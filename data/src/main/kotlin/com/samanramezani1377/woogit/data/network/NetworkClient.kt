@@ -16,8 +16,35 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 import kotlin.time.Duration.Companion.seconds
 
-class NetworkClient(private val policy:RequestPolicy=RequestPolicy()){
- val httpClient:HttpClient=HttpClient(Android){install(ContentNegotiation){json(Json{ignoreUnknownKeys=true;isLenient=true;explicitNulls=false})};install(HttpTimeout){requestTimeoutMillis=policy.timeout.inWholeMilliseconds;connectTimeoutMillis=10.seconds.inWholeMilliseconds;socketTimeoutMillis=policy.timeout.inWholeMilliseconds};install(HttpRequestRetry){maxRetries=3;retryIf{_,response->response.status.value==429||response.status.value in 500..599};retryOnExceptionIf{_,cause->cause is java.io.IOException};exponentialDelay()}}
- suspend fun execute(method:HttpMethod,url:String,credentials:CredentialPair,configure:HttpRequestBuilder.()->Unit={}):Result<HttpResponse>=runCatching{require(url.startsWith("https://",true)){"HTTPS is required"};httpClient.request(url){this.method=method;header(HttpHeaders.Authorization,WooCommerceRequestBuilder().basicAuthHeader(credentials));configure()}}
- fun close()=httpClient.close()
+class NetworkClient(private val policy: RequestPolicy = RequestPolicy()) {
+    val httpClient: HttpClient = HttpClient(Android) {
+        install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true; isLenient = true; explicitNulls = false }) }
+        install(HttpTimeout) {
+            requestTimeoutMillis = policy.timeout.inWholeMilliseconds
+            connectTimeoutMillis = 10.seconds.inWholeMilliseconds
+            socketTimeoutMillis = policy.timeout.inWholeMilliseconds
+        }
+        install(HttpRequestRetry) {
+            maxRetries = 3
+            retryIf { _, response -> response.status.value == 429 || response.status.value in 500..599 }
+            retryOnExceptionIf { _, cause -> cause is java.io.IOException }
+            exponentialDelay()
+        }
+    }
+
+    suspend fun execute(
+        method: HttpMethod,
+        url: String,
+        credentials: CredentialPair,
+        configure: HttpRequestBuilder.() -> Unit = {}
+    ): Result<HttpResponse> = runCatching {
+        require(url.startsWith("https://", true)) { "HTTPS is required" }
+        httpClient.request(url) {
+            this.method = method
+            header(HttpHeaders.Authorization, WooCommerceRequestBuilder().basicAuthHeader(credentials))
+            configure()
+        }
+    }
+
+    fun close() = httpClient.close()
 }
