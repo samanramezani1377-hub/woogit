@@ -77,7 +77,7 @@ README فقط **ورودی و نمای کلی پروژه** است و جزئیا�
 - **[Commit Versioning](docs/COMMIT_VERSIONING.md)**
 - **[Conflict Resolution](docs/CONFLICT_RESOLUTION.md)**
 - **[Notifications & Events](docs/NOTIFICATIONS_AND_EVENTS.md)**
-- **[Notification Specification](docs/NOTIFICATION_SPECIFICATION.md)**
+- **[Notification Specification](docs/NOTIFICATION_SPEC.md)**
 - **[Notification Roadmap](docs/NOTIFICATION_ROADMAP.md)**
 - **[Security & Auth](docs/SECURITY_AND_AUTH.md)**
 - **[Security & Permissions](docs/SECURITY_AND_PERMISSIONS.md)**
