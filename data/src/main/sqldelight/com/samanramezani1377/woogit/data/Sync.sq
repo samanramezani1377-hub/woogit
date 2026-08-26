@@ -5,23 +5,63 @@ CREATE TABLE pending_operation (
     entity_id TEXT NOT NULL,
     operation_type TEXT NOT NULL,
     state TEXT NOT NULL,
+    payload_json TEXT NOT NULL,
+    payload_hash TEXT NOT NULL,
     retry_count INTEGER NOT NULL DEFAULT 0,
     next_attempt_at INTEGER,
+    claimed_at INTEGER,
     last_error TEXT,
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
 );
 
 selectPending:
-SELECT * FROM pending_operation WHERE state IN ('PENDING', 'FAILED') AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
+SELECT * FROM pending_operation
+WHERE state IN ('PENDING', 'RETRYABLE_FAILURE')
+  AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
 ORDER BY created_at ASC;
 
+selectById:
+SELECT * FROM pending_operation WHERE id = ?;
+
 insert:
-INSERT OR REPLACE INTO pending_operation(id, store_id, entity_type, entity_id, operation_type, state, retry_count, next_attempt_at, last_error, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT OR IGNORE INTO pending_operation(id, store_id, entity_type, entity_id, operation_type, state, payload_json, payload_hash, retry_count, next_attempt_at, claimed_at, last_error, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+claim:
+UPDATE pending_operation SET state = 'RUNNING', claimed_at = ?, updated_at = ?
+WHERE id = ? AND state IN ('PENDING', 'RETRYABLE_FAILURE');
 
 updateState:
-UPDATE pending_operation SET state = ?, retry_count = ?, next_attempt_at = ?, last_error = ?, updated_at = ? WHERE id = ?;
+UPDATE pending_operation SET state = ?, retry_count = ?, next_attempt_at = ?, claimed_at = NULL, last_error = ?, updated_at = ? WHERE id = ?;
 
 deleteById:
 DELETE FROM pending_operation WHERE id = ?;
+
+recoverRunning:
+UPDATE pending_operation SET state = 'PENDING', claimed_at = NULL, updated_at = ? WHERE state = 'RUNNING';
+
+CREATE TABLE sync_conflict (
+    id TEXT NOT NULL PRIMARY KEY,
+    store_id TEXT NOT NULL,
+    entity_type TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    operation_id TEXT NOT NULL,
+    local_snapshot TEXT NOT NULL,
+    server_snapshot TEXT NOT NULL,
+    base_snapshot TEXT,
+    conflicting_fields TEXT NOT NULL,
+    resolution_state TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+insertConflict:
+INSERT OR REPLACE INTO sync_conflict(id, store_id, entity_type, entity_id, operation_id, local_snapshot, server_snapshot, base_snapshot, conflicting_fields, resolution_state, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+selectConflicts:
+SELECT * FROM sync_conflict WHERE store_id = ? AND resolution_state = 'UNRESOLVED' ORDER BY created_at ASC;
+
+resolveConflict:
+UPDATE sync_conflict SET resolution_state = ?, updated_at = ? WHERE id = ? AND store_id = ?;
