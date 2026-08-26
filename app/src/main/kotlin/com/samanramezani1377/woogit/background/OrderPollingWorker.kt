@@ -10,28 +10,36 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.samanramezani1377.woogit.WooGitApplication
+import com.samanramezani1377.woogit.core.domain.error.CoreResult
+import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import java.util.concurrent.TimeUnit
 
 class OrderPollingWorker(appContext: Context, params: WorkerParameters) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result {
         val storeId = inputData.getString(KEY_STORE_ID) ?: return Result.failure()
         val app = applicationContext as? WooGitApplication ?: return Result.failure()
+        val store = StoreId(storeId)
         val source = RepositoryOrderBackgroundSource(app.composition.getOrders)
-        val store = OrderNotificationStore(applicationContext)
+        val notificationStore = OrderNotificationStore(applicationContext)
         val notifier = OrderNotificationManager(applicationContext)
 
         return try {
+            // Local-first mutations are persisted before network execution. When connectivity
+            // is available this worker is the durable bridge that drains that queue after the
+            // process has been restarted or the device has been offline.
+            when (val sync = app.composition.syncPending(store)) {
+                is CoreResult.Failure -> if (sync.error.recoverable) return Result.retry()
+                is CoreResult.Success -> Unit
+            }
+
             source.findNewOrders(storeId).forEach { order ->
-                val observed = store.lastObserved(order.storeId, order.orderId)
+                val observed = notificationStore.lastObserved(order.storeId, order.orderId)
                 val changed = observed == null || observed != order.serverState
-                if (changed && !store.wasNotified(order.storeId, order.orderId, order.serverState)) {
-                    // Do not acknowledge an order until notification delivery succeeds.
-                    // This makes transient notification failures retryable instead of losing
-                    // the new-order alert permanently.
+                if (changed && !notificationStore.wasNotified(order.storeId, order.orderId, order.serverState)) {
                     if (!notifier.notify(order)) return Result.retry()
-                    store.markNotified(order.storeId, order.orderId, order.serverState)
+                    notificationStore.markNotified(order.storeId, order.orderId, order.serverState)
                 }
-                store.markObserved(order.storeId, order.orderId, order.serverState)
+                notificationStore.markObserved(order.storeId, order.orderId, order.serverState)
             }
             Result.success()
         } catch (_: Throwable) {
@@ -55,7 +63,7 @@ class OrderPollingWorker(appContext: Context, params: WorkerParameters) : Corout
                 .setInputData(workDataOf(KEY_STORE_ID to storeId))
                 .build()
             WorkManager.getInstance(context)
-                .enqueueUniquePeriodicWork(WORK_NAME, ExistingPeriodicWorkPolicy.UPDATE, request)
+                .enqueueUniquePeriodicWork(WORK_NAME, ExistingPeriodicWorkPolicy.KEEP, request)
         }
 
         fun cancel(context: Context) {
