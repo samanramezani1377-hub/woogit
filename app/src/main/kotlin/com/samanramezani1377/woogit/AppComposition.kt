@@ -38,5 +38,5 @@ class AppComposition(context:Context){
  val v1Presentation=V1PresentationDependencies(getStore,connectStore,disconnectStore,getOrders,getOrder,updateOrder,addOrderNote,getProducts,getProduct,createProduct,updateProduct,deleteProduct,getVariations,getVariation,createVariation,updateVariation,deleteVariation,getAttributes,getAttribute,createAttribute,updateAttribute,deleteAttribute,getTerms,getTerm,createTerm,updateTerm,deleteTerm,getConnectionState,getSyncState,getPending,getConflictsFn,resolveConflictFn,syncPending,prefs.getString("active_store_id",null),::rememberStore,::forgetStore)
  fun startBackgroundWork(storeId:String){OrderPollingWorker.schedule(appContext,storeId)}
  fun cancelBackgroundWork(){WorkManager.getInstance(appContext).cancelUniqueWork("woogit-order-polling")}
- fun close(){scope.cancel();network.close()}
+ fun close(){network.close()}
 }
