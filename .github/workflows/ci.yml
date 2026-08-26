@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write
 
 concurrency:
   group: woogit-ci-${{ github.workflow }}-${{ github.ref }}
@@ -76,6 +77,33 @@ jobs:
             tail -n 150 /tmp/build_debug.log
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
+
+      - name: Publish build errors as PR comment
+        if: steps.build_debug.outcome == 'failure' && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          {
+            echo '### Build debug APK failed (commit '"${GITHUB_SHA}"')'
+            echo '```'
+            grep -E "^e: |error:|FAILURE|What went wrong|\* Where|\* What went wrong|Caused by|Execution failed" /tmp/build_debug.log | head -n 200
+            echo '---- tail ----'
+            tail -n 150 /tmp/build_debug.log
+            echo '```'
+          } > /tmp/comment_body.txt
+          python3 -c "
+import json
+body = open('/tmp/comment_body.txt').read()[:60000]
+print(json.dumps({'body': body}))
+" > /tmp/comment_payload.json
+          curl -s -X POST \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${REPO}/issues/${PR_NUMBER}/comments" \
+            -d @/tmp/comment_payload.json
           exit 1
 
       - name: Unit tests
