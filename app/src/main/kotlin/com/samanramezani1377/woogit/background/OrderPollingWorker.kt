@@ -8,6 +8,7 @@ import androidx.work.NetworkType
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 class OrderPollingWorker(
@@ -22,12 +23,12 @@ class OrderPollingWorker(
             val notifier = OrderNotificationManager(applicationContext)
             source.findNewOrders(storeId).forEach { order ->
                 if (!notificationStore.wasNotified(order.storeId, order.orderId)) {
-                    notifier.notify(order)
+                    if (!notifier.notify(order)) return Result.retry()
                     notificationStore.markNotified(order.storeId, order.orderId)
                 }
             }
             Result.success()
-        } catch (_: java.io.IOException) {
+        } catch (_: IOException) {
             Result.retry()
         } catch (_: Exception) {
             Result.failure()
@@ -42,8 +43,9 @@ class OrderPollingWorker(
             val constraints = Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build()
-            val request = PeriodicWorkRequestBuilder<OrderPollingWorker>(repeatHours.coerceAtLeast(1L), TimeUnit.HOURS)
-                .setConstraints(constraints)
+            val request = PeriodicWorkRequestBuilder<OrderPollingWorker>(
+                repeatHours.coerceAtLeast(1L), TimeUnit.HOURS
+            ).setConstraints(constraints)
                 .setInputData(androidx.work.Data.Builder().putString(KEY_STORE_ID, storeId).build())
                 .build()
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
