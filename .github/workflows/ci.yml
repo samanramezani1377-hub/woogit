@@ -16,6 +16,9 @@ concurrency:
 
 env:
   JAVA_VERSION: '17'
+  GRADLE_VERSION: '8.13'
+  ANDROID_API_LEVEL: '36'
+  ANDROID_BUILD_TOOLS: '36.0.0'
   GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx3g -Dfile.encoding=UTF-8
 
 jobs:
@@ -37,24 +40,34 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
 
-      - name: Set up Gradle
+      - name: Install required Android SDK packages
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-${ANDROID_API_LEVEL}" "build-tools;${ANDROID_BUILD_TOOLS}" "platform-tools"
+
+      - name: Set up Gradle 8.13
         uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: ${{ env.GRADLE_VERSION }}
 
-      - name: Make Gradle wrapper executable
-        run: chmod +x ./gradlew
-
-      - name: Verify Gradle wrapper
-        run: ./gradlew --version
+      - name: Verify toolchain
+        run: |
+          java -version
+          gradle --version
+          adb version
+          sdkmanager --list_installed | grep -E "platforms;android-${ANDROID_API_LEVEL}|build-tools;${ANDROID_BUILD_TOOLS}|platform-tools" || true
 
       - name: Build debug APK
-        run: ./gradlew assembleDebug --stacktrace --no-daemon
+        run: gradle assembleDebug --stacktrace --no-daemon
 
       - name: Unit tests
-        run: ./gradlew test --stacktrace --no-daemon
+        run: gradle test --stacktrace --no-daemon
 
       - name: Android lint
-        run: ./gradlew lint --stacktrace --no-daemon
+        run: gradle lint --stacktrace --no-daemon
 
       - name: Upload debug APK
         if: success()
