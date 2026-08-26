@@ -1,0 +1,4 @@
+-- Initial V1 schema migration.
+-- SQLDelight owns schema versioning; this migration is intentionally empty
+-- because the .sq schema is the canonical initial schema.
+SELECT 1;
