@@ -1,0 +1,21 @@
+CREATE TABLE store (
+    id TEXT NOT NULL PRIMARY KEY,
+    base_url TEXT NOT NULL,
+    credential_reference TEXT,
+    connection_state TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+selectById:
+SELECT * FROM store WHERE id = ?;
+
+selectAll:
+SELECT * FROM store ORDER BY updated_at DESC;
+
+insert:
+INSERT OR REPLACE INTO store(id, base_url, credential_reference, connection_state, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?);
+
+deleteById:
+DELETE FROM store WHERE id = ?;
