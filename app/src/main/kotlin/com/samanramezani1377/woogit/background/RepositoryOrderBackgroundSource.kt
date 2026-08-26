@@ -6,7 +6,8 @@ import com.samanramezani1377.woogit.core.domain.usecase.GetOrders
 
 class RepositoryOrderBackgroundSource(private val getOrders:GetOrders):OrderBackgroundSource{
  override suspend fun findNewOrders(storeId:String):List<BackgroundOrder>{
-  val result=getOrders(StoreId(storeId),1,20);if(result !is CoreResult.Success)return emptyList()
-  return result.value.map{val version=it.modifiedAt?.toString()?:"${it.status.name}:${it.id.value}";val amount=it.items.sumOf{item->item.total.toDoubleOrNull()?:0.0};BackgroundOrder(storeId,it.id.value.toLong(),it.id.value,amount.toString(),"${it.items.size} items",it.modifiedAt?.toEpochMilliseconds()?:System.currentTimeMillis(),version)}
+  val result=getOrders(StoreId(storeId),1,50)
+  if(result !is CoreResult.Success)return emptyList()
+  return result.value.map{order->val version=order.modifiedAt?.toString()?:"${order.status.name}:${order.id.value}";BackgroundOrder(storeId,order.id.value.toLong(),order.number,order.total?:order.items.sumOf{it.total.toDoubleOrNull()?:0.0}.toString(),"${order.items.size} items",order.modifiedAt?.toEpochMilliseconds()?:System.currentTimeMillis(),version)}
  }
 }

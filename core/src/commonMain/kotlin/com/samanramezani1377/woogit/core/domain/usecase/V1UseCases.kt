@@ -17,8 +17,10 @@ class DeleteProductUseCase(private val repository:ProductRepository):DeleteProdu
 class GetStoreUseCase(private val repository:StoreRepository):GetStore{override suspend fun invoke(storeId:StoreId)=repository.get(storeId)}
 class ConnectStoreUseCase(private val repository:StoreRepository):ConnectStore{override suspend fun invoke(store:StoreConnection,consumerKey:String,consumerSecret:String)=repository.connect(store,consumerKey,consumerSecret)}
 class DisconnectStoreUseCase(private val repository:StoreRepository):DisconnectStore{override suspend fun invoke(storeId:StoreId)=repository.disconnect(storeId)}
-class GetConnectionStateUseCase(private val repository:StoreRepository):GetConnectionState{override suspend fun invoke(storeId:StoreId)=repository.get(storeId).let{if(it is CoreResult.Success)CoreResult.Success(it.value.state) else CoreResult.Failure((it as CoreResult.Failure).error)}}
+class GetConnectionStateUseCase(private val repository:StoreRepository):GetConnectionState{override suspend fun invoke(storeId:StoreId)=repository.get(storeId).let{if(it is CoreResult.Success)CoreResult.Success(it.value.state)else CoreResult.Failure((it as CoreResult.Failure).error)}}
 class GetPendingOperationsUseCase(private val repository:PendingOperationRepository):GetPendingOperations{override suspend fun invoke(storeId:StoreId)=repository.getPending(storeId)}
 class EnqueueOperationUseCase(private val repository:PendingOperationRepository):EnqueueOperation{override suspend fun invoke(operation:PendingOperation)=repository.enqueue(operation)}
 class GetSyncStateUseCase(private val repository:SyncRepository):GetSyncState{override suspend fun invoke(storeId:StoreId)=repository.getState(storeId)}
 class SyncPendingOperationsUseCase(private val repository:SyncRepository):SyncPendingOperations{override suspend fun invoke(storeId:StoreId)=repository.sync(storeId)}
+class GetConflictsUseCase(private val repository:SyncRepository){suspend operator fun invoke(storeId:StoreId)=repository.getConflicts(storeId)}
+class ResolveConflictUseCase(private val repository:SyncRepository){suspend operator fun invoke(storeId:StoreId,conflictId:EntityId,resolution:ConflictResolution)=repository.resolveConflict(storeId,conflictId,resolution)}

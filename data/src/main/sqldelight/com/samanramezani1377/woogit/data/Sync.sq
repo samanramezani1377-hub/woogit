@@ -38,6 +38,8 @@ INSERT OR REPLACE INTO sync_metadata(store_id, state, version, modified_at, last
 CREATE TABLE sync_conflict (id TEXT NOT NULL PRIMARY KEY, store_id TEXT NOT NULL, entity_type TEXT NOT NULL, entity_id TEXT NOT NULL, operation_id TEXT NOT NULL, local_snapshot TEXT NOT NULL, server_snapshot TEXT NOT NULL, base_snapshot TEXT, conflicting_fields TEXT NOT NULL, resolution_state TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
 insertConflict:
 INSERT OR REPLACE INTO sync_conflict(id, store_id, entity_type, entity_id, operation_id, local_snapshot, server_snapshot, base_snapshot, conflicting_fields, resolution_state, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+selectConflictById:
+SELECT * FROM sync_conflict WHERE id = ?;
 selectConflicts:
 SELECT * FROM sync_conflict WHERE store_id = ? AND resolution_state = 'UNRESOLVED' ORDER BY created_at ASC;
 resolveConflict:
