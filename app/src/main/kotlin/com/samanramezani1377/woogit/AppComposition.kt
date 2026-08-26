@@ -8,10 +8,7 @@ import com.samanramezani1377.woogit.core.domain.usecase.*
 import com.samanramezani1377.woogit.data.db.WooGitDatabaseFactory
 import com.samanramezani1377.woogit.data.network.NetworkClient
 import com.samanramezani1377.woogit.data.repository.*
-import com.samanramezani1377.woogit.data.local.SqlOrderDataSource
-import com.samanramezani1377.woogit.data.local.SqlProductDataSource
-import com.samanramezani1377.woogit.data.local.SqlStoreDataSource
-import com.samanramezani1377.woogit.data.local.SqlMutationCoordinator
+import com.samanramezani1377.woogit.data.local.*
 import com.samanramezani1377.woogit.data.sync.*
 import com.samanramezani1377.woogit.presentation.WooGitPresentationDependencies
 import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
@@ -28,8 +25,8 @@ class AppComposition(context:Context){
  private val provider=WooCommerceClientProvider(db,secure,network.httpClient)
  private val mutationCoordinator=SqlMutationCoordinator(db)
  val storeRepository=StoreRepositoryImpl(storeLocal,secure,network.httpClient)
- val orderRepository=OrderRepositoryV1Impl(orderLocal,provider,mutationCoordinator)
- val productRepository=ProductRepositoryV1Impl(productLocal,provider,mutationCoordinator)
+ val orderRepository=OrderRepositoryV1Impl(orderLocal,provider,mutationCoordinator,pending)
+ val productRepository=ProductRepositoryV1Impl(productLocal,provider,mutationCoordinator,pending)
  private val executor=WooCommerceOperationExecutor(db,provider,orderLocal,productLocal)
  val syncEngine=SyncEngine(db,executor)
  val syncRepository=SyncRepositoryImpl(db,syncEngine,pending)
@@ -49,6 +46,8 @@ class AppComposition(context:Context){
  val getSyncState=GetSyncStateUseCase(syncRepository)
  val getPending=GetPendingOperationsUseCase(pending)
  val enqueue=EnqueueOperationUseCase(pending)
+ val getConflicts=GetConflictsUseCase(syncRepository)
+ val resolveConflict=ResolveConflictUseCase(syncRepository)
  val presentation=WooGitPresentationDependencies(getStore,getOrders,getOrder,getProducts,getProduct,getConnectionState,getSyncState)
  val v1Presentation=V1PresentationDependencies(getStore,connectStore,disconnectStore,getOrders,getOrder,getProducts,getProduct,getConnectionState,getSyncState)
  fun startBackgroundWork(storeId:String){OrderPollingWorker.schedule(appContext,storeId)}
