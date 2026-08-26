@@ -29,7 +29,7 @@ class OrderNotificationManager(private val context: Context) {
         )
     }
 
-    /** Returns false when Android notification permission/settings prevent delivery. */
+    /** Returns false when the notification cannot be delivered right now. */
     fun notify(order: BackgroundOrder): Boolean {
         ensureChannel()
         val intent = deepLinkIntent(context, order.storeId, order.orderId) ?: return false
@@ -47,7 +47,10 @@ class OrderNotificationManager(private val context: Context) {
             .setAutoCancel(true)
             .build()
         return try {
-            NotificationManagerCompat.from(context).notify(order.orderId.hashCode(), notification)
+            NotificationManagerCompat.from(context).notify(
+                "${order.storeId}:${order.orderId}".hashCode(),
+                notification,
+            )
             true
         } catch (_: SecurityException) {
             false
