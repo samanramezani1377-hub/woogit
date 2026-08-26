@@ -5,7 +5,7 @@ import kotlin.test.assertTrue
 
 class FoundationTest {
     @Test
-    fun foundationTestInfrastructureIsAvailable() {
+    fun testInfrastructureIsAvailable() {
         assertTrue(true)
     }
 }
