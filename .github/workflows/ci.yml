@@ -61,12 +61,29 @@ jobs:
           sdkmanager --list_installed | grep -E "platforms;android-${ANDROID_API_LEVEL}|build-tools;${ANDROID_BUILD_TOOLS}|platform-tools" || true
 
       - name: Build debug APK
-        run: gradle assembleDebug --stacktrace --no-daemon
+        id: build_debug
+        continue-on-error: true
+        run: gradle assembleDebug --stacktrace --no-daemon 2>&1 | tee /tmp/build_debug.log
+
+      - name: Publish build errors to job summary
+        if: steps.build_debug.outcome == 'failure'
+        run: |
+          {
+            echo '### Build debug APK failed'
+            echo '```'
+            grep -E "^e: |error:|FAILURE|What went wrong|\* Where|\* What went wrong|Caused by|Execution failed" /tmp/build_debug.log | head -n 200
+            echo '---- tail ----'
+            tail -n 150 /tmp/build_debug.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
 
       - name: Unit tests
+        if: steps.build_debug.outcome == 'success'
         run: gradle test --stacktrace --no-daemon
 
       - name: Android lint
+        if: steps.build_debug.outcome == 'success'
         run: gradle lint --stacktrace --no-daemon
 
       - name: Upload debug APK
