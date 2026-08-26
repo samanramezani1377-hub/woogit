@@ -6,8 +6,14 @@ plugins {
 android {
     namespace = "com.samanramezani1377.woogit.presentation"
     compileSdk = 36
-
     defaultConfig {
         minSdk = 26
     }
+    buildFeatures {
+        compose = true
+    }
+}
+
+dependencies {
+    implementation(project(":core"))
 }
