@@ -25,12 +25,12 @@ class SyncEngine(private val db: WooGitDatabase, private val executor: Operation
         try {
             executor.execute(op)
             db.transaction {
-                db.syncQueries.updateState("SUCCEEDED", op.retry_count, null, null, null, now, op.id)
+                db.syncQueries.updateState("SUCCEEDED", op.retry_count, null, null, now, op.id)
                 db.syncQueries.upsertMetadata(op.store_id, "SUCCEEDED", null, null, now, now)
             }
         } catch (error: ConflictDetected) {
             db.transaction {
-                db.syncQueries.updateState("CONFLICT", op.retry_count, null, null, error.message, now, op.id)
+                db.syncQueries.updateState("CONFLICT", op.retry_count, null, error.message, now, op.id)
                 db.syncQueries.upsertMetadata(op.store_id, "CONFLICT", null, null, null, now)
             }
         } catch (error: CancellationException) {
@@ -42,7 +42,7 @@ class SyncEngine(private val db: WooGitDatabase, private val executor: Operation
             val next = if (canRetry) now + executor.backoffMillis(attempt) else null
             val state = if (canRetry) "RETRYABLE_FAILURE" else "PERMANENT_FAILURE"
             db.transaction {
-                db.syncQueries.updateState(state, attempt, next, null, error.message, now, op.id)
+                db.syncQueries.updateState(state, attempt, next, error.message, now, op.id)
                 db.syncQueries.upsertMetadata(op.store_id, state, null, null, null, now)
             }
         }
