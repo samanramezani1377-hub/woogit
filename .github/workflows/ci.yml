@@ -39,14 +39,19 @@ jobs:
           cache: gradle
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
         with:
           packages: platform-tools
 
       - name: Install required Android SDK packages
+        shell: bash
         run: |
+          set -euo pipefail
           yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platforms;android-${ANDROID_API_LEVEL}" "build-tools;${ANDROID_BUILD_TOOLS}" "platform-tools"
+          sdkmanager --sdk_root="${ANDROID_SDK_ROOT}" \
+            "platforms;android-${ANDROID_API_LEVEL}" \
+            "build-tools;${ANDROID_BUILD_TOOLS}" \
+            "platform-tools"
 
       - name: Set up Gradle 8.13
         uses: gradle/actions/setup-gradle@v4
@@ -54,11 +59,13 @@ jobs:
           gradle-version: ${{ env.GRADLE_VERSION }}
 
       - name: Verify toolchain
+        shell: bash
         run: |
+          set -euo pipefail
           java -version
           gradle --version
           adb version
-          sdkmanager --list_installed | grep -E "platforms;android-${ANDROID_API_LEVEL}|build-tools;${ANDROID_BUILD_TOOLS}|platform-tools" || true
+          sdkmanager --sdk_root="${ANDROID_SDK_ROOT}" --list_installed | grep -E "platforms;android-${ANDROID_API_LEVEL}|build-tools;${ANDROID_BUILD_TOOLS}|platform-tools"
 
       - name: Build debug APK
         run: gradle assembleDebug --stacktrace --no-daemon
