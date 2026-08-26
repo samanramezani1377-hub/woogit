@@ -29,3 +29,9 @@ When network data is available, local state should be refreshed safely. Temporar
 ## Future Offline Mode
 
 The local data layer must be suitable for a future full offline mode with durable mutations, synchronization and conflict resolution. V1 should establish these boundaries without adding unnecessary offline complexity now.
+
+## Backup & Device Migration
+
+- **App update (same device):** the local database and the pending mutation queue must survive an app update; an update must never wipe local data or the pending queue.
+- **Device replacement / factory reset:** V1 does not rely on automatic cloud backup (e.g. Android Auto Backup) to restore the local database or pending queue on a new/reset device. Local data and any pending mutations are device-local only and are lost on device replacement or reset; the user reconnects the store and data is re-fetched from WooCommerce.
+- Secure credentials (Consumer Key/Secret, stored via Android Keystore per `SECURITY_AND_AUTH.md`) must be excluded from any backup mechanism regardless of scope, so they are never transferred insecurely through app update or device backup/restore flows.
