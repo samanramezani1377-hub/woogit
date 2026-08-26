@@ -1,0 +1,17 @@
+build:
+  maxIssues: 0
+
+config:
+  validation: true
+
+style:
+  MagicNumber:
+    active: false
+  ReturnCount:
+    active: false
+
+complexity:
+  LongMethod:
+    active: false
+  LongParameterList:
+    active: false
