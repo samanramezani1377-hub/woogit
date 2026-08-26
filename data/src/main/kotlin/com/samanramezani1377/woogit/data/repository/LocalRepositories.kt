@@ -8,12 +8,12 @@ class LocalStoreRepository(private val db: WooGitDatabase) {
 }
 
 class LocalOrderRepository(private val db: WooGitDatabase) {
-    fun find(id: String) = db.orderQueries.selectById(id).executeAsOneOrNull()
+    fun find(storeId: String, id: String) = db.orderQueries.selectById(id, storeId).executeAsOneOrNull()
     fun list(storeId: String) = db.orderQueries.selectByStore(storeId).executeAsList()
 }
 
 class LocalProductRepository(private val db: WooGitDatabase) {
-    fun find(id: String) = db.productQueries.selectById(id).executeAsOneOrNull()
+    fun find(storeId: String, id: String) = db.productQueries.selectById(id, storeId).executeAsOneOrNull()
     fun list(storeId: String) = db.productQueries.selectByStore(storeId).executeAsList()
 }
 
