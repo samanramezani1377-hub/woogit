@@ -1,0 +1,12 @@
+package com.samanramezani1377.woogit.core.domain.model
+
+import com.samanramezani1377.woogit.core.domain.entity.EntityId
+import com.samanramezani1377.woogit.core.domain.entity.EntityTimestamp
+import com.samanramezani1377.woogit.core.domain.entity.StoreId
+
+enum class SyncState { IDLE, RUNNING, SUCCEEDED, FAILED, CONFLICT }
+enum class OperationType { CREATE, UPDATE, DELETE }
+data class PendingOperation(val id: EntityId, val storeId: StoreId, val entityId: EntityId, val type: OperationType, val retryCount: Int, val lastAttemptAt: EntityTimestamp?)
+data class EntityVersion(val value: String, val modifiedAt: EntityTimestamp?)
+data class Conflict(val entityId: EntityId, val localVersion: EntityVersion?, val remoteVersion: EntityVersion?, val reason: String)
+data class SyncMetadata(val state: SyncState, val version: EntityVersion?, val pending: List<PendingOperation>)
