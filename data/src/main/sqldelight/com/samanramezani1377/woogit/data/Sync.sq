@@ -27,7 +27,7 @@ UPDATE pending_operation SET state = 'RUNNING', claimed_at = ?, updated_at = ? W
 updateState:
 UPDATE pending_operation SET state = ?, retry_count = ?, next_attempt_at = ?, claimed_at = NULL, last_error = ?, updated_at = ? WHERE id = ?;
 recoverRunning:
-UPDATE pending_operation SET state = 'PENDING', claimed_at = NULL, updated_at = ? WHERE state = 'RUNNING';
+UPDATE pending_operation SET state = 'PENDING', claimed_at = NULL, updated_at = ? WHERE state = 'RUNNING' AND (claimed_at IS NULL OR claimed_at <= ?);
 deleteById:
 DELETE FROM pending_operation WHERE id = ?;
 
