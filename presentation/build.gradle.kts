@@ -4,7 +4,18 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-android { namespace = "com.samanramezani1377.woogit.presentation"; compileSdk = 36; defaultConfig { minSdk = 26 }; buildFeatures { compose = true } }
+android {
+    namespace = "com.samanramezani1377.woogit.presentation"
+    compileSdk = 36
+    defaultConfig { minSdk = 26 }
+    buildFeatures { compose = true }
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+}
+
+kotlin { jvmToolchain(17) }
 
 dependencies {
     implementation(project(":core"))
