@@ -16,16 +16,14 @@ android {
         versionName = "0.1.0"
     }
 
-    buildFeatures {
-        compose = true
-    }
+    buildFeatures { compose = true }
 }
 
-kotlin {
-    jvmToolchain(17)
-}
+kotlin { jvmToolchain(17) }
 
 dependencies {
     implementation(project(":core"))
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.core.ktx)
     testImplementation(kotlin("test"))
 }
