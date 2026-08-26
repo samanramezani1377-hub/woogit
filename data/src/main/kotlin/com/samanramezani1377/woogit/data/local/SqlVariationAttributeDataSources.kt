@@ -33,30 +33,38 @@ private val localJson = Json { ignoreUnknownKeys = true; explicitNulls = false }
 
 class SqlVariationDataSource(private val db: WooGitDatabase) : LocalVariationDataSource {
     override fun list(storeId: StoreId, productId: EntityId): CoreResult<List<Variation>> =
-        CoreResult.Success(db.variationQueries.selectVariationsByProduct(productId.value, storeId.value).executeAsList().map(::mapVariation))
+        CoreResult.Success(
+            db.variationQueries.selectVariationsByProduct(productId.value, storeId.value)
+                .executeAsList()
+                .map { mapVariation(it.payload_json) },
+        )
 
     override fun get(storeId: StoreId, productId: EntityId, id: EntityId): CoreResult<Variation> =
-        db.variationQueries.selectVariationById(id.value, productId.value, storeId.value).executeAsOneOrNull()
-            ?.let { CoreResult.Success(mapVariation(it)) }
+        db.variationQueries.selectVariationById(id.value, productId.value, storeId.value)
+            .executeAsOneOrNull()
+            ?.let { CoreResult.Success(mapVariation(it.payload_json)) }
             ?: CoreResult.Failure(DomainError.NotFound("variation", id.value))
 
-    private fun mapVariation(row: Any): Variation {
-        // SQLDelight generated row types are intentionally kept out of the domain mapper signature.
-        // The selected row exposes payload_json; decode is the source of truth for the cached model.
-        val payload = (row as? com.samanramezani1377.woogit.data.db.Variation_entity)?.payload_json
-            ?: error("Unexpected variation row type")
+    private fun mapVariation(payload: String): Variation {
         val v = localJson.decodeFromString<VariationCache>(payload)
         return Variation(
-            EntityId(v.id), EntityId(v.product_id),
+            EntityId(v.id),
+            EntityId(v.product_id),
             v.attributes.map { VariationAttribute(it.name, it.option) },
             Pricing(v.regular_price, v.sale_price, v.sale_price != null),
-            Stock(v.stock_quantity, when (v.stock_status) {
-                "outofstock" -> StockStatus.OUT_OF_STOCK
-                "onbackorder" -> StockStatus.ON_BACKORDER
-                else -> StockStatus.IN_STOCK
-            }, v.manage_stock),
+            Stock(
+                v.stock_quantity,
+                when (v.stock_status) {
+                    "outofstock" -> StockStatus.OUT_OF_STOCK
+                    "onbackorder" -> StockStatus.ON_BACKORDER
+                    else -> StockStatus.IN_STOCK
+                },
+                v.manage_stock,
+            ),
             v.sku,
-            v.image?.let { im -> ProductImage(im.id?.let(::EntityId) ?: EntityId("0"), im.src, im.name, im.alt) },
+            v.image?.let { im ->
+                ProductImage(im.id?.let(::EntityId) ?: EntityId("0"), im.src, im.name, im.alt)
+            },
             v.date_modified_gmt?.let(Instant::parse),
         )
     }
@@ -115,7 +123,17 @@ class SqlAttributeDataSource(private val db: WooGitDatabase) : LocalAttributeDat
 
     override fun upsert(storeId: StoreId, value: GlobalAttribute): CoreResult<Unit> {
         val now = System.currentTimeMillis()
-        db.variationQueries.upsertAttribute(value.id.value, storeId.value, null, value.name, value.terms.joinToString(",") { it.name }, "GLOBAL", "{}", now, now)
+        db.variationQueries.upsertAttribute(
+            value.id.value,
+            storeId.value,
+            null,
+            value.name,
+            value.terms.joinToString(",") { it.name },
+            "GLOBAL",
+            "{}",
+            now,
+            now,
+        )
         return CoreResult.Success(Unit)
     }
 
