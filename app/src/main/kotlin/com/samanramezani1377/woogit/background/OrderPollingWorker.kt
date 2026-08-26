@@ -12,6 +12,7 @@ import androidx.work.workDataOf
 import com.samanramezani1377.woogit.WooGitApplication
 import com.samanramezani1377.woogit.core.domain.error.CoreResult
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
+import com.samanramezani1377.woogit.data.network.HttpApiException
 import java.util.concurrent.TimeUnit
 
 class OrderPollingWorker(appContext: Context, params: WorkerParameters) : CoroutineWorker(appContext, params) {
@@ -39,8 +40,8 @@ class OrderPollingWorker(appContext: Context, params: WorkerParameters) : Corout
             Result.success()
         } catch (_: java.io.IOException) {
             Result.retry()
-        } catch (_: HttpApiException) {
-            Result.retry()
+        } catch (e: HttpApiException) {
+            if (e.statusCode == 408 || e.statusCode == 429 || e.statusCode in 500..599) Result.retry() else Result.failure()
         } catch (_: kotlinx.coroutines.CancellationException) {
             throw kotlinx.coroutines.CancellationException("Order polling cancelled")
         } catch (_: Throwable) {
