@@ -25,6 +25,7 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.kotlinx.datetime)
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.9.2")
     implementation("io.coil-kt:coil-compose:2.7.0")
 }
