@@ -1,0 +1,78 @@
+-- V1 store-isolation migration. Rebuild tables whose identity previously ignored store_id.
+PRAGMA foreign_keys=OFF;
+
+CREATE TABLE product_entity_v5 (
+    id TEXT NOT NULL,
+    store_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    status TEXT NOT NULL,
+    price_minor_units INTEGER,
+    currency TEXT,
+    stock_quantity INTEGER,
+    version TEXT NOT NULL,
+    modified_at TEXT NOT NULL,
+    payload_json TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (id, store_id)
+);
+INSERT OR IGNORE INTO product_entity_v5(id, store_id, name, status, price_minor_units, currency, stock_quantity, version, modified_at, payload_json, created_at, updated_at)
+SELECT id, store_id, name, status, price_minor_units, currency, stock_quantity, version, modified_at, payload_json, created_at, updated_at FROM product_entity;
+DROP TABLE product_entity;
+ALTER TABLE product_entity_v5 RENAME TO product_entity;
+
+CREATE TABLE order_entity_v5 (
+    id TEXT NOT NULL,
+    store_id TEXT NOT NULL,
+    status TEXT NOT NULL,
+    total_minor_units INTEGER NOT NULL,
+    currency TEXT NOT NULL,
+    version TEXT NOT NULL,
+    modified_at TEXT NOT NULL,
+    payload_json TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (id, store_id)
+);
+INSERT OR IGNORE INTO order_entity_v5(id, store_id, status, total_minor_units, currency, version, modified_at, payload_json, created_at, updated_at)
+SELECT id, store_id, status, total_minor_units, currency, version, modified_at, payload_json, created_at, updated_at FROM order_entity;
+DROP TABLE order_entity;
+ALTER TABLE order_entity_v5 RENAME TO order_entity;
+
+CREATE TABLE variation_entity_v5 (
+    id TEXT NOT NULL,
+    product_id TEXT NOT NULL,
+    store_id TEXT NOT NULL,
+    status TEXT NOT NULL,
+    price_minor_units INTEGER,
+    stock_quantity INTEGER,
+    payload_json TEXT NOT NULL,
+    version TEXT NOT NULL,
+    modified_at TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (id, product_id, store_id)
+);
+INSERT OR IGNORE INTO variation_entity_v5(id, product_id, store_id, status, price_minor_units, stock_quantity, payload_json, version, modified_at, created_at, updated_at)
+SELECT id, product_id, store_id, status, price_minor_units, stock_quantity, payload_json, version, modified_at, created_at, updated_at FROM variation_entity;
+DROP TABLE variation_entity;
+ALTER TABLE variation_entity_v5 RENAME TO variation_entity;
+
+CREATE TABLE attribute_entity_v5 (
+    id TEXT NOT NULL,
+    store_id TEXT NOT NULL,
+    product_id TEXT,
+    name TEXT NOT NULL,
+    value TEXT NOT NULL,
+    scope TEXT NOT NULL,
+    payload_json TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (id, store_id)
+);
+INSERT OR IGNORE INTO attribute_entity_v5(id, store_id, product_id, name, value, scope, payload_json, created_at, updated_at)
+SELECT id, store_id, product_id, name, value, scope, payload_json, created_at, updated_at FROM attribute_entity;
+DROP TABLE attribute_entity;
+ALTER TABLE attribute_entity_v5 RENAME TO attribute_entity;
+
+PRAGMA foreign_keys=ON;
