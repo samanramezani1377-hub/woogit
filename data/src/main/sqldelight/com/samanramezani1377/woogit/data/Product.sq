@@ -1,0 +1,27 @@
+CREATE TABLE product_entity (
+    id TEXT NOT NULL PRIMARY KEY,
+    store_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    status TEXT NOT NULL,
+    price_minor_units INTEGER,
+    currency TEXT,
+    stock_quantity INTEGER,
+    version TEXT NOT NULL,
+    modified_at TEXT NOT NULL,
+    payload_json TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+);
+
+selectById:
+SELECT * FROM product_entity WHERE id = ?;
+
+selectByStore:
+SELECT * FROM product_entity WHERE store_id = ? ORDER BY updated_at DESC;
+
+upsert:
+INSERT OR REPLACE INTO product_entity(id, store_id, name, status, price_minor_units, currency, stock_quantity, version, modified_at, payload_json, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+deleteById:
+DELETE FROM product_entity WHERE id = ?;
