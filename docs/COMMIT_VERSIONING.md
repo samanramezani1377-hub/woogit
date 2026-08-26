@@ -53,7 +53,7 @@ Commit Versioning نباید باعث درخواست شبکه برای هر Enti
 
 ## Conflict
 
-اگر نسخه‌ی محلی و نسخه‌ی سرور برای یک Entity متفاوت باشند، Sync Engine باید Conflict را تشخیص دهد و از overwrite کورکورانه جلوگیری کند. استراتژی حل Conflict در سند معماری مشخص خواهد شد.
+اگر نسخه‌ی محلی و نسخه‌ی سرور برای یک Entity متفاوت باشند، Sync Engine باید Conflict را تشخیص دهد و از overwrite کورکورانه جلوگیری کند. استراتژی حل Conflict (Field-level Merge + مودال انتخاب کاربر برای موارد غیرقابل ادغام) در `docs/CONFLICT_RESOLUTION.md` مشخص شده است.
 
 ## اصل آینده‌نگری
 

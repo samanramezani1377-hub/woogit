@@ -14,7 +14,7 @@ Core باید مستقل از UI باشد و Domain، Store Data، Sync، Queue 
 
 ## Data Versioning
 
-اپ نسخه داده محلی را نگه می‌دارد و ابتدا نسخه سبک سرور را بررسی می‌کند؛ فقط در صورت تغییر Sync انجام می‌شود. مسیر دقیق می‌تواند date_modified_gmt یا endpoint اختصاصی WooGit باشد.
+اپ نسخه داده محلی را نگه می‌دارد و ابتدا نسخه سبک سرور را بررسی می‌کند؛ فقط در صورت تغییر Sync انجام می‌شود. طبق تصمیم نهایی (`docs/DECISION_TRACKER.md` پرسش ۰۱ و `docs/CONNECTION_AND_SYNC.md`)، مسیر V1 استفاده از `date_modified_gmt` است؛ endpoint اختصاصی WooGit از طریق افزونه‌ی همراه به آینده موکول شده است.
 
 ## Multi-Store Ready
 
