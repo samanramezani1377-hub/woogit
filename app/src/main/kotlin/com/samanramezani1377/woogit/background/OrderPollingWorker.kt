@@ -15,20 +15,36 @@ class OrderPollingWorker(
     workerParams: WorkerParameters,
 ) : CoroutineWorker(appContext, workerParams) {
     override suspend fun doWork(): Result {
-        // Repository/notification orchestration is injected at the application boundary.
-        // The worker itself never keeps a permanent network connection.
-        return Result.success()
+        val source = OrderBackgroundSourceRegistry.source ?: return Result.failure()
+        val storeId = inputData.getString(KEY_STORE_ID) ?: return Result.failure()
+        return try {
+            val notificationStore = OrderNotificationStore(applicationContext)
+            val notifier = OrderNotificationManager(applicationContext)
+            source.findNewOrders(storeId).forEach { order ->
+                if (!notificationStore.wasNotified(order.storeId, order.orderId)) {
+                    notifier.notify(order)
+                    notificationStore.markNotified(order.storeId, order.orderId)
+                }
+            }
+            Result.success()
+        } catch (_: java.io.IOException) {
+            Result.retry()
+        } catch (_: Exception) {
+            Result.failure()
+        }
     }
 
     companion object {
         private const val WORK_NAME = "woogit-order-polling"
+        const val KEY_STORE_ID = "store_id"
 
-        fun schedule(context: Context, repeatHours: Long = 1L) {
+        fun schedule(context: Context, storeId: String, repeatHours: Long = 1L) {
             val constraints = Constraints.Builder()
                 .setRequiredNetworkType(NetworkType.CONNECTED)
                 .build()
-            val request = PeriodicWorkRequestBuilder<OrderPollingWorker>(repeatHours, TimeUnit.HOURS)
+            val request = PeriodicWorkRequestBuilder<OrderPollingWorker>(repeatHours.coerceAtLeast(1L), TimeUnit.HOURS)
                 .setConstraints(constraints)
+                .setInputData(androidx.work.Data.Builder().putString(KEY_STORE_ID, storeId).build())
                 .build()
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(
                 WORK_NAME,
