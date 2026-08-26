@@ -22,14 +22,25 @@ CREATE TABLE attribute_entity (
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
 );
+CREATE TABLE attribute_term_entity (
+    id TEXT NOT NULL,
+    store_id TEXT NOT NULL,
+    attribute_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    slug TEXT,
+    payload_json TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (id, store_id, attribute_id)
+);
 selectVariationsByProduct:
-SELECT * FROM variation_entity WHERE product_id = ? ORDER BY updated_at DESC;
+SELECT * FROM variation_entity WHERE product_id = ? AND store_id = ? ORDER BY updated_at DESC;
 selectVariationById:
-SELECT * FROM variation_entity WHERE id = ?;
+SELECT * FROM variation_entity WHERE id = ? AND product_id = ? AND store_id = ?;
 upsertVariation:
 INSERT OR REPLACE INTO variation_entity(id, product_id, store_id, status, price_minor_units, stock_quantity, payload_json, version, modified_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 deleteVariation:
-DELETE FROM variation_entity WHERE id = ?;
+DELETE FROM variation_entity WHERE id = ? AND product_id = ? AND store_id = ?;
 selectAttributesByProduct:
 SELECT * FROM attribute_entity WHERE store_id = ? AND product_id = ? ORDER BY updated_at DESC;
 selectAttributesByStore:
@@ -37,4 +48,12 @@ SELECT * FROM attribute_entity WHERE store_id = ? ORDER BY updated_at DESC;
 upsertAttribute:
 INSERT OR REPLACE INTO attribute_entity(id, store_id, product_id, name, value, scope, payload_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
 deleteAttribute:
-DELETE FROM attribute_entity WHERE id = ?;
+DELETE FROM attribute_entity WHERE id = ? AND store_id = ?;
+selectTermsByAttribute:
+SELECT * FROM attribute_term_entity WHERE store_id = ? AND attribute_id = ? ORDER BY updated_at DESC;
+selectTermById:
+SELECT * FROM attribute_term_entity WHERE id = ? AND store_id = ? AND attribute_id = ?;
+upsertTerm:
+INSERT OR REPLACE INTO attribute_term_entity(id, store_id, attribute_id, name, slug, payload_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+deleteTerm:
+DELETE FROM attribute_term_entity WHERE id = ? AND store_id = ? AND attribute_id = ?;
