@@ -21,3 +21,19 @@ interface SyncPendingOperations { suspend operator fun invoke(storeId: StoreId):
 interface GetSyncState { suspend operator fun invoke(storeId: StoreId): CoreResult<SyncMetadata> }
 interface GetPendingOperations { suspend operator fun invoke(storeId: StoreId): CoreResult<List<PendingOperation>> }
 interface EnqueueOperation { suspend operator fun invoke(operation: PendingOperation): CoreResult<Unit> }
+interface AddOrderNote { suspend operator fun invoke(storeId: StoreId, orderId: EntityId, content: String, customerNote: Boolean = false): CoreResult<OrderNote> }
+interface GetVariations { suspend operator fun invoke(storeId: StoreId, productId: EntityId, page: Int = 1, perPage: Int = 20): CoreResult<List<Variation>> }
+interface GetVariation { suspend operator fun invoke(storeId: StoreId, productId: EntityId, id: EntityId): CoreResult<Variation> }
+interface CreateVariation { suspend operator fun invoke(storeId: StoreId, value: Variation): CoreResult<Variation> }
+interface UpdateVariation { suspend operator fun invoke(storeId: StoreId, productId: EntityId, id: EntityId, value: Variation): CoreResult<Variation> }
+interface DeleteVariation { suspend operator fun invoke(storeId: StoreId, productId: EntityId, id: EntityId): CoreResult<Unit> }
+interface GetAttributes { suspend operator fun invoke(storeId: StoreId, page: Int = 1, perPage: Int = 100): CoreResult<List<GlobalAttribute>> }
+interface GetAttribute { suspend operator fun invoke(storeId: StoreId, id: EntityId): CoreResult<GlobalAttribute> }
+interface CreateAttribute { suspend operator fun invoke(storeId: StoreId, value: GlobalAttribute): CoreResult<GlobalAttribute> }
+interface UpdateAttribute { suspend operator fun invoke(storeId: StoreId, id: EntityId, value: GlobalAttribute): CoreResult<GlobalAttribute> }
+interface DeleteAttribute { suspend operator fun invoke(storeId: StoreId, id: EntityId): CoreResult<Unit> }
+interface GetTerms { suspend operator fun invoke(storeId: StoreId, attributeId: EntityId, page: Int = 1, perPage: Int = 100): CoreResult<List<AttributeTerm>> }
+interface GetTerm { suspend operator fun invoke(storeId: StoreId, attributeId: EntityId, id: EntityId): CoreResult<AttributeTerm> }
+interface CreateTerm { suspend operator fun invoke(storeId: StoreId, attributeId: EntityId, value: AttributeTerm): CoreResult<AttributeTerm> }
+interface UpdateTerm { suspend operator fun invoke(storeId: StoreId, attributeId: EntityId, id: EntityId, value: AttributeTerm): CoreResult<AttributeTerm> }
+interface DeleteTerm { suspend operator fun invoke(storeId: StoreId, attributeId: EntityId, id: EntityId): CoreResult<Unit> }
