@@ -1,5 +1,5 @@
 CREATE TABLE order_entity (
-    id TEXT NOT NULL PRIMARY KEY,
+    id TEXT NOT NULL,
     store_id TEXT NOT NULL,
     status TEXT NOT NULL,
     total_minor_units INTEGER NOT NULL,
@@ -8,18 +8,19 @@ CREATE TABLE order_entity (
     modified_at TEXT NOT NULL,
     payload_json TEXT NOT NULL,
     created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (id, store_id)
 );
 
 selectById:
-SELECT * FROM order_entity WHERE id = ?;
+SELECT * FROM order_entity WHERE id = ? AND store_id = ?;
 
 selectByStore:
 SELECT * FROM order_entity WHERE store_id = ? ORDER BY updated_at DESC;
 
 upsert:
 INSERT OR REPLACE INTO order_entity(id, store_id, status, total_minor_units, currency, version, modified_at, payload_json, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 deleteById:
-DELETE FROM order_entity WHERE id = ?;
+DELETE FROM order_entity WHERE id = ? AND store_id = ?;
