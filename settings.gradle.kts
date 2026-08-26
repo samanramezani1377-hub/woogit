@@ -16,3 +16,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "WooGit"
 include(":app")
+include(":core")
+include(":data")
+include(":presentation")
