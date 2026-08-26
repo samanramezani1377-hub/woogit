@@ -20,7 +20,7 @@ SELECT * FROM order_entity WHERE store_id = ? ORDER BY updated_at DESC;
 
 upsert:
 INSERT OR REPLACE INTO order_entity(id, store_id, status, total_minor_units, currency, version, modified_at, payload_json, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 deleteById:
 DELETE FROM order_entity WHERE id = ? AND store_id = ?;
