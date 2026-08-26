@@ -1,0 +1,41 @@
+CREATE TABLE global_attribute (
+    id TEXT NOT NULL,
+    store_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    slug TEXT NOT NULL,
+    version TEXT NOT NULL,
+    modified_at TEXT NOT NULL,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (id, store_id)
+);
+
+selectById:
+SELECT * FROM global_attribute WHERE id = ? AND store_id = ?;
+
+selectByStore:
+SELECT * FROM global_attribute WHERE store_id = ? ORDER BY name ASC;
+
+upsert:
+INSERT OR REPLACE INTO global_attribute(id, store_id, name, slug, version, modified_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+
+CREATE TABLE custom_attribute (
+    id TEXT NOT NULL,
+    store_id TEXT NOT NULL,
+    owner_type TEXT NOT NULL,
+    owner_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    value TEXT NOT NULL,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (id, store_id)
+);
+
+selectCustomByOwner:
+SELECT * FROM custom_attribute WHERE store_id = ? AND owner_type = ? AND owner_id = ? ORDER BY name ASC;
+
+upsertCustom:
+INSERT OR REPLACE INTO custom_attribute(id, store_id, owner_type, owner_id, name, value, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+
+deleteCustomById:
+DELETE FROM custom_attribute WHERE id = ? AND store_id = ?;
