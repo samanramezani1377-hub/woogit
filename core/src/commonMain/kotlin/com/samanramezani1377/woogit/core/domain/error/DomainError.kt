@@ -19,6 +19,14 @@ sealed interface CoreResult<out T> {
     data class Failure(val error: DomainError) : CoreResult<Nothing>
 }
 
+inline fun <T, R> CoreResult<T>.fold(
+    onSuccess: (T) -> R,
+    onFailure: (DomainError) -> R,
+): R = when (this) {
+    is CoreResult.Success -> onSuccess(value)
+    is CoreResult.Failure -> onFailure(error)
+}
+
 fun DomainError.presentationKey(): String = when (this) {
     is DomainError.Validation -> "validation"
     is DomainError.NotFound -> "not_found"
