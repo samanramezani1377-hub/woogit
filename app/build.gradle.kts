@@ -23,6 +23,8 @@ kotlin { jvmToolchain(17) }
 
 dependencies {
     implementation(project(":core"))
+    implementation(project(":data"))
+    implementation(project(":presentation"))
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.core.ktx)
     testImplementation(kotlin("test"))
