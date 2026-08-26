@@ -11,7 +11,6 @@ CREATE TABLE variation_entity (
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
 );
-
 CREATE TABLE attribute_entity (
     id TEXT NOT NULL PRIMARY KEY,
     store_id TEXT NOT NULL,
@@ -23,14 +22,19 @@ CREATE TABLE attribute_entity (
     created_at INTEGER NOT NULL,
     updated_at INTEGER NOT NULL
 );
-
 selectVariationsByProduct:
 SELECT * FROM variation_entity WHERE product_id = ? ORDER BY updated_at DESC;
-
+selectVariationById:
+SELECT * FROM variation_entity WHERE id = ?;
 upsertVariation:
-INSERT OR REPLACE INTO variation_entity(id, product_id, store_id, status, price_minor_units, stock_quantity, payload_json, version, modified_at, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
-
+INSERT OR REPLACE INTO variation_entity(id, product_id, store_id, status, price_minor_units, stock_quantity, payload_json, version, modified_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+deleteVariation:
+DELETE FROM variation_entity WHERE id = ?;
+selectAttributesByProduct:
+SELECT * FROM attribute_entity WHERE store_id = ? AND product_id = ? ORDER BY updated_at DESC;
+selectAttributesByStore:
+SELECT * FROM attribute_entity WHERE store_id = ? ORDER BY updated_at DESC;
 upsertAttribute:
-INSERT OR REPLACE INTO attribute_entity(id, store_id, product_id, name, value, scope, payload_json, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT OR REPLACE INTO attribute_entity(id, store_id, product_id, name, value, scope, payload_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+deleteAttribute:
+DELETE FROM attribute_entity WHERE id = ?;
