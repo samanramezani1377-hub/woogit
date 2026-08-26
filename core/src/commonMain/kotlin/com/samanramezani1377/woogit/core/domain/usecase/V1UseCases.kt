@@ -22,8 +22,8 @@ class GetPendingOperationsUseCase(private val repository:PendingOperationReposit
 class EnqueueOperationUseCase(private val repository:PendingOperationRepository):EnqueueOperation{override suspend fun invoke(operation:PendingOperation)=repository.enqueue(operation)}
 class GetSyncStateUseCase(private val repository:SyncRepository):GetSyncState{override suspend fun invoke(storeId:StoreId)=repository.getState(storeId)}
 class SyncPendingOperationsUseCase(private val repository:SyncRepository):SyncPendingOperations{override suspend fun invoke(storeId:StoreId)=repository.sync(storeId)}
-class GetConflictsUseCase(private val repository:SyncRepository):Function1<StoreId,CoreResult<List<Conflict>>>{override suspend operator fun invoke(storeId:StoreId)=repository.getConflicts(storeId)}
-class ResolveConflictUseCase(private val repository:SyncRepository):Function3<StoreId,EntityId,ConflictResolution,CoreResult<Unit>>{override suspend operator fun invoke(storeId:StoreId,conflictId:EntityId,resolution:ConflictResolution)=repository.resolveConflict(storeId,conflictId,resolution)}
+class GetConflictsUseCase(private val repository:SyncRepository){suspend operator fun invoke(storeId:StoreId)=repository.getConflicts(storeId)}
+class ResolveConflictUseCase(private val repository:SyncRepository){suspend operator fun invoke(storeId:StoreId,conflictId:EntityId,resolution:ConflictResolution)=repository.resolveConflict(storeId,conflictId,resolution)}
 class AddOrderNoteUseCase(private val repository:OrderNoteRepository):AddOrderNote{override suspend fun invoke(storeId:StoreId,orderId:EntityId,content:String,customerNote:Boolean)=repository.addNote(storeId,orderId,content,customerNote)}
 class GetVariationsUseCase(private val repository:VariationRepository):GetVariations{override suspend fun invoke(storeId:StoreId,productId:EntityId,page:Int,perPage:Int)=repository.list(storeId,productId,page,perPage)}
 class GetVariationUseCase(private val repository:VariationRepository):GetVariation{override suspend fun invoke(storeId:StoreId,productId:EntityId,id:EntityId)=repository.get(storeId,productId,id)}
