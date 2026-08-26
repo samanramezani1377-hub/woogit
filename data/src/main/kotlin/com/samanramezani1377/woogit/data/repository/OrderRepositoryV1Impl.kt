@@ -3,6 +3,7 @@ package com.samanramezani1377.woogit.data.repository
 import com.samanramezani1377.woogit.core.domain.entity.EntityId
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.core.domain.error.CoreResult
+import com.samanramezani1377.woogit.core.domain.error.DomainError
 import com.samanramezani1377.woogit.core.domain.error.fold
 import com.samanramezani1377.woogit.core.domain.model.*
 import com.samanramezani1377.woogit.core.domain.repository.*
@@ -50,41 +51,42 @@ class OrderRepositoryV1Impl(
     private val pending: PendingOperationRepository,
 ) : OrderRepository {
     override suspend fun get(storeId: StoreId, id: EntityId): CoreResult<Order> = provider.client(storeId).fold(
-        { (store, api) -> api.order(store.baseUrl, id.value.toLong()).fold({ remote -> val d = remote.toDomain(); local.upsert(storeId, d); CoreResult.Success(d) }, { local.get(storeId, id) }) },
+        { (store, api) -> api.order(store.baseUrl, id.value.toLong()).fold({ remote -> val value = remote.toDomain(); local.upsert(storeId, value); CoreResult.Success(value) }, { local.get(storeId, id) }) },
         { local.get(storeId, id) },
     )
 
     override suspend fun list(storeId: StoreId, page: Int, perPage: Int, search: String?, status: String?): CoreResult<List<Order>> {
         val cached = if (page == 1) local.list(storeId) else null
         return provider.client(storeId).fold(
-            { (store, api) -> api.orders(store.baseUrl, page, perPage, search, status).fold({ values -> val d = values.map(WooOrderTypedDto::toDomain); d.forEach { local.upsert(storeId, it) }; CoreResult.Success(d) }, { cached ?: CoreResult.Failure(it) }) },
+            { (store, api) -> api.orders(store.baseUrl, page, perPage, search, status).fold({ values -> val mapped = values.map(WooOrderTypedDto::toDomain); mapped.forEach { local.upsert(storeId, it) }; CoreResult.Success(mapped) }, { cached ?: CoreResult.Failure(it.toDomain()) }) },
             { cached ?: CoreResult.Failure(it) },
         )
     }
 
     override suspend fun update(storeId: StoreId, id: EntityId, order: Order): CoreResult<Order> {
         val payload = mutationJson.encodeToString(OrderMutation(order.status.name.lowercase()))
-        val hash = payloadHash(payload)
-        val op = PendingOperation(EntityId("order-update-${storeId.value}-${id.value}-${hash.take(16)}"), storeId, "order", id, OperationType.UPDATE, payload, hash, 0, null, null)
-        val localResult = coordinator.execute(op) { local.upsert(storeId, order).let { if (it is CoreResult.Success) CoreResult.Success(order) else CoreResult.Failure((it as CoreResult.Failure).error) } }
+        val operation = PendingOperation(EntityId("order-update-${storeId.value}-${id.value}-${payloadHash(payload).take(16)}"), storeId, "order", id, OperationType.UPDATE, payload, payloadHash(payload), 0, null, null)
+        val localResult = coordinator.execute(operation) { local.upsert(storeId, order) }
         if (localResult is CoreResult.Failure) return localResult
         return provider.client(storeId).fold(
-            { (store, api) -> api.updateOrder(store.baseUrl, id.value.toLong(), WooOrderTypedDto(id.value.toLong(), number = order.number, status = order.status.name.lowercase(), total = order.total ?: "0", currency = order.currency ?: "", customer_id = order.customer?.id?.value?.toLongOrNull() ?: 0L)).fold({ remote -> val d = remote.toDomain(); local.upsert(storeId, d); pending.markSucceeded(op.id); CoreResult.Success(d) }, { error -> if (error is HttpApiException && error.statusCode in 408..599) CoreResult.Success(order) else CoreResult.Failure(error.toDomain()) }) },
+            { (store, api) ->
+                api.updateOrder(store.baseUrl, id.value.toLong(), WooOrderTypedDto(id.value.toLong(), number = order.number, status = order.status.name.lowercase(), total = order.total ?: "0", currency = order.currency ?: "", customer_id = order.customer?.id?.value?.toLongOrNull() ?: 0L)).fold({ remote -> val value = remote.toDomain(); local.upsert(storeId, value); pending.markSucceeded(operation.id); CoreResult.Success(value) }, { error -> if (error is HttpApiException && error.statusCode in 408..599) CoreResult.Success(order) else CoreResult.Failure(error.toDomain()) })
+            },
             { CoreResult.Success(order) },
         )
     }
 }
 
-private fun Throwable.toDomain() = when (this) {
+private fun Throwable.toDomain(): DomainError = when (this) {
     is HttpApiException -> when (statusCode) {
-        401 -> com.samanramezani1377.woogit.core.domain.error.DomainError.Authentication("Authentication failed")
-        403 -> com.samanramezani1377.woogit.core.domain.error.DomainError.Permission("Permission denied")
-        404 -> com.samanramezani1377.woogit.core.domain.error.DomainError.NotFound("remote", statusCode.toString())
-        409 -> com.samanramezani1377.woogit.core.domain.error.DomainError.Conflict("Remote conflict")
-        422 -> com.samanramezani1377.woogit.core.domain.error.DomainError.Validation("Validation failed")
-        429 -> com.samanramezani1377.woogit.core.domain.error.DomainError.RateLimited("Rate limited")
-        in 500..599 -> com.samanramezani1377.woogit.core.domain.error.DomainError.Server("Server error")
-        else -> com.samanramezani1377.woogit.core.domain.error.DomainError.Unknown("HTTP $statusCode")
+        401 -> DomainError.Authentication("Authentication failed")
+        403 -> DomainError.Permission("Permission denied")
+        404 -> DomainError.NotFound("remote", statusCode.toString())
+        409 -> DomainError.Conflict("Remote conflict")
+        422 -> DomainError.Validation("Validation failed")
+        429 -> DomainError.RateLimited("Rate limited")
+        in 500..599 -> DomainError.Server("Server error")
+        else -> DomainError.Unknown("HTTP $statusCode")
     }
-    else -> com.samanramezani1377.woogit.core.domain.error.DomainError.Network(message ?: "Network failure")
+    else -> DomainError.Network(message ?: "Network failure")
 }
