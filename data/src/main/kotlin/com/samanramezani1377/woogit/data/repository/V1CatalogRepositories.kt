@@ -4,6 +4,7 @@ import com.samanramezani1377.woogit.core.domain.entity.EntityId
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.core.domain.error.CoreResult
 import com.samanramezani1377.woogit.core.domain.error.DomainError
+import com.samanramezani1377.woogit.core.domain.error.fold
 import com.samanramezani1377.woogit.core.domain.model.*
 import com.samanramezani1377.woogit.core.domain.repository.*
 import com.samanramezani1377.woogit.data.network.*
@@ -32,26 +33,16 @@ private fun Throwable.toDomain(): DomainError = when (this) {
 @Serializable private data class NoteWrite(val note: String, val customer_note: Boolean)
 
 class VariationRepositoryImpl(private val local: LocalVariationDataSource, private val provider: WooCommerceClientProvider, private val coordinator: MutationCoordinator, private val pending: PendingOperationRepository) : VariationRepository {
-    override suspend fun list(storeId: StoreId, productId: EntityId, page: Int, perPage: Int): CoreResult<List<Variation>> = provider.client(storeId).fold({ (store, api) ->
-        api.variations(store.baseUrl, productId.value.toLong(), page, perPage).fold({ items ->
-            val values = items.map { it.toDomain(productId) }; values.forEach { local.upsert(storeId, it) }; CoreResult.Success(values)
-        }, { if (page == 1) local.list(storeId, productId) else CoreResult.Failure(it.toDomain()) })
-    }, { if (page == 1) local.list(storeId, productId) else CoreResult.Failure(it) }) }
-
-    override suspend fun get(storeId: StoreId, productId: EntityId, id: EntityId): CoreResult<Variation> = provider.client(storeId).fold({ (store, api) ->
-        api.variation(store.baseUrl, productId.value.toLong(), id.value.toLong()).fold({ remote -> val value = remote.toDomain(productId); local.upsert(storeId, value); CoreResult.Success(value) }, { local.get(storeId, productId, id) })
-    }, { local.get(storeId, productId, id) })
-
+    override suspend fun list(storeId: StoreId, productId: EntityId, page: Int, perPage: Int): CoreResult<List<Variation>> = provider.client(storeId).fold({ (store, api) -> api.variations(store.baseUrl, productId.value.toLong(), page, perPage).fold({ items -> val values = items.map { it.toDomain(productId) }; values.forEach { local.upsert(storeId, it) }; CoreResult.Success(values) }, { if (page == 1) local.list(storeId, productId) else CoreResult.Failure(it.toDomain()) }) }, { if (page == 1) local.list(storeId, productId) else CoreResult.Failure(it) })
+    override suspend fun get(storeId: StoreId, productId: EntityId, id: EntityId): CoreResult<Variation> = provider.client(storeId).fold({ (store, api) -> api.variation(store.baseUrl, productId.value.toLong(), id.value.toLong()).fold({ remote -> val value = remote.toDomain(productId); local.upsert(storeId, value); CoreResult.Success(value) }, { local.get(storeId, productId, id) }) }, { local.get(storeId, productId, id) })
     override suspend fun create(storeId: StoreId, value: Variation): CoreResult<Variation> = mutate(storeId, value, OperationType.CREATE) { api, store -> api.createVariation(store.baseUrl, value.productId.value.toLong(), value.toDto()).map { it.toDomain(value.productId) } }
     override suspend fun update(storeId: StoreId, productId: EntityId, id: EntityId, value: Variation): CoreResult<Variation> = mutate(storeId, value, OperationType.UPDATE) { api, store -> api.updateVariation(store.baseUrl, productId.value.toLong(), id.value.toLong(), value.toDto()).map { it.toDomain(productId) } }
-
     override suspend fun delete(storeId: StoreId, productId: EntityId, id: EntityId): CoreResult<Unit> {
         val op = PendingOperation(EntityId("variation-delete-${storeId.value}-${productId.value}-${id.value}"), storeId, "variation", id, OperationType.DELETE, "{}", id.value, 0, null)
         val localResult = coordinator.execute(op) { local.delete(storeId, productId, id) }
         if (localResult is CoreResult.Failure) return localResult
         return provider.client(storeId).fold({ (store, api) -> api.deleteVariation(store.baseUrl, productId.value.toLong(), id.value.toLong()).fold({ pending.markSucceeded(op.id); CoreResult.Success(Unit) }, { CoreResult.Success(Unit) }) }, { CoreResult.Success(Unit) })
     }
-
     private suspend fun mutate(storeId: StoreId, value: Variation, type: OperationType, remote: suspend (TypedWooCommerceApi, StoreConnection) -> Result<Variation>): CoreResult<Variation> {
         val payload = repoJson.encodeToString(value.toDto())
         val op = PendingOperation(EntityId("variation-${type.name.lowercase()}-${storeId.value}-${value.productId.value}-${value.id.value}"), storeId, "variation", value.id, type, payload, payload.hashCode().toString(), 0, null)
@@ -61,8 +52,8 @@ class VariationRepositoryImpl(private val local: LocalVariationDataSource, priva
     }
 }
 
-private fun WooVariationTypedDto.toDomain(productId: EntityId) = Variation(EntityId(id.toString()), productId, attributes.map { VariationAttribute(it.name, it.options.firstOrNull().orEmpty()) }, Pricing(regular_price, sale_price, sale_price != null), Stock(stock_quantity, when (stock_status) { "outofstock" -> StockStatus.OUT_OF_STOCK; "onbackorder" -> StockStatus.ON_BACKORDER; else -> StockStatus.IN_STOCK }, manage_stock), sku, image?.let { ProductImage(it.id?.let(::EntityId) ?: EntityId("0"), it.src, it.name, it.alt) }, modifiedAt = date_modified_gmt?.let(kotlinx.datetime.Instant::parse))
-private fun Variation.toDto() = WooVariationTypedDto(id.value.toLongOrNull() ?: 0L, productId.value.toLongOrNull() ?: 0L, sku, pricing.sale ?: pricing.regular, pricing.regular, pricing.sale, stock?.quantity, stock?.status?.name?.lowercase() ?: "instock", stock?.manageStock, image, modifiedAt?.toString(), attributes.map { WooProductAttributeDto(null, it.name, true, true, listOf(it.option)) })
+private fun WooVariationTypedDto.toDomain(productId: EntityId) = Variation(EntityId(id.toString()), productId, attributes.map { VariationAttribute(it.name, it.options.firstOrNull().orEmpty()) }, Pricing(regular_price, sale_price, sale_price != null), Stock(stock_quantity, when (stock_status) { "outofstock" -> StockStatus.OUT_OF_STOCK; "onbackorder" -> StockStatus.ON_BACKORDER; else -> StockStatus.IN_STOCK }, manage_stock), sku, image?.let { ProductImage(it.id?.let { id -> EntityId(id.toString()) } ?: EntityId("0"), it.src, it.name, it.alt) }, modifiedAt = date_modified_gmt?.let(kotlinx.datetime.Instant::parse))
+private fun Variation.toDto() = WooVariationTypedDto(id.value.toLongOrNull() ?: 0L, productId.value.toLongOrNull() ?: 0L, sku, pricing.sale ?: pricing.regular, pricing.regular, pricing.sale, stock?.quantity, stock?.status?.name?.lowercase() ?: "instock", stock?.manageStock ?: false, image, modifiedAt?.toString(), attributes.map { WooProductAttributeDto(null, it.name, true, true, listOf(it.option)) })
 
 class AttributeRepositoryImpl(private val local: LocalAttributeDataSource, private val provider: WooCommerceClientProvider, private val coordinator: MutationCoordinator, private val pending: PendingOperationRepository) : AttributeRepository {
     override suspend fun list(storeId: StoreId, page: Int, perPage: Int): CoreResult<List<GlobalAttribute>> = provider.client(storeId).fold({ (store, api) -> api.attributes(store.baseUrl, page, perPage).fold({ items -> val values = items.map { it.toDomain() }; values.forEach { local.upsert(storeId, it) }; CoreResult.Success(values) }, { if (page == 1) local.list(storeId) else CoreResult.Failure(it.toDomain()) }) }, { if (page == 1) local.list(storeId) else CoreResult.Failure(it) })
