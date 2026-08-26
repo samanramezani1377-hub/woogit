@@ -6,12 +6,20 @@
 - Unique periodic scheduling with KEEP policy.
 - Explicit cancellation.
 - No permanent connection.
+- Background order source contract.
+- Persistent store/order notification deduplication across process restart.
+- Notification channel and order summary notification.
+- PendingIntent carries store/order identifiers for order navigation.
+- Network/IO failures return WorkManager retry; unexpected failures stop the worker.
 
-## Review findings
-The worker is intentionally an orchestration boundary. It does not own repository, polling, deduplication, notification, or deep-link business logic. Those dependencies must be injected at the application composition root after the repository and notification contracts are available.
+## Review findings and corrections
+- The initial worker was a no-op; it now executes source -> deduplication -> notification orchestration.
+- Deduplication is persistent and keyed by store ID + order ID.
+- The worker does not create or retain a permanent network connection.
+- Notification payload contains identifiers rather than a complete order object.
 
 ## Verification status
-Background execution, restart, duplicate-detection, offline, notification and deep-link tests remain unverified and are not marked complete.
+Automated background/integration tests and the E9 Gate remain intentionally unmarked until they are executed in CI.
 
-## Important limitation
-The current repository does not yet expose a production-ready application composition root for E9's complete orchestration. Therefore this commit establishes the WorkManager foundation only; it does not falsely claim E9.02–E9.07 are complete.
+## Integration boundary
+`OrderBackgroundSourceRegistry.source` must be supplied by the application composition root with an implementation backed by the existing repository/network boundary. This keeps background execution separate from the WooCommerce API and prevents a second network architecture.
