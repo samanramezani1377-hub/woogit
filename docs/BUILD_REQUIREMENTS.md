@@ -1,6 +1,6 @@
 # WooGit V1 — نیازمندی‌های ساخت
 
-این سند مرجع «چه چیزهایی باید برای ساخت و تکمیل V1 وجود داشته باشد؟» است. ترتیب اجرا در `BUILD_PLAN.md` و روش کنترل در `BUILD_CHECKLIST.md` است.
+این سند مرجع «چه چیزهایی باید برای ساخت و تکمیل V1 وجود داشته باشد؟» است. ترتیب اجرا در `BUILD_PLAN.md` و `EXECUTION_PLAN.md` و روش کنترل در `BUILD_CHECKLIST.md` است.
 
 ## قوانین کلی
 - هر Requirement باید قابل تست و قابل پذیرش باشد.
@@ -8,6 +8,8 @@
 - هیچ Requirement نباید فقط در UI پیاده شود؛ منطق باید در Core/Use Case قرار گیرد.
 - همه مسیرهای داده باید Local-first باشند.
 - Credential و Secret فقط در storage امن نگهداری شوند.
+- **V1 بدون سرور اختصاصی WooGit است.** تنها سیستم remote ووکامرس فروشگاه است.
+- قراردادهای دقیق V1 در `docs/V1_*` اسناد مرجع تکمیلی این فایل هستند.
 
 ## P0 — Foundation
 ### نیازهای معماری
@@ -64,6 +66,7 @@
 - Errorها typed و قابل نمایش در Presentation باشند.
 
 ## P2 — Local Data
+- **V1 local database: SQLDelight.**
 - Database برای داده‌های لازم V1.
 - CRUD برای Orders/Products/Variations/Attributes و Store state.
 - Pending Queue پایدار.
@@ -72,7 +75,7 @@
 - Migration.
 - Restart recovery.
 - Transactionهای لازم.
-- Cache policy.
+- Cache/freshness policy.
 - عدم ذخیره Secret در DB عادی.
 - امکان پاک‌سازی Store data هنگام disconnect طبق سیاست امنیتی.
 
@@ -118,6 +121,7 @@
 - Serialization validation.
 - Server-side validation mapping.
 - Retry-safe request classification.
+- Batch operations where useful and supported, with per-entity failure tracking.
 
 ## P4 — Sync Engine
 - Local mutation first.
@@ -126,11 +130,12 @@
 - Retry policy.
 - Backoff.
 - Timeout.
-- Idempotency strategy.
+- Stable operation identity.
+- Idempotency/reconciliation strategy for ambiguous mutation outcomes.
 - Version comparison.
 - Conflict detection.
-- Safe merge where possible.
-- Explicit conflict for unsafe merge.
+- Safe merge where explicitly proven.
+- Explicit user conflict for unsafe merge.
 - Recovery after process death.
 - No silent data loss.
 - No silent overwrite of newer server data.
@@ -144,9 +149,10 @@
 - Local notification.
 - Notification payload.
 - Tap → order deep link.
-- App closed behavior.
+- App closed behavior where Android permits background execution.
+- Explicit handling of force-stop/platform limitations.
 - No permanent foreground connection.
-- No custom backend/provider in V1.
+- **No custom backend/provider in V1.**
 
 ## P6 — Security
 - Android Keystore or equivalent secure credential storage.
@@ -167,6 +173,7 @@
 - Accessibility basics.
 - Loading/empty/error/offline states.
 - Pending/Synced/Failed indicators.
+- Hi-Fi specification before feature implementation.
 
 ### Screens
 1. Onboarding/Connection
@@ -204,6 +211,7 @@
 - Queue.
 - Retry.
 - Conflict.
+- Idempotency/reconciliation.
 
 ### Integration
 - Database.
@@ -211,6 +219,7 @@
 - Repository.
 - Sync.
 - Worker.
+- Notification deduplication.
 
 ### UI
 - Critical navigation.
@@ -232,6 +241,7 @@
 - Restart.
 - Update/migration.
 - Duplicate request.
+- Ambiguous mutation outcome.
 - Concurrent server/local mutation.
 
 ## P10 — Beta/Hardening
@@ -258,8 +268,7 @@
 - Git tag/release created.
 
 ## V1 Non-Requirements
-این موارد برای V1 نیازمندی فعال نیستند:
-- Backend اختصاصی.
+- Backend اختصاصی WooGit.
 - Companion Plugin.
 - Real Commit history.
 - Real Push provider.
