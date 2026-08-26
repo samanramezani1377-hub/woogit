@@ -1,5 +1,5 @@
 CREATE TABLE variation_entity (
-    id TEXT NOT NULL PRIMARY KEY,
+    id TEXT NOT NULL,
     product_id TEXT NOT NULL,
     store_id TEXT NOT NULL,
     status TEXT NOT NULL,
@@ -9,10 +9,11 @@ CREATE TABLE variation_entity (
     version TEXT NOT NULL,
     modified_at TEXT NOT NULL,
     created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (id, product_id, store_id)
 );
 CREATE TABLE attribute_entity (
-    id TEXT NOT NULL PRIMARY KEY,
+    id TEXT NOT NULL,
     store_id TEXT NOT NULL,
     product_id TEXT,
     name TEXT NOT NULL,
@@ -20,7 +21,8 @@ CREATE TABLE attribute_entity (
     scope TEXT NOT NULL,
     payload_json TEXT NOT NULL,
     created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (id, store_id)
 );
 CREATE TABLE attribute_term_entity (
     id TEXT NOT NULL,
@@ -38,7 +40,7 @@ SELECT * FROM variation_entity WHERE product_id = ? AND store_id = ? ORDER BY up
 selectVariationById:
 SELECT * FROM variation_entity WHERE id = ? AND product_id = ? AND store_id = ?;
 upsertVariation:
-INSERT OR REPLACE INTO variation_entity(id, product_id, store_id, status, price_minor_units, stock_quantity, payload_json, version, modified_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT OR REPLACE INTO variation_entity(id, product_id, store_id, status, price_minor_units, stock_quantity, payload_json, version, modified_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 deleteVariation:
 DELETE FROM variation_entity WHERE id = ? AND product_id = ? AND store_id = ?;
 selectAttributesByProduct:
@@ -46,7 +48,7 @@ SELECT * FROM attribute_entity WHERE store_id = ? AND product_id = ? ORDER BY up
 selectAttributesByStore:
 SELECT * FROM attribute_entity WHERE store_id = ? ORDER BY updated_at DESC;
 upsertAttribute:
-INSERT OR REPLACE INTO attribute_entity(id, store_id, product_id, name, value, scope, payload_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT OR REPLACE INTO attribute_entity(id, store_id, product_id, name, value, scope, payload_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 deleteAttribute:
 DELETE FROM attribute_entity WHERE id = ? AND store_id = ?;
 selectTermsByAttribute:
