@@ -3,40 +3,41 @@ package com.samanramezani1377.woogit.core.domain.usecase
 import com.samanramezani1377.woogit.core.domain.entity.EntityId
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.core.domain.error.CoreResult
-import com.samanramezani1377.woogit.core.domain.model.*
 import com.samanramezani1377.woogit.core.domain.repository.*
-
-class GetOrderUseCase(private val repository:OrderRepository):GetOrder{override suspend fun invoke(storeId:StoreId,id:EntityId)=repository.get(storeId,id)}
-class GetOrdersUseCase(private val repository:OrderRepository):GetOrders{override suspend fun invoke(storeId:StoreId,page:Int,perPage:Int,search:String?,status:String?)=repository.list(storeId,page,perPage,search,status)}
-class UpdateOrderUseCase(private val repository:OrderRepository):UpdateOrder{override suspend fun invoke(storeId:StoreId,id:EntityId,value:Order)=repository.update(storeId,id,value)}
-class GetProductUseCase(private val repository:ProductRepository):GetProduct{override suspend fun invoke(storeId:StoreId,id:EntityId)=repository.get(storeId,id)}
-class GetProductsUseCase(private val repository:ProductRepository):GetProducts{override suspend fun invoke(storeId:StoreId,page:Int,perPage:Int,search:String?)=repository.list(storeId,page,perPage,search)}
-class CreateProductUseCase(private val repository:ProductRepository):CreateProduct{override suspend fun invoke(storeId:StoreId,value:Product)=repository.create(storeId,value)}
-class UpdateProductUseCase(private val repository:ProductRepository):UpdateProduct{override suspend fun invoke(storeId:StoreId,id:EntityId,value:Product)=repository.update(storeId,id,value)}
-class DeleteProductUseCase(private val repository:ProductRepository):DeleteProduct{override suspend fun invoke(storeId:StoreId,id:EntityId)=repository.delete(storeId,id)}
-class GetStoreUseCase(private val repository:StoreRepository):GetStore{override suspend fun invoke(storeId:StoreId)=repository.get(storeId)}
-class ConnectStoreUseCase(private val repository:StoreRepository):ConnectStore{override suspend fun invoke(store:StoreConnection,consumerKey:String,consumerSecret:String)=repository.connect(store,consumerKey,consumerSecret)}
-class DisconnectStoreUseCase(private val repository:StoreRepository):DisconnectStore{override suspend fun invoke(storeId:StoreId)=repository.disconnect(storeId)}
-class GetConnectionStateUseCase(private val repository:StoreRepository):GetConnectionState{override suspend fun invoke(storeId:StoreId)=repository.get(storeId).let{if(it is CoreResult.Success)CoreResult.Success(it.value.state)else CoreResult.Failure((it as CoreResult.Failure).error)}}
-class GetPendingOperationsUseCase(private val repository:PendingOperationRepository):GetPendingOperations{override suspend fun invoke(storeId:StoreId)=repository.getPending(storeId)}
-class EnqueueOperationUseCase(private val repository:PendingOperationRepository):EnqueueOperation{override suspend fun invoke(operation:PendingOperation)=repository.enqueue(operation)}
-class GetSyncStateUseCase(private val repository:SyncRepository):GetSyncState{override suspend fun invoke(storeId:StoreId)=repository.getState(storeId)}
-class SyncPendingOperationsUseCase(private val repository:SyncRepository):SyncPendingOperations{override suspend fun invoke(storeId:StoreId)=repository.sync(storeId)}
-class GetConflictsUseCase(private val repository:SyncRepository){suspend operator fun invoke(storeId:StoreId)=repository.getConflicts(storeId)}
-class ResolveConflictUseCase(private val repository:SyncRepository){suspend operator fun invoke(storeId:StoreId,conflictId:EntityId,resolution:ConflictResolution)=repository.resolveConflict(storeId,conflictId,resolution)}
-class AddOrderNoteUseCase(private val repository:OrderNoteRepository):AddOrderNote{override suspend fun invoke(storeId:StoreId,orderId:EntityId,content:String,customerNote:Boolean)=repository.addNote(storeId,orderId,content,customerNote)}
-class GetVariationsUseCase(private val repository:VariationRepository):GetVariations{override suspend fun invoke(storeId:StoreId,productId:EntityId,page:Int,perPage:Int)=repository.list(storeId,productId,page,perPage)}
-class GetVariationUseCase(private val repository:VariationRepository):GetVariation{override suspend fun invoke(storeId:StoreId,productId:EntityId,id:EntityId)=repository.get(storeId,productId,id)}
-class CreateVariationUseCase(private val repository:VariationRepository):CreateVariation{override suspend fun invoke(storeId:StoreId,value:Variation)=repository.create(storeId,value)}
-class UpdateVariationUseCase(private val repository:VariationRepository):UpdateVariation{override suspend fun invoke(storeId:StoreId,productId:EntityId,id:EntityId,value:Variation)=repository.update(storeId,productId,id,value)}
-class DeleteVariationUseCase(private val repository:VariationRepository):DeleteVariation{override suspend fun invoke(storeId:StoreId,productId:EntityId,id:EntityId)=repository.delete(storeId,productId,id)}
-class GetAttributesUseCase(private val repository:AttributeRepository):GetAttributes{override suspend fun invoke(storeId:StoreId,page:Int,perPage:Int)=repository.list(storeId,page,perPage)}
-class GetAttributeUseCase(private val repository:AttributeRepository):GetAttribute{override suspend fun invoke(storeId:StoreId,id:EntityId)=repository.get(storeId,id)}
-class CreateAttributeUseCase(private val repository:AttributeRepository):CreateAttribute{override suspend fun invoke(storeId:StoreId,value:GlobalAttribute)=repository.create(storeId,value)}
-class UpdateAttributeUseCase(private val repository:AttributeRepository):UpdateAttribute{override suspend fun invoke(storeId:StoreId,id:EntityId,value:GlobalAttribute)=repository.update(storeId,id,value)}
-class DeleteAttributeUseCase(private val repository:AttributeRepository):DeleteAttribute{override suspend fun invoke(storeId:StoreId,id:EntityId)=repository.delete(storeId,id)}
-class GetTermsUseCase(private val repository:TermRepository):GetTerms{override suspend fun invoke(storeId:StoreId,attributeId:EntityId,page:Int,perPage:Int)=repository.list(storeId,attributeId,page,perPage)}
-class GetTermUseCase(private val repository:TermRepository):GetTerm{override suspend fun invoke(storeId:StoreId,attributeId:EntityId,id:EntityId)=repository.get(storeId,attributeId,id)}
-class CreateTermUseCase(private val repository:TermRepository):CreateTerm{override suspend fun invoke(storeId:StoreId,attributeId:EntityId,value:AttributeTerm)=repository.create(storeId,attributeId,value)}
-class UpdateTermUseCase(private val repository:TermRepository):UpdateTerm{override suspend fun invoke(storeId:StoreId,attributeId:EntityId,id:EntityId,value:AttributeTerm)=repository.update(storeId,attributeId,id,value)}
-class DeleteTermUseCase(private val repository:TermRepository):DeleteTerm{override suspend fun invoke(storeId:StoreId,attributeId:EntityId,id:EntityId)=repository.delete(storeId,attributeId,id)}
+import com.samanramezani1377.woogit.core.domain.model.*
+class GetOrderUseCase(private val r:OrderRepository):GetOrder{override suspend fun invoke(s:StoreId,id:EntityId)=r.get(s,id)}
+class GetOrdersUseCase(private val r:OrderRepository):GetOrders{override suspend fun invoke(s:StoreId,p:Int,n:Int,q:String?,st:String?)=r.list(s,p,n,q,st)}
+class UpdateOrderUseCase(private val r:OrderRepository):UpdateOrder{override suspend fun invoke(s:StoreId,id:EntityId,v:Order)=r.update(s,id,v)}
+class GetProductUseCase(private val r:ProductRepository):GetProduct{override suspend fun invoke(s:StoreId,id:EntityId)=r.get(s,id)}
+class GetProductsUseCase(private val r:ProductRepository):GetProducts{override suspend fun invoke(s:StoreId,p:Int,n:Int,q:String?)=r.list(s,p,n,q)}
+class CreateProductUseCase(private val r:ProductRepository):CreateProduct{override suspend fun invoke(s:StoreId,v:Product)=r.create(s,v)}
+class UpdateProductUseCase(private val r:ProductRepository):UpdateProduct{override suspend fun invoke(s:StoreId,id:EntityId,v:Product)=r.update(s,id,v)}
+class DeleteProductUseCase(private val r:ProductRepository):DeleteProduct{override suspend fun invoke(s:StoreId,id:EntityId)=r.delete(s,id)}
+class UploadMediaUseCase(private val r:MediaRepository):UploadMedia{override suspend fun invoke(s:StoreId,f:String,b:ByteArray,m:String)=r.upload(s,f,b,m)}
+class DeleteMediaUseCase(private val r:MediaRepository):DeleteMedia{override suspend fun invoke(s:StoreId,id:EntityId)=r.delete(s,id)}
+class GetStoreUseCase(private val r:StoreRepository):GetStore{override suspend fun invoke(s:StoreId)=r.get(s)}
+class ConnectStoreUseCase(private val r:StoreRepository):ConnectStore{override suspend fun invoke(s:StoreConnection,k:String,c:String)=r.connect(s,k,c)}
+class DisconnectStoreUseCase(private val r:StoreRepository):DisconnectStore{override suspend fun invoke(s:StoreId)=r.disconnect(s)}
+class GetConnectionStateUseCase(private val r:StoreRepository):GetConnectionState{override suspend fun invoke(s:StoreId)=r.get(s).let{if(it is CoreResult.Success)CoreResult.Success(it.value.state)else CoreResult.Failure((it as CoreResult.Failure).error)}}
+class GetPendingOperationsUseCase(private val r:PendingOperationRepository):GetPendingOperations{override suspend fun invoke(s:StoreId)=r.getPending(s)}
+class EnqueueOperationUseCase(private val r:PendingOperationRepository):EnqueueOperation{override suspend fun invoke(o:PendingOperation)=r.enqueue(o)}
+class GetSyncStateUseCase(private val r:SyncRepository):GetSyncState{override suspend fun invoke(s:StoreId)=r.getState(s)}
+class SyncPendingOperationsUseCase(private val r:SyncRepository):SyncPendingOperations{override suspend fun invoke(s:StoreId)=r.sync(s)}
+class GetConflictsUseCase(private val r:SyncRepository){suspend operator fun invoke(s:StoreId)=r.getConflicts(s)}
+class ResolveConflictUseCase(private val r:SyncRepository){suspend operator fun invoke(s:StoreId,id:EntityId,x:ConflictResolution)=r.resolveConflict(s,id,x)}
+class AddOrderNoteUseCase(private val r:OrderNoteRepository):AddOrderNote{override suspend fun invoke(s:StoreId,id:EntityId,c:String,n:Boolean)=r.addNote(s,id,c,n)}
+class GetVariationsUseCase(private val r:VariationRepository):GetVariations{override suspend fun invoke(s:StoreId,p:EntityId,n:Int,q:Int)=r.list(s,p,n,q)}
+class GetVariationUseCase(private val r:VariationRepository):GetVariation{override suspend fun invoke(s:StoreId,p:EntityId,id:EntityId)=r.get(s,p,id)}
+class CreateVariationUseCase(private val r:VariationRepository):CreateVariation{override suspend fun invoke(s:StoreId,v:Variation)=r.create(s,v)}
+class UpdateVariationUseCase(private val r:VariationRepository):UpdateVariation{override suspend fun invoke(s:StoreId,p:EntityId,id:EntityId,v:Variation)=r.update(s,p,id,v)}
+class DeleteVariationUseCase(private val r:VariationRepository):DeleteVariation{override suspend fun invoke(s:StoreId,p:EntityId,id:EntityId)=r.delete(s,p,id)}
+class GetAttributesUseCase(private val r:AttributeRepository):GetAttributes{override suspend fun invoke(s:StoreId,p:Int,n:Int)=r.list(s,p,n)}
+class GetAttributeUseCase(private val r:AttributeRepository):GetAttribute{override suspend fun invoke(s:StoreId,id:EntityId)=r.get(s,id)}
+class CreateAttributeUseCase(private val r:AttributeRepository):CreateAttribute{override suspend fun invoke(s:StoreId,v:GlobalAttribute)=r.create(s,v)}
+class UpdateAttributeUseCase(private val r:AttributeRepository):UpdateAttribute{override suspend fun invoke(s:StoreId,id:EntityId,v:GlobalAttribute)=r.update(s,id,v)}
+class DeleteAttributeUseCase(private val r:AttributeRepository):DeleteAttribute{override suspend fun invoke(s:StoreId,id:EntityId)=r.delete(s,id)}
+class GetTermsUseCase(private val r:TermRepository):GetTerms{override suspend fun invoke(s:StoreId,a:EntityId,p:Int,n:Int)=r.list(s,a,p,n)}
+class GetTermUseCase(private val r:TermRepository):GetTerm{override suspend fun invoke(s:StoreId,a:EntityId,id:EntityId)=r.get(s,a,id)}
+class CreateTermUseCase(private val r:TermRepository):CreateTerm{override suspend fun invoke(s:StoreId,a:EntityId,v:AttributeTerm)=r.create(s,a,v)}
+class UpdateTermUseCase(private val r:TermRepository):UpdateTerm{override suspend fun invoke(s:StoreId,a:EntityId,id:EntityId,v:AttributeTerm)=r.update(s,a,id,v)}
+class DeleteTermUseCase(private val r:TermRepository):DeleteTerm{override suspend fun invoke(s:StoreId,a:EntityId,id:EntityId)=r.delete(s,a,id)}

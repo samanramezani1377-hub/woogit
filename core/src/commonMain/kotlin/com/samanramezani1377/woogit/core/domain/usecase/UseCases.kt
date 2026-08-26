@@ -13,6 +13,8 @@ interface GetProducts { suspend operator fun invoke(storeId: StoreId, page: Int 
 interface CreateProduct { suspend operator fun invoke(storeId: StoreId, value: Product): CoreResult<Product> }
 interface UpdateProduct { suspend operator fun invoke(storeId: StoreId, id: EntityId, value: Product): CoreResult<Product> }
 interface DeleteProduct { suspend operator fun invoke(storeId: StoreId, id: EntityId): CoreResult<Unit> }
+interface UploadMedia { suspend operator fun invoke(storeId: StoreId, fileName: String, bytes: ByteArray, mediaType: String): CoreResult<ProductImage> }
+interface DeleteMedia { suspend operator fun invoke(storeId: StoreId, mediaId: EntityId): CoreResult<Unit> }
 interface GetStore { suspend operator fun invoke(storeId: StoreId): CoreResult<StoreConnection> }
 interface ConnectStore { suspend operator fun invoke(store: StoreConnection, consumerKey: String, consumerSecret: String): CoreResult<StoreConnection> }
 interface DisconnectStore { suspend operator fun invoke(storeId: StoreId): CoreResult<Unit> }
