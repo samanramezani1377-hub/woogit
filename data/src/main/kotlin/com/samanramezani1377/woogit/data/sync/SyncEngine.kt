@@ -16,31 +16,34 @@ class SyncEngine(
 
     suspend fun runOnce(now: Long) {
         db.transaction { db.syncQueries.recoverRunning(now, now - CLAIM_TIMEOUT_MS) }
-        db.syncQueries.selectPending(now.toInt()).executeAsList().forEach { row ->
+        db.syncQueries.selectPending(now).executeAsList().forEach { row ->
             process(row.toPendingOperation(), now)
         }
     }
 
     suspend fun runOnce(storeId: String, now: Long) {
         db.transaction { db.syncQueries.recoverRunning(now, now - CLAIM_TIMEOUT_MS) }
-        db.syncQueries.selectPendingByStore(storeId, now.toInt()).executeAsList().forEach { row ->
+        db.syncQueries.selectPendingByStore(storeId, now).executeAsList().forEach { row ->
             process(row.toPendingOperation(), now)
         }
     }
 
-    private fun com.samanramezani1377.woogit.data.db.Pending_operation.toPendingOperation() =
-        PendingOperation(
-            id = EntityId(id),
-            storeId = StoreId(store_id),
-            entityType = entity_type,
-            entityId = EntityId(entity_id),
-            type = OperationType.valueOf(operation_type),
-            payloadJson = payload_json,
-            payloadHash = payload_hash,
-            retryCount = retry_count.toInt(),
-            claimedAt = claimed_at?.let(Instant::fromEpochMilliseconds),
-            nextAttemptAt = next_attempt_at?.let(Instant::fromEpochMilliseconds),
+    private fun Any.toPendingOperation(): PendingOperation {
+        @Suppress("UNCHECKED_CAST")
+        val row = this as com.samanramezani1377.woogit.data.Pending_operation
+        return PendingOperation(
+            id = EntityId(row.id),
+            storeId = StoreId(row.store_id),
+            entityType = row.entity_type,
+            entityId = EntityId(row.entity_id),
+            type = OperationType.valueOf(row.operation_type),
+            payloadJson = row.payload_json,
+            payloadHash = row.payload_hash,
+            retryCount = row.retry_count.toInt(),
+            lastAttemptAt = row.claimed_at?.let(Instant::fromEpochMilliseconds),
+            nextAttemptAt = row.next_attempt_at?.let(Instant::fromEpochMilliseconds),
         )
+    }
 
     private suspend fun process(op: PendingOperation, now: Long) {
         val claimed = db.transactionWithResult {
