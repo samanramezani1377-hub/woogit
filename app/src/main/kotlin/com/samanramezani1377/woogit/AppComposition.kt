@@ -15,6 +15,7 @@ import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 class AppComposition(context:Context){
@@ -31,11 +32,11 @@ class AppComposition(context:Context){
  val getVariations=GetVariationsUseCase(variationRepository);val getVariation=GetVariationUseCase(variationRepository);val createVariation=CreateVariationUseCase(variationRepository);val updateVariation=UpdateVariationUseCase(variationRepository);val deleteVariation=DeleteVariationUseCase(variationRepository);val getAttributes=GetAttributesUseCase(attributeRepository);val getAttribute=GetAttributeUseCase(attributeRepository);val createAttribute=CreateAttributeUseCase(attributeRepository);val updateAttribute=UpdateAttributeUseCase(attributeRepository);val deleteAttribute=DeleteAttributeUseCase(attributeRepository);val getTerms=GetTermsUseCase(termRepository);val getTerm=GetTermUseCase(termRepository);val createTerm=CreateTermUseCase(termRepository);val updateTerm=UpdateTermUseCase(termRepository);val deleteTerm=DeleteTermUseCase(termRepository);val uploadMedia=UploadMediaUseCase(mediaRepository);val deleteMedia=DeleteMediaUseCase(mediaRepository)
  val syncPending=SyncPendingOperationsUseCase(syncRepository);val getSyncState=GetSyncStateUseCase(syncRepository);val getPending=GetPendingOperationsUseCase(pending);val getConflicts=GetConflictsUseCase(syncRepository);val resolveConflict=ResolveConflictUseCase(syncRepository)
  private fun rememberStore(id:String){prefs.edit().putString("active_store_id",id).apply();startBackgroundWork(id)}
- private fun forgetStore(){val id=prefs.getString("active_store_id",null);if(id!=null)scope.launch{disconnectStore(StoreId(id))};prefs.edit().remove("active_store_id").apply();cancelBackgroundWork()}
+ private fun forgetStore(){val id=prefs.getString("active_store_id",null);if(id!=null)scope.launch{disconnectStore(StoreId(id))};prefs.edit().remove("active_store_id").apply();if(id!=null)cancelBackgroundWork(id)}
  private val getConflictsFn:suspend(StoreId)->com.samanramezani1377.woogit.core.domain.error.CoreResult<List<com.samanramezani1377.woogit.core.domain.model.Conflict>>={getConflicts(it)}
  private val resolveConflictFn:suspend(StoreId,com.samanramezani1377.woogit.core.domain.entity.EntityId,com.samanramezani1377.woogit.core.domain.model.ConflictResolution)->com.samanramezani1377.woogit.core.domain.error.CoreResult<Unit>={s,id,r->resolveConflict(s,id,r)}
  val v1Presentation=V1PresentationDependencies(getStore,connectStore,disconnectStore,getOrders,getOrder,updateOrder,addOrderNote,getProducts,getProduct,createProduct,updateProduct,deleteProduct,getVariations,getVariation,createVariation,updateVariation,deleteVariation,getAttributes,getAttribute,createAttribute,updateAttribute,deleteAttribute,getTerms,getTerm,createTerm,updateTerm,deleteTerm,uploadMedia,deleteMedia,getConnectionState,getSyncState,getPending,getConflictsFn,resolveConflictFn,syncPending,prefs.getString("active_store_id",null),::rememberStore,::forgetStore)
  fun startBackgroundWork(storeId:String){OrderPollingWorker.schedule(appContext,storeId)}
- fun cancelBackgroundWork(){WorkManager.getInstance(appContext).cancelUniqueWork("woogit-order-polling")}
+ fun cancelBackgroundWork(storeId:String){OrderPollingWorker.cancel(appContext,storeId)}
  fun close(){scope.cancel();network.close()}
 }
