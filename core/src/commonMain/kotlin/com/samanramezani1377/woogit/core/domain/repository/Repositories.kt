@@ -2,23 +2,24 @@ package com.samanramezani1377.woogit.core.domain.repository
 
 import com.samanramezani1377.woogit.core.domain.entity.EntityId
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
+import com.samanramezani1377.woogit.core.domain.error.CoreResult
 
-interface OrderRepository {
-    suspend fun get(id: EntityId): Any?
+interface OrderRepository<T> {
+    suspend fun get(storeId: StoreId, id: EntityId): CoreResult<T>
 }
 
-interface ProductRepository {
-    suspend fun get(id: EntityId): Any?
+interface ProductRepository<T> {
+    suspend fun get(storeId: StoreId, id: EntityId): CoreResult<T>
 }
 
-interface StoreRepository {
-    suspend fun get(id: StoreId): Any?
+interface StoreRepository<T> {
+    suspend fun get(id: StoreId): CoreResult<T>
 }
 
-interface PendingOperationRepository {
-    suspend fun pending(storeId: StoreId): List<EntityId>
+interface PendingOperationRepository<T> {
+    suspend fun pending(storeId: StoreId): CoreResult<List<T>>
 }
 
 interface SyncRepository {
-    suspend fun enqueue(storeId: StoreId, operationId: EntityId)
+    suspend fun enqueue(storeId: StoreId, operationId: EntityId): CoreResult<Unit>
 }
