@@ -1,0 +1,18 @@
+package com.samanramezani1377.woogit.data.network
+
+import kotlinx.serialization.Serializable
+
+@Serializable
+data class WooOrderDto(val id: Long, val status: String = "", val total: String = "", val currency: String = "")
+
+@Serializable
+data class WooProductDto(val id: Long, val name: String = "", val type: String = "", val status: String = "", val price: String? = null)
+
+@Serializable
+data class WooVariationDto(val id: Long, val sku: String? = null, val price: String? = null)
+
+@Serializable
+data class WooAttributeDto(val id: Long? = null, val name: String = "", val slug: String = "")
+
+@Serializable
+data class WooImageDto(val id: Long? = null, val src: String = "", val name: String = "", val alt: String = "")
