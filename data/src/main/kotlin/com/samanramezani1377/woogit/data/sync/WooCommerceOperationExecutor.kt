@@ -6,8 +6,10 @@ import com.samanramezani1377.woogit.core.domain.error.CoreResult
 import com.samanramezani1377.woogit.core.domain.model.OperationType
 import com.samanramezani1377.woogit.core.domain.model.Order
 import com.samanramezani1377.woogit.core.domain.model.Product
+import com.samanramezani1377.woogit.core.domain.repository.LocalAttributeDataSource
 import com.samanramezani1377.woogit.core.domain.repository.LocalOrderDataSource
 import com.samanramezani1377.woogit.core.domain.repository.LocalProductDataSource
+import com.samanramezani1377.woogit.core.domain.repository.LocalTermDataSource
 import com.samanramezani1377.woogit.core.domain.repository.LocalVariationDataSource
 import com.samanramezani1377.woogit.data.db.Pending_operation
 import com.samanramezani1377.woogit.data.db.WooGitDatabase
@@ -16,8 +18,8 @@ import kotlinx.datetime.Clock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonPrimitive
 
 private val json=Json{ignoreUnknownKeys=true;explicitNulls=false}
@@ -26,7 +28,7 @@ class ConflictDetected(message:String):Exception(message)
 @Serializable private data class OrderMutation(val status:String,val __woogit_force_local:Boolean=false)
 @Serializable private data class NoteMutation(val note:String,val customer_note:Boolean=false)
 
-class WooCommerceOperationExecutor(private val db:WooGitDatabase,private val provider:com.samanramezani1377.woogit.data.repository.WooCommerceClientProvider,private val orders:LocalOrderDataSource<Order>,private val products:LocalProductDataSource<Product>,private val variations:LocalVariationDataSource):OperationExecutor{
+class WooCommerceOperationExecutor(private val db:WooGitDatabase,private val provider:com.samanramezani1377.woogit.data.repository.WooCommerceClientProvider,private val orders:LocalOrderDataSource<Order>,private val products:LocalProductDataSource<Product>,private val variations:LocalVariationDataSource,private val attributes:LocalAttributeDataSource,private val terms:LocalTermDataSource):OperationExecutor{
  override suspend fun execute(operation:Pending_operation){
   val storeId=StoreId(operation.store_id);val(store,api)=provider.client(storeId).getOrThrow()
   when(operation.entity_type to OperationType.valueOf(operation.operation_type)){
@@ -37,11 +39,11 @@ class WooCommerceOperationExecutor(private val db:WooGitDatabase,private val pro
    "product" to OperationType.DELETE->{api.deleteProduct(store.baseUrl,operation.entity_id.toLong()).getOrThrow()}
    "variation" to OperationType.CREATE->{val v=json.decodeFromString<WooVariationTypedDto>(operation.payload_json);val remote=api.createVariation(store.baseUrl,v.product_id,v).getOrThrow();variations.delete(storeId,EntityId(v.product_id.toString()),EntityId(operation.entity_id));variations.upsert(storeId,remote.toDomain())}
    "variation" to OperationType.UPDATE->{val v=json.decodeFromString<WooVariationTypedDto>(operation.payload_json);val remote=api.variation(store.baseUrl,v.product_id,operation.entity_id.toLong()).getOrThrow();if(v.date_modified_gmt!=null&&remote.date_modified_gmt!=null&&v.date_modified_gmt!=remote.date_modified_gmt){persistConflict(operation,operation.payload_json,json.encodeToString(remote),v.date_modified_gmt,remote.date_modified_gmt);throw ConflictDetected("Remote variation changed before sync")};api.updateVariation(store.baseUrl,v.product_id,operation.entity_id.toLong(),v).getOrThrow()}
-   "variation" to OperationType.DELETE->{val v=runCatching{json.decodeFromString<WooVariationTypedDto>(operation.payload_json)}.getOrNull();val productId=v?.product_id?:operation.id.substringBeforeLast('-').substringAfterLast('-').toLongOrNull()?:error("Variation product id unavailable");api.deleteVariation(store.baseUrl,productId,operation.entity_id.toLong()).getOrThrow()}
-   "attribute" to OperationType.CREATE->{val value=json.decodeFromString<WooGlobalAttributeDto>(operation.payload_json);api.createAttribute(store.baseUrl,value).getOrThrow()}
+   "variation" to OperationType.DELETE->{val productId=operation.id.substringAfter("variation-delete-${storeId.value}-").substringBefore("-${operation.entity_id.value}").toLongOrNull()?:error("Variation product id unavailable");api.deleteVariation(store.baseUrl,productId,operation.entity_id.toLong()).getOrThrow()}
+   "attribute" to OperationType.CREATE->{val value=json.decodeFromString<WooGlobalAttributeDto>(operation.payload_json);val remote=api.createAttribute(store.baseUrl,value).getOrThrow();attributes.delete(storeId,EntityId(operation.entity_id));attributes.upsert(storeId,remote.toDomain())}
    "attribute" to OperationType.UPDATE->{val value=json.decodeFromString<WooGlobalAttributeDto>(operation.payload_json);api.updateAttribute(store.baseUrl,operation.entity_id.toLong(),value).getOrThrow()}
    "attribute" to OperationType.DELETE->{api.deleteAttribute(store.baseUrl,operation.entity_id.toLong()).getOrThrow()}
-   "term" to OperationType.CREATE->{val value=json.decodeFromString<WooAttributeTermDto>(operation.payload_json);val attributeId=operation.id.substringAfter("term-create-${storeId.value}-").substringBefore("-${operation.entity_id.value}").toLongOrNull()?:error("Term attribute id unavailable");api.createTerm(store.baseUrl,attributeId,value).getOrThrow()}
+   "term" to OperationType.CREATE->{val value=json.decodeFromString<WooAttributeTermDto>(operation.payload_json);val attributeId=operation.id.substringAfter("term-create-${storeId.value}-").substringBefore("-${operation.entity_id.value}").toLongOrNull()?:error("Term attribute id unavailable");val remote=api.createTerm(store.baseUrl,attributeId,value).getOrThrow();terms.delete(storeId,EntityId(attributeId.toString()),EntityId(operation.entity_id));terms.upsert(storeId,EntityId(attributeId.toString()),remote.toDomain())}
    "term" to OperationType.UPDATE->{val value=json.decodeFromString<WooAttributeTermDto>(operation.payload_json);val attributeId=operation.id.substringAfter("term-update-${storeId.value}-").substringBefore("-${operation.entity_id.value}").toLongOrNull()?:error("Term attribute id unavailable");api.updateTerm(store.baseUrl,attributeId,operation.entity_id.toLong(),value).getOrThrow()}
    "term" to OperationType.DELETE->{val attributeId=operation.id.substringAfter("term-delete-${storeId.value}-").substringBefore("-${operation.entity_id.value}").toLongOrNull()?:error("Term attribute id unavailable");api.deleteTerm(store.baseUrl,attributeId,operation.entity_id.toLong()).getOrThrow()}
   }
@@ -51,3 +53,5 @@ class WooCommerceOperationExecutor(private val db:WooGitDatabase,private val pro
 }
 private fun WooProductTypedDto.toDomain()=Product(EntityId(id.toString()),name,sku,description,short_description,when(status){"publish"->com.samanramezani1377.woogit.core.domain.model.ProductStatus.PUBLISHED;"pending"->com.samanramezani1377.woogit.core.domain.model.ProductStatus.PENDING;"private"->com.samanramezani1377.woogit.core.domain.model.ProductStatus.PRIVATE;else->com.samanramezani1377.woogit.core.domain.model.ProductStatus.DRAFT},when(type){"variable"->com.samanramezani1377.woogit.core.domain.model.ProductType.VARIABLE;"grouped"->com.samanramezani1377.woogit.core.domain.model.ProductType.GROUPED;"external"->com.samanramezani1377.woogit.core.domain.model.ProductType.EXTERNAL;else->com.samanramezani1377.woogit.core.domain.model.ProductType.SIMPLE},com.samanramezani1377.woogit.core.domain.model.Pricing(regular_price,sale_price,on_sale),com.samanramezani1377.woogit.core.domain.model.Stock(stock_quantity,com.samanramezani1377.woogit.core.domain.model.StockStatus.IN_STOCK,manage_stock),images.map{com.samanramezani1377.woogit.core.domain.model.ProductImage(it.id?.let(::EntityId)?:EntityId("0"),it.src,it.name,it.alt)},categories.map{com.samanramezani1377.woogit.core.domain.model.IdName(EntityId(it.id.toString()),it.name)},attributes.map{com.samanramezani1377.woogit.core.domain.model.Attribute(it.id?.let(::EntityId),it.name,it.visible,it.variation,it.options)},date_modified_gmt)
 private fun WooVariationTypedDto.toDomain()=com.samanramezani1377.woogit.core.domain.model.Variation(EntityId(id.toString()),EntityId(product_id.toString()),attributes.map{com.samanramezani1377.woogit.core.domain.model.VariationAttribute(it.name,it.options.firstOrNull().orEmpty())},com.samanramezani1377.woogit.core.domain.model.Pricing(regular_price,sale_price,sale_price!=null),com.samanramezani1377.woogit.core.domain.model.Stock(stock_quantity,when(stock_status){"outofstock"->com.samanramezani1377.woogit.core.domain.model.StockStatus.OUT_OF_STOCK;"onbackorder"->com.samanramezani1377.woogit.core.domain.model.StockStatus.ON_BACKORDER;else->com.samanramezani1377.woogit.core.domain.model.StockStatus.IN_STOCK},manage_stock),sku,image?.let{com.samanramezani1377.woogit.core.domain.model.ProductImage(it.id?.let(::EntityId)?:EntityId("0"),it.src,it.name,it.alt)},date_modified_gmt)
+private fun WooGlobalAttributeDto.toDomain()=com.samanramezani1377.woogit.core.domain.model.GlobalAttribute(EntityId(id.toString()),name,slug,emptyList())
+private fun WooAttributeTermDto.toDomain()=com.samanramezani1377.woogit.core.domain.model.AttributeTerm(EntityId(id.toString()),name,slug)
