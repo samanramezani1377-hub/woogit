@@ -1,4 +1,0 @@
-PRAGMA user_version;
-
-checkpoint:
-SELECT 1;
