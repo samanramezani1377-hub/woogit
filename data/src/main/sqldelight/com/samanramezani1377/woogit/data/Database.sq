@@ -1,7 +1,2 @@
-PRAGMA user_version;
-
 checkpoint:
 SELECT 1;
-
-setUserVersion:
-PRAGMA user_version = ?;
