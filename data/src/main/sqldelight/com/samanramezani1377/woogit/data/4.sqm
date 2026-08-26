@@ -1,0 +1,11 @@
+CREATE TABLE attribute_term_entity (
+    id TEXT NOT NULL,
+    store_id TEXT NOT NULL,
+    attribute_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    slug TEXT,
+    payload_json TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (id, store_id, attribute_id)
+);
