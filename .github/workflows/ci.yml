@@ -23,3 +23,5 @@ jobs:
         run: gradle build --stacktrace
       - name: Unit tests
         run: gradle test --stacktrace
+      - name: Android lint
+        run: gradle lint --stacktrace
