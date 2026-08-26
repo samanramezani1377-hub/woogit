@@ -9,6 +9,7 @@ import com.samanramezani1377.woogit.core.security.CredentialPair
 import com.samanramezani1377.woogit.core.security.SecureCredentialStore
 import java.nio.charset.StandardCharsets
 import java.security.KeyStore
+import java.security.MessageDigest
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -23,8 +24,7 @@ class AndroidSecureCredentialStore(context: Context) : SecureCredentialStore {
         require(consumerSecret.isNotBlank()) { "Consumer secret cannot be blank" }
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey(reference))
-        val plaintext = "$consumerKey\u0000$consumerSecret".toByteArray(StandardCharsets.UTF_8)
-        val encrypted = cipher.doFinal(plaintext)
+        val encrypted = cipher.doFinal("$consumerKey\u0000$consumerSecret".toByteArray(StandardCharsets.UTF_8))
         preferences.edit()
             .putString(ivKey(reference), Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
             .putString(ciphertextKey(reference), Base64.encodeToString(encrypted, Base64.NO_WRAP))
@@ -60,14 +60,20 @@ class AndroidSecureCredentialStore(context: Context) : SecureCredentialStore {
                 ).setBlockModes(KeyProperties.BLOCK_MODE_GCM)
                     .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
                     .setRandomizedEncryptionRequired(true)
+                    .setKeySize(256)
                     .build()
             )
         }.generateKey()
     }
 
-    private fun alias(reference: CredentialReference) = "woogit.credential.${reference.value}"
-    private fun ivKey(reference: CredentialReference) = "iv.${reference.value}"
-    private fun ciphertextKey(reference: CredentialReference) = "ciphertext.${reference.value}"
+    private fun alias(reference: CredentialReference): String = "woogit.credential.${sha256(reference.value)}"
+
+    private fun sha256(value: String): String = MessageDigest.getInstance("SHA-256")
+        .digest(value.toByteArray(StandardCharsets.UTF_8))
+        .joinToString("") { "%02x".format(it) }
+
+    private fun ivKey(reference: CredentialReference) = "iv.${sha256(reference.value)}"
+    private fun ciphertextKey(reference: CredentialReference) = "ciphertext.${sha256(reference.value)}"
 
     private companion object {
         const val ANDROID_KEYSTORE = "AndroidKeyStore"
