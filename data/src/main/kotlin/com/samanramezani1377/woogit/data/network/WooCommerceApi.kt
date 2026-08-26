@@ -1,9 +1,10 @@
 package com.samanramezani1377.woogit.data.network
 
-import com.samanramezani1377.woogit.core.domain.model.CredentialPair
+import com.samanramezani1377.woogit.core.security.CredentialPair
 import io.ktor.client.HttpClient
 import io.ktor.client.request.*
 import io.ktor.http.*
+import io.ktor.client.statement.bodyAsText
 import java.util.Base64
 
 class WooCommerceApi(private val client: HttpClient, private val credentials: CredentialPair) {
@@ -35,11 +36,34 @@ class WooCommerceApi(private val client: HttpClient, private val credentials: Cr
     suspend fun deleteAttributeTerm(baseUrl: String, attributeId: Long, id: Long, force: Boolean = false) = request(baseUrl, "/wp-json/wc/v3/products/attributes/$attributeId/terms/$id", "DELETE", params = mapOf("force" to force))
     suspend fun uploadMedia(baseUrl: String, fileName: String, bytes: ByteArray, mediaType: String) = requestBytes(baseUrl, "/wp-json/wp/v2/media", fileName, bytes, mediaType)
     suspend fun deleteMedia(baseUrl: String, mediaId: Long, force: Boolean = true) = request(baseUrl, "/wp-json/wp/v2/media/$mediaId", "DELETE", params = mapOf("force" to force))
-    private suspend fun request(baseUrl: String, path: String, method: String = "GET", body: String? = null, params: Map<String, Any> = emptyMap()): ApiResponse { val url=Url("${baseUrl.trimEnd('/')}$path");require(url.protocol.name=="https"){"WooCommerce API requires HTTPS"};val response=when(method){"POST"->client.post(url){common(params);contentType(ContentType.Application.Json);setBody(body?:"{}")} ;"PUT"->client.put(url){common(params);contentType(ContentType.Application.Json);setBody(body?:"{}")} ;"PATCH"->client.patch(url){common(params);contentType(ContentType.Application.Json);setBody(body?:"{}")} ;"DELETE"->client.delete(url){common(params)} ;else->client.get(url){common(params)}};return ApiResponse(response.status.value,response.bodyAsText()) }
-    private suspend fun requestBytes(baseUrl:String,path:String,fileName:String,bytes:ByteArray,mediaType:String):ApiResponse{val url=Url("${baseUrl.trimEnd('/')}$path");require(url.protocol.name=="https"){"WooCommerce API requires HTTPS"};val response=client.post(url){header(HttpHeaders.Authorization,basicAuth());header(HttpHeaders.ContentDisposition,"attachment; filename=\"$fileName\"");header(HttpHeaders.ContentType,mediaType);setBody(bytes)};return ApiResponse(response.status.value,response.bodyAsText())}
-    private fun HttpRequestBuilder.common(params:Map<String,Any>){header(HttpHeaders.Authorization,basicAuth());params.forEach{(key,value)->parameter(key,value)}}
-    private fun basicAuth():String="Basic ${Base64.getEncoder().encodeToString("${credentials.consumerKey}:${credentials.consumerSecret}".toByteArray())}"
-    private fun params(page:Int,perPage:Int,search:String?=null,status:String?=null)=buildMap<String,Any>{put("page",page);put("per_page",perPage);if(!search.isNullOrBlank())put("search",search);if(!status.isNullOrBlank())put("status",status)}
+
+    private suspend fun request(baseUrl: String, path: String, method: String = "GET", body: String? = null, params: Map<String, Any> = emptyMap()): ApiResponse {
+        val url = Url("${baseUrl.trimEnd('/')}$path")
+        require(url.protocol.name == "https") { "WooCommerce API requires HTTPS" }
+        val response = when (method) {
+            "POST" -> client.post(url) { common(params); contentType(ContentType.Application.Json); setBody(body ?: "{}") }
+            "PUT" -> client.put(url) { common(params); contentType(ContentType.Application.Json); setBody(body ?: "{}") }
+            "PATCH" -> client.patch(url) { common(params); contentType(ContentType.Application.Json); setBody(body ?: "{}") }
+            "DELETE" -> client.delete(url) { common(params) }
+            else -> client.get(url) { common(params) }
+        }
+        return ApiResponse(response.status.value, response.bodyAsText())
+    }
+
+    private suspend fun requestBytes(baseUrl: String, path: String, fileName: String, bytes: ByteArray, mediaType: String): ApiResponse {
+        val url = Url("${baseUrl.trimEnd('/')}$path")
+        require(url.protocol.name == "https") { "WooCommerce API requires HTTPS" }
+        val response = client.post(url) {
+            header(HttpHeaders.Authorization, basicAuth())
+            header(HttpHeaders.ContentDisposition, "attachment; filename=\"$fileName\"")
+            header(HttpHeaders.ContentType, mediaType)
+            setBody(bytes)
+        }
+        return ApiResponse(response.status.value, response.bodyAsText())
+    }
+    private fun HttpRequestBuilder.common(params: Map<String, Any>) { header(HttpHeaders.Authorization, basicAuth()); params.forEach { (key, value) -> parameter(key, value) } }
+    private fun basicAuth(): String = "Basic ${Base64.getEncoder().encodeToString("${credentials.consumerKey}:${credentials.consumerSecret}".toByteArray())}"
+    private fun params(page: Int, perPage: Int, search: String? = null, status: String? = null) = buildMap<String, Any> { put("page", page); put("per_page", perPage); if (!search.isNullOrBlank()) put("search", search); if (!status.isNullOrBlank()) put("status", status) }
 }
 
-data class ApiResponse(val statusCode:Int,val body:String)
+data class ApiResponse(val statusCode: Int, val body: String)
