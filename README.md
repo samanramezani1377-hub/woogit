@@ -43,26 +43,32 @@ V1 عمداً روی **ساخت پایه واقعی محصول** تمرکز دا
 
 برای mutationهای مبهم، مانند timeout بعد از ارسال درخواست، WooGit نباید کورکورانه همان mutation را تکرار کند؛ operation identity پایدار، persistence و reconciliation قبل از retry ناامن الزامی است.
 
+## وضعیت فعلی
+
+Foundation و لایه‌های Core/Data/Sync پروژه پیاده‌سازی شده‌اند و **E11 — Design System & UI** در حال تکمیل روی همین معماری است. Theme Foundation و Liquid Glass primitives اضافه شده‌اند و UI اصلی V1 اکنون از مسیر `E11ReleaseApp` و Composition Root موجود استفاده می‌کند. مرحله بعدی، E12 برای تکمیل و سخت‌گیری integration بین UI و Core است.
+
+این وضعیت به معنی اجرای Test Suite یا اعلام Release نهایی نیست؛ تست‌ها طبق Scope فعلی این اجرای فنی خارج از معیار Done هستند.
+
 ## وضعیت مستندات و Source of Truth
 
 README فقط **ورودی و نمای کلی پروژه** است و جزئیات در مستندات تخصصی نگهداری می‌شوند.
 
 ### Product & Architecture
-- **[Product Vision](docs/PRODUCT_VISION.md)** — چه چیزی می‌سازیم و چرا.
-- **[Roadmap](docs/ROADMAP.md)** — چه چیزی در V1 فعال است و چه چیزی به آینده موکول شده.
-- **[Architecture](docs/ARCHITECTURE.md)** — Core-Out، KMP و اصول معماری V1.
-- **[V1 Architecture Decisions](docs/V1_ARCHITECTURE_DECISIONS.md)** — تصمیم‌های کلیدی معماری V1.
-- **[V1 Pre-Build Gate](docs/V1_PREBUILD_GATE.md)** — قفل‌های لازم قبل از پیاده‌سازی.
+- **[Product Vision](docs/PRODUCT_VISION.md)**
+- **[Roadmap](docs/ROADMAP.md)**
+- **[Architecture](docs/ARCHITECTURE.md)**
+- **[V1 Architecture Decisions](docs/V1_ARCHITECTURE_DECISIONS.md)**
+- **[V1 Pre-Build Gate](docs/V1_PREBUILD_GATE.md)**
 
 ### V1 Implementation Contracts
-- **[V1 Design Specification](docs/V1_DESIGN_SPEC.md)** — صفحات، Navigation، Stateها، Design System و Accessibility.
-- **[V1 Data Contracts](docs/V1_DATA_CONTRACTS.md)** — Local-first، Versioning، Queue، Idempotency و Conflict.
-- **[V1 API Contract](docs/V1_API_CONTRACT.md)** — مرز و عملیات WooCommerce REST API.
-- **[V1 Schema](docs/V1_SCHEMA.md)** — قرارداد دیتابیس محلی و Migration.
-- **[V1 Notification Specification](docs/V1_NOTIFICATION_SPEC.md)** — اعلان V1 بدون سرور و محدودیت‌های Android.
-- **[V1 Error Catalog](docs/V1_ERROR_CATALOG.md)** — خطاها و رفتار Recovery.
-- **[V1 Permission & Security](docs/V1_PERMISSION_SECURITY.md)** — Permission، Credential، TLS و Logging.
-- **[V1 Traceability](docs/V1_TRACEABILITY.md)** — ارتباط Requirement → Task → Test → Evidence.
+- **[V1 Design Specification](docs/V1_DESIGN_SPEC.md)**
+- **[V1 Data Contracts](docs/V1_DATA_CONTRACTS.md)**
+- **[V1 API Contract](docs/V1_API_CONTRACT.md)**
+- **[V1 Schema](docs/V1_SCHEMA.md)**
+- **[V1 Notification Specification](docs/V1_NOTIFICATION_SPEC.md)**
+- **[V1 Error Catalog](docs/V1_ERROR_CATALOG.md)**
+- **[V1 Permission & Security](docs/V1_PERMISSION_SECURITY.md)**
+- **[V1 Traceability](docs/V1_TRACEABILITY.md)**
 
 ### Existing Detailed Documentation
 - **[Orders & Products](docs/ORDERS_AND_PRODUCTS.md)**
@@ -71,7 +77,7 @@ README فقط **ورودی و نمای کلی پروژه** است و جزئیا�
 - **[Commit Versioning](docs/COMMIT_VERSIONING.md)**
 - **[Conflict Resolution](docs/CONFLICT_RESOLUTION.md)**
 - **[Notifications & Events](docs/NOTIFICATIONS_AND_EVENTS.md)**
-- **[Notification Specification](docs/NOTIFICATION_SPEC.md)**
+- **[Notification Specification](docs/NOTIFICATION_SPECIFICATION.md)**
 - **[Notification Roadmap](docs/NOTIFICATION_ROADMAP.md)**
 - **[Security & Auth](docs/SECURITY_AND_AUTH.md)**
 - **[Security & Permissions](docs/SECURITY_AND_PERMISSIONS.md)**
@@ -92,12 +98,6 @@ README فقط **ورودی و نمای کلی پروژه** است و جزئیا�
 4. قابلیت آینده باید از نظر معماری آماده باشد، اما بدون تصمیم صریح نباید زودتر فعال شود.
 5. هیچ قابلیت موجود بدون تصمیم صریح حذف نمی‌شود.
 6. اسناد `docs/V1_*` قراردادهای اجرایی V1 هستند؛ در صورت تعارض، Decision Tracker و قراردادهای قفل‌شده باید بررسی و سپس تصمیم صریح ثبت شود.
-
-## وضعیت فعلی
-
-پروژه در مرحله **تعریف و تثبیت محصول/معماری پیش از کدنویسی** است. پیش از شروع پیاده‌سازی، جریان‌ها و صفحات V1 باید در سطح Hi-Fi و همراه با Design System اختصاصی Liquid Glass مشخص شوند. قراردادهای اجرایی V1 اکنون در `docs/V1_*` تثبیت شده‌اند و Pre-Build Gate مرجع کنترل ورود به کدنویسی است.
-
-برای ترتیب نسخه‌ها و مرز دقیق V1، مرجع اصلی `docs/ROADMAP.md` و برای ترتیب اجرای Taskها `docs/EXECUTION_PLAN.md` است.
 
 ## License
 
