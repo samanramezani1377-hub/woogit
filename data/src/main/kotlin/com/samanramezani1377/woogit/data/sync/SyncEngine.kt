@@ -8,22 +8,39 @@ import com.samanramezani1377.woogit.data.db.WooGitDatabase
 import kotlinx.coroutines.CancellationException
 import kotlinx.datetime.Instant
 
-class SyncEngine(private val db: WooGitDatabase, private val executor: OperationExecutor) {
+class SyncEngine(
+    private val db: WooGitDatabase,
+    private val executor: OperationExecutor,
+) {
     companion object { private const val CLAIM_TIMEOUT_MS = 15 * 60 * 1000L }
 
     suspend fun runOnce(now: Long) {
         db.transaction { db.syncQueries.recoverRunning(now, now - CLAIM_TIMEOUT_MS) }
-        db.syncQueries.selectPending(now).executeAsList().forEach { row ->
-            process(PendingOperation(EntityId(row.id), StoreId(row.store_id), row.entity_type, EntityId(row.entity_id), OperationType.valueOf(row.operation_type), row.payload_json, row.payload_hash, row.retry_count, row.claimed_at?.let(Instant::fromEpochMilliseconds), row.next_attempt_at?.let(Instant::fromEpochMilliseconds)), now)
+        db.syncQueries.selectPending(now.toInt()).executeAsList().forEach { row ->
+            process(row.toPendingOperation(), now)
         }
     }
 
     suspend fun runOnce(storeId: String, now: Long) {
         db.transaction { db.syncQueries.recoverRunning(now, now - CLAIM_TIMEOUT_MS) }
-        db.syncQueries.selectPendingByStore(storeId, now).executeAsList().forEach { row ->
-            process(PendingOperation(EntityId(row.id), StoreId(row.store_id), row.entity_type, EntityId(row.entity_id), OperationType.valueOf(row.operation_type), row.payload_json, row.payload_hash, row.retry_count, row.claimed_at?.let(Instant::fromEpochMilliseconds), row.next_attempt_at?.let(Instant::fromEpochMilliseconds)), now)
+        db.syncQueries.selectPendingByStore(storeId, now.toInt()).executeAsList().forEach { row ->
+            process(row.toPendingOperation(), now)
         }
     }
+
+    private fun com.samanramezani1377.woogit.data.db.Pending_operation.toPendingOperation() =
+        PendingOperation(
+            id = EntityId(id),
+            storeId = StoreId(store_id),
+            entityType = entity_type,
+            entityId = EntityId(entity_id),
+            type = OperationType.valueOf(operation_type),
+            payloadJson = payload_json,
+            payloadHash = payload_hash,
+            retryCount = retry_count.toInt(),
+            claimedAt = claimed_at?.let(Instant::fromEpochMilliseconds),
+            nextAttemptAt = next_attempt_at?.let(Instant::fromEpochMilliseconds),
+        )
 
     private suspend fun process(op: PendingOperation, now: Long) {
         val claimed = db.transactionWithResult {
@@ -33,16 +50,26 @@ class SyncEngine(private val db: WooGitDatabase, private val executor: Operation
         if (!claimed) return
         try {
             executor.execute(op)
-            db.transaction { db.syncQueries.updateState("SUCCEEDED", op.retryCount, null, null, now, op.id.value); db.syncQueries.upsertMetadata(op.storeId.value, "SUCCEEDED", null, null, now, now) }
+            db.transaction {
+                db.syncQueries.updateState("SUCCEEDED", op.retryCount.toLong(), null, null, now, op.id.value)
+                db.syncQueries.upsertMetadata(op.storeId.value, "SUCCEEDED", null, null, now, now)
+            }
         } catch (error: ConflictDetected) {
-            db.transaction { db.syncQueries.updateState("CONFLICT", op.retryCount, null, error.message, now, op.id.value); db.syncQueries.upsertMetadata(op.storeId.value, "CONFLICT", null, null, null, now) }
-        } catch (error: CancellationException) { throw error
+            db.transaction {
+                db.syncQueries.updateState("CONFLICT", op.retryCount.toLong(), null, error.message, now, op.id.value)
+                db.syncQueries.upsertMetadata(op.storeId.value, "CONFLICT", null, null, null, now)
+            }
+        } catch (error: CancellationException) {
+            throw error
         } catch (error: Throwable) {
             val attempt = op.retryCount + 1
             val canRetry = executor.isRetryable(error) && attempt < executor.maxAttempts
             val next = if (canRetry) now + executor.backoffMillis(attempt) else null
             val state = if (canRetry) "RETRYABLE_FAILURE" else "PERMANENT_FAILURE"
-            db.transaction { db.syncQueries.updateState(state, attempt, next, error.message, now, op.id.value); db.syncQueries.upsertMetadata(op.storeId.value, state, null, null, null, now) }
+            db.transaction {
+                db.syncQueries.updateState(state, attempt.toLong(), next, error.message, now, op.id.value)
+                db.syncQueries.upsertMetadata(op.storeId.value, state, null, null, null, now)
+            }
         }
     }
 }
