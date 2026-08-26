@@ -1,12 +1,18 @@
 package com.samanramezani1377.woogit
 
+import android.Manifest
 import android.app.Activity
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.compose.material3.MaterialTheme
+import androidx.core.app.ActivityCompat
 import com.samanramezani1377.woogit.presentation.NotificationOrderEntry
 import com.samanramezani1377.woogit.presentation.V1WooGitApp
 
 class MainActivity:Activity(){
- override fun onCreate(savedInstanceState:Bundle?){super.onCreate(savedInstanceState);val composition=(application as WooGitApplication).composition;val storeId=intent.getStringExtra("store_id");val orderId=intent.getLongExtra("order_id",-1L);setContent{MaterialTheme{if(storeId!=null&&orderId>0)NotificationOrderEntry(composition.presentation,storeId,orderId.toString())else V1WooGitApp(composition.v1Presentation)}}}
+ override fun onCreate(savedInstanceState:Bundle?){super.onCreate(savedInstanceState);requestNotificationPermissionIfNeeded();val composition=(application as WooGitApplication).composition;val storeId=intent.getStringExtra("store_id");val orderId=intent.getLongExtra("order_id",-1L);setContent{MaterialTheme{if(storeId!=null&&orderId>0)NotificationOrderEntry(composition.presentation,storeId,orderId.toString())else V1WooGitApp(composition.v1Presentation)}}}
+ private fun requestNotificationPermissionIfNeeded(){if(Build.VERSION.SDK_INT>=33&&checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS)!=PackageManager.PERMISSION_GRANTED)ActivityCompat.requestPermissions(this,arrayOf(Manifest.permission.POST_NOTIFICATIONS),REQUEST_NOTIFICATIONS)}
+ private companion object{const val REQUEST_NOTIFICATIONS=1001}
 }
