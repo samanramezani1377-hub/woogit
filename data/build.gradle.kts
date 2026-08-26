@@ -13,6 +13,10 @@ android {
 dependencies {
     implementation(project(":core"))
     implementation("app.cash.sqldelight:android-driver:2.1.0")
+    implementation(libs.ktor.client.core)
+    implementation(libs.ktor.client.content.negotiation)
+    implementation(libs.ktor.serialization.kotlinx.json)
+    implementation(libs.ktor.client.android)
 }
 
 sqldelight {
