@@ -16,6 +16,8 @@ CREATE TABLE pending_operation (
 );
 selectPending:
 SELECT * FROM pending_operation WHERE state IN ('PENDING', 'RETRYABLE_FAILURE') AND (next_attempt_at IS NULL OR next_attempt_at <= ?) ORDER BY created_at ASC;
+selectPendingByStore:
+SELECT * FROM pending_operation WHERE store_id = ? AND state IN ('PENDING', 'RETRYABLE_FAILURE') AND (next_attempt_at IS NULL OR next_attempt_at <= ?) ORDER BY created_at ASC;
 selectById:
 SELECT * FROM pending_operation WHERE id = ?;
 insert:
