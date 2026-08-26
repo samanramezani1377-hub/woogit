@@ -3,7 +3,8 @@ package com.samanramezani1377.woogit.data.network
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-private val typedJson=Json{ignoreUnknownKeys=true;explicitNulls=false}
+
+private val typedJson = Json { ignoreUnknownKeys = true; explicitNulls = false }
 @Serializable data class WooAddressDto(val first_name:String?=null,val last_name:String?=null,val company:String?=null,val address_1:String?=null,val address_2:String?=null,val city:String?=null,val state:String?=null,val postcode:String?=null,val country:String?=null,val phone:String?=null)
 @Serializable data class WooLineItemDto(val id:Long,val name:String="",val product_id:Long=0,val variation_id:Long=0,val quantity:Double=0.0,val subtotal:String="0",val total:String="0")
 @Serializable data class WooShippingLineDto(val id:Long=0,val method_id:String?=null,val method_title:String?=null,val total:String?=null)
@@ -20,34 +21,36 @@ private val typedJson=Json{ignoreUnknownKeys=true;explicitNulls=false}
 @Serializable data class WooSystemStatusDto(val environment:Map<String,String> = emptyMap())
 @Serializable data class WooMediaTitleDto(val rendered:String="")
 @Serializable data class WooMediaDto(val id:Long,val source_url:String="",val title:WooMediaTitleDto?=null,val alt_text:String="")
-class TypedWooCommerceApi(private val raw:WooCommerceApi){
- private fun <T> decode(r:ApiResponse,d:(String)->T):Result<T>=if(r.statusCode in 200..299)runCatching{d(r.body)}else Result.failure(HttpApiException(r.statusCode,r.body))
- suspend fun validate(b:String)=decode(raw.validateStore(b)){typedJson.decodeFromString<WooSystemStatusDto>(it)}
- suspend fun orders(b:String,p:Int,n:Int,s:String?,st:String?)=decode(raw.listOrders(b,p,n,s,st)){typedJson.decodeFromString<List<WooOrderTypedDto>>(it)}
- suspend fun order(b:String,id:Long)=decode(raw.getOrder(b,id)){typedJson.decodeFromString<WooOrderTypedDto>(it)}
- suspend fun updateOrder(b:String,id:Long,o:WooOrderTypedDto)=decode(raw.updateOrder(b,id,typedJson.encodeToString(o))){typedJson.decodeFromString<WooOrderTypedDto>(it)}
- suspend fun addOrderNote(b:String,id:Long,n:WooOrderNoteDto)=decode(raw.addOrderNote(b,id,typedJson.encodeToString(n))){typedJson.decodeFromString<WooOrderNoteDto>(it)}
- suspend fun products(b:String,p:Int,n:Int,s:String?)=decode(raw.listProducts(b,p,n,s)){typedJson.decodeFromString<List<WooProductTypedDto>>(it)}
- suspend fun product(b:String,id:Long)=decode(raw.getProduct(b,id)){typedJson.decodeFromString<WooProductTypedDto>(it)}
- suspend fun createProduct(b:String,p:WooProductTypedDto)=decode(raw.createProduct(b,typedJson.encodeToString(p))){typedJson.decodeFromString<WooProductTypedDto>(it)}
- suspend fun updateProduct(b:String,id:Long,p:WooProductTypedDto)=decode(raw.updateProduct(b,id,typedJson.encodeToString(p))){typedJson.decodeFromString<WooProductTypedDto>(it)}
- suspend fun deleteProduct(b:String,id:Long)=decode(raw.deleteProduct(b,id,true)){Unit}
- suspend fun variations(b:String,p:Long,n:Int,c:Int)=decode(raw.listVariations(b,p,n,c)){typedJson.decodeFromString<List<WooVariationTypedDto>>(it)}
- suspend fun variation(b:String,p:Long,id:Long)=decode(raw.getVariation(b,p,id)){typedJson.decodeFromString<WooVariationTypedDto>(it)}
- suspend fun createVariation(b:String,p:Long,v:WooVariationTypedDto)=decode(raw.createVariation(b,p,typedJson.encodeToString(v))){typedJson.decodeFromString<WooVariationTypedDto>(it)}
- suspend fun updateVariation(b:String,p:Long,id:Long,v:WooVariationTypedDto)=decode(raw.updateVariation(b,p,id,typedJson.encodeToString(v))){typedJson.decodeFromString<WooVariationTypedDto>(it)}
- suspend fun deleteVariation(b:String,p:Long,id:Long)=decode(raw.deleteVariation(b,p,id,true)){Unit}
- suspend fun attributes(b:String,p:Int,n:Int)=decode(raw.listAttributes(b,p,n)){typedJson.decodeFromString<List<WooGlobalAttributeDto>>(it)}
- suspend fun attribute(b:String,id:Long)=decode(raw.getAttribute(b,id)){typedJson.decodeFromString<WooGlobalAttributeDto>(it)}
- suspend fun createAttribute(b:String,v:WooGlobalAttributeDto)=decode(raw.createAttribute(b,typedJson.encodeToString(v))){typedJson.decodeFromString<WooGlobalAttributeDto>(it)}
- suspend fun updateAttribute(b:String,id:Long,v:WooGlobalAttributeDto)=decode(raw.updateAttribute(b,id,typedJson.encodeToString(v))){typedJson.decodeFromString<WooGlobalAttributeDto>(it)}
- suspend fun deleteAttribute(b:String,id:Long)=decode(raw.deleteAttribute(b,id,true)){Unit}
- suspend fun terms(b:String,a:Long,p:Int,n:Int)=decode(raw.listAttributeTerms(b,a,p,n)){typedJson.decodeFromString<List<WooAttributeTermDto>>(it)}
- suspend fun term(b:String,a:Long,id:Long)=decode(raw.getAttributeTerm(b,a,id)){typedJson.decodeFromString<WooAttributeTermDto>(it)}
- suspend fun createTerm(b:String,a:Long,v:WooAttributeTermDto)=decode(raw.createAttributeTerm(b,a,typedJson.encodeToString(v))){typedJson.decodeFromString<WooAttributeTermDto>(it)}
- suspend fun updateTerm(b:String,a:Long,id:Long,v:WooAttributeTermDto)=decode(raw.updateAttributeTerm(b,a,id,typedJson.encodeToString(v))){typedJson.decodeFromString<WooAttributeTermDto>(it)}
- suspend fun deleteTerm(b:String,a:Long,id:Long)=decode(raw.deleteAttributeTerm(b,a,id,true)){Unit}
- suspend fun uploadMedia(b:String,f:String,bytes:ByteArray,m:String)=decode(raw.uploadMedia(b,f,bytes,m)){typedJson.decodeFromString<WooMediaDto>(it)}
- suspend fun deleteMedia(b:String,id:Long)=decode(raw.deleteMedia(b,id,true)){Unit}
+
+class TypedWooCommerceApi(private val raw: WooCommerceApi) {
+    private fun <T> decode(r: ApiResponse, decoder: (String) -> T): Result<T> = if (r.statusCode in 200..299) runCatching { decoder(r.body) } else Result.failure(HttpApiException(r.statusCode, r.body))
+    suspend fun validate(b:String) = decode(raw.validateStore(b)) { typedJson.decodeFromString<WooSystemStatusDto>(it) }
+    suspend fun orders(b:String,p:Int,n:Int,s:String?,st:String?) = decode(raw.listOrders(b,p,n,s,st)) { typedJson.decodeFromString<List<WooOrderTypedDto>>(it) }
+    suspend fun order(b:String,id:Long) = decode(raw.getOrder(b,id)) { typedJson.decodeFromString<WooOrderTypedDto>(it) }
+    suspend fun updateOrder(b:String,id:Long,o:WooOrderTypedDto) = decode(raw.updateOrder(b,id,typedJson.encodeToString(o))) { typedJson.decodeFromString<WooOrderTypedDto>(it) }
+    suspend fun addOrderNote(b:String,id:Long,n:WooOrderNoteDto) = decode(raw.addOrderNote(b,id,typedJson.encodeToString(n))) { typedJson.decodeFromString<WooOrderNoteDto>(it) }
+    suspend fun products(b:String,p:Int,n:Int,s:String?) = decode(raw.listProducts(b,p,n,s)) { typedJson.decodeFromString<List<WooProductTypedDto>>(it) }
+    suspend fun product(b:String,id:Long) = decode(raw.getProduct(b,id)) { typedJson.decodeFromString<WooProductTypedDto>(it) }
+    suspend fun createProduct(b:String,p:WooProductTypedDto) = decode(raw.createProduct(b,typedJson.encodeToString(p))) { typedJson.decodeFromString<WooProductTypedDto>(it) }
+    suspend fun updateProduct(b:String,id:Long,p:WooProductTypedDto) = decode(raw.updateProduct(b,id,typedJson.encodeToString(p))) { typedJson.decodeFromString<WooProductTypedDto>(it) }
+    suspend fun deleteProduct(b:String,id:Long) = decode(raw.deleteProduct(b,id,true)) { Unit }
+    suspend fun variations(b:String,p:Long,n:Int,c:Int) = decode(raw.listVariations(b,p,n,c)) { typedJson.decodeFromString<List<WooVariationTypedDto>>(it) }
+    suspend fun variation(b:String,p:Long,id:Long) = decode(raw.getVariation(b,p,id)) { typedJson.decodeFromString<WooVariationTypedDto>(it) }
+    suspend fun createVariation(b:String,p:Long,v:WooVariationTypedDto) = decode(raw.createVariation(b,p,typedJson.encodeToString(v))) { typedJson.decodeFromString<WooVariationTypedDto>(it) }
+    suspend fun updateVariation(b:String,p:Long,id:Long,v:WooVariationTypedDto) = decode(raw.updateVariation(b,p,id,typedJson.encodeToString(v))) { typedJson.decodeFromString<WooVariationTypedDto>(it) }
+    suspend fun deleteVariation(b:String,p:Long,id:Long) = decode(raw.deleteVariation(b,p,id,true)) { Unit }
+    suspend fun attributes(b:String,p:Int,n:Int) = decode(raw.listAttributes(b,p,n)) { typedJson.decodeFromString<List<WooGlobalAttributeDto>>(it) }
+    suspend fun attribute(b:String,id:Long) = decode(raw.getAttribute(b,id)) { typedJson.decodeFromString<WooGlobalAttributeDto>(it) }
+    suspend fun createAttribute(b:String,v:WooGlobalAttributeDto) = decode(raw.createAttribute(b,typedJson.encodeToString(v))) { typedJson.decodeFromString<WooGlobalAttributeDto>(it) }
+    suspend fun updateAttribute(b:String,id:Long,v:WooGlobalAttributeDto) = decode(raw.updateAttribute(b,id,typedJson.encodeToString(v))) { typedJson.decodeFromString<WooGlobalAttributeDto>(it) }
+    suspend fun deleteAttribute(b:String,id:Long) = decode(raw.deleteAttribute(b,id,true)) { Unit }
+    suspend fun terms(b:String,a:Long,p:Int,n:Int) = decode(raw.listAttributeTerms(b,a,p,n)) { typedJson.decodeFromString<List<WooAttributeTermDto>>(it) }
+    suspend fun term(b:String,a:Long,id:Long) = decode(raw.getAttributeTerm(b,a,id)) { typedJson.decodeFromString<WooAttributeTermDto>(it) }
+    suspend fun createTerm(b:String,a:Long,v:WooAttributeTermDto) = decode(raw.createAttributeTerm(b,a,typedJson.encodeToString(v))) { typedJson.decodeFromString<WooAttributeTermDto>(it) }
+    suspend fun updateTerm(b:String,a:Long,id:Long,v:WooAttributeTermDto) = decode(raw.updateAttributeTerm(b,a,id,typedJson.encodeToString(v))) { typedJson.decodeFromString<WooAttributeTermDto>(it) }
+    suspend fun deleteTerm(b:String,a:Long,id:Long) = decode(raw.deleteAttributeTerm(b,a,id,true)) { Unit }
+    suspend fun uploadMedia(b:String,f:String,bytes:ByteArray,m:String) = decode(raw.uploadMedia(b,f,bytes,m)) { typedJson.decodeFromString<WooMediaDto>(it) }
+    suspend fun deleteMedia(b:String,id:Long) = decode(raw.deleteMedia(b,id,true)) { Unit }
 }
+
 data class HttpApiException(val statusCode:Int,val body:String):Exception("WooCommerce HTTP $statusCode")
