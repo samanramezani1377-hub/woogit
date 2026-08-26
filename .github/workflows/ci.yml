@@ -94,11 +94,8 @@ jobs:
             tail -n 150 /tmp/build_debug.log
             echo '```'
           } > /tmp/comment_body.txt
-          python3 -c "
-import json
-body = open('/tmp/comment_body.txt').read()[:60000]
-print(json.dumps({'body': body}))
-" > /tmp/comment_payload.json
+          head -c 60000 /tmp/comment_body.txt > /tmp/comment_body_trunc.txt
+          jq -Rs '{body: .}' /tmp/comment_body_trunc.txt > /tmp/comment_payload.json
           curl -s -X POST \
             -H "Authorization: Bearer ${GH_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
