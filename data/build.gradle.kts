@@ -22,6 +22,7 @@ kotlin {
 dependencies {
     implementation(project(":core"))
     implementation("app.cash.sqldelight:android-driver:2.1.0")
+    implementation(libs.kotlinx.datetime)
     implementation(libs.ktor.client.core)
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
