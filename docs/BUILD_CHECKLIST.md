@@ -1,6 +1,6 @@
 # WooGit V1 — چک‌لیست بررسی و کنترل ساخت
 
-این سند مرجع «چه چیزی را باید بررسی کنیم؟» است. هر مرحله قبل از عبور به مرحله بعد باید بررسی‌های مربوط به خود را پاس کند.
+این سند مرجع بررسی هر مرحله است و اکنون نتیجه آخرین بررسی واقعی Repository را نیز ثبت می‌کند.
 
 ## وضعیت‌ها
 - `[ ]` بررسی نشده
@@ -9,393 +9,297 @@
 - `[!]` مشکل/Blocker
 - `[-]` خارج از محدوده V1
 
-> این فایل قرار نیست جای Test Suite را بگیرد؛ Test Suite باید در کد وجود داشته باشد. این سند وضعیت بررسی معماری، کیفیت، وابستگی و پذیرش هر مرحله را ثبت می‌کند.
+> مواردی که نیازمند اجرای کد، Build، API، دستگاه یا Test Suite هستند تا زمان وجود implementation هرگز صرفاً بر اساس مستندات تأیید نمی‌شوند.
+
+## وضعیت کلی — 2026-08-26
+
+Repository فعلی در مرحله مستندسازی و تثبیت پیش از کدنویسی است. Tree فعلی شامل `README.md` و مستندات پروژه است و Android/KMP source، Gradle build، test suite و CI implementation هنوز وجود ندارند. بنابراین بررسی معماری و Scope از روی اسناد ممکن است، اما بررسی اجرایی هنوز قابل تأیید نیست.
+
+**نتیجه کلی: P0 هنوز Gate نشده و مراحل اجرایی بعد از آن Not Started/Blocked هستند.**
 
 ---
 
 # P0 — Foundation
 
 ## بررسی معماری
-- [ ] ساختار Repository با Core-Out منطبق است.
-- [ ] جهت وابستگی Moduleها یک‌طرفه و قابل توضیح است.
-- [ ] Core به Android/Compose وابستگی ندارد.
-- [ ] KMP boundary منطقی است.
-- [ ] هیچ قابلیت آینده‌ای به‌صورت implementation وارد V1 نشده است.
+- [x] Core-Out به‌عنوان معماری اصلی تعریف شده است؛ implementation هنوز وجود ندارد.
+- [x] جهت وابستگی Moduleها در Architecture/Build Plan تعریف شده است؛ Module واقعی هنوز وجود ندارد.
+- [x] Core مستقل از Android/Compose تعریف شده است.
+- [x] KMP boundary تعریف شده است.
+- [x] قابلیت‌های آینده از V1 جدا شده‌اند.
 
 ## بررسی Build
-- [ ] Clean build موفق است.
-- [ ] Debug build موفق است.
-- [ ] Test task موفق است.
-- [ ] CI همان build/test پایه را اجرا می‌کند.
-- [ ] Dependencyهای اضافه و بلااستفاده بررسی شده‌اند.
+- [!] Clean build — قابل اجرا نیست؛ Gradle project وجود ندارد.
+- [!] Debug build — قابل اجرا نیست.
+- [!] Test task — test infrastructure وجود ندارد.
+- [!] CI build/test — workflow اجرایی وجود ندارد.
+- [x] Dependencyهای runtime هنوز وجود ندارند؛ بنابراین dependency اضافی برای حذف مشاهده نشد.
 
 ## بررسی کیفیت
-- [ ] Lint/format بدون blocker است.
-- [ ] Logging policy اعمال شده است.
-- [ ] Secret در source code وجود ندارد.
+- [!] Lint/format — قابل اجرا نیست؛ source/build configuration وجود ندارد.
+- [x] Logging policy در اسناد تعریف شده است.
+- [x] Secret hardcoded در فایل‌های مستنداتی بررسی‌شده مشاهده نشد.
 
 ### Gate P0
-- [ ] Build + Test + Architecture Review تأیید شد.
+- [!] **BLOCKED** — Foundation کدی، Build، Test و CI هنوز ایجاد نشده‌اند.
 
 ---
 
 # P1 — Core & Domain
 
 ## بررسی مدل‌ها
-- [ ] Order model با نیازهای WooCommerce سازگار است.
-- [ ] Product model ساده/متغیر را پوشش می‌دهد.
-- [ ] Variation model مستقل و قابل مدیریت است.
-- [ ] Attribute model Custom/Global را پوشش می‌دهد.
-- [ ] Store scope از ابتدا قابل تشخیص است.
-- [ ] Sync state و Pending Operation دقیق هستند.
+- [x] Order/Product/Variation/Attribute/Store/Sync/PendingOperation در نیازمندی‌ها تعریف شده‌اند.
+- [!] سازگاری مدل Order با API واقعی — نیازمند implementation و API test.
+- [!] Product/Variation/Attribute implementation — وجود ندارد.
+- [x] Store scope و Sync/Pending boundaries در معماری تعریف شده‌اند.
 
 ## بررسی معماری
-- [ ] Repositoryها فقط Contract هستند.
-- [ ] Use Caseها Business Logic را نگه می‌دارند.
-- [ ] API model و Domain model بی‌دلیل یکی نشده‌اند.
-- [ ] VersionProvider abstraction وجود دارد.
-- [ ] V1 از `date_modified_gmt` استفاده می‌کند.
-- [ ] Commit واقعی به V1 وارد نشده است.
-- [ ] Conflict model تعریف شده است.
-- [ ] Notification/Event boundary مستقل است.
+- [x] Repository Contract، Use Case، جداسازی API/Domain و VersionProvider در اسناد تعریف شده‌اند.
+- [x] V1 از `date_modified_gmt` استفاده می‌کند.
+- [x] Commit واقعی در V1 نیست.
+- [x] Conflict و Event/Notification boundaries تعریف شده‌اند.
 
 ## بررسی تست
-- [ ] Domain rules تست شده‌اند.
-- [ ] Error model تست شده است.
-- [ ] Version comparison تست شده است.
-- [ ] Queue state transitions تست شده‌اند.
+- [!] Domain rules — implementation/test وجود ندارد.
+- [!] Error model — implementation/test وجود ندارد.
+- [!] Version comparison — implementation/test وجود ندارد.
+- [!] Queue state transitions — implementation/test وجود ندارد.
 
 ### Gate P1
-- [ ] Core بدون Android build/test می‌شود.
-- [ ] Domain Review تأیید شد.
+- [!] **BLOCKED تا P0 و ایجاد Core implementation.**
 
 ---
 
 # P2 — Local Data
 
-## بررسی Database
-- [ ] Schema با Domain تطبیق دارد.
-- [ ] Primary/foreign keys صحیح‌اند.
-- [ ] Indexهای لازم بررسی شده‌اند.
-- [ ] Transactionهای حساس مشخص‌اند.
-- [ ] Migration وجود دارد و تست شده است.
+## Database
+- [x] Schema/Keys/Index/Transaction/Migration به‌عنوان نیاز مشخص شده‌اند.
+- [!] Schema واقعی — Database implementation وجود ندارد.
+- [!] Migration — وجود ندارد.
 
-## بررسی Queue
-- [ ] Pending operation بعد از restart باقی می‌ماند.
-- [ ] State transitionها deterministic هستند.
-- [ ] عملیات شکست‌خورده حذف نمی‌شود.
-- [ ] عملیات موفق حذف/نهایی می‌شود.
-- [ ] Conflict state حفظ می‌شود.
+## Queue
+- [x] Pending Queue و stateهای آن در Requirements تعریف شده‌اند.
+- [!] Restart persistence — implementation ندارد.
+- [!] Deterministic transitions — قابل تست نیست.
+- [!] Failed operation retention — قابل تست نیست.
+- [!] Conflict state persistence — قابل تست نیست.
 
-## بررسی امنیت
-- [ ] Credential در DB معمولی نیست.
-- [ ] داده Store قابل پاک‌سازی است.
-- [ ] Backup behavior بررسی شده است.
+## Security
+- [x] عدم ذخیره Credential در DB عادی الزام شده است.
+- [x] پاک‌سازی Store data الزام شده است.
+- [!] Backup behavior واقعی — implementation وجود ندارد.
 
-## تست
-- [ ] CRUD تست شده.
-- [ ] Restart تست شده.
-- [ ] Migration تست شده.
-- [ ] Corrupt/invalid state handling بررسی شده.
+## Tests
+- [!] CRUD / Restart / Migration / Invalid-state tests — وجود ندارند.
 
 ### Gate P2
-- [ ] Local Data و Queue قابل بازیابی و قابل تست هستند.
+- [!] **NOT STARTED / BLOCKED BY P0-P1.**
 
 ---
 
 # P3 — WooCommerce Integration
 
-## بررسی اتصال
-- [ ] URL معتبر/نامعتبر.
-- [ ] Credential معتبر/نامعتبر.
-- [ ] HTTPS.
-- [ ] Connection timeout.
-- [ ] Server unreachable.
+## Connection
+- [x] URL، Credential، HTTPS، Timeout و Server failure در Requirements تعریف شده‌اند.
+- [!] تست واقعی Connection — API client وجود ندارد.
 
-## بررسی Orders
-- [ ] List.
-- [ ] Search/filter.
-- [ ] Detail.
-- [ ] Items.
-- [ ] Customer/address.
-- [ ] Payment.
-- [ ] Shipping.
-- [ ] Discount.
-- [ ] Notes.
-- [ ] Status.
-- [ ] Edit.
-- [ ] Cancel/delete طبق Scope.
+## Orders
+- [x] List، Search/Filter، Detail، Items، Customer/Address، Payment، Shipping، Discount، Notes، Status و Edit در Scope تعریف شده‌اند.
+- [!] API implementation و integration test — وجود ندارند.
 
-## بررسی Products
-- [ ] List.
-- [ ] Search.
-- [ ] Create.
-- [ ] Edit.
-- [ ] Delete.
-- [ ] Simple product.
-- [ ] Variable product.
-- [ ] Variation CRUD.
-- [ ] Attributes.
-- [ ] Images.
-- [ ] Gallery.
+## Products
+- [x] List/Search/Create/Edit/Delete، Simple/Variable، Variations، Attributes، Images/Gallery در Scope تعریف شده‌اند.
+- [!] API implementation و integration test — وجود ندارند.
 
-## بررسی API
-- [ ] Pagination.
-- [ ] Serialization.
-- [ ] 400/401/403/404.
-- [ ] 409/conflict-like responses.
-- [ ] 429/rate limit.
-- [ ] 5xx.
-- [ ] Timeout.
-- [ ] Malformed response.
-- [ ] Server validation errors.
+## API Error Handling
+- [x] Pagination، Serialization، 4xx، 5xx، Timeout، Rate Limit و Malformed Response به‌عنوان نیاز ثبت شده‌اند.
+- [!] Error mapping واقعی — implementation وجود ندارد.
 
 ### Gate P3
-- [ ] Integration tests سبز.
-- [ ] هیچ endpoint حیاتی بدون error mapping نیست.
+- [!] **NOT STARTED / BLOCKED BY P0-P2.**
 
 ---
 
 # P4 — Sync Engine
 
-## بررسی جریان اصلی
-- [ ] Local mutation بلافاصله قابل مشاهده است.
-- [ ] Mutation وارد Queue می‌شود.
-- [ ] Worker Queue را پردازش می‌کند.
-- [ ] موفقیت Server state را به‌روز می‌کند.
-- [ ] شکست Queue state را حفظ می‌کند.
+## جریان اصلی
+- [x] Local → Queue → Worker → WooCommerce → Version/Conflict در Build Plan تعریف شده است.
+- [!] Local mutation واقعی و Queue/Worker — implementation ندارد.
+- [!] Server state update — تست نشده و implementation ندارد.
 
-## بررسی Retry
-- [ ] Retry محدود و deterministic است.
-- [ ] Backoff وجود دارد.
-- [ ] Timeout کنترل شده است.
-- [ ] Retry باعث duplicate mutation نمی‌شود.
+## Retry
+- [x] Retry، Backoff، Timeout و Idempotency نیاز قطعی هستند.
+- [!] اجرای واقعی و جلوگیری از duplicate mutation — تست نشده.
 
-## بررسی Conflict
-- [ ] Server version خوانده می‌شود.
-- [ ] Local/server تغییر هم‌زمان تشخیص داده می‌شود.
-- [ ] Merge فقط در موارد امن انجام می‌شود.
-- [ ] Conflict غیرقابل merge به کاربر منتقل می‌شود.
-- [ ] overwrite خاموش وجود ندارد.
+## Conflict
+- [x] Version check، merge امن و conflict غیرقابل merge تعریف شده‌اند.
+- [!] Conflict واقعی و جلوگیری از silent overwrite — تست نشده.
 
-## بررسی Recovery
-- [ ] Process death.
-- [ ] App restart.
-- [ ] Network drop.
-- [ ] Server down.
-- [ ] Offline طولانی.
-- [ ] Queue بزرگ.
+## Recovery
+- [x] Process death، Restart، Network drop، Server down، Offline طولانی و Queue بزرگ در Matrix تعریف شده‌اند.
+- [!] اجرای واقعی همه سناریوها — implementation وجود ندارد.
 
 ### Gate P4
-- [ ] هیچ سناریوی شناخته‌شده‌ای باعث silent data loss نمی‌شود.
-- [ ] Sync resilience review تأیید شد.
+- [!] **NOT STARTED / BLOCKED BY P0-P3.**
 
 ---
 
 # P5 — Background Detection & Notifications
 
-## بررسی Background
-- [ ] WorkManager correctly configured.
-- [ ] Periodic work محدودیت‌های Android را رعایت می‌کند.
-- [ ] سرویس دائمی/Foreground بی‌دلیل استفاده نشده است.
-- [ ] شرایط battery/network بررسی شده‌اند.
+## Background
+- [x] WorkManager و عدم استفاده از اتصال دائمی در Scope مشخص شده‌اند.
+- [!] WorkManager implementation/configuration وجود ندارد.
+- [!] Battery/network behavior تست نشده است.
 
-## بررسی Order Detection
-- [ ] سفارش جدید تشخیص داده می‌شود.
-- [ ] سفارش قدیمی دوباره اعلان نمی‌شود.
-- [ ] تغییرات عادی با New Order اشتباه نمی‌شوند.
-- [ ] duplicate notification حذف شده است.
+## Order Detection
+- [x] New Order Detection و deduplication تعریف شده‌اند.
+- [!] تشخیص واقعی سفارش جدید وجود ندارد.
+- [!] duplicate notification تست نشده است.
 
-## بررسی Notification
-- [ ] عنوان صحیح.
-- [ ] شماره سفارش.
-- [ ] مبلغ.
-- [ ] اطلاعات کالا.
-- [ ] تاریخ/ساعت.
-- [ ] tap action.
-- [ ] deep link.
-- [ ] App closed behavior.
+## Notification
+- [x] Payload، tap action و deep link تعریف شده‌اند.
+- [!] Notification واقعی روی دستگاه تست نشده است.
 
 ### Gate P5
-- [ ] Notification flow در دستگاه واقعی تست شده است.
+- [!] **NOT STARTED / BLOCKED BY P0-P4.**
 
 ---
 
 # P6 — Security
 
-## بررسی Credential
-- [ ] Secret در Secure Storage است.
-- [ ] Secret در Log نیست.
-- [ ] Secret در Crash payload نیست.
-- [ ] Secret در backup ناخواسته نیست.
-- [ ] Disconnect credential را پاک می‌کند.
+## Credential
+- [x] Secure Storage/Keystore، عدم Log/Crash/Backup ناخواسته Secret و Secure Disconnect الزام شده‌اند.
+- [!] implementation امنیتی وجود ندارد؛ بنابراین هیچ مورد اجرایی تأیید نشده است.
 
-## بررسی Network
-- [ ] HTTPS enforced/validated.
-- [ ] certificate/TLS handling مناسب است.
-- [ ] sensitive headers در error logs چاپ نمی‌شوند.
+## Network
+- [x] HTTPS/TLS و عدم چاپ Header حساس الزام شده است.
+- [!] Network Security implementation/test وجود ندارد.
 
 ### Gate P6
-- [ ] Security review بدون Critical/High blocker.
+- [!] **NOT STARTED / BLOCKED BY implementation.**
 
 ---
 
 # P7 — UI / Design System
 
-## بررسی Design System
-- [ ] Typography.
-- [ ] Spacing.
-- [ ] Colors.
-- [ ] Components.
-- [ ] Liquid Glass rules.
-- [ ] RTL.
-- [ ] LTR readiness.
-- [ ] Accessibility basics.
+## Design System
+- [x] Liquid Glass، RTL-first، LTR-ready، Typography، Spacing، Components و Accessibility در نقشه ساخت تعریف شده‌اند.
+- [!] Hi-Fi Design واقعی در Repository وجود ندارد.
+- [!] Compose implementation وجود ندارد.
 
-## بررسی States
-- [ ] Loading.
-- [ ] Empty.
-- [ ] Error.
-- [ ] Offline.
-- [ ] Pending.
-- [ ] Synced.
-- [ ] Failed.
-- [ ] Conflict.
+## States
+- [x] Loading/Empty/Error/Offline/Pending/Synced/Failed/Conflict تعریف شده‌اند.
+- [!] طراحی و implementation واقعی stateها تأیید نشده است.
 
-## بررسی Screens
-- [ ] Connection/Onboarding.
-- [ ] Dashboard.
-- [ ] Orders.
-- [ ] Order detail.
-- [ ] Order edit.
-- [ ] Products.
-- [ ] Quick add.
-- [ ] Product edit.
-- [ ] Variable product.
-- [ ] Variations.
-- [ ] Attributes.
-- [ ] Images/gallery.
-- [ ] Settings.
+## Screens
+- [x] Screens اصلی V1 در Build Plan/Requirements مشخص شده‌اند.
+- [!] Screen واقعی وجود ندارد.
 
 ### Gate P7
-- [ ] Hi-Fi design review تأیید شده.
-- [ ] Critical screen بدون missing state نیست.
+- [!] **NOT STARTED** — ابتدا Hi-Fi Design و سپس implementation.
 
 ---
 
 # P8 — UI ↔ Core
 
-## بررسی State
-- [ ] UI از Local state تغذیه می‌شود.
-- [ ] Mutation از Use Case عبور می‌کند.
-- [ ] Sync status قابل مشاهده است.
-- [ ] Error state دقیق است.
-- [ ] Conflict flow کامل است.
+## State
+- [x] Local-first rendering، Use Case mutation، Sync status، Error و Conflict flow تعریف شده‌اند.
+- [!] implementation واقعی وجود ندارد.
 
-## بررسی معماری
-- [ ] Business Logic در Compose نیست.
-- [ ] API call مستقیم از UI وجود ندارد.
-- [ ] ViewModelها قابل تست‌اند.
-- [ ] Navigation/deep links صحیح‌اند.
+## Architecture
+- [x] Business Logic در Compose و API call مستقیم از UI ممنوع شده‌اند.
+- [!] ViewModel/Presentation implementation وجود ندارد.
 
 ### Gate P8
-- [ ] Critical user journeys end-to-end کار می‌کنند.
+- [!] **NOT STARTED / BLOCKED BY P1-P7.**
 
 ---
 
 # P9 — Full Test Matrix
 
 ## Functional
-- [ ] Connection.
-- [ ] Orders.
-- [ ] Order editing.
-- [ ] Products.
-- [ ] Variations.
-- [ ] Attributes.
-- [ ] Images.
-- [ ] Notifications.
+- [x] Connection، Orders، Order Editing، Products، Variations، Attributes، Images و Notifications در Matrix تعریف شده‌اند.
+- [!] اجرای تست‌ها ممکن نیست؛ implementation وجود ندارد.
 
 ## Resilience
-- [ ] Offline.
-- [ ] Slow network.
-- [ ] Network drop.
-- [ ] Timeout.
-- [ ] 4xx.
-- [ ] 5xx.
-- [ ] Restart.
-- [ ] Update.
-- [ ] Migration.
-- [ ] Duplicate operation.
-- [ ] Conflict.
+- [x] Offline، Slow Network، Drop، Timeout، 4xx، 5xx، Restart، Update، Migration، Duplicate و Conflict تعریف شده‌اند.
+- [!] اجرای واقعی وجود ندارد.
 
 ## Performance
-- [ ] Startup.
-- [ ] Memory.
-- [ ] Large catalog.
-- [ ] Large order.
-- [ ] Large image.
-- [ ] Queue performance.
+- [x] Startup، Memory، Large Catalog، Large Order، Large Image و Queue Performance تعریف شده‌اند.
+- [!] Benchmark/Measurement وجود ندارد.
 
 ### Gate P9
-- [ ] Regression suite green.
-- [ ] No known V1 blocker.
+- [!] **NOT STARTED / BLOCKED BY implementation.**
 
 ---
 
 # P10 — Beta / Hardening
 
-- [ ] Real WooCommerce stores tested.
-- [ ] Multiple hosting/server conditions tested.
-- [ ] Weak mobile network tested.
-- [ ] Background restrictions tested.
-- [ ] Large data tested.
-- [ ] Crash monitoring reviewed.
-- [ ] UX issues triaged.
-- [ ] Critical/High issues resolved.
+- [!] Real WooCommerce stores — Not Started.
+- [!] Multiple hosting/server conditions — Not Started.
+- [!] Weak mobile network — Not Started.
+- [!] Background restrictions — Not Started.
+- [!] Large data — Not Started.
+- [!] Crash monitoring — Not Started.
+- [!] UX triage — Not Started.
+- [!] Critical/High issue resolution — Not Started.
 
 ### Gate P10
-- [ ] Beta acceptance signed off.
+- [!] **NOT STARTED.**
 
 ---
 
 # P11 — Release
 
-- [ ] Scope verified against `PRODUCT_VISION.md`.
-- [ ] Scope verified against `ROADMAP.md`.
-- [ ] Decisions verified against `DECISION_TRACKER.md`.
-- [ ] Build Plan gates all passed.
-- [ ] Release build verified.
-- [ ] Signing verified.
-- [ ] Migration verified.
-- [ ] Final regression green.
-- [ ] Known limitations documented.
-- [ ] Release notes ready.
-- [ ] GitHub release/tag ready.
+- [x] تطبیق با Product Vision، Roadmap و Decision Tracker در فرآیند Release تعریف شده است.
+- [!] Scope اجرایی نهایی — کد وجود ندارد.
+- [!] Release build — وجود ندارد.
+- [!] Signing verification — انجام نشده.
+- [!] Migration verification — انجام نشده.
+- [!] Final regression — انجام نشده.
+- [!] Known limitations — نهایی نشده.
+- [!] Release notes — آماده نیست.
+- [!] GitHub release/tag V1 — وجود ندارد.
 
 ## V1 Final Gate
-- [ ] New Order Notification works.
-- [ ] Orders management works.
-- [ ] Products management works.
-- [ ] Local-first works.
-- [ ] Sync/retry/conflict works.
-- [ ] Security requirements pass.
-- [ ] No silent data loss known.
-- [ ] No Critical/High blocker known.
+- [!] New Order Notification — Not Implemented.
+- [!] Orders Management — Not Implemented.
+- [!] Products Management — Not Implemented.
+- [!] Local-first — Not Implemented.
+- [!] Sync/Retry/Conflict — Not Implemented.
+- [!] Security implementation — Not Implemented.
+- [!] No Silent Data Loss — تا تست Sync Engine قابل اثبات نیست.
+- [!] No Critical/High blocker — تا Beta قابل اثبات نیست.
 
 ---
 
-# بررسی‌های اجباری مشترک در همه مراحل
+# بررسی‌های اجباری مشترک
 
-- [ ] آیا این تغییر با Product Vision سازگار است؟
-- [ ] آیا در Roadmap برای V1 مجاز است؟
-- [ ] آیا Decision Tracker تصمیم مرتبط دارد؟
-- [ ] آیا Architecture boundary شکسته شده؟
-- [ ] آیا قابلیت آینده ناخواسته وارد V1 شده؟
-- [ ] آیا Test قابل نوشتن است؟
-- [ ] آیا Offline/Network failure رفتار مشخص دارد؟
-- [ ] آیا امنیت Credential حفظ شده؟
-- [ ] آیا Documentation لازم به‌روز شده؟
+- [x] Product Vision با Build Plan/Requirements هم‌راستا است.
+- [x] Roadmap مرز V1/Future را مشخص کرده است.
+- [x] Decision Tracker Source of Truth تصمیم‌های V1 است.
+- [x] Architecture boundary در اسناد تعریف شده است.
+- [x] قابلیت‌های آینده از implementation V1 جدا شده‌اند.
+- [!] قابلیت‌های اجرایی هنوز قابل تست نیستند.
+- [x] Offline/Network failure در Requirements و Checklist پوشش داده شده است.
+- [x] Credential security به‌عنوان Requirement ثبت شده است.
+- [x] Project Map محل نگهداری مستندات را مشخص کرده است.
 
-# قانون عبور
+# نتیجه نهایی بررسی فعلی
 
-هیچ Phase بدون عبور از Gate خودش «تمام‌شده» محسوب نمی‌شود. اگر یک بررسی `[!]` باشد، مرحله Blocked است مگر اینکه Decision Tracker صراحتاً ریسک را پذیرفته باشد.
+## P0 = BLOCKED
+
+دلیل Blocker کمبود تصمیم یا مستندات نیست؛ Repository هنوز وارد مرحله کدنویسی نشده و Foundation اجرایی ندارد.
+
+**اقدام بعدی فقط P0 — Foundation است.** تا Gate واقعی P0 پاس نشده، نباید P1/P2/P3 یا UI را به‌صورت اجرایی شروع کنیم.
+
+### اقدامات لازم برای باز شدن P0
+1. ایجاد Android/KMP project skeleton.
+2. ایجاد Gradle/module structure.
+3. ایجاد package boundaries طبق Architecture.
+4. ایجاد test infrastructure.
+5. ایجاد CI build/test.
+6. اجرای Clean/Debug/Test build.
+7. Architecture Review روی ساختار واقعی.
+8. فقط پس از عبور واقعی همه موارد، Gate P0 به `[x]` تغییر کند.
