@@ -27,3 +27,7 @@ Store Connection یک موجودیت مستقل است. Auth، داده، Sync،
 ## Android
 
 Jetpack Compose + Material 3، WorkManager، Coroutines/Flow و Ktor Client. انتخاب دیتابیس و DI باید با KMP سازگار باشد.
+
+## Testing (V1 Mandatory)
+
+سطح آزمایش V1 کامل است: Unit Test برای منطق Core (Sync، Versioning، Conflict Resolution، Pending Queue)، Integration Test برای REST API ووکامرس و دیتابیس محلی، و UI Test برای جریان‌های سه محور اصلی. تست شبکه ناپایدار/کند الزامی است و باید قطعی حین تغییر، Retry/Timeout و Idempotency عملیات Push را پوشش دهد.
