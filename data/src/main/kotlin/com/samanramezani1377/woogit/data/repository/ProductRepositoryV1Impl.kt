@@ -14,19 +14,193 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 import java.security.MessageDigest
 
-private val j = Json { ignoreUnknownKeys = true; explicitNulls = false }
-private fun h(v: String) = MessageDigest.getInstance("SHA-256").digest(v.toByteArray()).joinToString("") { "%02x".format(it) }
-@Serializable private data class PM(val name: String, val sku: String? = null, val description: String? = null, val short_description: String? = null, val status: String, val type: String, val regular_price: String? = null, val sale_price: String? = null, val stock_quantity: Double? = null, val stock_status: String = "instock", val manage_stock: Boolean = false, val images: List<WooImageTypedDto> = emptyList(), val attributes: List<WooProductAttributeDto> = emptyList())
+private val productJson = Json { ignoreUnknownKeys = true; explicitNulls = false }
+private fun hash(value: String) = MessageDigest.getInstance("SHA-256").digest(value.toByteArray()).joinToString("") { "%02x".format(it) }
 
-private fun WooProductTypedDto.domain() = Product(EntityId(id.toString()), name, sku, description, short_description, when (status) { "publish" -> ProductStatus.PUBLISHED; "pending" -> ProductStatus.PENDING; "private" -> ProductStatus.PRIVATE; else -> ProductStatus.DRAFT }, when (type) { "grouped" -> ProductType.GROUPED; "external" -> ProductType.EXTERNAL; "variable" -> ProductType.VARIABLE; else -> ProductType.SIMPLE }, Pricing(regular_price, sale_price, on_sale), Stock(stock_quantity, when (stock_status) { "outofstock" -> StockStatus.OUT_OF_STOCK; "onbackorder" -> StockStatus.ON_BACKORDER; else -> StockStatus.IN_STOCK }, manage_stock), images.map { ProductImage(it.id?.let { id -> EntityId(id.toString()) }, it.src, it.name, it.alt) }, categories.map { IdName(EntityId(it.id.toString()), it.name) }, attributes.map { Attribute(it.id?.let { id -> EntityId(id.toString()) }, it.name, it.visible, it.variation, it.options) }, date_modified_gmt)
-private fun Product.pm() = PM(name, sku, description, shortDescription, status.name.lowercase(), type.name.lowercase(), pricing.regular, pricing.sale, stock?.quantity, stock?.status?.name?.lowercase() ?: "instock", stock?.manageStock ?: false, images.map { WooImageTypedDto(it.id?.value?.toLongOrNull(), it.src, it.name, it.alt) }, attributes.map { WooProductAttributeDto(it.id?.value?.toLongOrNull(), it.name, it.visible, it.variation, it.options) })
+@Serializable
+private data class ProductMutation(
+    val name: String,
+    val sku: String? = null,
+    val description: String? = null,
+    val short_description: String? = null,
+    val status: String,
+    val type: String,
+    val regular_price: String? = null,
+    val sale_price: String? = null,
+    val stock_quantity: Double? = null,
+    val stock_status: String = "instock",
+    val manage_stock: Boolean = false,
+    val images: List<WooImageTypedDto> = emptyList(),
+    val attributes: List<WooProductAttributeDto> = emptyList(),
+)
 
-class ProductRepositoryV1Impl(private val local: LocalProductDataSource<Product>, private val provider: WooCommerceClientProvider, private val coordinator: MutationCoordinator, private val pending: PendingOperationRepository) : ProductRepository {
-    override suspend fun get(s: StoreId, id: EntityId): CoreResult<Product> = provider.client(s).fold({ (st, api) -> api.product(st.baseUrl, id.value.toLong()).fold({ v -> val d = v.domain(); local.upsert(s, d); CoreResult.Success(d) }, { local.get(s, id) }) }, { local.get(s, id) })
-    override suspend fun list(s: StoreId, p: Int, n: Int, q: String?): CoreResult<List<Product>> { val cached = if (p == 1) local.list(s) else null; return provider.client(s).fold({ (st, api) -> api.products(st.baseUrl, p, n, q).fold({ v -> val d = v.map { it.domain() }; d.forEach { local.upsert(s, it) }; CoreResult.Success(d) }, { cached ?: CoreResult.Failure(it.toDomain()) }) }, { cached ?: CoreResult.Failure(it.toDomain()) }) }
-    override suspend fun create(s: StoreId, p: Product): CoreResult<Product> { val payload = j.encodeToString(p.pm()); val hash = h(payload); val op = PendingOperation(EntityId("product-create-${s.value}-${hash.take(20)}"), s, "product", p.id, OperationType.CREATE, payload, hash, 0, null, null); val lr = coordinator.execute(op) { local.upsert(s, p).let { if (it is CoreResult.Success) CoreResult.Success(p) else CoreResult.Failure((it as CoreResult.Failure).error) } }; if (lr is CoreResult.Failure) return lr; return provider.client(s).fold({ (st, api) -> api.createProduct(st.baseUrl, WooProductTypedDto(0, p.name, sku = p.sku, description = p.description, short_description = p.shortDescription, status = p.status.name.lowercase(), type = p.type.name.lowercase(), regular_price = p.pricing.regular, sale_price = p.pricing.sale, stock_quantity = p.stock?.quantity, stock_status = p.stock?.status?.name?.lowercase() ?: "instock", manage_stock = p.stock?.manageStock ?: false, images = p.images.map { WooImageTypedDto(it.id?.value?.toLongOrNull(), it.src, it.name, it.alt) }, attributes = p.attributes.map { WooProductAttributeDto(it.id?.value?.toLongOrNull(), it.name, it.visible, it.variation, it.options) }, meta_data = listOf(WooMetaDataDto(key = "_woogit_operation_id", value = JsonPrimitive(op.id.value)))).fold({ v -> val d = v.domain(); local.upsert(s, d); pending.markSucceeded(op.id); CoreResult.Success(d) }, { error -> if (error is HttpApiException && error.statusCode in 408..599) CoreResult.Success(p) else CoreResult.Failure(error.toDomain()) }) }, { CoreResult.Success(p) }) }
-    override suspend fun update(s: StoreId, id: EntityId, p: Product): CoreResult<Product> { val payload = j.encodeToString(p.pm()); val hash = h(payload); val op = PendingOperation(EntityId("product-update-${s.value}-${id.value}-${hash.take(16)}"), s, "product", id, OperationType.UPDATE, payload, hash, 0, null, null); val lr = coordinator.execute(op) { local.upsert(s, p).let { if (it is CoreResult.Success) CoreResult.Success(p) else CoreResult.Failure((it as CoreResult.Failure).error) } }; if (lr is CoreResult.Failure) return lr; return provider.client(s).fold({ (st, api) -> api.updateProduct(st.baseUrl, id.value.toLong(), WooProductTypedDto(id.value.toLong(), p.name, sku = p.sku, description = p.description, short_description = p.shortDescription, status = p.status.name.lowercase(), type = p.type.name.lowercase(), regular_price = p.pricing.regular, sale_price = p.pricing.sale, stock_quantity = p.stock?.quantity, stock_status = p.stock?.status?.name?.lowercase() ?: "instock", manage_stock = p.stock?.manageStock ?: false, images = p.images.map { WooImageTypedDto(it.id?.value?.toLongOrNull(), it.src, it.name, it.alt) }, attributes = p.attributes.map { WooProductAttributeDto(it.id?.value?.toLongOrNull(), it.name, it.visible, it.variation, it.options) })).fold({ v -> val d = v.domain(); local.upsert(s, d); pending.markSucceeded(op.id); CoreResult.Success(d) }, { error -> if (error is HttpApiException && error.statusCode in 408..599) CoreResult.Success(p) else CoreResult.Failure(error.toDomain()) }) }, { CoreResult.Success(p) }) }
-    override suspend fun delete(s: StoreId, id: EntityId): CoreResult<Unit> { val op = PendingOperation(EntityId("product-delete-${s.value}-${id.value}"), s, "product", id, OperationType.DELETE, "{}", h("{}"), 0, null, null); val lr = coordinator.execute(op) { local.delete(s, id) }; if (lr is CoreResult.Failure) return lr; return provider.client(s).fold({ (st, api) -> api.deleteProduct(st.baseUrl, id.value.toLong()).fold({ pending.markSucceeded(op.id); CoreResult.Success(Unit) }, { error -> if (error is HttpApiException && error.statusCode in 408..599) CoreResult.Success(Unit) else CoreResult.Failure(error.toDomain()) }) }, { CoreResult.Success(Unit) }) }
+private fun WooProductTypedDto.toDomain() = Product(
+    id = EntityId(id.toString()),
+    name = name,
+    sku = sku,
+    description = description,
+    shortDescription = short_description,
+    status = when (status) {
+        "publish" -> ProductStatus.PUBLISHED
+        "pending" -> ProductStatus.PENDING
+        "private" -> ProductStatus.PRIVATE
+        else -> ProductStatus.DRAFT
+    },
+    type = when (type) {
+        "grouped" -> ProductType.GROUPED
+        "external" -> ProductType.EXTERNAL
+        "variable" -> ProductType.VARIABLE
+        else -> ProductType.SIMPLE
+    },
+    pricing = Pricing(regular_price, sale_price, on_sale),
+    stock = Stock(stock_quantity, when (stock_status) {
+        "outofstock" -> StockStatus.OUT_OF_STOCK
+        "onbackorder" -> StockStatus.ON_BACKORDER
+        else -> StockStatus.IN_STOCK
+    }, manage_stock),
+    images = images.map { ProductImage(it.id?.let(::EntityId)?.let { id -> EntityId(id.value) }, it.src, it.name, it.alt) },
+    categories = categories.map { IdName(EntityId(it.id.toString()), it.name) },
+    attributes = attributes.map { Attribute(it.id?.let { id -> EntityId(id.toString()) }, it.name, it.visible, it.variation, it.options) },
+    modifiedAt = date_modified_gmt,
+)
+
+private fun Product.toDto(operationId: String? = null) = WooProductTypedDto(
+    id = id.value.toLongOrNull() ?: 0L,
+    name = name,
+    sku = sku,
+    description = description,
+    short_description = shortDescription,
+    status = status.name.lowercase(),
+    type = type.name.lowercase(),
+    regular_price = pricing.regular,
+    sale_price = pricing.sale,
+    stock_quantity = stock?.quantity,
+    stock_status = stock?.status?.name?.lowercase() ?: "instock",
+    manage_stock = stock?.manageStock ?: false,
+    images = images.map { WooImageTypedDto(it.id?.value?.toLongOrNull(), it.src, it.name, it.alt) },
+    attributes = attributes.map { WooProductAttributeDto(it.id?.value?.toLongOrNull(), it.name, it.visible, it.variation, it.options) },
+    meta_data = operationId?.let { listOf(WooMetaDataDto(key = "_woogit_operation_id", value = JsonPrimitive(it))) } ?: emptyList(),
+)
+
+class ProductRepositoryV1Impl(
+    private val local: LocalProductDataSource<Product>,
+    private val provider: WooCommerceClientProvider,
+    private val coordinator: MutationCoordinator,
+    private val pending: PendingOperationRepository,
+) : ProductRepository {
+
+    override suspend fun get(storeId: StoreId, id: EntityId): CoreResult<Product> = provider.client(storeId).fold(
+        { (store, api) ->
+            val result = api.product(store.baseUrl, id.value.toLong())
+            result.getOrNull()?.let { remote ->
+                val value = remote.toDomain()
+                local.upsert(storeId, value)
+                CoreResult.Success(value)
+            } ?: local.get(storeId, id)
+        },
+        { local.get(storeId, id) },
+    )
+
+    override suspend fun list(storeId: StoreId, page: Int, perPage: Int, search: String?): CoreResult<List<Product>> {
+        val cached = if (page == 1) local.list(storeId) else null
+        return provider.client(storeId).fold(
+            { (store, api) ->
+                val result = api.products(store.baseUrl, page, perPage, search)
+                result.getOrNull()?.let { remote ->
+                    val values = remote.map(WooProductTypedDto::toDomain)
+                    values.forEach { local.upsert(storeId, it) }
+                    CoreResult.Success(values)
+                } ?: (cached ?: CoreResult.Failure(result.exceptionOrNull().toDomain()))
+            },
+            { cached ?: CoreResult.Failure(it) },
+        )
+    }
+
+    override suspend fun create(storeId: StoreId, product: Product): CoreResult<Product> {
+        val payload = productJson.encodeToString(product.toDto())
+        val operationId = "product-create-${storeId.value}-${hash(payload).take(20)}"
+        val operation = PendingOperation(EntityId(operationId), storeId, "product", product.id, OperationType.CREATE, payload, hash(payload), 0, null, null)
+        val localResult = coordinator.execute(operation) { local.upsert(storeId, product) }
+        if (localResult is CoreResult.Failure) return localResult
+
+        return provider.client(storeId).fold(
+            { (store, api) ->
+                val remoteResult = api.createProduct(store.baseUrl, product.toDto(operationId))
+                val remote = remoteResult.getOrNull()
+                if (remote != null) {
+                    val value = remote.toDomain()
+                    local.upsert(storeId, value)
+                    pending.markSucceeded(operation.id)
+                    CoreResult.Success(value)
+                } else {
+                    val error = remoteResult.exceptionOrNull()
+                    if (error is HttpApiException && error.statusCode in 408..599) CoreResult.Success(product)
+                    else CoreResult.Failure(error.toDomain())
+                }
+            },
+            { CoreResult.Success(product) },
+        )
+    }
+
+    override suspend fun update(storeId: StoreId, id: EntityId, product: Product): CoreResult<Product> {
+        val payload = productJson.encodeToString(product.toDto())
+        val operation = PendingOperation(EntityId("product-update-${storeId.value}-${id.value}-${hash(payload).take(16)}"), storeId, "product", id, OperationType.UPDATE, payload, hash(payload), 0, null, null)
+        val localResult = coordinator.execute(operation) { local.upsert(storeId, product) }
+        if (localResult is CoreResult.Failure) return localResult
+
+        return provider.client(storeId).fold(
+            { (store, api) ->
+                val remoteResult = api.updateProduct(store.baseUrl, id.value.toLong(), product.toDto())
+                val remote = remoteResult.getOrNull()
+                if (remote != null) {
+                    val value = remote.toDomain()
+                    local.upsert(storeId, value)
+                    pending.markSucceeded(operation.id)
+                    CoreResult.Success(value)
+                } else {
+                    val error = remoteResult.exceptionOrNull()
+                    if (error is HttpApiException && error.statusCode in 408..599) CoreResult.Success(product)
+                    else CoreResult.Failure(error.toDomain())
+                }
+            },
+            { CoreResult.Success(product) },
+        )
+    }
+
+    override suspend fun delete(storeId: StoreId, id: EntityId): CoreResult<Unit> {
+        val payload = "{}"
+        val operation = PendingOperation(EntityId("product-delete-${storeId.value}-${id.value}"), storeId, "product", id, OperationType.DELETE, payload, hash(payload), 0, null, null)
+        val localResult = coordinator.execute(operation) { local.delete(storeId, id) }
+        if (localResult is CoreResult.Failure) return localResult
+
+        return provider.client(storeId).fold(
+            { (store, api) ->
+                val result = api.deleteProduct(store.baseUrl, id.value.toLong())
+                if (result.isSuccess) {
+                    pending.markSucceeded(operation.id)
+                    CoreResult.Success(Unit)
+                } else {
+                    val error = result.exceptionOrNull()
+                    if (error is HttpApiException && error.statusCode in 408..599) CoreResult.Success(Unit)
+                    else CoreResult.Failure(error.toDomain())
+                }
+            },
+            { CoreResult.Success(Unit) },
+        )
+    }
 }
 
-private fun Throwable.toDomain(): DomainError = when (this) { is HttpApiException -> when (statusCode) { 401 -> DomainError.Authentication("Authentication failed"); 403 -> DomainError.Permission("Permission denied"); 404 -> DomainError.NotFound("remote", statusCode.toString()); 409 -> DomainError.Conflict("Remote conflict"); 422 -> DomainError.Validation("Validation failed"); 429 -> DomainError.RateLimited("Rate limited"); in 500..599 -> DomainError.Server("Server error"); else -> DomainError.Unknown("HTTP $statusCode") }; else -> DomainError.Network(message ?: "Network failure") }
+private fun Throwable?.toDomain(): DomainError = when (this) {
+    is HttpApiException -> when (statusCode) {
+        401 -> DomainError.Authentication("Authentication failed")
+        403 -> DomainError.Permission("Permission denied")
+        404 -> DomainError.NotFound("remote", statusCode.toString())
+        409 -> DomainError.Conflict("Remote conflict")
+        422 -> DomainError.Validation("Validation failed")
+        429 -> DomainError.RateLimited("Rate limited")
+        in 500..599 -> DomainError.Server("Server error")
+        else -> DomainError.Unknown("HTTP $statusCode")
+    }
+    null -> DomainError.Unknown("Unknown failure")
+    else -> DomainError.Network(message ?: "Network failure")
+}
