@@ -22,10 +22,9 @@ class OrderPollingWorker(appContext: Context, params: WorkerParameters) : Corout
         val notificationStore = OrderNotificationStore(applicationContext)
         val source = RepositoryOrderBackgroundSource(app.composition.getOrders, notificationStore)
         val notifier = OrderNotificationManager(applicationContext)
-
         return try {
             when (val sync = app.composition.syncPending(store)) {
-                is CoreResult.Failure -> if (sync.error.recoverable) return Result.retry()
+                is CoreResult.Failure -> return if (sync.error.recoverable) Result.retry() else Result.failure()
                 is CoreResult.Success -> Unit
             }
             source.findNewOrders(storeId).forEach { order ->
@@ -38,32 +37,29 @@ class OrderPollingWorker(appContext: Context, params: WorkerParameters) : Corout
                 notificationStore.markObserved(order.storeId, order.orderId, order.serverState)
             }
             Result.success()
-        } catch (_: Throwable) {
+        } catch (_: java.io.IOException) {
             Result.retry()
+        } catch (_: HttpApiException) {
+            Result.retry()
+        } catch (_: kotlinx.coroutines.CancellationException) {
+            throw kotlinx.coroutines.CancellationException("Order polling cancelled")
+        } catch (_: Throwable) {
+            Result.failure()
         }
     }
 
     companion object {
-        private const val WORK_NAME = "woogit-order-polling"
         const val KEY_STORE_ID = "store_id"
-
+        private const val WORK_PREFIX = "woogit-order-polling-"
         fun schedule(context: Context, storeId: String, repeatHours: Long = 1L) {
-            val request = PeriodicWorkRequestBuilder<OrderPollingWorker>(
-                repeatHours.coerceAtLeast(1L), TimeUnit.HOURS
-            )
-                .setConstraints(
-                    Constraints.Builder()
-                        .setRequiredNetworkType(NetworkType.CONNECTED)
-                        .build()
-                )
+            val request = PeriodicWorkRequestBuilder<OrderPollingWorker>(repeatHours.coerceAtLeast(1L), TimeUnit.HOURS)
+                .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
                 .setInputData(workDataOf(KEY_STORE_ID to storeId))
                 .build()
-            WorkManager.getInstance(context)
-                .enqueueUniquePeriodicWork(WORK_NAME, ExistingPeriodicWorkPolicy.KEEP, request)
+            WorkManager.getInstance(context).enqueueUniquePeriodicWork(WORK_PREFIX + storeId, ExistingPeriodicWorkPolicy.UPDATE, request)
         }
-
-        fun cancel(context: Context) {
-            WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
+        fun cancel(context: Context, storeId: String) {
+            WorkManager.getInstance(context).cancelUniqueWork(WORK_PREFIX + storeId)
         }
     }
 }
