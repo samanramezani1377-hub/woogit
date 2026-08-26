@@ -19,19 +19,15 @@ class OrderPollingWorker(appContext: Context, params: WorkerParameters) : Corout
         val storeId = inputData.getString(KEY_STORE_ID) ?: return Result.failure()
         val app = applicationContext as? WooGitApplication ?: return Result.failure()
         val store = StoreId(storeId)
-        val source = RepositoryOrderBackgroundSource(app.composition.getOrders)
         val notificationStore = OrderNotificationStore(applicationContext)
+        val source = RepositoryOrderBackgroundSource(app.composition.getOrders, notificationStore)
         val notifier = OrderNotificationManager(applicationContext)
 
         return try {
-            // Local-first mutations are persisted before network execution. When connectivity
-            // is available this worker is the durable bridge that drains that queue after the
-            // process has been restarted or the device has been offline.
             when (val sync = app.composition.syncPending(store)) {
                 is CoreResult.Failure -> if (sync.error.recoverable) return Result.retry()
                 is CoreResult.Success -> Unit
             }
-
             source.findNewOrders(storeId).forEach { order ->
                 val observed = notificationStore.lastObserved(order.storeId, order.orderId)
                 val changed = observed == null || observed != order.serverState
