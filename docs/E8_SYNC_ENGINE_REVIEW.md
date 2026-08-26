@@ -10,16 +10,22 @@
 - Exponential backoff with a bounded attempt policy.
 - Durable conflict snapshot storage and resolution state.
 - Sync execution boundary separated from the WooCommerce API.
+- Background WorkManager execution now drains the pending queue whenever connected.
+- Product CREATE mutations carry a deterministic WooGit operation marker and reconcile an
+  ambiguous result before issuing a second CREATE request.
 
 ## Safety decisions
 
 - Mutations must be persisted before network execution.
 - A retry must reuse the same operation id and payload hash.
-- Ambiguous mutation failures must be reconciled by the executor before unsafe duplication.
+- Ambiguous product CREATE failures are reconciled through the WooCommerce product metadata
+  marker before another CREATE request is attempted.
 - No automatic field-level merge is assumed.
 - Conflict records remain user-resolvable.
 - No silent overwrite of newer server state is allowed.
 
-## Verification not claimed
+## Verification status
 
-The implementation has not been marked as passing the E8 test matrix. Runtime tests for offline mutation, reconnect, duplicate requests, conflicts, restart/process death, and large queues remain required before the E8 Gate can be checked.
+Implementation is present on `main`, but the E8 runtime test matrix is not yet claimed as passed.
+The required verification remains offline mutation, reconnect, duplicate request/reconciliation,
+conflict, restart/process death, and large queue behavior.
