@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.mutableStateOf
 import androidx.core.app.ActivityCompat
 import com.samanramezani1377.woogit.presentation.E11ReleaseApp
@@ -17,6 +18,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         notificationOrderId.value = intentOrderId(intent)
         requestNotificationPermissionIfNeeded()
         val composition = (application as WooGitApplication).composition
@@ -39,7 +41,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun requestNotificationPermissionIfNeeded() {
-        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+        if (Build.VERSION.SDK_INT >= 33 &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQUEST_NOTIFICATIONS)
         }
     }
