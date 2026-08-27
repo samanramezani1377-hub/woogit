@@ -70,22 +70,35 @@ jobs:
           adb version
           sdkmanager --sdk_root="${ANDROID_SDK_ROOT}" --list_installed | grep -E "platforms;android-${ANDROID_API_LEVEL}|build-tools;${ANDROID_BUILD_TOOLS}|platform-tools"
 
-      # Diagnostic mode: every Gradle check is attempted independently. Gradle
-      # exit codes remain authoritative; this workflow does not invent errors.
-      - name: Build debug APK (diagnostic)
-        id: build
+      # Diagnostic compile phase. Both variants are attempted independently so
+      # release-only compiler errors are not hidden by a debug failure.
+      - name: Compile debug (diagnostic)
+        id: debug_compile
         continue-on-error: true
         shell: bash
         run: |
           set +e
-          gradle assembleDebug --continue --console=plain --warning-mode=all --stacktrace --no-daemon 2>&1 | tee build-ci.log
+          gradle assembleDebug --continue --console=plain --warning-mode=all --stacktrace --no-daemon 2>&1 | tee debug-ci.log
           status=${PIPESTATUS[0]}
           echo "Gradle exit code: ${status}"
           exit "${status}"
 
-      - name: Unit tests (diagnostic)
+      - name: Compile release (diagnostic)
+        id: release_compile
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          gradle assembleRelease --continue --console=plain --warning-mode=all --stacktrace --no-daemon 2>&1 | tee release-ci.log
+          status=${PIPESTATUS[0]}
+          echo "Gradle exit code: ${status}"
+          exit "${status}"
+
+      # Tests and lint are meaningful after both variants compile. This avoids
+      # re-running the same Kotlin compiler failures three times while debugging.
+      - name: Unit tests
         id: tests
-        if: always()
+        if: steps.debug_compile.outcome == 'success' && steps.release_compile.outcome == 'success'
         continue-on-error: true
         shell: bash
         run: |
@@ -95,9 +108,9 @@ jobs:
           echo "Gradle exit code: ${status}"
           exit "${status}"
 
-      - name: Android lint (diagnostic)
+      - name: Android lint
         id: lint
-        if: always()
+        if: steps.debug_compile.outcome == 'success' && steps.release_compile.outcome == 'success'
         continue-on-error: true
         shell: bash
         run: |
@@ -107,25 +120,49 @@ jobs:
           echo "Gradle exit code: ${status}"
           exit "${status}"
 
-      - name: Collect diagnostic reports
+      - name: Collect diagnostic summary and annotations
         if: always()
         shell: bash
         run: |
-          {
-            echo "# WooGit CI diagnostic summary"
-            echo
-            echo "Commit: ${GITHUB_SHA}"
-            echo "Build outcome: ${{ steps.build.outcome }}"
-            echo "Tests outcome: ${{ steps.tests.outcome }}"
-            echo "Lint outcome: ${{ steps.lint.outcome }}"
-            echo
-            echo "## Gradle reports"
-            find . -type f \( -path '*/build/reports/*' -o -path '*/build/test-results/*' \) -print | sort
-          } | tee ci-diagnostic-summary.txt
+          set +e
+          : > ci-diagnostic-summary.txt
+          echo "# WooGit CI diagnostic summary" >> ci-diagnostic-summary.txt
+          echo >> ci-diagnostic-summary.txt
+          echo "Commit: ${GITHUB_SHA}" >> ci-diagnostic-summary.txt
+          echo "Debug compile: ${{ steps.debug_compile.outcome }}" >> ci-diagnostic-summary.txt
+          echo "Release compile: ${{ steps.release_compile.outcome }}" >> ci-diagnostic-summary.txt
+          echo "Tests: ${{ steps.tests.outcome }}" >> ci-diagnostic-summary.txt
+          echo "Lint: ${{ steps.lint.outcome }}" >> ci-diagnostic-summary.txt
+          echo >> ci-diagnostic-summary.txt
+
+          echo "## Compiler errors" >> ci-diagnostic-summary.txt
+          grep -hE '^e: (file:)?' debug-ci.log release-ci.log 2>/dev/null | sort -u >> ci-diagnostic-summary.txt || true
+          echo >> ci-diagnostic-summary.txt
+          echo "## Compiler warnings" >> ci-diagnostic-summary.txt
+          grep -hE '^w: (file:)?' debug-ci.log release-ci.log 2>/dev/null | sort -u >> ci-diagnostic-summary.txt || true
+          echo >> ci-diagnostic-summary.txt
+          echo "## Gradle reports" >> ci-diagnostic-summary.txt
+          find . -type f \( -path '*/build/reports/*' -o -path '*/build/test-results/*' \) -print | sort >> ci-diagnostic-summary.txt
+
+          # Turn only compiler messages emitted by Kotlin into native GitHub
+          # annotations. The compiler output remains the source of truth.
+          for log in debug-ci.log release-ci.log; do
+            [[ -f "$log" ]] || continue
+            grep -E '^e: file:/.+:[0-9]+:[0-9]+ ' "$log" | while IFS= read -r line; do
+              payload="${line#e: file:///workspace/}"
+              file_part="${payload%%:*}"
+              rest="${payload#*:}"
+              line_no="${rest%%:*}"
+              rest="${rest#*:}"
+              col_no="${rest%% *}"
+              message="${rest#* }"
+              echo "::error file=${file_part},line=${line_no},col=${col_no}::${message}"
+            done
+          done
 
       - name: Upload CI diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: woogit-ci-diagnostics-${{ github.sha }}
           path: |
@@ -137,8 +174,8 @@ jobs:
           retention-days: 14
 
       - name: Upload debug APK
-        if: always() && steps.build.outcome == 'success'
-        uses: actions/upload-artifact@v4
+        if: always() && steps.debug_compile.outcome == 'success'
+        uses: actions/upload-artifact@v6
         with:
           name: woogit-debug-apk-${{ github.sha }}
           path: '**/build/outputs/apk/**/*.apk'
@@ -149,7 +186,8 @@ jobs:
         if: always()
         shell: bash
         env:
-          BUILD_OUTCOME: ${{ steps.build.outcome }}
+          DEBUG_OUTCOME: ${{ steps.debug_compile.outcome }}
+          RELEASE_OUTCOME: ${{ steps.release_compile.outcome }}
           TESTS_OUTCOME: ${{ steps.tests.outcome }}
           LINT_OUTCOME: ${{ steps.lint.outcome }}
         run: |
@@ -157,12 +195,17 @@ jobs:
           echo "========================================"
           echo "WooGit V1 CI result"
           echo "========================================"
-          echo "Build : ${BUILD_OUTCOME}"
-          echo "Tests : ${TESTS_OUTCOME}"
-          echo "Lint  : ${LINT_OUTCOME}"
+          echo "Debug compile   : ${DEBUG_OUTCOME}"
+          echo "Release compile : ${RELEASE_OUTCOME}"
+          echo "Tests           : ${TESTS_OUTCOME:-skipped}"
+          echo "Lint            : ${LINT_OUTCOME:-skipped}"
           echo "========================================"
-          if [[ "${BUILD_OUTCOME}" != "success" || "${TESTS_OUTCOME}" != "success" || "${LINT_OUTCOME}" != "success" ]]; then
-            echo "CI FAILED: one or more required Gradle checks failed."
+          if [[ "${DEBUG_OUTCOME}" != "success" || "${RELEASE_OUTCOME}" != "success" ]]; then
+            echo "CI FAILED: one or more required compile variants failed."
             exit 1
           fi
-          echo "CI PASSED: build, tests and lint are green."
+          if [[ "${TESTS_OUTCOME:-skipped}" != "success" || "${LINT_OUTCOME:-skipped}" != "success" ]]; then
+            echo "CI FAILED: tests or lint did not pass after compilation."
+            exit 1
+          fi
+          echo "CI PASSED: compile, tests and lint are green."
