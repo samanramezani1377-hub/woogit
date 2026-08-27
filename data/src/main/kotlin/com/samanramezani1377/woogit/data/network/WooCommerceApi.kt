@@ -5,6 +5,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.request.*
 import io.ktor.http.*
 import io.ktor.client.statement.bodyAsText
+import java.net.InetAddress
 import java.util.Base64
 
 class WooCommerceApi(private val client: HttpClient, private val credentials: CredentialPair) {
@@ -39,7 +40,7 @@ class WooCommerceApi(private val client: HttpClient, private val credentials: Cr
 
     private suspend fun request(baseUrl: String, path: String, method: String = "GET", body: String? = null, params: Map<String, Any> = emptyMap()): ApiResponse {
         val url = Url("${baseUrl.trimEnd('/')}$path")
-        require(url.protocol.name == "https") { "WooCommerce API requires HTTPS" }
+        require(url.protocol.name == "https" || isLocalSandboxHost(url.host)) { "WooCommerce API requires HTTPS except for local sandbox hosts" }
         val response = when (method) {
             "POST" -> client.post(url) { common(params); contentType(ContentType.Application.Json); setBody(body ?: "{}") }
             "PUT" -> client.put(url) { common(params); contentType(ContentType.Application.Json); setBody(body ?: "{}") }
@@ -52,7 +53,7 @@ class WooCommerceApi(private val client: HttpClient, private val credentials: Cr
 
     private suspend fun requestBytes(baseUrl: String, path: String, fileName: String, bytes: ByteArray, mediaType: String): ApiResponse {
         val url = Url("${baseUrl.trimEnd('/')}$path")
-        require(url.protocol.name == "https") { "WooCommerce API requires HTTPS" }
+        require(url.protocol.name == "https" || isLocalSandboxHost(url.host)) { "WooCommerce API requires HTTPS except for local sandbox hosts" }
         val response = client.post(url) {
             header(HttpHeaders.Authorization, basicAuth())
             header(HttpHeaders.ContentDisposition, "attachment; filename=\"$fileName\"")
@@ -64,6 +65,7 @@ class WooCommerceApi(private val client: HttpClient, private val credentials: Cr
     private fun HttpRequestBuilder.common(params: Map<String, Any>) { header(HttpHeaders.Authorization, basicAuth()); params.forEach { (key, value) -> parameter(key, value) } }
     private fun basicAuth(): String = "Basic ${Base64.getEncoder().encodeToString("${credentials.consumerKey}:${credentials.consumerSecret}".toByteArray())}"
     private fun params(page: Int, perPage: Int, search: String? = null, status: String? = null) = buildMap<String, Any> { put("page", page); put("per_page", perPage); if (!search.isNullOrBlank()) put("search", search); if (!status.isNullOrBlank()) put("status", status) }
+    private fun isLocalSandboxHost(host: String): Boolean = host == "localhost" || host == "10.0.2.2" || host.startsWith("10.") || host.startsWith("192.168.") || host.startsWith("127.") || Regex("^172\\.(1[6-9]|2[0-9]|3[0-1])\\.").containsMatchIn(host)
 }
 
 data class ApiResponse(val statusCode: Int, val body: String)
