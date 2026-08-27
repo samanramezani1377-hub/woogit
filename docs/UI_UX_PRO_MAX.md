@@ -40,6 +40,15 @@ WooGit is an Android/Compose project. Prefer Compose-native solutions and the pr
 
 If a persisted `design-system/MASTER.md` exists, read it before making UI changes. Page-specific files under `design-system/pages/` override the master only for that page.
 
+## Visual references
+
+[`docs/references/`](./references/) holds static visual mockups (HTML/CSS, no build step) that
+translate this spec into concrete pixels — colors, radii, blur, type, motion. Open the relevant
+`preview.html` and its `README.md` before implementing a Liquid Glass surface, and read off exact
+token values instead of re-deriving them from the written spec alone. These files are downstream
+references, not a replacement for `V1_DESIGN_SPEC.md` or this document — if they disagree, this
+document and `V1_DESIGN_SPEC.md` win.
+
 If UI/UX Pro Max is installed in the active AI environment, use its search/design-system tooling for the relevant domain and Jetpack Compose stack. If it is not installed, use the official repository as the reference and do not fabricate results from the skill.
 
 ## Suggested design-system workflow
