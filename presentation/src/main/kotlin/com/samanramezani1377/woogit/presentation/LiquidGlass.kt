@@ -59,6 +59,7 @@ fun LiquidGlassEnvironment(
 
 /** A reusable translucent, blurred, highlighted Liquid Glass material. */
 @OptIn(ExperimentalHazeMaterialsApi::class)
+@Composable
 fun Modifier.liquidGlass(
     hazeState: HazeState,
     shape: RoundedCornerShape = RoundedCornerShape(24.dp),
