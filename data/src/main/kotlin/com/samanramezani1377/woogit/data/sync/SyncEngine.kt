@@ -22,7 +22,7 @@ class SyncEngine(
     }
 
     suspend fun runOnce(storeId: String, now: Long) {
-        db.transaction { db.syncQueries.recoverRunning(now, now - CLAIM_TIMEOUT_MS) }
+        db.transaction { db.syncQueries.recoverRunningByStore(now, storeId, now - CLAIM_TIMEOUT_MS) }
         db.syncQueries.selectPendingByStore(storeId, now).executeAsList().forEach { row ->
             process(row.toPendingOperation(), now)
         }
