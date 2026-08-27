@@ -43,17 +43,11 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
         with:
-          packages: platform-tools
+          packages: |
+            platform-tools
+            platforms;android-${{ env.ANDROID_API_LEVEL }}
+            build-tools;${{ env.ANDROID_BUILD_TOOLS }}
           accept-android-sdk-licenses: true
-
-      - name: Install required Android SDK packages
-        shell: bash
-        run: |
-          set -euo pipefail
-          yes | sdkmanager --sdk_root="${ANDROID_SDK_ROOT}" \
-            "platforms;android-${ANDROID_API_LEVEL}" \
-            "build-tools;${ANDROID_BUILD_TOOLS}" \
-            "platform-tools" >/dev/null
 
       - name: Set up Gradle 8.13
         uses: gradle/actions/setup-gradle@v6
@@ -69,9 +63,9 @@ jobs:
           adb version
           sdkmanager --sdk_root="${ANDROID_SDK_ROOT}" --list_installed | grep -E "platforms;android-${ANDROID_API_LEVEL}|build-tools;${ANDROID_BUILD_TOOLS}|platform-tools"
 
-      # Diagnostic mode: every major Gradle check is attempted even when an
-      # earlier check fails. Gradle remains the source of truth; no synthetic
-      # errors are created by the workflow.
+      # Diagnostic mode: each Gradle check is attempted independently. The
+      # Gradle exit code remains authoritative; this workflow does not invent
+      # compiler errors or turn warnings into failures.
       - name: Build debug APK (diagnostic)
         id: build
         continue-on-error: true
@@ -111,7 +105,6 @@ jobs:
         if: always()
         shell: bash
         run: |
-          set +e
           {
             echo "# WooGit CI diagnostic summary"
             echo
@@ -120,7 +113,7 @@ jobs:
             echo "Tests outcome: ${{ steps.tests.outcome }}"
             echo "Lint outcome: ${{ steps.lint.outcome }}"
             echo
-            echo "## Gradle task reports"
+            echo "## Gradle reports"
             find . -type f \( -path '*/build/reports/*' -o -path '*/build/test-results/*' \) -print | sort
           } | tee ci-diagnostic-summary.txt
 
