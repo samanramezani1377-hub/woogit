@@ -3,6 +3,7 @@ package com.samanramezani1377.woogit.data.network
 import com.samanramezani1377.woogit.core.security.CredentialPair
 import io.ktor.client.HttpClient
 import io.ktor.client.request.*
+import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.*
 import java.util.Base64
