@@ -12,20 +12,22 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.haze
-import dev.chrisbanes.haze.hazeChild
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
 
-/** Shared Liquid Glass environment. The haze state is kept above all glass surfaces
- * so surfaces can sample the real backdrop instead of faking translucency with alpha. */
+/** Shared Liquid Glass environment. Background content is registered as a Haze source. */
 @Composable
 fun LiquidGlassEnvironment(
     modifier: Modifier = Modifier,
-    content: @Composable BoxScope.(HazeState) -> Unit
+    content: @Composable BoxScope.(HazeState) -> Unit,
 ) {
     val hazeState = remember { HazeState() }
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -34,10 +36,10 @@ fun LiquidGlassEnvironment(
                     listOf(
                         Color(0xFFF4F8FF),
                         Color(0xFFDDE8F7),
-                        Color(0xFFF8FAFD)
-                    )
-                )
-            )
+                        Color(0xFFF8FAFD),
+                    ),
+                ),
+            ),
     ) {
         Box(
             modifier = Modifier
@@ -45,48 +47,37 @@ fun LiquidGlassEnvironment(
                 .background(
                     Brush.radialGradient(
                         listOf(Color.White.copy(alpha = 0.70f), Color.Transparent),
-                        radius = 1000f
-                    )
+                        radius = 1000f,
+                    ),
                 )
-                .haze(hazeState)
+                .hazeSource(state = hazeState, zIndex = 0f),
         )
+
         content(hazeState)
     }
 }
 
-/** A reusable translucent, blurred, highlighted glass material. */
+/** A reusable translucent, blurred, highlighted Liquid Glass material. */
+@OptIn(ExperimentalHazeMaterialsApi::class)
 fun Modifier.liquidGlass(
     hazeState: HazeState,
     shape: RoundedCornerShape = RoundedCornerShape(24.dp),
     material: dev.chrisbanes.haze.HazeStyle = HazeMaterials.thin(),
-    elevation: androidx.compose.ui.unit.Dp = 8.dp
+    elevation: Dp = 8.dp,
 ): Modifier = this
-    .shadow(elevation, shape)
-    .hazeChild(
+    .shadow(elevation = elevation, shape = shape)
+    .hazeEffect(
         state = hazeState,
-        shape = shape,
         style = material,
-        block = {
-            backgroundColor = Color.White.copy(alpha = 0.20f)
-            blurRadius = 22.dp
-        }
     )
     .background(
         Brush.verticalGradient(
             listOf(
                 Color.White.copy(alpha = 0.30f),
-                Color.White.copy(alpha = 0.12f)
+                Color.White.copy(alpha = 0.12f),
             ),
-            shape = shape
-        )
-    )
-    .then(
-        Modifier.background(
-            Brush.verticalGradient(
-                listOf(Color.White.copy(alpha = 0.26f), Color.Transparent),
-                shape = shape
-            )
-        )
+        ),
+        shape = shape,
     )
 
 @Composable
@@ -94,28 +85,22 @@ fun LiquidGlassSurface(
     hazeState: HazeState,
     modifier: Modifier = Modifier,
     shape: RoundedCornerShape = RoundedCornerShape(24.dp),
-    content: @Composable BoxScope.() -> Unit
+    content: @Composable BoxScope.() -> Unit,
 ) {
     Box(
         modifier = modifier
-            .liquidGlass(hazeState, shape)
+            .liquidGlass(hazeState = hazeState, shape = shape)
             .background(
-                Color.Transparent,
-                shape
-            )
-            .then(
-                Modifier.background(
-                    Brush.linearGradient(
-                        listOf(
-                            Color.White.copy(alpha = 0.34f),
-                            Color.Transparent,
-                            Color.White.copy(alpha = 0.08f)
-                        )
+                Brush.linearGradient(
+                    listOf(
+                        Color.White.copy(alpha = 0.34f),
+                        Color.Transparent,
+                        Color.White.copy(alpha = 0.08f),
                     ),
-                    shape
-                )
+                ),
+                shape = shape,
             ),
-        content = content
+        content = content,
     )
 }
 
@@ -124,7 +109,7 @@ fun liquidGlassBorder(): BorderStroke = BorderStroke(
     brush = Brush.verticalGradient(
         listOf(
             Color.White.copy(alpha = 0.72f),
-            Color.White.copy(alpha = 0.24f)
-        )
-    )
+            Color.White.copy(alpha = 0.24f),
+        ),
+    ),
 )
