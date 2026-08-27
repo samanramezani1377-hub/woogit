@@ -58,6 +58,7 @@ fun GlassScaffold(modifier: Modifier = Modifier, content: @Composable (PaddingVa
     }
 }
 
+@Composable
 private fun Modifier.glassMaterial(shape: RoundedCornerShape): Modifier {
     val haze = LocalWooGitGlassHaze.current
     return if (haze != null) liquidGlass(hazeState = haze, shape = shape) else this
@@ -78,7 +79,7 @@ fun GlassTopBar(title: String, subtitle: String? = null, modifier: Modifier = Mo
     }
 }
 
-@Composable fun GlassText(text: String, modifier: Modifier = Modifier, style: TextStyle = MaterialTheme.typography.bodyLarge) = Text(text.stripHtml(), modifier, style)
+@Composable fun GlassText(text: String, modifier: Modifier = Modifier, style: TextStyle = MaterialTheme.typography.bodyLarge) = Text(text.stripHtml(), modifier = modifier, style = style)
 
 @Composable
 fun GlassCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
