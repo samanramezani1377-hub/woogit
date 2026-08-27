@@ -89,9 +89,20 @@ class OrderRepositoryV1Impl(
         if (localResult is CoreResult.Failure) return localResult
         return provider.client(storeId).fold(
             { (store, api) ->
-                api.updateOrder(store.baseUrl, id.value.toLong(), WooOrderTypedDto(id.value.toLong(), number = order.number, status = wooStatus, total = order.total ?: "0", currency = order.currency ?: "", customer_id = order.customer?.id?.value?.toLongOrNull() ?: 0L)).fold({ remote -> val value = remote.toDomain(); local.upsert(storeId, value); pending.markSucceeded(operation.id); CoreResult.Success(value) }, { error -> if (error is HttpApiException && error.statusCode in 408..599) CoreResult.Success(order) else CoreResult.Failure(error.toDomain()) })
+                api.updateOrder(store.baseUrl, id.value.toLong(), WooOrderTypedDto(id.value.toLong(), number = order.number, status = wooStatus, total = order.total ?: "0", currency = order.currency ?: "", customer_id = order.customer?.id?.value?.toLongOrNull() ?: 0L)).fold(
+                    { remote ->
+                        val value = remote.toDomain()
+                        local.upsert(storeId, value)
+                        pending.markSucceeded(operation.id)
+                        CoreResult.Success(value)
+                    },
+                    { error ->
+                        if (error is HttpApiException && error.statusCode in 408..599) CoreResult.Success(order)
+                        else CoreResult.Failure(error.toDomain())
+                    },
+                )
             },
-            { CoreResult.Success(order) },
+            { error -> if (error.recoverable) CoreResult.Success(order) else CoreResult.Failure(error) },
         )
     }
 }
