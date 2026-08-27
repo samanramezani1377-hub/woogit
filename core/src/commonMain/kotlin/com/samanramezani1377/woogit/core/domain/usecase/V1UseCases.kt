@@ -14,16 +14,14 @@ class GetProductsUseCase(private val r: ProductRepository) : GetProducts { overr
 class CreateProductUseCase(private val r: ProductRepository) : CreateProduct { override suspend fun invoke(storeId: StoreId, value: Product) = r.create(storeId, value) }
 class UpdateProductUseCase(private val r: ProductRepository) : UpdateProduct { override suspend fun invoke(storeId: StoreId, id: EntityId, value: Product) = r.update(storeId, id, value) }
 class DeleteProductUseCase(private val r: ProductRepository) : DeleteProduct { override suspend fun invoke(storeId: StoreId, id: EntityId) = r.delete(storeId, id) }
+class GetProductCategoriesUseCase(private val r: ProductCategoryRepository) : GetProductCategories { override suspend fun invoke(storeId: StoreId, page: Int, perPage: Int, search: String?) = r.list(storeId, page, perPage, search) }
 class UploadMediaUseCase(private val r: MediaRepository) : UploadMedia { override suspend fun invoke(storeId: StoreId, fileName: String, bytes: ByteArray, mediaType: String) = r.upload(storeId, fileName, bytes, mediaType) }
 class DeleteMediaUseCase(private val r: MediaRepository) : DeleteMedia { override suspend fun invoke(storeId: StoreId, mediaId: EntityId) = r.delete(storeId, mediaId) }
 class GetStoreUseCase(private val r: StoreRepository) : GetStore { override suspend fun invoke(storeId: StoreId) = r.get(storeId) }
 class ConnectStoreUseCase(private val r: StoreRepository) : ConnectStore { override suspend fun invoke(store: StoreConnection, consumerKey: String, consumerSecret: String) = r.connect(store, consumerKey, consumerSecret) }
 class DisconnectStoreUseCase(private val r: StoreRepository) : DisconnectStore { override suspend fun invoke(storeId: StoreId) = r.disconnect(storeId) }
 class GetConnectionStateUseCase(private val r: StoreRepository) : GetConnectionState {
-    override suspend fun invoke(storeId: StoreId) = r.get(storeId).let { result ->
-        if (result is CoreResult.Success) CoreResult.Success(result.value.state)
-        else CoreResult.Failure((result as CoreResult.Failure).error)
-    }
+    override suspend fun invoke(storeId: StoreId) = r.get(storeId).let { result -> if (result is CoreResult.Success) CoreResult.Success(result.value.state) else CoreResult.Failure((result as CoreResult.Failure).error) }
 }
 class GetPendingOperationsUseCase(private val r: PendingOperationRepository) : GetPendingOperations { override suspend fun invoke(storeId: StoreId) = r.getPending(storeId) }
 class EnqueueOperationUseCase(private val r: PendingOperationRepository) : EnqueueOperation { override suspend fun invoke(operation: PendingOperation) = r.enqueue(operation) }
