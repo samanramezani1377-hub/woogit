@@ -18,6 +18,17 @@ private val mutationJson = Json { ignoreUnknownKeys = true; explicitNulls = fals
 private fun payloadHash(value: String) = MessageDigest.getInstance("SHA-256").digest(value.toByteArray()).joinToString("") { "%02x".format(it) }
 @Serializable private data class OrderMutation(val status: String)
 
+private fun OrderStatus.toWooValue(): String = when (this) {
+    OrderStatus.PENDING -> "pending"
+    OrderStatus.PROCESSING -> "processing"
+    OrderStatus.ON_HOLD -> "on-hold"
+    OrderStatus.COMPLETED -> "completed"
+    OrderStatus.CANCELLED -> "cancelled"
+    OrderStatus.REFUNDED -> "refunded"
+    OrderStatus.FAILED -> "failed"
+    OrderStatus.OTHER -> "pending"
+}
+
 private fun WooOrderTypedDto.toDomain(): Order {
     val modified = date_modified_gmt?.let { runCatching { Instant.parse(it) }.getOrNull() }
     return Order(
@@ -71,13 +82,14 @@ class OrderRepositoryV1Impl(
     }
 
     override suspend fun update(storeId: StoreId, id: EntityId, order: Order): CoreResult<Order> {
-        val payload = mutationJson.encodeToString(OrderMutation(order.status.name.lowercase()))
+        val wooStatus = order.status.toWooValue()
+        val payload = mutationJson.encodeToString(OrderMutation(wooStatus))
         val operation = PendingOperation(EntityId("order-update-${storeId.value}-${id.value}-${payloadHash(payload).take(16)}"), storeId, "order", id, OperationType.UPDATE, payload, payloadHash(payload), 0, null, null)
         val localResult = coordinator.execute(operation) { local.upsert(storeId, order) }
         if (localResult is CoreResult.Failure) return localResult
         return provider.client(storeId).fold(
             { (store, api) ->
-                api.updateOrder(store.baseUrl, id.value.toLong(), WooOrderTypedDto(id.value.toLong(), number = order.number, status = order.status.name.lowercase(), total = order.total ?: "0", currency = order.currency ?: "", customer_id = order.customer?.id?.value?.toLongOrNull() ?: 0L)).fold({ remote -> val value = remote.toDomain(); local.upsert(storeId, value); pending.markSucceeded(operation.id); CoreResult.Success(value) }, { error -> if (error is HttpApiException && error.statusCode in 408..599) CoreResult.Success(order) else CoreResult.Failure(error.toDomain()) })
+                api.updateOrder(store.baseUrl, id.value.toLong(), WooOrderTypedDto(id.value.toLong(), number = order.number, status = wooStatus, total = order.total ?: "0", currency = order.currency ?: "", customer_id = order.customer?.id?.value?.toLongOrNull() ?: 0L)).fold({ remote -> val value = remote.toDomain(); local.upsert(storeId, value); pending.markSucceeded(operation.id); CoreResult.Success(value) }, { error -> if (error is HttpApiException && error.statusCode in 408..599) CoreResult.Success(order) else CoreResult.Failure(error.toDomain()) })
             },
             { CoreResult.Success(order) },
         )
@@ -85,15 +97,18 @@ class OrderRepositoryV1Impl(
 }
 
 private fun Throwable.toDomain(): DomainError = when (this) {
-    is HttpApiException -> when (statusCode) {
-        401 -> DomainError.Authentication("Authentication failed")
-        403 -> DomainError.Permission("Permission denied")
-        404 -> DomainError.NotFound("remote", statusCode.toString())
-        409 -> DomainError.Conflict("Remote conflict")
-        422 -> DomainError.Validation("Validation failed")
-        429 -> DomainError.RateLimited("Rate limited")
-        in 500..599 -> DomainError.Server("Server error")
-        else -> DomainError.Unknown("HTTP $statusCode")
+    is HttpApiException -> {
+        val message = WordPressErrorMapper.message(statusCode, body)
+        when (statusCode) {
+            401 -> DomainError.Authentication(message)
+            403 -> DomainError.Permission(message)
+            404 -> DomainError.NotFound("remote", message)
+            409 -> DomainError.Conflict(message)
+            400, 405, 415, 422 -> DomainError.Validation(message)
+            429 -> DomainError.RateLimited(message)
+            in 500..599 -> DomainError.Server(message)
+            else -> DomainError.Unknown(message)
+        }
     }
-    else -> DomainError.Network(message ?: "Network failure")
+    else -> DomainError.Network(message ?: "ارتباط با فروشگاه برقرار نشد. اتصال اینترنت و آدرس فروشگاه را بررسی کنید.")
 }
