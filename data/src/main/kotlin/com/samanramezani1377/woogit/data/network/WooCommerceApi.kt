@@ -35,26 +35,66 @@ class WooCommerceApi(private val client: HttpClient, private val credentials: Cr
     suspend fun createAttributeTerm(baseUrl: String, attributeId: Long, body: String) = request(baseUrl, "/wp-json/wc/v3/products/attributes/$attributeId/terms", "POST", body)
     suspend fun updateAttributeTerm(baseUrl: String, attributeId: Long, id: Long, body: String) = request(baseUrl, "/wp-json/wc/v3/products/attributes/$attributeId/terms/$id", "PUT", body)
     suspend fun deleteAttributeTerm(baseUrl: String, attributeId: Long, id: Long, force: Boolean = false) = request(baseUrl, "/wp-json/wc/v3/products/attributes/$attributeId/terms/$id", "DELETE", params = mapOf("force" to force))
-    suspend fun uploadMedia(baseUrl: String, fileName: String, bytes: ByteArray, mediaType: String) = requestBytes(baseUrl, "/wp-json/wp/v2/media", fileName, bytes, mediaType)
+    suspend fun uploadMedia(baseUrl: String, fileName: String, bytes: ByteArray, mediaType: String) = decodeMediaUpload(baseUrl, fileName, bytes, mediaType)
     suspend fun deleteMedia(baseUrl: String, mediaId: Long, force: Boolean = true) = request(baseUrl, "/wp-json/wp/v2/media/$mediaId", "DELETE", params = mapOf("force" to force))
 
     private suspend fun request(baseUrl: String, path: String, method: String = "GET", body: String? = null, params: Map<String, Any> = emptyMap()): ApiResponse {
         val url = Url("${baseUrl.trimEnd('/')}$path")
         require(url.protocol.name == "https") { "WooCommerce API requires HTTPS" }
-        val response = when (method) { "POST" -> client.post(url) { common(params); contentType(ContentType.Application.Json); setBody(body ?: "{}") }; "PUT" -> client.put(url) { common(params); contentType(ContentType.Application.Json); setBody(body ?: "{}") }; "PATCH" -> client.patch(url) { common(params); contentType(ContentType.Application.Json); setBody(body ?: "{}") }; "DELETE" -> client.delete(url) { common(params) }; else -> client.get(url) { common(params) } }
+        val response = when (method) {
+            "POST" -> client.post(url) { common(params); contentType(ContentType.Application.Json); setBody(body ?: "{}") }
+            "PUT" -> client.put(url) { common(params); contentType(ContentType.Application.Json); setBody(body ?: "{}") }
+            "PATCH" -> client.patch(url) { common(params); contentType(ContentType.Application.Json); setBody(body ?: "{}") }
+            "DELETE" -> client.delete(url) { common(params) }
+            else -> client.get(url) { common(params) }
+        }
         return ApiResponse(response.status.value, response.bodyAsText())
     }
-    private suspend fun requestBytes(baseUrl: String, path: String, fileName: String, bytes: ByteArray, mediaType: String): ApiResponse {
-        val url = Url("${baseUrl.trimEnd('/')}$path")
+
+    private suspend fun decodeMediaUpload(baseUrl: String, fileName: String, bytes: ByteArray, mediaType: String): ApiResponse {
+        val url = Url("${baseUrl.trimEnd('/')}/wp-json/wp/v2/media")
         require(url.protocol.name == "https") { "WooCommerce API requires HTTPS" }
-        val response = client.post(url) { header(HttpHeaders.Authorization, basicAuth()); header(HttpHeaders.ContentDisposition, "attachment; filename=\"$fileName\""); header(HttpHeaders.ContentType, mediaType); setBody(bytes) }
-        if (response.status.value != 401) return ApiResponse(response.status.value, response.bodyAsText())
-        val retry = client.post(url) { parameter("consumer_key", credentials.consumerKey); parameter("consumer_secret", credentials.consumerSecret); header(HttpHeaders.ContentDisposition, "attachment; filename=\"$fileName\""); header(HttpHeaders.ContentType, mediaType); setBody(bytes) }
-        return ApiResponse(retry.status.value, retry.bodyAsText())
+        val safeFileName = fileName.substringAfterLast('/').substringAfterLast('\\').ifBlank { "image-${System.currentTimeMillis()}.jpg" }
+        val normalizedMediaType = mediaType.ifBlank { "application/octet-stream" }
+
+        val authenticated = client.post(url) {
+            header(HttpHeaders.Authorization, basicAuth())
+            header(HttpHeaders.Accept, ContentType.Application.Json.toString())
+            header(HttpHeaders.ContentDisposition, "attachment; filename=\"$safeFileName\"")
+            header(HttpHeaders.ContentType, normalizedMediaType)
+            setBody(bytes)
+        }
+        if (authenticated.status.value != 401) {
+            return ApiResponse(authenticated.status.value, authenticated.bodyAsText())
+        }
+
+        // Some hosts strip Authorization before WordPress receives it. WooCommerce explicitly supports
+        // query-string authentication over HTTPS for REST requests, so retry the same media endpoint
+        // without changing credentials or weakening TLS.
+        val queryAuthenticated = client.post(url) {
+            parameter("consumer_key", credentials.consumerKey)
+            parameter("consumer_secret", credentials.consumerSecret)
+            header(HttpHeaders.Accept, ContentType.Application.Json.toString())
+            header(HttpHeaders.ContentDisposition, "attachment; filename=\"$safeFileName\"")
+            header(HttpHeaders.ContentType, normalizedMediaType)
+            setBody(bytes)
+        }
+        return ApiResponse(queryAuthenticated.status.value, queryAuthenticated.bodyAsText())
     }
-    private fun HttpRequestBuilder.common(params: Map<String, Any>) { header(HttpHeaders.Authorization, basicAuth()); params.forEach { (key, value) -> parameter(key, value) } }
+
+    private fun HttpRequestBuilder.common(params: Map<String, Any>) {
+        header(HttpHeaders.Authorization, basicAuth())
+        params.forEach { (key, value) -> parameter(key, value) }
+    }
+
     private fun basicAuth(): String = "Basic ${Base64.getEncoder().encodeToString("${credentials.consumerKey}:${credentials.consumerSecret}".toByteArray())}"
-    private fun params(page: Int, perPage: Int, search: String? = null, status: String? = null) = buildMap<String, Any> { put("page", page); put("per_page", perPage); if (!search.isNullOrBlank()) put("search", search); if (!status.isNullOrBlank()) put("status", status) }
+
+    private fun params(page: Int, perPage: Int, search: String? = null, status: String? = null) = buildMap<String, Any> {
+        put("page", page)
+        put("per_page", perPage)
+        if (!search.isNullOrBlank()) put("search", search)
+        if (!status.isNullOrBlank()) put("status", status)
+    }
 }
 
 data class ApiResponse(val statusCode: Int, val body: String)
