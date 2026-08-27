@@ -33,7 +33,12 @@ private fun Product.toDto(operationId: String? = null) = WooProductTypedDto(
     id = id.value.toLongOrNull() ?: 0L, name = name, sku = sku, description = description,
     short_description = shortDescription, status = status.name.lowercase(), type = type.name.lowercase(),
     regular_price = pricing.regular, sale_price = pricing.sale, on_sale = pricing.onSale,
-    stock_quantity = stock?.quantity, stock_status = stock?.status?.name?.lowercase() ?: "instock",
+    stock_quantity = stock?.quantity,
+    stock_status = when (stock?.status) {
+        StockStatus.OUT_OF_STOCK -> "outofstock"
+        StockStatus.ON_BACKORDER -> "onbackorder"
+        StockStatus.IN_STOCK, null -> "instock"
+    },
     manage_stock = stock?.manageStock ?: false,
     images = images.map { image -> WooImageTypedDto(image.id?.value?.toLongOrNull(), image.src, image.name, image.alt) },
     categories = categories.map { category -> WooCategoryDto(category.id.value.toLongOrNull() ?: 0L, category.name) },
