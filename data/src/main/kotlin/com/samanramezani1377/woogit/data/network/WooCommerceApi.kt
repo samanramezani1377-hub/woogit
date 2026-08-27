@@ -41,25 +41,16 @@ class WooCommerceApi(private val client: HttpClient, private val credentials: Cr
     private suspend fun request(baseUrl: String, path: String, method: String = "GET", body: String? = null, params: Map<String, Any> = emptyMap()): ApiResponse {
         val url = Url("${baseUrl.trimEnd('/')}$path")
         require(url.protocol.name == "https") { "WooCommerce API requires HTTPS" }
-        val response = when (method) {
-            "POST" -> client.post(url) { common(params); contentType(ContentType.Application.Json); setBody(body ?: "{}") }
-            "PUT" -> client.put(url) { common(params); contentType(ContentType.Application.Json); setBody(body ?: "{}") }
-            "PATCH" -> client.patch(url) { common(params); contentType(ContentType.Application.Json); setBody(body ?: "{}") }
-            "DELETE" -> client.delete(url) { common(params) }
-            else -> client.get(url) { common(params) }
-        }
+        val response = when (method) { "POST" -> client.post(url) { common(params); contentType(ContentType.Application.Json); setBody(body ?: "{}") }; "PUT" -> client.put(url) { common(params); contentType(ContentType.Application.Json); setBody(body ?: "{}") }; "PATCH" -> client.patch(url) { common(params); contentType(ContentType.Application.Json); setBody(body ?: "{}") }; "DELETE" -> client.delete(url) { common(params) }; else -> client.get(url) { common(params) } }
         return ApiResponse(response.status.value, response.bodyAsText())
     }
     private suspend fun requestBytes(baseUrl: String, path: String, fileName: String, bytes: ByteArray, mediaType: String): ApiResponse {
         val url = Url("${baseUrl.trimEnd('/')}$path")
         require(url.protocol.name == "https") { "WooCommerce API requires HTTPS" }
-        val response = client.post(url) {
-            header(HttpHeaders.Authorization, basicAuth())
-            header(HttpHeaders.ContentDisposition, "attachment; filename=\"$fileName\"")
-            header(HttpHeaders.ContentType, mediaType)
-            setBody(bytes)
-        }
-        return ApiResponse(response.status.value, response.bodyAsText())
+        val response = client.post(url) { header(HttpHeaders.Authorization, basicAuth()); header(HttpHeaders.ContentDisposition, "attachment; filename=\"$fileName\""); header(HttpHeaders.ContentType, mediaType); setBody(bytes) }
+        if (response.status.value != 401) return ApiResponse(response.status.value, response.bodyAsText())
+        val retry = client.post(url) { parameter("consumer_key", credentials.consumerKey); parameter("consumer_secret", credentials.consumerSecret); header(HttpHeaders.ContentDisposition, "attachment; filename=\"$fileName\""); header(HttpHeaders.ContentType, mediaType); setBody(bytes) }
+        return ApiResponse(retry.status.value, retry.bodyAsText())
     }
     private fun HttpRequestBuilder.common(params: Map<String, Any>) { header(HttpHeaders.Authorization, basicAuth()); params.forEach { (key, value) -> parameter(key, value) } }
     private fun basicAuth(): String = "Basic ${Base64.getEncoder().encodeToString("${credentials.consumerKey}:${credentials.consumerSecret}".toByteArray())}"
