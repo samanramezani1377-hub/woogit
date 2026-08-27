@@ -27,12 +27,10 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onNewIntent(intent: Intent?) {
+    override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        if (intent != null) {
-            setIntent(intent)
-            intentOrderId(intent)?.let { notificationOrderId.value = it }
-        }
+        setIntent(intent)
+        intentOrderId(intent)?.let { notificationOrderId.value = it }
     }
 
     private fun intentOrderId(intent: Intent?): String? = intent?.let {
