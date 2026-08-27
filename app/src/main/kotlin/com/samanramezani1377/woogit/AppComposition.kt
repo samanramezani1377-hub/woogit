@@ -89,8 +89,18 @@ class AppComposition(context: Context) {
     val getConflicts = GetConflictsUseCase(syncRepository)
     val resolveConflict = ResolveConflictUseCase(syncRepository)
 
-    private fun rememberStore(id: String) { prefs.edit().putString("active_store_id", id).apply(); startBackgroundWork(id) }
-    private fun forgetStore() { val id = prefs.getString("active_store_id", null); if (id != null) scope.launch { disconnectStore(StoreId(id)) }; prefs.edit().remove("active_store_id").apply(); if (id != null) cancelBackgroundWork(id) }
+    private fun rememberStore(id: String) {
+        prefs.edit().putString("active_store_id", id).apply()
+        startBackgroundWork(id)
+    }
+
+    private fun forgetStore() {
+        val id = prefs.getString("active_store_id", null)
+        if (id != null) scope.launch { disconnectStore(StoreId(id)) }
+        prefs.edit().remove("active_store_id").apply()
+        if (id != null) cancelBackgroundWork(id)
+    }
+
     private val getConflictsFn: suspend (StoreId) -> CoreResult<List<Conflict>> = { storeId -> getConflicts(storeId) }
     private val resolveConflictFn: suspend (StoreId, com.samanramezani1377.woogit.core.domain.entity.EntityId, ConflictResolution) -> CoreResult<Unit> = { storeId, conflictId, resolution -> resolveConflict(storeId, conflictId, resolution) }
 
@@ -103,7 +113,12 @@ class AppComposition(context: Context) {
         getConnectionState, getSyncState, getPending, getConflictsFn, resolveConflictFn,
         syncPending, prefs.getString("active_store_id", null), ::rememberStore, ::forgetStore,
     )
-    fun startBackgroundWork(storeId: String) = OrderPollingWorker.schedule(appContext, storeId)
+
+    fun startBackgroundWork(storeId: String) {
+        OrderPollingWorker.schedule(appContext, storeId)
+        OrderPollingWorker.scheduleNow(appContext, storeId)
+    }
+
     fun cancelBackgroundWork(storeId: String) = OrderPollingWorker.cancel(appContext, storeId)
     fun close() { scope.cancel(); network.close() }
 }
