@@ -13,6 +13,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import java.security.MessageDigest
 
 class SyncRepositoryImpl(private val db: WooGitDatabase, private val engine: SyncEngine, private val pending: PendingOperationRepository) : SyncRepository {
     override suspend fun sync(storeId: StoreId): CoreResult<Unit> {
@@ -72,10 +73,11 @@ class SyncRepositoryImpl(private val db: WooGitDatabase, private val engine: Syn
                     buildJsonObject { put("__woogit_force_local", true) }
                 }
                 val payloadText = payload.toString()
+                val payloadHash = sha256(payloadText)
                 db.transaction {
                     db.syncQueries.updatePayload(
                         payloadText,
-                        payloadText.hashCode().toString(),
+                        payloadHash,
                         System.currentTimeMillis(),
                         row.operation_id,
                         storeId.value
@@ -136,4 +138,9 @@ class SyncRepositoryImpl(private val db: WooGitDatabase, private val engine: Syn
                 CoreResult.Failure(DomainError.Validation("Automatic merge is not safe for this V1 resource"))
         }
     }
+
+    private fun sha256(value: String): String =
+        MessageDigest.getInstance("SHA-256")
+            .digest(value.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
 }
