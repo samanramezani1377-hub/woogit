@@ -22,4 +22,5 @@ class WooCommerceV1Api(private val raw: WooCommerceApi) {
     suspend fun terms(baseUrl: String, attributeId: Long, page: Int, perPage: Int): Result<List<WooAttributeTermDto>> = decode(raw.listAttributeTerms(baseUrl, attributeId, page, perPage))
     suspend fun media(baseUrl: String, fileName: String, bytes: ByteArray, mediaType: String): Result<WooMediaDto> = decode(raw.uploadMedia(baseUrl, fileName, bytes, mediaType))
     suspend fun deleteMedia(baseUrl: String, id: Long): Result<Unit> = decodeUnit(raw.deleteMedia(baseUrl, id, true))
+    suspend fun productCategories(baseUrl: String, page: Int, perPage: Int, search: String?): Result<List<WooCategoryDto>> = decode(raw.listProductCategories(baseUrl, page, perPage, search))
 }
