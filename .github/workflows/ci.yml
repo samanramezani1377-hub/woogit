@@ -45,6 +45,7 @@ jobs:
         with:
           packages: platform-tools
           accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: false
 
       - name: Install required Android SDK packages
         shell: bash
@@ -59,6 +60,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: ${{ env.GRADLE_VERSION }}
+          cache-cleanup: always
 
       - name: Verify toolchain
         shell: bash
@@ -70,8 +72,6 @@ jobs:
           adb version
           sdkmanager --sdk_root="${ANDROID_SDK_ROOT}" --list_installed | grep -E "platforms;android-${ANDROID_API_LEVEL}|build-tools;${ANDROID_BUILD_TOOLS}|platform-tools"
 
-      # Diagnostic compile phase. Both variants are attempted independently so
-      # release-only compiler errors are not hidden by a debug failure.
       - name: Compile debug (diagnostic)
         id: debug_compile
         continue-on-error: true
@@ -94,8 +94,9 @@ jobs:
           echo "Gradle exit code: ${status}"
           exit "${status}"
 
-      # Tests and lint are meaningful after both variants compile. This avoids
-      # re-running the same Kotlin compiler failures three times while debugging.
+      # Tests and lint are intentionally gated on compilation. Running them while
+      # Kotlin compilation is broken mostly repeats the same compiler failures and
+      # makes the diagnostic signal harder to read.
       - name: Unit tests
         id: tests
         if: steps.debug_compile.outcome == 'success' && steps.release_compile.outcome == 'success'
@@ -136,27 +137,32 @@ jobs:
           echo >> ci-diagnostic-summary.txt
 
           echo "## Compiler errors" >> ci-diagnostic-summary.txt
-          grep -hE '^e: (file:)?' debug-ci.log release-ci.log 2>/dev/null | sort -u >> ci-diagnostic-summary.txt || true
+          grep -hE '^e: file:///.+:[0-9]+:[0-9]+ ' debug-ci.log release-ci.log 2>/dev/null | sort -u >> ci-diagnostic-summary.txt || true
           echo >> ci-diagnostic-summary.txt
           echo "## Compiler warnings" >> ci-diagnostic-summary.txt
-          grep -hE '^w: (file:)?' debug-ci.log release-ci.log 2>/dev/null | sort -u >> ci-diagnostic-summary.txt || true
+          grep -hE '^w: file:///.+:[0-9]+:[0-9]+ ' debug-ci.log release-ci.log 2>/dev/null | sort -u >> ci-diagnostic-summary.txt || true
           echo >> ci-diagnostic-summary.txt
           echo "## Gradle reports" >> ci-diagnostic-summary.txt
           find . -type f \( -path '*/build/reports/*' -o -path '*/build/test-results/*' \) -print | sort >> ci-diagnostic-summary.txt
 
-          # Turn only compiler messages emitted by Kotlin into native GitHub
-          # annotations. The compiler output remains the source of truth.
+          # Convert only well-formed Kotlin compiler diagnostics to GitHub
+          # annotations. Raw logs remain authoritative and are uploaded below.
           for log in debug-ci.log release-ci.log; do
             [[ -f "$log" ]] || continue
-            grep -E '^e: file:/.+:[0-9]+:[0-9]+ ' "$log" | while IFS= read -r line; do
-              payload="${line#e: file:///workspace/}"
+            grep -E '^e: file:///.+:[0-9]+:[0-9]+ ' "$log" | while IFS= read -r line; do
+              payload="${line#e: file://${GITHUB_WORKSPACE}/}"
+              if [[ "$payload" == "$line" ]]; then
+                payload="${line#e: file:///home/runner/work/woogit/woogit/}"
+              fi
               file_part="${payload%%:*}"
               rest="${payload#*:}"
               line_no="${rest%%:*}"
               rest="${rest#*:}"
               col_no="${rest%% *}"
               message="${rest#* }"
-              echo "::error file=${file_part},line=${line_no},col=${col_no}::${message}"
+              if [[ -n "$file_part" && "$line_no" =~ ^[0-9]+$ && "$col_no" =~ ^[0-9]+$ ]]; then
+                echo "::error file=${file_part},line=${line_no},col=${col_no}::${message}"
+              fi
             done
           done
 
