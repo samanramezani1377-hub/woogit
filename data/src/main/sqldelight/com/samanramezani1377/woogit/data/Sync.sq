@@ -30,6 +30,8 @@ updatePayload:
 UPDATE pending_operation SET payload_json = ?, payload_hash = ?, updated_at = ? WHERE id = ? AND store_id = ?;
 recoverRunning:
 UPDATE pending_operation SET state = 'PENDING', claimed_at = NULL, updated_at = ? WHERE state = 'RUNNING' AND (claimed_at IS NULL OR claimed_at <= ?);
+recoverRunningByStore:
+UPDATE pending_operation SET state = 'PENDING', claimed_at = NULL, updated_at = ? WHERE store_id = ? AND state = 'RUNNING' AND (claimed_at IS NULL OR claimed_at <= ?);
 deleteById:
 DELETE FROM pending_operation WHERE id = ?;
 
