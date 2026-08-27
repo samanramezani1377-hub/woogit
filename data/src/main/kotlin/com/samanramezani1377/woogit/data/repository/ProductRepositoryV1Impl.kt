@@ -46,14 +46,14 @@ class ProductRepositoryV1Impl(
     private val coordinator: MutationCoordinator, private val pending: PendingOperationRepository,
 ) : ProductRepository {
     override suspend fun get(storeId: StoreId, id: EntityId): CoreResult<Product> = provider.client(storeId).fold(
-        { (store, api) -> api.product(store.baseUrl, id.value.toLong()).getOrNull()?.let { remote -> remote.toDomain().also { local.upsert(storeId, it) }.let(CoreResult::Success) } ?: local.get(storeId, id) },
+        { (store, api) -> api.product(store.baseUrl, id.value.toLong()).getOrNull()?.let { remote -> remote.toDomain().also { local.upsert(storeId, it) }.let { CoreResult.Success(it) } } ?: local.get(storeId, id) },
         { local.get(storeId, id) },
     )
 
     override suspend fun list(storeId: StoreId, page: Int, perPage: Int, search: String?): CoreResult<List<Product>> {
         val cached = if (page == 1) local.list(storeId) else null
         return provider.client(storeId).fold(
-            { (store, api) -> api.products(store.baseUrl, page, perPage, search).getOrNull()?.let { remote -> remote.map(WooProductTypedDto::toDomain).also { values -> values.forEach { local.upsert(storeId, it) } }.let(CoreResult::Success) } ?: (cached ?: CoreResult.Failure(DomainError.Network("Unable to load products"))) },
+            { (store, api) -> api.products(store.baseUrl, page, perPage, search).getOrNull()?.let { remote -> remote.map(WooProductTypedDto::toDomain).also { values -> values.forEach { local.upsert(storeId, it) } }.let { CoreResult.Success(it) } } ?: (cached ?: CoreResult.Failure(DomainError.Network("Unable to load products"))) },
             { cached ?: CoreResult.Failure(it) },
         )
     }
