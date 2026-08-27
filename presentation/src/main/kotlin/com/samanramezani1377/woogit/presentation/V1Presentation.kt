@@ -16,7 +16,7 @@ import kotlinx.coroutines.launch
 
 class V1PresentationDependencies(
     val getStore:GetStore,val connectStore:ConnectStore,val disconnectStore:DisconnectStore,val getOrders:GetOrders,val getOrder:GetOrder,val updateOrder:UpdateOrder,val addOrderNote:AddOrderNote,
-    val getProducts:GetProducts,val getProduct:GetProduct,val createProduct:CreateProduct,val updateProduct:UpdateProduct,val deleteProduct:DeleteProduct,
+    val getProducts:GetProducts,val getProduct:GetProduct,val createProduct:CreateProduct,val updateProduct:UpdateProduct,val deleteProduct:DeleteProduct,val getProductCategories:GetProductCategories,
     val getVariations:GetVariations,val getVariation:GetVariation,val createVariation:CreateVariation,val updateVariation:UpdateVariation,val deleteVariation:DeleteVariation,
     val getAttributes:GetAttributes,val getAttribute:GetAttribute,val createAttribute:CreateAttribute,val updateAttribute:UpdateAttribute,val deleteAttribute:DeleteAttribute,
     val getTerms:GetTerms,val getTerm:GetTerm,val createTerm:CreateTerm,val updateTerm:UpdateTerm,val deleteTerm:DeleteTerm,val uploadMedia:UploadMedia,val deleteMedia:DeleteMedia,
@@ -36,7 +36,7 @@ class ConnectionViewModel(private val d:V1PresentationDependencies):ViewModel(){
 }
 class OrdersViewModel(private val d:V1PresentationDependencies):ViewModel(){
     private val _state=MutableStateFlow<FeatureUiState<List<Order>>>(FeatureUiState.Loading);val state=_state.asStateFlow();var page=1;private var query="";private var job:Job?=null;private var loadingMore=false;private var hasMore=true
-    fun load(s:StoreId,search:String="",reset:Boolean=true){query=search;if(reset){page=1;hasMore=true;loadingMore=false};job?.cancel();job=viewModelScope.launch{delay(350);_state.value=FeatureUiState.Loading;when(val r=d.getOrders(s,page,30,query.ifBlank{null},null)){is CoreResult.Success->{hasMore=r.value.size>=30;_state.value=if(r.value.isEmpty())FeatureUiState.Empty else FeatureUiState.Success(r.value)};is CoreResult.Failure->_state.value=r.toUi()}}}
+    fun load(s:StoreId,search:String="",reset:Boolean=true){query=search;if(reset){page=1;hasMore=true;loadingMore=false};job?.cancel();job=viewModelScope.launch{delay(350);if(reset)_state.value=FeatureUiState.Loading;when(val r=d.getOrders(s,page,30,query.ifBlank{null},null)){is CoreResult.Success->{hasMore=r.value.size>=30;_state.value=if(r.value.isEmpty()&&page==1)FeatureUiState.Empty else FeatureUiState.Success(r.value)};is CoreResult.Failure->_state.value=r.toUi()}}}
     fun nextPage(s:StoreId)=viewModelScope.launch{if(loadingMore||!hasMore)return@launch;loadingMore=true;try{val target=page+1;when(val r=d.getOrders(s,target,30,query.ifBlank{null},null)){is CoreResult.Success->{page=target;hasMore=r.value.size>=30;val old=(_state.value as? FeatureUiState.Success)?.value.orEmpty();_state.value=FeatureUiState.Success(old+r.value)};is CoreResult.Failure->_state.value=r.toUi()}}finally{loadingMore=false}}
 }
 class OrderDetailViewModel(private val d:V1PresentationDependencies):ViewModel(){
@@ -47,12 +47,13 @@ class OrderDetailViewModel(private val d:V1PresentationDependencies):ViewModel()
 }
 class ProductsViewModel(private val d:V1PresentationDependencies):ViewModel(){
     private val _state=MutableStateFlow<FeatureUiState<List<Product>>>(FeatureUiState.Loading);val state=_state.asStateFlow();var page=1;private var query="";private var job:Job?=null;private var loadingMore=false;private var hasMore=true
-    fun load(s:StoreId,search:String="",reset:Boolean=true){query=search;if(reset){page=1;hasMore=true;loadingMore=false};job?.cancel();job=viewModelScope.launch{delay(350);_state.value=FeatureUiState.Loading;when(val r=d.getProducts(s,page,30,query.ifBlank{null})){is CoreResult.Success->{hasMore=r.value.size>=30;_state.value=if(r.value.isEmpty())FeatureUiState.Empty else FeatureUiState.Success(r.value)};is CoreResult.Failure->_state.value=r.toUi()}}}
+    fun load(s:StoreId,search:String="",reset:Boolean=true){query=search;if(reset){page=1;hasMore=true;loadingMore=false};job?.cancel();job=viewModelScope.launch{delay(350);if(reset)_state.value=FeatureUiState.Loading;when(val r=d.getProducts(s,page,30,query.ifBlank{null})){is CoreResult.Success->{hasMore=r.value.size>=30;_state.value=if(r.value.isEmpty()&&page==1)FeatureUiState.Empty else FeatureUiState.Success(r.value)};is CoreResult.Failure->_state.value=r.toUi()}}}
     fun nextPage(s:StoreId)=viewModelScope.launch{if(loadingMore||!hasMore)return@launch;loadingMore=true;try{val target=page+1;when(val r=d.getProducts(s,target,30,query.ifBlank{null})){is CoreResult.Success->{page=target;hasMore=r.value.size>=30;val old=(_state.value as? FeatureUiState.Success)?.value.orEmpty();_state.value=FeatureUiState.Success(old+r.value)};is CoreResult.Failure->_state.value=r.toUi()}}finally{loadingMore=false}}
 }
 class ProductDetailViewModel(private val d:V1PresentationDependencies):ViewModel(){
-    private val _state=MutableStateFlow<FeatureUiState<Product>>(FeatureUiState.Loading);val state=_state.asStateFlow()
-    fun load(s:StoreId,id:EntityId)=viewModelScope.launch{when(val r=d.getProduct(s,id)){is CoreResult.Success->_state.value=FeatureUiState.Success(r.value);is CoreResult.Failure->_state.value=r.toUi()}}
+    private val _state=MutableStateFlow<FeatureUiState<Product>>(FeatureUiState.Loading);val state=_state.asStateFlow();private val _categories=MutableStateFlow<FeatureUiState<List<IdName>>>(FeatureUiState.Loading);val categories:StateFlow<FeatureUiState<List<IdName>>> = _categories.asStateFlow()
+    fun load(s:StoreId,id:EntityId)=viewModelScope.launch{when(val r=d.getProduct(s,id)){is CoreResult.Success->_state.value=FeatureUiState.Success(r.value);is CoreResult.Failure->_state.value=r.toUi()};loadCategories(s)}
+    fun loadCategories(s:StoreId)=viewModelScope.launch{_categories.value=FeatureUiState.Loading;when(val r=d.getProductCategories(s,1,100,null)){is CoreResult.Success->_categories.value=FeatureUiState.Success(r.value);is CoreResult.Failure->_categories.value=r.toUi()}}
     fun save(s:StoreId,p:Product,create:Boolean,done:()->Unit)=viewModelScope.launch{_state.value=FeatureUiState.Pending;when(val r=if(create)d.createProduct(s,p)else d.updateProduct(s,p.id,p)){is CoreResult.Success->{_state.value=FeatureUiState.Success(r.value);done()};is CoreResult.Failure->_state.value=r.toUi()}}
     fun delete(s:StoreId,id:EntityId,done:()->Unit)=viewModelScope.launch{_state.value=FeatureUiState.Pending;when(val r=d.deleteProduct(s,id)){is CoreResult.Success->{_state.value=FeatureUiState.Empty;done()};is CoreResult.Failure->_state.value=r.toUi()}}
 }
