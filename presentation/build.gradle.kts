@@ -28,4 +28,6 @@ dependencies {
     implementation(libs.kotlinx.datetime)
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.9.2")
     implementation("io.coil-kt:coil-compose:2.7.0")
+    implementation(libs.haze)
+    implementation(libs.haze.materials)
 }
