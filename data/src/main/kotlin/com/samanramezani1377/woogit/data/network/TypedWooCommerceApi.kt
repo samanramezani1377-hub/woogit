@@ -36,6 +36,7 @@ class TypedWooCommerceApi(private val raw: WooCommerceApi) {
     suspend fun createProduct(b:String,p:WooProductTypedDto) = decode(raw.createProduct(b,typedJson.encodeToString(p))) { typedJson.decodeFromString<WooProductTypedDto>(it) }
     suspend fun updateProduct(b:String,id:Long,p:WooProductTypedDto) = decode(raw.updateProduct(b,id,typedJson.encodeToString(p))) { typedJson.decodeFromString<WooProductTypedDto>(it) }
     suspend fun deleteProduct(b:String,id:Long) = decode(raw.deleteProduct(b,id,true)) { Unit }
+    suspend fun productCategories(b:String,p:Int,n:Int,s:String?) = decode(raw.listProductCategories(b,p,n,s)) { typedJson.decodeFromString<List<WooCategoryDto>>(it) }
     suspend fun variations(b:String,p:Long,n:Int,c:Int) = decode(raw.listVariations(b,p,n,c)) { typedJson.decodeFromString<List<WooVariationTypedDto>>(it) }
     suspend fun variation(b:String,p:Long,id:Long) = decode(raw.getVariation(b,p,id)) { typedJson.decodeFromString<WooVariationTypedDto>(it) }
     suspend fun createVariation(b:String,p:Long,v:WooVariationTypedDto) = decode(raw.createVariation(b,p,typedJson.encodeToString(v))) { typedJson.decodeFromString<WooVariationTypedDto>(it) }
