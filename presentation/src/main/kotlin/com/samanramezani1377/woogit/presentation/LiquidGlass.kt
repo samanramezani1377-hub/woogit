@@ -5,10 +5,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -20,7 +24,7 @@ import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
 
-/** Shared Liquid Glass environment. Background content is registered as a Haze source. */
+/** Shared Liquid Glass environment. The backdrop contains soft ambient light sources so glass has real visual variation to refract/blur. */
 @Composable
 fun LiquidGlassEnvironment(
     modifier: Modifier = Modifier,
@@ -51,7 +55,44 @@ fun LiquidGlassEnvironment(
                     ),
                 )
                 .hazeSource(state = hazeState, zIndex = 0f),
-        )
+        ) {
+            Box(
+                Modifier
+                    .offset(x = (-80).dp, y = 40.dp)
+                    .size(260.dp)
+                    .blur(70.dp)
+                    .background(
+                        Brush.radialGradient(
+                            listOf(Color(0xFFB9D8FF).copy(alpha = 0.70f), Color.Transparent),
+                        ),
+                        CircleShape,
+                    ),
+            )
+            Box(
+                Modifier
+                    .offset(x = 250.dp, y = 170.dp)
+                    .size(300.dp)
+                    .blur(80.dp)
+                    .background(
+                        Brush.radialGradient(
+                            listOf(Color(0xFFD9C7FF).copy(alpha = 0.48f), Color.Transparent),
+                        ),
+                        CircleShape,
+                    ),
+            )
+            Box(
+                Modifier
+                    .offset(x = 40.dp, y = 560.dp)
+                    .size(340.dp)
+                    .blur(90.dp)
+                    .background(
+                        Brush.radialGradient(
+                            listOf(Color(0xFFBFEFE1).copy(alpha = 0.42f), Color.Transparent),
+                        ),
+                        CircleShape,
+                    ),
+            )
+        }
 
         content(hazeState)
     }
