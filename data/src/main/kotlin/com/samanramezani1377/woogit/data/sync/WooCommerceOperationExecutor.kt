@@ -1,6 +1,7 @@
 package com.samanramezani1377.woogit.data.sync
 
 import com.samanramezani1377.woogit.core.domain.entity.EntityId
+import com.samanramezani1377.woogit.core.domain.error.CoreResult
 import com.samanramezani1377.woogit.core.domain.model.*
 import com.samanramezani1377.woogit.core.domain.repository.LocalAttributeDataSource
 import com.samanramezani1377.woogit.core.domain.repository.LocalOrderDataSource
@@ -9,7 +10,6 @@ import com.samanramezani1377.woogit.core.domain.repository.LocalTermDataSource
 import com.samanramezani1377.woogit.core.domain.repository.LocalVariationDataSource
 import com.samanramezani1377.woogit.data.db.WooGitDatabase
 import com.samanramezani1377.woogit.data.network.*
-import com.samanramezani1377.woogit.data.network.WooCommerceClientProvider
 import kotlinx.datetime.Clock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -19,6 +19,14 @@ import kotlinx.serialization.json.jsonPrimitive
 
 private val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
 class ConflictDetected(message: String) : Exception(message)
+
+private class CoreResultException(val error: com.samanramezani1377.woogit.core.domain.error.DomainError) : Exception(error.toString())
+
+private fun <T> CoreResult<T>.getOrThrow(): T = when (this) {
+    is CoreResult.Success -> value
+    is CoreResult.Failure -> throw CoreResultException(error)
+}
+
 @Serializable private data class ProductMutation(val name: String, val sku: String? = null, val description: String? = null, val short_description: String? = null, val status: String, val type: String, val regular_price: String? = null, val sale_price: String? = null, val images: List<WooImageTypedDto> = emptyList(), val attributes: List<WooProductAttributeDto> = emptyList(), val __woogit_force_local: Boolean = false)
 @Serializable private data class OrderMutation(val status: String, val __woogit_force_local: Boolean = false)
 @Serializable private data class NoteMutation(val note: String, val customer_note: Boolean = false)
@@ -30,7 +38,7 @@ class WooCommerceOperationExecutor(private val db: WooGitDatabase, private val p
             "order" to OperationType.UPDATE -> {
                 val local = orders.get(operation.storeId, operation.entityId)
                 val remote = api.order(store.baseUrl, operation.entityId.value.toLong()).getOrThrow()
-                val localVersion = (local as? com.samanramezani1377.woogit.core.domain.error.CoreResult.Success)?.value?.modifiedAt?.toString()
+                val localVersion = (local as? CoreResult.Success)?.value?.modifiedAt?.toString()
                 val mutation = json.decodeFromString<OrderMutation>(operation.payloadJson)
                 if (!mutation.__woogit_force_local && localVersion != null && remote.date_modified_gmt != null && localVersion != remote.date_modified_gmt) {
                     persistConflict(operation, operation.payloadJson, json.encodeToString(remote), localVersion, remote.date_modified_gmt)
@@ -53,7 +61,7 @@ class WooCommerceOperationExecutor(private val db: WooGitDatabase, private val p
                 val p = json.decodeFromString<ProductMutation>(operation.payloadJson)
                 val remote = api.product(store.baseUrl, operation.entityId.value.toLong()).getOrThrow()
                 val local = products.get(operation.storeId, operation.entityId)
-                val localVersion = (local as? com.samanramezani1377.woogit.core.domain.error.CoreResult.Success)?.value?.modifiedAt?.toString()
+                val localVersion = (local as? CoreResult.Success)?.value?.modifiedAt?.toString()
                 if (!p.__woogit_force_local && localVersion != null && remote.date_modified_gmt != null && localVersion != remote.date_modified_gmt) {
                     persistConflict(operation, operation.payloadJson, json.encodeToString(remote), localVersion, remote.date_modified_gmt)
                     throw ConflictDetected("Remote product changed before sync")
@@ -78,8 +86,8 @@ class WooCommerceOperationExecutor(private val db: WooGitDatabase, private val p
             }
             "variation" to OperationType.DELETE -> {
                 val parts = operation.id.value.split('-')
-                require(parts.size >= 4) { "Invalid variation delete operation id" }
-                val productId = parts[2].toLongOrNull() ?: error("Variation product id unavailable")
+                require(parts.size >= 5) { "Invalid variation delete operation id" }
+                val productId = parts[3].toLongOrNull() ?: error("Variation product id unavailable")
                 api.deleteVariation(store.baseUrl, productId, operation.entityId.value.toLong()).getOrThrow()
             }
             "attribute" to OperationType.CREATE -> {
@@ -130,7 +138,7 @@ class WooCommerceOperationExecutor(private val db: WooGitDatabase, private val p
     }
 }
 
-private fun WooProductTypedDto.toDomain() = com.samanramezani1377.woogit.core.domain.model.Product(EntityId(id.toString()), name, sku, description, short_description, when (status) { "publish" -> ProductStatus.PUBLISHED; "pending" -> ProductStatus.PENDING; "private" -> ProductStatus.PRIVATE; else -> ProductStatus.DRAFT }, when (type) { "variable" -> ProductType.VARIABLE; "grouped" -> ProductType.GROUPED; "external" -> ProductType.EXTERNAL; else -> ProductType.SIMPLE }, Pricing(regular_price, sale_price, on_sale), Stock(stock_quantity, when (stock_status) { "outofstock" -> StockStatus.OUT_OF_STOCK; "onbackorder" -> StockStatus.ON_BACKORDER; else -> StockStatus.IN_STOCK }, manage_stock), images.map { com.samanramezani1377.woogit.core.domain.model.ProductImage(it.id?.let { id -> EntityId(id.toString()) }, it.src, it.name, it.alt) }, categories.map { com.samanramezani1377.woogit.core.domain.model.IdName(EntityId(it.id.toString()), it.name) }, attributes.map { com.samanramezani1377.woogit.core.domain.model.Attribute(it.id?.let { id -> EntityId(id.toString()) }, it.name, it.visible, it.variation, it.options) }, date_modified_gmt)
+private fun WooProductTypedDto.toDomain() = com.samanramezani1377.woogit.core.domain.model.Product(EntityId(id.toString()), name, sku, description, short_description, when (status) { "publish" -> ProductStatus.PUBLISHED; "pending" -> ProductStatus.PENDING; "private" -> ProductStatus.PRIVATE; else -> ProductStatus.DRAFT }, when (type) { "variable" -> ProductType.VARIABLE; "grouped" -> ProductType.GROUPED; "external" -> ProductType.EXTERNAL; else -> ProductType.SIMPLE }, Pricing(regular_price, sale_price, on_sale), Stock(stock_quantity, when (stock_status) { "outofstock" -> StockStatus.OUT_OF_STOCK; "onbackorder" -> StockStatus.ON_BACKORDER; else -> StockStatus.IN_STOCK }, manage_stock), images.map { com.samanramezani1377.woogit.core.domain.model.ProductImage(it.id?.let { id -> EntityId(id.toString()) }, it.src, it.name, it.alt) }, categories.map { com.samanramezani1377.woogit.core.domain.model.IdName(it.id.let { id -> EntityId(id.toString()) }, it.name) }, attributes.map { com.samanramezani1377.woogit.core.domain.model.Attribute(it.id?.let { id -> EntityId(id.toString()) }, it.name, it.visible, it.variation, it.options) }, date_modified_gmt)
 private fun WooVariationTypedDto.toDomain() = Variation(EntityId(id.toString()), EntityId(product_id.toString()), attributes.map { VariationAttribute(it.name, it.options.firstOrNull().orEmpty()) }, Pricing(regular_price, sale_price, sale_price != null), Stock(stock_quantity, when (stock_status) { "outofstock" -> StockStatus.OUT_OF_STOCK; "onbackorder" -> StockStatus.ON_BACKORDER; else -> StockStatus.IN_STOCK }, manage_stock), sku, image?.let { com.samanramezani1377.woogit.core.domain.model.ProductImage(it.id?.let { id -> EntityId(id.toString()) }, it.src, it.name, it.alt) }, date_modified_gmt?.let { kotlinx.datetime.Instant.parse(it) })
 private fun WooGlobalAttributeDto.toDomain() = GlobalAttribute(EntityId(id.toString()), name, slug, emptyList())
 private fun WooAttributeTermDto.toDomain() = AttributeTerm(EntityId(id.toString()), name, slug)
