@@ -61,90 +61,93 @@ jobs:
         run: |
           set -euo pipefail
           java -version
-          gradle --version
           gradle --version | grep -F "Gradle ${GRADLE_VERSION}"
           adb version
           sdkmanager --sdk_root="${ANDROID_SDK_ROOT}" --list_installed | grep -E "platforms;android-${ANDROID_API_LEVEL}|build-tools;${ANDROID_BUILD_TOOLS}|platform-tools"
-      - name: Compile debug (diagnostic)
-        id: debug_compile
-        continue-on-error: true
+      - name: Build debug
+        id: debug_build
         shell: bash
         run: |
-          set +e
-          gradle assembleDebug --continue --console=plain --warning-mode=all --stacktrace --no-daemon 2>&1 | tee debug-ci.log
-          status=${PIPESTATUS[0]}
-          echo "Gradle exit code: ${status}"
-          exit "${status}"
-      - name: Compile release (diagnostic)
-        id: release_compile
-        continue-on-error: true
+          set -euo pipefail
+          gradle assembleDebug --console=plain --warning-mode=all --stacktrace --no-daemon 2>&1 | tee debug-ci.log
+      - name: Build release
+        id: release_build
         shell: bash
         run: |
-          set +e
-          gradle assembleRelease --continue --console=plain --warning-mode=all --stacktrace --no-daemon 2>&1 | tee release-ci.log
-          status=${PIPESTATUS[0]}
-          echo "Gradle exit code: ${status}"
-          exit "${status}"
+          set -euo pipefail
+          gradle assembleRelease --console=plain --warning-mode=all --stacktrace --no-daemon 2>&1 | tee release-ci.log
       - name: Unit tests
         id: tests
-        if: ${{ always() && steps.debug_compile.outcome == 'success' && steps.release_compile.outcome == 'success' }}
-        continue-on-error: true
         shell: bash
         run: |
-          set +e
-          gradle test --continue --console=plain --warning-mode=all --stacktrace --no-daemon 2>&1 | tee test-ci.log
-          status=${PIPESTATUS[0]}
-          echo "Gradle exit code: ${status}"
-          exit "${status}"
+          set -euo pipefail
+          gradle test --console=plain --warning-mode=all --stacktrace --no-daemon 2>&1 | tee test-ci.log
       - name: Android lint
         id: lint
-        if: ${{ always() && steps.debug_compile.outcome == 'success' && steps.release_compile.outcome == 'success' }}
-        continue-on-error: true
         shell: bash
         run: |
-          set +e
-          gradle lint --continue --console=plain --warning-mode=all --stacktrace --no-daemon 2>&1 | tee lint-ci.log
-          status=${PIPESTATUS[0]}
-          echo "Gradle exit code: ${status}"
-          exit "${status}"
-      - name: Collect diagnostic summary and annotations
+          set -euo pipefail
+          gradle lint --console=plain --warning-mode=all --stacktrace --no-daemon 2>&1 | tee lint-ci.log
+      - name: Verify APK
+        id: verify_apk
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t apks < <(find . -type f -path '*/build/outputs/apk/**/*.apk' -size +0c | sort)
+          if (( ${#apks[@]} == 0 )); then
+            echo "No non-empty APK was produced by this build."
+            exit 1
+          fi
+          printf 'Produced APKs:\n%s\n' "${apks[@]}"
+          for apk in "${apks[@]}"; do
+            echo "APK: $apk"
+            ls -lh "$apk"
+            sha256sum "$apk"
+            if command -v apkanalyzer >/dev/null 2>&1; then
+              apkanalyzer manifest application-id "$apk"
+              apkanalyzer manifest version-code "$apk"
+              apkanalyzer manifest version-name "$apk"
+            elif command -v aapt2 >/dev/null 2>&1; then
+              aapt2 dump packagename "$apk"
+            else
+              echo "No APK manifest inspection tool available on PATH."
+              exit 1
+            fi
+          done
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v6
+        with:
+          name: woogit-debug-apk-${{ github.sha }}
+          path: '**/build/outputs/apk/**/*.apk'
+          if-no-files-found: error
+          retention-days: 7
+      - name: Collect CI diagnostics
         if: always()
         shell: bash
         run: |
-          set +e
+          set -u
           : > ci-diagnostic-summary.txt
           {
             echo "# WooGit CI diagnostic summary"
             echo
             echo "Commit: ${GITHUB_SHA}"
-            echo "Debug compile: ${{ steps.debug_compile.outcome }}"
-            echo "Release compile: ${{ steps.release_compile.outcome }}"
+            echo "Debug build: ${{ steps.debug_build.outcome }}"
+            echo "Release build: ${{ steps.release_build.outcome }}"
             echo "Tests: ${{ steps.tests.outcome }}"
             echo "Lint: ${{ steps.lint.outcome }}"
+            echo "APK verification: ${{ steps.verify_apk.outcome }}"
             echo
             echo "## Compiler errors"
           } >> ci-diagnostic-summary.txt
-          grep -hE '^e: file:///.+:[0-9]+:[0-9]+ ' debug-ci.log release-ci.log 2>/dev/null | sort -u >> ci-diagnostic-summary.txt || true
-          {
-            echo
-            echo "## Compiler warnings"
-          } >> ci-diagnostic-summary.txt
-          grep -hE '^w: file:///.+:[0-9]+:[0-9]+ ' debug-ci.log release-ci.log 2>/dev/null | sort -u >> ci-diagnostic-summary.txt || true
+          for log in debug-ci.log release-ci.log test-ci.log lint-ci.log; do
+            [[ -f "$log" ]] || continue
+            grep -hE '^e: file:///.+:[0-9]+:[0-9]+ ' "$log" 2>/dev/null || true
+          done | sort -u >> ci-diagnostic-summary.txt
           {
             echo
             echo "## Gradle reports"
+            find . -type f \( -path '*/build/reports/*' -o -path '*/build/test-results/*' \) -print | sort
           } >> ci-diagnostic-summary.txt
-          find . -type f \( -path '*/build/reports/*' -o -path '*/build/test-results/*' \) -print | sort >> ci-diagnostic-summary.txt
-          for log in debug-ci.log release-ci.log test-ci.log lint-ci.log; do
-            [[ -f "$log" ]] || continue
-            while IFS= read -r line; do
-              if [[ "$line" =~ ^e:\ file://([^:]+):([0-9]+):([0-9]+)\ (.*)$ ]]; then
-                file="${BASH_REMATCH[1]}";line_no="${BASH_REMATCH[2]}";col_no="${BASH_REMATCH[3]}";message="${BASH_REMATCH[4]}";file="${file#${GITHUB_WORKSPACE}/}"
-                printf '::error file=%s,line=%s,col=%s::%s\n' "$file" "$line_no" "$col_no" "$message"
-              fi
-            done < <(grep -E '^e: file://[^:]+:[0-9]+:[0-9]+ ' "$log" 2>/dev/null || true)
-          done
-          exit 0
       - name: Upload CI diagnostics
         if: always()
         uses: actions/upload-artifact@v6
@@ -157,38 +160,28 @@ jobs:
             '**/build/test-results/**'
           if-no-files-found: warn
           retention-days: 14
-      - name: Upload debug APK
-        if: always() && steps.debug_compile.outcome == 'success'
-        uses: actions/upload-artifact@v6
-        with:
-          name: woogit-debug-apk-${{ github.sha }}
-          path: '**/build/outputs/apk/**/*.apk'
-          if-no-files-found: error
-          retention-days: 7
       - name: Final CI gate
         if: always()
         shell: bash
         env:
-          DEBUG_OUTCOME: ${{ steps.debug_compile.outcome }}
-          RELEASE_OUTCOME: ${{ steps.release_compile.outcome }}
+          DEBUG_OUTCOME: ${{ steps.debug_build.outcome }}
+          RELEASE_OUTCOME: ${{ steps.release_build.outcome }}
           TESTS_OUTCOME: ${{ steps.tests.outcome }}
           LINT_OUTCOME: ${{ steps.lint.outcome }}
+          APK_OUTCOME: ${{ steps.verify_apk.outcome }}
         run: |
           set -euo pipefail
           echo "========================================"
           echo "WooGit V1 CI result"
           echo "========================================"
-          echo "Debug compile   : ${DEBUG_OUTCOME}"
-          echo "Release compile : ${RELEASE_OUTCOME}"
-          echo "Tests           : ${TESTS_OUTCOME:-skipped}"
-          echo "Lint            : ${LINT_OUTCOME:-skipped}"
+          echo "Debug build     : ${DEBUG_OUTCOME}"
+          echo "Release build   : ${RELEASE_OUTCOME}"
+          echo "Tests           : ${TESTS_OUTCOME}"
+          echo "Lint            : ${LINT_OUTCOME}"
+          echo "APK verification: ${APK_OUTCOME}"
           echo "========================================"
-          if [[ "${DEBUG_OUTCOME}" != "success" || "${RELEASE_OUTCOME}" != "success" ]]; then
-            echo "CI FAILED: one or more required compile variants failed."
+          if [[ "${DEBUG_OUTCOME}" != "success" || "${RELEASE_OUTCOME}" != "success" || "${TESTS_OUTCOME}" != "success" || "${LINT_OUTCOME}" != "success" || "${APK_OUTCOME}" != "success" ]]; then
+            echo "CI FAILED: one or more required verification gates failed."
             exit 1
           fi
-          if [[ "${TESTS_OUTCOME:-skipped}" != "success" || "${LINT_OUTCOME:-skipped}" != "success" ]]; then
-            echo "CI FAILED: tests or lint did not pass after compilation."
-            exit 1
-          fi
-          echo "CI PASSED: compile, tests and lint are green."
+          echo "CI PASSED: build, tests, lint and APK verification are green."
