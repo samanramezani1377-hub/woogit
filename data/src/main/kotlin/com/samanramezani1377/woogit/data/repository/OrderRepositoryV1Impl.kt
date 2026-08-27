@@ -18,31 +18,34 @@ private val mutationJson = Json { ignoreUnknownKeys = true; explicitNulls = fals
 private fun payloadHash(value: String) = MessageDigest.getInstance("SHA-256").digest(value.toByteArray()).joinToString("") { "%02x".format(it) }
 @Serializable private data class OrderMutation(val status: String)
 
-private fun WooOrderTypedDto.toDomain() = Order(
-    EntityId(id.toString()),
-    when (status) {
-        "pending" -> OrderStatus.PENDING
-        "processing" -> OrderStatus.PROCESSING
-        "on-hold" -> OrderStatus.ON_HOLD
-        "completed" -> OrderStatus.COMPLETED
-        "cancelled" -> OrderStatus.CANCELLED
-        "refunded" -> OrderStatus.REFUNDED
-        "failed" -> OrderStatus.FAILED
-        else -> OrderStatus.OTHER
-    },
-    customer_id.takeIf { it != 0L }?.let { Customer(EntityId(it.toString()), listOfNotNull(billing?.first_name, billing?.last_name).joinToString(" "), billing?.phone) },
-    billing?.let { Address(it.first_name, it.last_name, it.company, it.address_1, it.address_2, it.city, it.state, it.postcode, it.country, it.phone) },
-    shipping?.let { Address(it.first_name, it.last_name, it.company, it.address_1, it.address_2, it.city, it.state, it.postcode, it.country, it.phone) },
-    Payment(payment_method, payment_method_title, transaction_id, payment_method != null),
-    shipping_lines.map { ShippingLine(it.method_id, it.method_title, it.total) },
-    coupon_lines.map { Discount(it.code, it.discount) },
-    emptyList(),
-    line_items.map { OrderItem(EntityId(it.id.toString()), it.product_id.takeIf { v -> v != 0L }?.let { v -> EntityId(v.toString()) }, it.variation_id.takeIf { v -> v != 0L }?.let { v -> EntityId(v.toString()) }, it.name, it.quantity, it.subtotal, it.total) },
-    date_modified_gmt?.let(Instant::parse),
-    number.ifBlank { id.toString() },
-    total,
-    currency,
-)
+private fun WooOrderTypedDto.toDomain(): Order {
+    val modified = date_modified_gmt?.let { runCatching { Instant.parse(it) }.getOrNull() }
+    return Order(
+        EntityId(id.toString()),
+        when (status) {
+            "pending" -> OrderStatus.PENDING
+            "processing" -> OrderStatus.PROCESSING
+            "on-hold" -> OrderStatus.ON_HOLD
+            "completed" -> OrderStatus.COMPLETED
+            "cancelled" -> OrderStatus.CANCELLED
+            "refunded" -> OrderStatus.REFUNDED
+            "failed" -> OrderStatus.FAILED
+            else -> OrderStatus.OTHER
+        },
+        customer_id.takeIf { it != 0L }?.let { Customer(EntityId(it.toString()), listOfNotNull(billing?.first_name, billing?.last_name).joinToString(" "), billing?.phone) },
+        billing?.let { Address(it.first_name, it.last_name, it.company, it.address_1, it.address_2, it.city, it.state, it.postcode, it.country, it.phone) },
+        shipping?.let { Address(it.first_name, it.last_name, it.company, it.address_1, it.address_2, it.city, it.state, it.postcode, it.country, it.phone) },
+        Payment(payment_method, payment_method_title, transaction_id, !payment_method.isNullOrBlank()),
+        shipping_lines.map { ShippingLine(it.method_id, it.method_title, it.total) },
+        coupon_lines.map { Discount(it.code, it.discount) },
+        emptyList(),
+        line_items.map { OrderItem(EntityId(it.id.toString()), it.product_id.takeIf { v -> v != 0L }?.let { v -> EntityId(v.toString()) }, it.variation_id.takeIf { v -> v != 0L }?.let { v -> EntityId(v.toString()) }, it.name, it.quantity, it.subtotal, it.total) },
+        modified,
+        number.ifBlank { id.toString() },
+        total,
+        currency,
+    )
+}
 
 class OrderRepositoryV1Impl(
     private val local: LocalOrderDataSource<Order>,
@@ -51,14 +54,18 @@ class OrderRepositoryV1Impl(
     private val pending: PendingOperationRepository,
 ) : OrderRepository {
     override suspend fun get(storeId: StoreId, id: EntityId): CoreResult<Order> = provider.client(storeId).fold(
-        { (store, api) -> api.order(store.baseUrl, id.value.toLong()).fold({ remote -> val value = remote.toDomain(); local.upsert(storeId, value); CoreResult.Success(value) }, { local.get(storeId, id) }) },
+        { (store, api) -> api.order(store.baseUrl, id.value.toLong()).fold({ remote -> runCatching { remote.toDomain() }.fold({ value -> local.upsert(storeId, value); CoreResult.Success(value) }, { CoreResult.Failure(DomainError.Network("سفارش دریافتی از فروشگاه قابل پردازش نیست.")) }) }, { local.get(storeId, id) }) },
         { local.get(storeId, id) },
     )
 
     override suspend fun list(storeId: StoreId, page: Int, perPage: Int, search: String?, status: String?): CoreResult<List<Order>> {
         val cached = if (page == 1) local.list(storeId) else null
         return provider.client(storeId).fold(
-            { (store, api) -> api.orders(store.baseUrl, page, perPage, search, status).fold({ values -> val mapped = values.map(WooOrderTypedDto::toDomain); mapped.forEach { local.upsert(storeId, it) }; CoreResult.Success(mapped) }, { cached ?: CoreResult.Failure(it.toDomain()) }) },
+            { (store, api) -> api.orders(store.baseUrl, page, perPage, search, status).fold({ values ->
+                val mapped = values.mapNotNull { remote -> runCatching { remote.toDomain() }.getOrNull() }
+                mapped.forEach { local.upsert(storeId, it) }
+                if (values.isNotEmpty() && mapped.isEmpty()) CoreResult.Failure(DomainError.Network("سفارش‌های دریافتی از فروشگاه قابل پردازش نیستند.")) else CoreResult.Success(mapped)
+            }, { cached ?: CoreResult.Failure(it.toDomain()) }) },
             { cached ?: CoreResult.Failure(it) },
         )
     }
