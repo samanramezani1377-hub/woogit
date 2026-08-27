@@ -87,7 +87,7 @@ jobs:
           exit "${status}"
       - name: Unit tests
         id: tests
-        if: steps.debug_compile.outcome == 'success' && steps.release_compile.outcome == 'success'
+        if: ${{ always() && steps.debug_compile.outcome == 'success' && steps.release_compile.outcome == 'success' }}
         continue-on-error: true
         shell: bash
         run: |
@@ -98,7 +98,7 @@ jobs:
           exit "${status}"
       - name: Android lint
         id: lint
-        if: steps.debug_compile.outcome == 'success' && steps.release_compile.outcome == 'success'
+        if: ${{ always() && steps.debug_compile.outcome == 'success' && steps.release_compile.outcome == 'success' }}
         continue-on-error: true
         shell: bash
         run: |
@@ -135,22 +135,15 @@ jobs:
             echo "## Gradle reports"
           } >> ci-diagnostic-summary.txt
           find . -type f \( -path '*/build/reports/*' -o -path '*/build/test-results/*' \) -print | sort >> ci-diagnostic-summary.txt
-
-          # Best-effort annotations only. A parser failure must never affect CI.
-          for log in debug-ci.log release-ci.log; do
+          for log in debug-ci.log release-ci.log test-ci.log lint-ci.log; do
             [[ -f "$log" ]] || continue
             while IFS= read -r line; do
               if [[ "$line" =~ ^e:\ file://([^:]+):([0-9]+):([0-9]+)\ (.*)$ ]]; then
-                file="${BASH_REMATCH[1]}"
-                line_no="${BASH_REMATCH[2]}"
-                col_no="${BASH_REMATCH[3]}"
-                message="${BASH_REMATCH[4]}"
-                file="${file#${GITHUB_WORKSPACE}/}"
+                file="${BASH_REMATCH[1]}";line_no="${BASH_REMATCH[2]}";col_no="${BASH_REMATCH[3]}";message="${BASH_REMATCH[4]}";file="${file#${GITHUB_WORKSPACE}/}"
                 printf '::error file=%s,line=%s,col=%s::%s\n' "$file" "$line_no" "$col_no" "$message"
               fi
             done < <(grep -E '^e: file://[^:]+:[0-9]+:[0-9]+ ' "$log" 2>/dev/null || true)
           done
-          # Never fail this diagnostic-only step, regardless of parser/annotation issues.
           exit 0
       - name: Upload CI diagnostics
         if: always()
