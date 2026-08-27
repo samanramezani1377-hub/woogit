@@ -43,11 +43,17 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
         with:
-          packages: |
-            platform-tools
-            platforms;android-${{ env.ANDROID_API_LEVEL }}
-            build-tools;${{ env.ANDROID_BUILD_TOOLS }}
+          packages: platform-tools
           accept-android-sdk-licenses: true
+
+      - name: Install required Android SDK packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager --sdk_root="${ANDROID_SDK_ROOT}" \
+            "platforms;android-${ANDROID_API_LEVEL}" \
+            "build-tools;${ANDROID_BUILD_TOOLS}" \
+            "platform-tools"
 
       - name: Set up Gradle 8.13
         uses: gradle/actions/setup-gradle@v6
@@ -60,12 +66,12 @@ jobs:
           set -euo pipefail
           java -version
           gradle --version
+          gradle --version | grep -F "Gradle ${GRADLE_VERSION}"
           adb version
           sdkmanager --sdk_root="${ANDROID_SDK_ROOT}" --list_installed | grep -E "platforms;android-${ANDROID_API_LEVEL}|build-tools;${ANDROID_BUILD_TOOLS}|platform-tools"
 
-      # Diagnostic mode: each Gradle check is attempted independently. The
-      # Gradle exit code remains authoritative; this workflow does not invent
-      # compiler errors or turn warnings into failures.
+      # Diagnostic mode: every Gradle check is attempted independently. Gradle
+      # exit codes remain authoritative; this workflow does not invent errors.
       - name: Build debug APK (diagnostic)
         id: build
         continue-on-error: true
