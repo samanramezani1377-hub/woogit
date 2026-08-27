@@ -26,27 +26,23 @@ jobs:
     name: Build, test and lint
     runs-on: ubuntu-latest
     timeout-minutes: 40
-
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
           persist-credentials: false
-
       - name: Set up JDK 17
         uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
           cache: gradle
-
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
         with:
           packages: platform-tools
           accept-android-sdk-licenses: true
           log-accepted-android-sdk-licenses: false
-
       - name: Install required Android SDK packages
         shell: bash
         run: |
@@ -55,13 +51,11 @@ jobs:
             "platforms;android-${ANDROID_API_LEVEL}" \
             "build-tools;${ANDROID_BUILD_TOOLS}" \
             "platform-tools"
-
       - name: Set up Gradle 8.13
         uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: ${{ env.GRADLE_VERSION }}
           cache-cleanup: always
-
       - name: Verify toolchain
         shell: bash
         run: |
@@ -71,7 +65,6 @@ jobs:
           gradle --version | grep -F "Gradle ${GRADLE_VERSION}"
           adb version
           sdkmanager --sdk_root="${ANDROID_SDK_ROOT}" --list_installed | grep -E "platforms;android-${ANDROID_API_LEVEL}|build-tools;${ANDROID_BUILD_TOOLS}|platform-tools"
-
       - name: Compile debug (diagnostic)
         id: debug_compile
         continue-on-error: true
@@ -82,7 +75,6 @@ jobs:
           status=${PIPESTATUS[0]}
           echo "Gradle exit code: ${status}"
           exit "${status}"
-
       - name: Compile release (diagnostic)
         id: release_compile
         continue-on-error: true
@@ -93,10 +85,6 @@ jobs:
           status=${PIPESTATUS[0]}
           echo "Gradle exit code: ${status}"
           exit "${status}"
-
-      # Tests and lint are intentionally gated on compilation. Running them while
-      # Kotlin compilation is broken mostly repeats the same compiler failures and
-      # makes the diagnostic signal harder to read.
       - name: Unit tests
         id: tests
         if: steps.debug_compile.outcome == 'success' && steps.release_compile.outcome == 'success'
@@ -108,7 +96,6 @@ jobs:
           status=${PIPESTATUS[0]}
           echo "Gradle exit code: ${status}"
           exit "${status}"
-
       - name: Android lint
         id: lint
         if: steps.debug_compile.outcome == 'success' && steps.release_compile.outcome == 'success'
@@ -120,52 +107,51 @@ jobs:
           status=${PIPESTATUS[0]}
           echo "Gradle exit code: ${status}"
           exit "${status}"
-
       - name: Collect diagnostic summary and annotations
         if: always()
         shell: bash
         run: |
           set +e
           : > ci-diagnostic-summary.txt
-          echo "# WooGit CI diagnostic summary" >> ci-diagnostic-summary.txt
-          echo >> ci-diagnostic-summary.txt
-          echo "Commit: ${GITHUB_SHA}" >> ci-diagnostic-summary.txt
-          echo "Debug compile: ${{ steps.debug_compile.outcome }}" >> ci-diagnostic-summary.txt
-          echo "Release compile: ${{ steps.release_compile.outcome }}" >> ci-diagnostic-summary.txt
-          echo "Tests: ${{ steps.tests.outcome }}" >> ci-diagnostic-summary.txt
-          echo "Lint: ${{ steps.lint.outcome }}" >> ci-diagnostic-summary.txt
-          echo >> ci-diagnostic-summary.txt
-
-          echo "## Compiler errors" >> ci-diagnostic-summary.txt
+          {
+            echo "# WooGit CI diagnostic summary"
+            echo
+            echo "Commit: ${GITHUB_SHA}"
+            echo "Debug compile: ${{ steps.debug_compile.outcome }}"
+            echo "Release compile: ${{ steps.release_compile.outcome }}"
+            echo "Tests: ${{ steps.tests.outcome }}"
+            echo "Lint: ${{ steps.lint.outcome }}"
+            echo
+            echo "## Compiler errors"
+          } >> ci-diagnostic-summary.txt
           grep -hE '^e: file:///.+:[0-9]+:[0-9]+ ' debug-ci.log release-ci.log 2>/dev/null | sort -u >> ci-diagnostic-summary.txt || true
-          echo >> ci-diagnostic-summary.txt
-          echo "## Compiler warnings" >> ci-diagnostic-summary.txt
+          {
+            echo
+            echo "## Compiler warnings"
+          } >> ci-diagnostic-summary.txt
           grep -hE '^w: file:///.+:[0-9]+:[0-9]+ ' debug-ci.log release-ci.log 2>/dev/null | sort -u >> ci-diagnostic-summary.txt || true
-          echo >> ci-diagnostic-summary.txt
-          echo "## Gradle reports" >> ci-diagnostic-summary.txt
+          {
+            echo
+            echo "## Gradle reports"
+          } >> ci-diagnostic-summary.txt
           find . -type f \( -path '*/build/reports/*' -o -path '*/build/test-results/*' \) -print | sort >> ci-diagnostic-summary.txt
 
-          # Convert only well-formed Kotlin compiler diagnostics to GitHub
-          # annotations. Raw logs remain authoritative and are uploaded below.
+          # Best-effort annotations only. A parser failure must never affect CI.
           for log in debug-ci.log release-ci.log; do
             [[ -f "$log" ]] || continue
-            grep -E '^e: file:///.+:[0-9]+:[0-9]+ ' "$log" | while IFS= read -r line; do
-              payload="${line#e: file://${GITHUB_WORKSPACE}/}"
-              if [[ "$payload" == "$line" ]]; then
-                payload="${line#e: file:///home/runner/work/woogit/woogit/}"
+            while IFS= read -r line; do
+              if [[ "$line" =~ ^e:\ file://([^:]+):([0-9]+):([0-9]+)\ (.*)$ ]]; then
+                file="${BASH_REMATCH[1]}"
+                line_no="${BASH_REMATCH[2]}"
+                col_no="${BASH_REMATCH[3]}"
+                message="${BASH_REMATCH[4]}"
+                file="${file#${GITHUB_WORKSPACE}/}"
+                printf '::error file=%s,line=%s,col=%s::%s\n' "$file" "$line_no" "$col_no" "$message"
               fi
-              file_part="${payload%%:*}"
-              rest="${payload#*:}"
-              line_no="${rest%%:*}"
-              rest="${rest#*:}"
-              col_no="${rest%% *}"
-              message="${rest#* }"
-              if [[ -n "$file_part" && "$line_no" =~ ^[0-9]+$ && "$col_no" =~ ^[0-9]+$ ]]; then
-                echo "::error file=${file_part},line=${line_no},col=${col_no}::${message}"
-              fi
-            done
+            done < <(grep -E '^e: file://[^:]+:[0-9]+:[0-9]+ ' "$log" 2>/dev/null || true)
           done
-
+          # Never fail this diagnostic-only step, regardless of parser/annotation issues.
+          exit 0
       - name: Upload CI diagnostics
         if: always()
         uses: actions/upload-artifact@v6
@@ -178,7 +164,6 @@ jobs:
             '**/build/test-results/**'
           if-no-files-found: warn
           retention-days: 14
-
       - name: Upload debug APK
         if: always() && steps.debug_compile.outcome == 'success'
         uses: actions/upload-artifact@v6
@@ -187,7 +172,6 @@ jobs:
           path: '**/build/outputs/apk/**/*.apk'
           if-no-files-found: error
           retention-days: 7
-
       - name: Final CI gate
         if: always()
         shell: bash
