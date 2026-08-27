@@ -9,6 +9,7 @@ import com.samanramezani1377.woogit.core.domain.model.ProductImage
 import com.samanramezani1377.woogit.core.domain.repository.MediaRepository
 import com.samanramezani1377.woogit.data.network.HttpApiException
 import com.samanramezani1377.woogit.data.network.WooCommerceClientProvider
+import com.samanramezani1377.woogit.data.network.WordPressErrorMapper
 
 class MediaRepositoryImpl(private val provider: WooCommerceClientProvider) : MediaRepository {
     override suspend fun upload(storeId: StoreId, fileName: String, bytes: ByteArray, mediaType: String): CoreResult<ProductImage> =
@@ -37,15 +38,15 @@ class MediaRepositoryImpl(private val provider: WooCommerceClientProvider) : Med
 
     private fun Throwable.toDomain(): DomainError = when (this) {
         is HttpApiException -> when (statusCode) {
-            401 -> DomainError.Authentication("Authentication failed")
-            403 -> DomainError.Permission("Media permission denied")
+            401 -> DomainError.Authentication(WordPressErrorMapper.message(statusCode, body))
+            403 -> DomainError.Permission(WordPressErrorMapper.message(statusCode, body))
             404 -> DomainError.NotFound("media", statusCode.toString())
-            409 -> DomainError.Conflict("Media conflict")
-            422 -> DomainError.Validation("Media validation failed")
-            429 -> DomainError.RateLimited("Rate limited")
-            in 500..599 -> DomainError.Server("Media server error")
-            else -> DomainError.Unknown("Media HTTP $statusCode")
+            409 -> DomainError.Conflict(WordPressErrorMapper.message(statusCode, body))
+            422 -> DomainError.Validation(WordPressErrorMapper.message(statusCode, body))
+            429 -> DomainError.RateLimited(WordPressErrorMapper.message(statusCode, body))
+            in 500..599 -> DomainError.Server(WordPressErrorMapper.message(statusCode, body))
+            else -> DomainError.Unknown(WordPressErrorMapper.message(statusCode, body))
         }
-        else -> DomainError.Network(message ?: "Network failure")
+        else -> DomainError.Network(message ?: "خطای شبکه هنگام ارتباط با فروشگاه")
     }
 }
