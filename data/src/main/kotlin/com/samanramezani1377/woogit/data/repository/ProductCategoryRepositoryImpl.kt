@@ -13,7 +13,7 @@ import com.samanramezani1377.woogit.data.network.WooCommerceClientProvider
 class ProductCategoryRepositoryImpl(private val provider: WooCommerceClientProvider) : ProductCategoryRepository {
     override suspend fun list(storeId: StoreId, page: Int, perPage: Int, search: String?): CoreResult<List<IdName>> =
         provider.client(storeId).fold(
-            { (store, api) -> api.listProductCategories(store.baseUrl, page, perPage, search).fold(
+            { (store, api) -> api.productCategories(store.baseUrl, page, perPage, search).fold(
                 onSuccess = { categories -> CoreResult.Success(categories.map { IdName(EntityId(it.id.toString()), it.name) }) },
                 onFailure = { CoreResult.Failure(it.toDomain()) },
             ) },
