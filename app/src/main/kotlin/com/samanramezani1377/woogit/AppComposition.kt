@@ -41,6 +41,7 @@ class AppComposition(context: Context) {
     val storeRepository = StoreRepositoryImpl(storeLocal, secure, network.httpClient)
     val orderRepository = OrderRepositoryV1Impl(orderLocal, provider, mutationCoordinator, pending)
     val productRepository = ProductRepositoryV1Impl(productLocal, provider, mutationCoordinator, pending)
+    val productCategoryRepository = ProductCategoryRepositoryImpl(provider)
     val variationRepository = VariationRepositoryImpl(variationLocal, provider, mutationCoordinator, pending)
     val attributeRepository = AttributeRepositoryImpl(attributeLocal, provider, mutationCoordinator, pending)
     val termRepository = TermRepositoryImpl(termLocal, provider, mutationCoordinator, pending)
@@ -64,6 +65,7 @@ class AppComposition(context: Context) {
     val createProduct = CreateProductUseCase(productRepository)
     val updateProduct = UpdateProductUseCase(productRepository)
     val deleteProduct = DeleteProductUseCase(productRepository)
+    val getProductCategories = GetProductCategoriesUseCase(productCategoryRepository)
     val getVariations = GetVariationsUseCase(variationRepository)
     val getVariation = GetVariationUseCase(variationRepository)
     val createVariation = CreateVariationUseCase(variationRepository)
@@ -87,36 +89,20 @@ class AppComposition(context: Context) {
     val getConflicts = GetConflictsUseCase(syncRepository)
     val resolveConflict = ResolveConflictUseCase(syncRepository)
 
-    private fun rememberStore(id: String) {
-        prefs.edit().putString("active_store_id", id).apply()
-        startBackgroundWork(id)
-    }
-
-    private fun forgetStore() {
-        val id = prefs.getString("active_store_id", null)
-        if (id != null) scope.launch { disconnectStore(StoreId(id)) }
-        prefs.edit().remove("active_store_id").apply()
-        if (id != null) cancelBackgroundWork(id)
-    }
-
-    private val getConflictsFn: suspend (StoreId) -> CoreResult<List<Conflict>> = { storeId ->
-        getConflicts(storeId)
-    }
-
-    private val resolveConflictFn: suspend (StoreId, com.samanramezani1377.woogit.core.domain.entity.EntityId, ConflictResolution) -> CoreResult<Unit> = { storeId, conflictId, resolution ->
-        resolveConflict(storeId, conflictId, resolution)
-    }
+    private fun rememberStore(id: String) { prefs.edit().putString("active_store_id", id).apply(); startBackgroundWork(id) }
+    private fun forgetStore() { val id = prefs.getString("active_store_id", null); if (id != null) scope.launch { disconnectStore(StoreId(id)) }; prefs.edit().remove("active_store_id").apply(); if (id != null) cancelBackgroundWork(id) }
+    private val getConflictsFn: suspend (StoreId) -> CoreResult<List<Conflict>> = { storeId -> getConflicts(storeId) }
+    private val resolveConflictFn: suspend (StoreId, com.samanramezani1377.woogit.core.domain.entity.EntityId, ConflictResolution) -> CoreResult<Unit> = { storeId, conflictId, resolution -> resolveConflict(storeId, conflictId, resolution) }
 
     val v1Presentation = V1PresentationDependencies(
         getStore, connectStore, disconnectStore, getOrders, getOrder, updateOrder, addOrderNote,
-        getProducts, getProduct, createProduct, updateProduct, deleteProduct,
+        getProducts, getProduct, createProduct, updateProduct, deleteProduct, getProductCategories,
         getVariations, getVariation, createVariation, updateVariation, deleteVariation,
         getAttributes, getAttribute, createAttribute, updateAttribute, deleteAttribute,
         getTerms, getTerm, createTerm, updateTerm, deleteTerm, uploadMedia, deleteMedia,
         getConnectionState, getSyncState, getPending, getConflictsFn, resolveConflictFn,
         syncPending, prefs.getString("active_store_id", null), ::rememberStore, ::forgetStore,
     )
-
     fun startBackgroundWork(storeId: String) = OrderPollingWorker.schedule(appContext, storeId)
     fun cancelBackgroundWork(storeId: String) = OrderPollingWorker.cancel(appContext, storeId)
     fun close() { scope.cancel(); network.close() }
