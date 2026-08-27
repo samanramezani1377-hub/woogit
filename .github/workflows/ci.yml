@@ -25,11 +25,13 @@ jobs:
   verify:
     name: Build, test and lint
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Set up JDK 17
         uses: actions/setup-java@v5
@@ -42,19 +44,19 @@ jobs:
         uses: android-actions/setup-android@v4
         with:
           packages: platform-tools
+          accept-android-sdk-licenses: true
 
       - name: Install required Android SDK packages
         shell: bash
         run: |
           set -euo pipefail
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager --sdk_root="${ANDROID_SDK_ROOT}" \
+          yes | sdkmanager --sdk_root="${ANDROID_SDK_ROOT}" \
             "platforms;android-${ANDROID_API_LEVEL}" \
             "build-tools;${ANDROID_BUILD_TOOLS}" \
-            "platform-tools"
+            "platform-tools" >/dev/null
 
       - name: Set up Gradle 8.13
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: ${{ env.GRADLE_VERSION }}
 
@@ -67,20 +69,101 @@ jobs:
           adb version
           sdkmanager --sdk_root="${ANDROID_SDK_ROOT}" --list_installed | grep -E "platforms;android-${ANDROID_API_LEVEL}|build-tools;${ANDROID_BUILD_TOOLS}|platform-tools"
 
-      - name: Build debug APK
-        run: gradle assembleDebug --stacktrace --no-daemon
+      # Diagnostic mode: every major Gradle check is attempted even when an
+      # earlier check fails. Gradle remains the source of truth; no synthetic
+      # errors are created by the workflow.
+      - name: Build debug APK (diagnostic)
+        id: build
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          gradle assembleDebug --continue --console=plain --warning-mode=all --stacktrace --no-daemon 2>&1 | tee build-ci.log
+          status=${PIPESTATUS[0]}
+          echo "Gradle exit code: ${status}"
+          exit "${status}"
 
-      - name: Unit tests
-        run: gradle test --stacktrace --no-daemon
+      - name: Unit tests (diagnostic)
+        id: tests
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          gradle test --continue --console=plain --warning-mode=all --stacktrace --no-daemon 2>&1 | tee test-ci.log
+          status=${PIPESTATUS[0]}
+          echo "Gradle exit code: ${status}"
+          exit "${status}"
 
-      - name: Android lint
-        run: gradle lint --stacktrace --no-daemon
+      - name: Android lint (diagnostic)
+        id: lint
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          gradle lint --continue --console=plain --warning-mode=all --stacktrace --no-daemon 2>&1 | tee lint-ci.log
+          status=${PIPESTATUS[0]}
+          echo "Gradle exit code: ${status}"
+          exit "${status}"
+
+      - name: Collect diagnostic reports
+        if: always()
+        shell: bash
+        run: |
+          set +e
+          {
+            echo "# WooGit CI diagnostic summary"
+            echo
+            echo "Commit: ${GITHUB_SHA}"
+            echo "Build outcome: ${{ steps.build.outcome }}"
+            echo "Tests outcome: ${{ steps.tests.outcome }}"
+            echo "Lint outcome: ${{ steps.lint.outcome }}"
+            echo
+            echo "## Gradle task reports"
+            find . -type f \( -path '*/build/reports/*' -o -path '*/build/test-results/*' \) -print | sort
+          } | tee ci-diagnostic-summary.txt
+
+      - name: Upload CI diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: woogit-ci-diagnostics-${{ github.sha }}
+          path: |
+            *-ci.log
+            ci-diagnostic-summary.txt
+            '**/build/reports/**'
+            '**/build/test-results/**'
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Upload debug APK
-        if: success()
+        if: always() && steps.build.outcome == 'success'
         uses: actions/upload-artifact@v4
         with:
           name: woogit-debug-apk-${{ github.sha }}
           path: '**/build/outputs/apk/**/*.apk'
           if-no-files-found: error
           retention-days: 7
+
+      - name: Final CI gate
+        if: always()
+        shell: bash
+        env:
+          BUILD_OUTCOME: ${{ steps.build.outcome }}
+          TESTS_OUTCOME: ${{ steps.tests.outcome }}
+          LINT_OUTCOME: ${{ steps.lint.outcome }}
+        run: |
+          set -euo pipefail
+          echo "========================================"
+          echo "WooGit V1 CI result"
+          echo "========================================"
+          echo "Build : ${BUILD_OUTCOME}"
+          echo "Tests : ${TESTS_OUTCOME}"
+          echo "Lint  : ${LINT_OUTCOME}"
+          echo "========================================"
+          if [[ "${BUILD_OUTCOME}" != "success" || "${TESTS_OUTCOME}" != "success" || "${LINT_OUTCOME}" != "success" ]]; then
+            echo "CI FAILED: one or more required Gradle checks failed."
+            exit 1
+          fi
+          echo "CI PASSED: build, tests and lint are green."
