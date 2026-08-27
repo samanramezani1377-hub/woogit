@@ -1,18 +1,21 @@
 package com.samanramezani1377.woogit.background
 
 import android.content.Context
-import androidx.work.CoroutineWorker
 import androidx.work.Constraints
+import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.samanramezani1377.woogit.WooGitApplication
-import com.samanramezani1377.woogit.core.domain.error.CoreResult
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
+import com.samanramezani1377.woogit.core.domain.error.CoreResult
 import com.samanramezani1377.woogit.data.network.HttpApiException
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 class OrderPollingWorker(appContext: Context, params: WorkerParameters) : CoroutineWorker(appContext, params) {
@@ -24,6 +27,8 @@ class OrderPollingWorker(appContext: Context, params: WorkerParameters) : Corout
         val source = RepositoryOrderBackgroundSource(app.composition.getOrders, notificationStore)
         val notifier = OrderNotificationManager(applicationContext)
         return try {
+            // The same worker drains pending mutations and then polls remote state.
+            // This keeps background sync serialized per store and avoids a second sync engine.
             when (val sync = app.composition.syncPending(store)) {
                 is CoreResult.Failure -> return if (sync.error.recoverable) Result.retry() else Result.failure()
                 is CoreResult.Success -> Unit
@@ -38,12 +43,12 @@ class OrderPollingWorker(appContext: Context, params: WorkerParameters) : Corout
                 notificationStore.markObserved(order.storeId, order.orderId, order.serverState)
             }
             Result.success()
-        } catch (_: java.io.IOException) {
+        } catch (_: IOException) {
             Result.retry()
         } catch (e: HttpApiException) {
             if (e.statusCode == 408 || e.statusCode == 429 || e.statusCode in 500..599) Result.retry() else Result.failure()
-        } catch (_: kotlinx.coroutines.CancellationException) {
-            throw kotlinx.coroutines.CancellationException("Order polling cancelled")
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (_: Throwable) {
             Result.failure()
         }
@@ -52,15 +57,41 @@ class OrderPollingWorker(appContext: Context, params: WorkerParameters) : Corout
     companion object {
         const val KEY_STORE_ID = "store_id"
         private const val WORK_PREFIX = "woogit-order-polling-"
+        private const val IMMEDIATE_PREFIX = "woogit-sync-now-"
+
+        private fun constraints() = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+
         fun schedule(context: Context, storeId: String, repeatHours: Long = 1L) {
             val request = PeriodicWorkRequestBuilder<OrderPollingWorker>(repeatHours.coerceAtLeast(1L), TimeUnit.HOURS)
-                .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                .setConstraints(constraints())
                 .setInputData(workDataOf(KEY_STORE_ID to storeId))
                 .build()
-            WorkManager.getInstance(context).enqueueUniquePeriodicWork(WORK_PREFIX + storeId, ExistingPeriodicWorkPolicy.UPDATE, request)
+            WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+                WORK_PREFIX + storeId,
+                ExistingPeriodicWorkPolicy.UPDATE,
+                request,
+            )
         }
+
+        /** Safe one-shot startup/reconnect sync. WorkManager waits for network availability. */
+        fun scheduleNow(context: Context, storeId: String) {
+            val request = OneTimeWorkRequestBuilder<OrderPollingWorker>()
+                .setConstraints(constraints())
+                .setInputData(workDataOf(KEY_STORE_ID to storeId))
+                .build()
+            WorkManager.getInstance(context).enqueueUniqueWork(
+                IMMEDIATE_PREFIX + storeId,
+                ExistingWorkPolicy.KEEP,
+                request,
+            )
+        }
+
         fun cancel(context: Context, storeId: String) {
-            WorkManager.getInstance(context).cancelUniqueWork(WORK_PREFIX + storeId)
+            val manager = WorkManager.getInstance(context)
+            manager.cancelUniqueWork(WORK_PREFIX + storeId)
+            manager.cancelUniqueWork(IMMEDIATE_PREFIX + storeId)
         }
     }
 }
