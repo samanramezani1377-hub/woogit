@@ -53,7 +53,10 @@ class ProductRepositoryV1Impl(
     override suspend fun list(storeId: StoreId, page: Int, perPage: Int, search: String?): CoreResult<List<Product>> {
         val cached = if (page == 1) local.list(storeId) else null
         return provider.client(storeId).fold(
-            { (store, api) -> api.products(store.baseUrl, page, perPage, search).getOrNull()?.let { remote -> remote.map(WooProductTypedDto::toDomain).also { values -> values.forEach { local.upsert(storeId, it) } }.let { CoreResult.Success(it) } } ?: (cached ?: CoreResult.Failure(DomainError.Network("Unable to load products"))) },
+            { (store, api) -> api.products(store.baseUrl, page, perPage, search).fold(
+                onSuccess = { remote -> remote.map(WooProductTypedDto::toDomain).also { values -> values.forEach { local.upsert(storeId, it) } }.let { CoreResult.Success(it) } },
+                onFailure = { error -> cached ?: CoreResult.Failure(error.toDomain()) },
+            ) },
             { cached ?: CoreResult.Failure(it) },
         )
     }
@@ -65,12 +68,11 @@ class ProductRepositoryV1Impl(
         val localResult = coordinator.execute(operation) { local.upsert(storeId, product) }
         if (localResult is CoreResult.Failure) return localResult
         return provider.client(storeId).fold(
-            { (store, api) ->
-                api.createProduct(store.baseUrl, product.toDto(operationId)).fold(
-                    onSuccess = { remote -> local.upsert(storeId, remote.toDomain()); pending.markSucceeded(operation.id); CoreResult.Success(remote.toDomain()) },
-                    onFailure = { error -> if (error is HttpApiException && error.statusCode in 408..599) CoreResult.Success(product) else CoreResult.Failure(error.toDomain()) },
-                )
-            }, { CoreResult.Success(product) },
+            { (store, api) -> api.createProduct(store.baseUrl, product.toDto(operationId)).fold(
+                onSuccess = { remote -> local.upsert(storeId, remote.toDomain()); pending.markSucceeded(operation.id); CoreResult.Success(remote.toDomain()) },
+                onFailure = { error -> if (error.isRetryableHttp()) CoreResult.Success(product) else CoreResult.Failure(error.toDomain()) },
+            ) },
+            { error -> if (error.recoverable) CoreResult.Success(product) else CoreResult.Failure(error) },
         )
     }
 
@@ -82,8 +84,9 @@ class ProductRepositoryV1Impl(
         return provider.client(storeId).fold(
             { (store, api) -> api.updateProduct(store.baseUrl, id.value.toLong(), product.toDto()).fold(
                 onSuccess = { remote -> local.upsert(storeId, remote.toDomain()); pending.markSucceeded(operation.id); CoreResult.Success(remote.toDomain()) },
-                onFailure = { error -> if (error is HttpApiException && error.statusCode in 408..599) CoreResult.Success(product) else CoreResult.Failure(error.toDomain()) },
-            ) }, { CoreResult.Success(product) },
+                onFailure = { error -> if (error.isRetryableHttp()) CoreResult.Success(product) else CoreResult.Failure(error.toDomain()) },
+            ) },
+            { error -> if (error.recoverable) CoreResult.Success(product) else CoreResult.Failure(error) },
         )
     }
 
@@ -93,19 +96,28 @@ class ProductRepositoryV1Impl(
         val localResult = coordinator.execute(operation) { local.delete(storeId, id) }
         if (localResult is CoreResult.Failure) return localResult
         return provider.client(storeId).fold(
-            { (store, api) -> api.deleteProduct(store.baseUrl, id.value.toLong()).fold(onSuccess = { pending.markSucceeded(operation.id); CoreResult.Success(Unit) }, onFailure = { error -> if (error is HttpApiException && error.statusCode in 408..599) CoreResult.Success(Unit) else CoreResult.Failure(error.toDomain()) }) },
-            { CoreResult.Success(Unit) },
+            { (store, api) -> api.deleteProduct(store.baseUrl, id.value.toLong()).fold(onSuccess = { pending.markSucceeded(operation.id); CoreResult.Success(Unit) }, onFailure = { error -> if (error.isRetryableHttp()) CoreResult.Success(Unit) else CoreResult.Failure(error.toDomain()) }) },
+            { error -> if (error.recoverable) CoreResult.Success(Unit) else CoreResult.Failure(error) },
         )
     }
 }
 
+private fun Throwable?.isRetryableHttp() = this is HttpApiException && statusCode in 408..599
+
 private fun Throwable?.toDomain(): DomainError = when (this) {
-    is HttpApiException -> when (statusCode) {
-        401 -> DomainError.Authentication("Authentication failed"); 403 -> DomainError.Permission("Permission denied");
-        404 -> DomainError.NotFound("remote", statusCode.toString()); 409 -> DomainError.Conflict("Remote conflict");
-        422 -> DomainError.Validation("Validation failed"); 429 -> DomainError.RateLimited("Rate limited");
-        in 500..599 -> DomainError.Server("Server error"); else -> DomainError.Unknown("HTTP $statusCode")
+    is HttpApiException -> {
+        val message = WordPressErrorMapper.message(statusCode, body)
+        when (statusCode) {
+            401 -> DomainError.Authentication(message)
+            403 -> DomainError.Permission(message)
+            404 -> DomainError.NotFound("remote", message)
+            409 -> DomainError.Conflict(message)
+            422, 400, 405, 415 -> DomainError.Validation(message)
+            429 -> DomainError.RateLimited(message)
+            in 500..599 -> DomainError.Server(message)
+            else -> DomainError.Unknown(message)
+        }
     }
-    null -> DomainError.Unknown("Unknown failure")
-    else -> DomainError.Network(message ?: "Network failure")
+    null -> DomainError.Unknown("خطای نامشخصی در ارتباط با فروشگاه رخ داد. لطفاً دوباره تلاش کنید.")
+    else -> DomainError.Network(message ?: "ارتباط با فروشگاه برقرار نشد. اتصال اینترنت و آدرس فروشگاه را بررسی کنید.")
 }
