@@ -67,6 +67,7 @@ class AppComposition(context: Context) {
     val updateProduct = UpdateProductUseCase(productRepository)
     val deleteProduct = DeleteProductUseCase(productRepository)
     val getProductCategories = GetProductCategoriesUseCase(productCategoryRepository)
+    val getMedia = GetMediaUseCase(mediaRepository)
     val getVariations = GetVariationsUseCase(variationRepository)
     val getVariation = GetVariationUseCase(variationRepository)
     val createVariation = CreateVariationUseCase(variationRepository)
@@ -108,7 +109,7 @@ class AppComposition(context: Context) {
     val v1Presentation = V1PresentationDependencies(
         getStore, connectStore, disconnectStore, getOrders, getOrder, updateOrder, addOrderNote,
         getProducts, getProduct, createProduct, updateProduct, deleteProduct, getProductCategories,
-        getVariations, getVariation, createVariation, updateVariation, deleteVariation,
+        getMedia, getVariations, getVariation, createVariation, updateVariation, deleteVariation,
         getAttributes, getAttribute, createAttribute, updateAttribute, deleteAttribute,
         getTerms, getTerm, createTerm, updateTerm, deleteTerm, uploadMedia, deleteMedia,
         getConnectionState, getSyncState, getPending, getConflictsFn, resolveConflictFn,
