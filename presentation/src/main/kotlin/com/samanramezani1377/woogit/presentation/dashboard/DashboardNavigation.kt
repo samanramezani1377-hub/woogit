@@ -4,13 +4,14 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -49,11 +50,12 @@ internal fun DashboardFloatingNavigation(
 private fun DashboardNavItem(label: String, selected: Boolean, onClick: () -> Unit) {
     TextButton(
         onClick = onClick,
-        modifier = Modifier.padding(horizontal = 1.dp),
+        modifier = Modifier.heightIn(min = 48.dp).padding(horizontal = 1.dp),
         shape = RoundedCornerShape(14.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp, vertical = 10.dp),
         colors = ButtonDefaults.textButtonColors(
             contentColor = if (selected) GlassTokens.accent else GlassTokens.muted,
-            containerColor = if (selected) GlassTokens.accent.copy(alpha = .12f) else Color.Transparent,
+            containerColor = if (selected) GlassTokens.accent.copy(alpha = .16f) else Color.Transparent,
         ),
     ) {
         Text(label, fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold)
