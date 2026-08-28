@@ -15,15 +15,16 @@ internal fun DashboardActions(
     onOrdersClick: () -> Unit,
     onProductsClick: () -> Unit,
     onSettingsClick: () -> Unit,
+    onSyncClick: () -> Unit,
+    onConflictsClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier.fillMaxWidth().padding(vertical = 2.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
+    Column(modifier.fillMaxWidth().padding(vertical = 2.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text("اقدامات سریع", style = MaterialTheme.typography.titleMedium)
         DashboardQuickAction("سفارش‌ها", "مدیریت سفارش‌های فروشگاه", onClick = onOrdersClick)
         DashboardQuickAction("محصولات", "مدیریت محصولات و موجودی", onClick = onProductsClick)
+        DashboardQuickAction("همگام‌سازی", "همگام‌سازی داده‌های فروشگاه", onClick = onSyncClick)
+        DashboardQuickAction("تعارض‌ها", "بررسی و حل تعارض‌های داده", onClick = onConflictsClick)
         DashboardQuickAction("تنظیمات فروشگاه", "اتصال، حساب و مدیریت فروشگاه", onClick = onSettingsClick)
     }
 }
