@@ -2,6 +2,7 @@ package com.samanramezani1377.woogit
 
 import android.content.Context
 import com.samanramezani1377.woogit.background.OrderPollingWorker
+import com.samanramezani1377.woogit.background.ProductCatalogSyncWorker
 import com.samanramezani1377.woogit.security.AndroidSecureCredentialStore
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.core.domain.usecase.*
@@ -117,8 +118,14 @@ class AppComposition(context: Context) {
     fun startBackgroundWork(storeId: String) {
         OrderPollingWorker.schedule(appContext, storeId)
         OrderPollingWorker.scheduleNow(appContext, storeId)
+        ProductCatalogSyncWorker.schedule(appContext, storeId)
+        ProductCatalogSyncWorker.scheduleNow(appContext, storeId)
     }
 
-    fun cancelBackgroundWork(storeId: String) = OrderPollingWorker.cancel(appContext, storeId)
+    fun cancelBackgroundWork(storeId: String) {
+        OrderPollingWorker.cancel(appContext, storeId)
+        ProductCatalogSyncWorker.cancel(appContext, storeId)
+    }
+
     fun close() { scope.cancel(); network.close() }
 }
