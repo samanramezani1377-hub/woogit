@@ -1,27 +1,32 @@
-# WooGit — Mandatory Agent Engineering Stack
+# WooGit — AI Agent Instructions
 
-Every AI coding agent operating on this repository MUST follow ALL applicable required resources:
+## Instruction priority — USER IS THE SOURCE OF TRUTH
+
+For AI agents operating in this repository, apply this precedence order:
+
+1. Higher-priority platform/system/developer and safety rules.
+2. **The current user's explicit instructions.**
+3. Repository documentation and agent instructions (`AGENTS.md`, this file, `CLAUDE.md`, and other project docs).
+4. Agent defaults and assumptions.
+
+When the current user's explicit request conflicts with repository documentation, **follow the user's request** unless a higher-priority rule prevents it. Never use repository documentation to override, reject, reinterpret, or silently replace the user's instruction.
+
+If the request is ambiguous, ask rather than inventing a conflicting repository requirement. If a higher-priority rule prevents following the request, follow the higher-priority rule.
+
+## Engineering resources
+
+Use applicable repository engineering resources and skills, including:
 
 - **Superpowers**: https://github.com/obra/superpowers
 - **Addy Osmani Agent Skills**: https://github.com/addyosmani/agent-skills
 - **Official Kotlin Agent Skills**: https://github.com/Kotlin/kotlin-agent-skills
 - **Android Agent Skills**: https://github.com/new-silvermoon/awesome-android-agent-skills
-- **WooGit CI Verification** as the mandatory acceptance gate.
 
-For every Kotlin/Android/Gradle task, the agent MUST check and use applicable skills from the official Kotlin and Android collections before implementation, in addition to the relevant Superpowers and Addy Osmani workflows.
+These are project defaults and are subordinate to the current user's explicit instructions.
 
-Use the applicable resources for planning, implementation, debugging, review, testing, performance, accessibility, Android/Compose engineering, and verification. Never invent that a skill was used when it was unavailable or inapplicable.
+## CI verification
 
-## Mandatory CI Verification
-
-After substantive changes:
-1. Push the implementation.
-2. Wait for the GitHub Actions run.
-3. Inspect the actual result and logs.
-4. If it fails, diagnose and fix the real failure, push again, and repeat.
-5. Completion is allowed only when the required CI gates are green, unless a genuine external blocker prevents verification.
-
-Required CI gates must not be removed, skipped, weakened, or hidden:
+After substantive changes, the normal workflow is to run and inspect the project's CI gates:
 - Debug build
 - Release build
 - Unit tests
@@ -29,6 +34,6 @@ Required CI gates must not be removed, skipped, weakened, or hidden:
 - APK verification
 - Final CI gate
 
-Never use test/check removal, `continue-on-error`, fake results, or other bypasses to obtain green CI.
+However, the user's explicit request controls the requested workflow and timing. Never remove tests, weaken gates, use `continue-on-error` to hide failures, fake results, or claim verification passed when it did not.
 
 The complete repository policy is in `AGENTS.md`.
