@@ -3,6 +3,16 @@ package com.samanramezani1377.woogit.data.network
 import kotlinx.serialization.Serializable
 
 @Serializable
+data class WooSystemStatusSettingsDto(
+    val currency: String = "",
+    val currency_symbol: String = "",
+    val currency_position: String = "left",
+    val thousand_separator: String = ",",
+    val decimal_separator: String = ".",
+    val number_of_decimals: Int = 2,
+)
+
+@Serializable
 data class WooOrderDto(val id: Long, val status: String = "", val total: String = "", val currency: String = "")
 
 @Serializable
