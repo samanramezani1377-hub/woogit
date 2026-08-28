@@ -22,10 +22,10 @@ env:
   GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx3g -Dfile.encoding=UTF-8
 
 jobs:
-  verify:
-    name: Build, test and lint
+  debug-build:
+    name: Debug build
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -55,46 +55,58 @@ jobs:
         with:
           gradle-version: ${{ env.GRADLE_VERSION }}
           cache-cleanup: on-success
-      - name: Verify toolchain
-        shell: bash
-        run: |
-          set -euo pipefail
-          java -version
-          gradle --version | grep -F "Gradle ${GRADLE_VERSION}"
-          adb version
-          sdkmanager --sdk_root="${ANDROID_SDK_ROOT}" --list_installed | grep -E "platforms;android-${ANDROID_API_LEVEL}|build-tools;${ANDROID_BUILD_TOOLS}|platform-tools"
       - name: Build debug
-        id: debug_build
+        run: gradle assembleDebug --console=plain --warning-mode=all --stacktrace
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v6
+        with:
+          name: woogit-debug-apk-${{ github.sha }}
+          path: '**/build/outputs/apk/**/*.apk'
+          if-no-files-found: error
+          retention-days: 7
+
+  release-build:
+    name: Release build and APK verification
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: false
+      - name: Install required Android SDK packages
         shell: bash
         run: |
           set -euo pipefail
-          gradle assembleDebug --console=plain --warning-mode=all --stacktrace 2>&1 | tee debug-ci.log
+          sdkmanager --sdk_root="${ANDROID_SDK_ROOT}" \
+            "platforms;android-${ANDROID_API_LEVEL}" \
+            "build-tools;${ANDROID_BUILD_TOOLS}" \
+            "platform-tools"
+      - name: Set up Gradle 8.13
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: ${{ env.GRADLE_VERSION }}
+          cache-cleanup: on-success
       - name: Build release
-        id: release_build
-        shell: bash
-        run: |
-          set -euo pipefail
-          gradle assembleRelease --console=plain --warning-mode=all --stacktrace 2>&1 | tee release-ci.log
-      - name: Unit tests
-        id: tests
-        shell: bash
-        run: |
-          set -euo pipefail
-          gradle test --console=plain --warning-mode=all --stacktrace 2>&1 | tee test-ci.log
-      - name: Android lint
-        id: lint
-        shell: bash
-        run: |
-          set -euo pipefail
-          gradle lint --console=plain --warning-mode=all --stacktrace 2>&1 | tee lint-ci.log
-      - name: Verify APK
-        id: verify_apk
+        run: gradle assembleRelease --console=plain --warning-mode=all --stacktrace
+      - name: Verify release APK
         shell: bash
         run: |
           set -euo pipefail
           mapfile -t apks < <(find . -type f -path '*/build/outputs/apk/**/*.apk' -size +0c | sort)
           if (( ${#apks[@]} == 0 )); then
-            echo "No non-empty APK was produced by this build."
+            echo "No non-empty APK was produced by the release build."
             exit 1
           fi
           printf 'Produced APKs:\n%s\n' "${apks[@]}"
@@ -113,74 +125,95 @@ jobs:
               exit 1
             fi
           done
-      - name: Upload debug APK
+      - name: Upload release APK
         uses: actions/upload-artifact@v6
         with:
-          name: woogit-debug-apk-${{ github.sha }}
+          name: woogit-release-apk-${{ github.sha }}
           path: '**/build/outputs/apk/**/*.apk'
           if-no-files-found: error
           retention-days: 7
-      - name: Collect CI diagnostics
-        if: always()
-        shell: bash
-        run: |
-          set -u
-          : > ci-diagnostic-summary.txt
-          {
-            echo "# WooGit CI diagnostic summary"
-            echo
-            echo "Commit: ${GITHUB_SHA}"
-            echo "Debug build: ${{ steps.debug_build.outcome }}"
-            echo "Release build: ${{ steps.release_build.outcome }}"
-            echo "Tests: ${{ steps.tests.outcome }}"
-            echo "Lint: ${{ steps.lint.outcome }}"
-            echo "APK verification: ${{ steps.verify_apk.outcome }}"
-            echo
-            echo "## Compiler errors"
-          } >> ci-diagnostic-summary.txt
-          for log in debug-ci.log release-ci.log test-ci.log lint-ci.log; do
-            [[ -f "$log" ]] || continue
-            grep -hE '^e: file:///.+:[0-9]+:[0-9]+ ' "$log" 2>/dev/null || true
-          done | sort -u >> ci-diagnostic-summary.txt
-          {
-            echo
-            echo "## Gradle reports"
-            find . -type f \( -path '*/build/reports/*' -o -path '*/build/test-results/*' \) -print | sort
-          } >> ci-diagnostic-summary.txt
-      - name: Upload CI diagnostics
-        if: always()
-        uses: actions/upload-artifact@v6
+
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
         with:
-          name: woogit-ci-diagnostics-${{ github.sha }}
-          path: |
-            *-ci.log
-            ci-diagnostic-summary.txt
-            '**/build/reports/**'
-            '**/build/test-results/**'
-          if-no-files-found: warn
-          retention-days: 14
-      - name: Final CI gate
-        if: always()
+          persist-credentials: false
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: false
+      - name: Install required Android SDK packages
+        run: sdkmanager --sdk_root="${ANDROID_SDK_ROOT}" "platforms;android-${ANDROID_API_LEVEL}" "build-tools;${ANDROID_BUILD_TOOLS}" "platform-tools"
+      - name: Set up Gradle 8.13
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: ${{ env.GRADLE_VERSION }}
+          cache-cleanup: on-success
+      - name: Unit tests
+        run: gradle test --console=plain --warning-mode=all --stacktrace
+
+  lint:
+    name: Android lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: false
+      - name: Install required Android SDK packages
+        run: sdkmanager --sdk_root="${ANDROID_SDK_ROOT}" "platforms;android-${ANDROID_API_LEVEL}" "build-tools;${ANDROID_BUILD_TOOLS}" "platform-tools"
+      - name: Set up Gradle 8.13
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: ${{ env.GRADLE_VERSION }}
+          cache-cleanup: on-success
+      - name: Android lint
+        run: gradle lint --console=plain --warning-mode=all --stacktrace
+
+  final-gate:
+    name: Final CI gate
+    if: always()
+    needs: [debug-build, release-build, unit-tests, lint]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require all validation jobs to pass
         shell: bash
         env:
-          DEBUG_OUTCOME: ${{ steps.debug_build.outcome }}
-          RELEASE_OUTCOME: ${{ steps.release_build.outcome }}
-          TESTS_OUTCOME: ${{ steps.tests.outcome }}
-          LINT_OUTCOME: ${{ steps.lint.outcome }}
-          APK_OUTCOME: ${{ steps.verify_apk.outcome }}
+          DEBUG_RESULT: ${{ needs.debug-build.result }}
+          RELEASE_RESULT: ${{ needs.release-build.result }}
+          TEST_RESULT: ${{ needs.unit-tests.result }}
+          LINT_RESULT: ${{ needs.lint.result }}
         run: |
           set -euo pipefail
-          echo "========================================"
-          echo "WooGit V1 CI result"
-          echo "========================================"
-          echo "Debug build     : ${DEBUG_OUTCOME}"
-          echo "Release build   : ${RELEASE_OUTCOME}"
-          echo "Tests           : ${TESTS_OUTCOME}"
-          echo "Lint            : ${LINT_OUTCOME}"
-          echo "APK verification: ${APK_OUTCOME}"
-          echo "========================================"
-          if [[ "${DEBUG_OUTCOME}" != "success" || "${RELEASE_OUTCOME}" != "success" || "${TESTS_OUTCOME}" != "success" || "${LINT_OUTCOME}" != "success" || "${APK_OUTCOME}" != "success" ]]; then
-            echo "CI FAILED: one or more required verification gates failed."
+          echo "Debug build : ${DEBUG_RESULT}"
+          echo "Release APK : ${RELEASE_RESULT}"
+          echo "Unit tests  : ${TEST_RESULT}"
+          echo "Lint        : ${LINT_RESULT}"
+          if [[ "${DEBUG_RESULT}" != "success" || "${RELEASE_RESULT}" != "success" || "${TEST_RESULT}" != "success" || "${LINT_RESULT}" != "success" ]]; then
+            echo "CI FAILED: one or more required validation jobs failed or were cancelled."
             exit 1
           fi
-          echo "CI PASSED: build, tests, lint and APK verification are green."
+          echo "CI PASSED: debug/release builds, tests, lint and APK verification are green."
