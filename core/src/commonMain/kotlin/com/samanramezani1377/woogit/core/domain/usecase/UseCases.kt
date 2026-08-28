@@ -40,4 +40,4 @@ interface GetTerms { suspend operator fun invoke(storeId: StoreId, attributeId: 
 interface GetTerm { suspend operator fun invoke(storeId: StoreId, attributeId: EntityId, id: EntityId): CoreResult<AttributeTerm> }
 interface CreateTerm { suspend operator fun invoke(storeId: StoreId, attributeId: EntityId, value: AttributeTerm): CoreResult<AttributeTerm> }
 interface UpdateTerm { suspend operator fun invoke(storeId: StoreId, attributeId: EntityId, id: EntityId, value: AttributeTerm): CoreResult<AttributeTerm> }
-interface DeleteTerm { suspend operator fun invoke(storeId: StoreId, attributeId: EntityId, id: EntityId, value: AttributeTerm): CoreResult<AttributeTerm> }
+interface DeleteTerm { suspend operator fun invoke(storeId: StoreId, attributeId: EntityId, id: EntityId): CoreResult<Unit> }
