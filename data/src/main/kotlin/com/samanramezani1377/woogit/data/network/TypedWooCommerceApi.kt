@@ -31,7 +31,7 @@ class TypedWooCommerceApi(private val raw: WooCommerceApi) {
     suspend fun order(b:String,id:Long) = decode(raw.getOrder(b,id)) { typedJson.decodeFromString<WooOrderTypedDto>(it) }
     suspend fun updateOrder(b:String,id:Long,o:WooOrderTypedDto) = decode(raw.updateOrder(b,id,typedJson.encodeToString(o))) { typedJson.decodeFromString<WooOrderTypedDto>(it) }
     suspend fun addOrderNote(b:String,id:Long,n:WooOrderNoteDto) = decode(raw.addOrderNote(b,id,typedJson.encodeToString(n))) { typedJson.decodeFromString<WooOrderNoteDto>(it) }
-    suspend fun products(b:String,p:Int,n:Int,s:String?) = decode(raw.listProducts(b,p,n,s)) { typedJson.decodeFromString<List<WooProductTypedDto>>(it) }
+    suspend fun products(b:String,p:Int,n:Int,s:String?,modifiedAfter:String?=null) = decode(raw.listProducts(b,p,n,s,modifiedAfter)) { typedJson.decodeFromString<List<WooProductTypedDto>>(it) }
     suspend fun product(b:String,id:Long) = decode(raw.getProduct(b,id)) { typedJson.decodeFromString<WooProductTypedDto>(it) }
     suspend fun createProduct(b:String,p:WooProductTypedDto) = decode(raw.createProduct(b,typedJson.encodeToString(p))) { typedJson.decodeFromString<WooProductTypedDto>(it) }
     suspend fun updateProduct(b:String,id:Long,p:WooProductTypedDto) = decode(raw.updateProduct(b,id,typedJson.encodeToString(p))) { typedJson.decodeFromString<WooProductTypedDto>(it) }
