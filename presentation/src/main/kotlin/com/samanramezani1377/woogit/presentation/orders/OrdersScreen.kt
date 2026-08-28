@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -77,12 +78,7 @@ private fun OrdersList(state: OrdersUiState.Content, onOrderClick: (String) -> U
             .filter { it >= (state.orders.size - 4).coerceAtLeast(0) }
             .collect { if (state.hasMore) onLoadMore() }
     }
-    LazyColumn(
-        state = listState,
-        modifier = modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-        contentPadding = PaddingValues(start = 16.dp, top = 10.dp, end = 16.dp, bottom = 120.dp),
-    ) {
+    LazyColumn(state = listState, modifier = modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(start = 16.dp, top = 10.dp, end = 16.dp, bottom = 120.dp)) {
         items(state.orders, key = { it.id }) { order ->
             GlassCard {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
