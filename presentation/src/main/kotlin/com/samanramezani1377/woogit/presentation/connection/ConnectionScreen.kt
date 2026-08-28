@@ -51,6 +51,8 @@ internal fun ConnectionScreen(dependencies: V1PresentationDependencies, onConnec
     }
 
     val ready = storeHost.isNotBlank() && consumerKey.isNotBlank() && consumerSecret.isNotBlank() && wordpressUser.isNotBlank() && wordpressPassword.isNotBlank()
+    val isConnecting = state is FeatureUiState.Loading
+
     GlassScaffold { paddingValues ->
         Column(
             modifier = Modifier.fillMaxWidth().padding(paddingValues).padding(horizontal = 20.dp, vertical = 16.dp)
@@ -62,30 +64,35 @@ internal fun ConnectionScreen(dependencies: V1PresentationDependencies, onConnec
                 FilterChip(selected = useHttps, onClick = { useHttps = true }, label = { Text("HTTPS") })
                 FilterChip(selected = !useHttps, onClick = { useHttps = false }, label = { Text("HTTP") })
             }
-            GlassTextField(
-                value = storeHost,
-                onValueChange = { storeHost = normalizeStoreHostInput(it) },
-                label = "آدرس فروشگاه",
-            )
+            GlassTextField(value = storeHost, onValueChange = { storeHost = normalizeStoreHostInput(it) }, label = "آدرس فروشگاه")
             GlassText("فقط نام دامنه را وارد کنید؛ مثلاً senoobar.ir")
             GlassTextField(value = consumerKey, onValueChange = { consumerKey = it }, label = "Consumer Key")
             GlassPasswordField(value = consumerSecret, onValueChange = { consumerSecret = it })
             GlassText("دسترسی WordPress برای تصاویر")
             GlassTextField(value = wordpressUser, onValueChange = { wordpressUser = it }, label = "نام کاربری WordPress")
             GlassPasswordField(value = wordpressPassword, onValueChange = { wordpressPassword = it }, label = "رمز عبور WordPress")
+
             when (val currentState = state) {
                 FeatureUiState.Loading -> GlassLoading("در حال اتصال…")
                 is FeatureUiState.Error -> GlassErrorState(currentState.message)
+                FeatureUiState.Offline -> GlassErrorState("اتصال به فروشگاه برقرار نشد. اینترنت و اطلاعات اتصال را بررسی کنید.")
                 else -> Unit
             }
-            GlassPrimaryAction(
-                label = "بررسی و اتصال",
-                onClick = {
-                    connectionViewModel.connect(buildStoreUrl(useHttps, storeHost), consumerKey, consumerSecret + "\u0001" + wordpressUser + "\u0001" + wordpressPassword)
-                },
-                modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp),
-                enabled = ready,
-            )
+
+            if (!isConnecting) {
+                GlassPrimaryAction(
+                    label = "بررسی و اتصال",
+                    onClick = {
+                        connectionViewModel.connect(
+                            buildStoreUrl(useHttps, storeHost),
+                            consumerKey,
+                            consumerSecret + "\u0001" + wordpressUser + "\u0001" + wordpressPassword,
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp),
+                    enabled = ready,
+                )
+            }
         }
     }
 }
