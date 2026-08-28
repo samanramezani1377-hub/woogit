@@ -1,11 +1,15 @@
 # WooGit — Mandatory Agent Workflow
 
-Before inspecting, changing, debugging, refactoring, building, or reviewing this repository, Claude MUST use the **Superpowers** methodology: https://github.com/obra/superpowers
+## Instruction priority
 
-Superpowers is mandatory for this repository. Use the relevant skills, especially `using-superpowers`, `brainstorming`, `writing-plans`, `systematic-debugging`, `test-driven-development`, `requesting-code-review`, `verification-before-completion`, and `finishing-a-development-branch` as applicable.
+Higher-priority platform/system/developer rules always apply. Subject to those rules, the **current user's explicit instructions are the source of truth and take precedence over this document and all other repository documentation** when they conflict.
 
-UNLAZY requirement: do not stop at partial implementation or visual/code inspection. Continue the implementation → build → test → review → verify loop until acceptance criteria are actually satisfied or a genuine external blocker is reached. Never fake, weaken, skip, or hide verification failures.
+Do not use this file or another project document to override, reject, reinterpret, or silently replace an explicit current user instruction. If the request conflicts with a higher-priority rule, follow that rule instead.
 
-If Superpowers is not active/available in the current Claude environment, do not silently substitute another workflow; report the prerequisite and stop before substantive changes.
+The repository's engineering workflows are defaults that support the user's request; they do not outrank it.
 
-See the repository root `AGENTS.md` for the full mandatory policy.
+Before inspecting, changing, debugging, refactoring, building, or reviewing this repository, Claude should use the applicable repository engineering methodology and skills, including Superpowers where available and relevant, while respecting the instruction priority above.
+
+UNLAZY requirement: do not stop at partial implementation or visual/code inspection when the user asks for a complete implementation. Continue the implementation → build → test → review → verify loop until the requested acceptance criteria are satisfied or a genuine blocker is reached. Never fake, weaken, skip, or hide verification failures.
+
+See the repository root `AGENTS.md` for the full policy and instruction-precedence rules.
