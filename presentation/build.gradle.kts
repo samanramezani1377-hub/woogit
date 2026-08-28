@@ -30,4 +30,8 @@ dependencies {
     implementation("io.coil-kt:coil-compose:2.7.0")
     implementation(libs.haze)
     implementation(libs.haze.materials)
+
+    // Test integration: real AGSL Liquid Glass / refraction / chromatic aberration.
+    implementation("io.github.kyant0:backdrop:1.0.6")
+    implementation("io.github.kyant0:shapes:1.2.0")
 }
