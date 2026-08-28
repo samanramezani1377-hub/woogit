@@ -63,10 +63,10 @@ internal fun ConnectionScreen(
             GlassTopBar(title = "اتصال فروشگاه", subtitle = "WooCommerce")
             GlassTextField(value = storeUrl, onValueChange = { storeUrl = it }, label = "آدرس فروشگاه HTTPS")
             GlassTextField(value = consumerKey, onValueChange = { consumerKey = it }, label = "Consumer Key")
-            GlassPasswordField(value = consumerSecret)
+            GlassPasswordField(value = consumerSecret, onValueChange = { consumerSecret = it })
             GlassText("دسترسی WordPress برای تصاویر")
             GlassTextField(value = wordpressUser, onValueChange = { wordpressUser = it }, label = "نام کاربری WordPress")
-            GlassPasswordField(value = wordpressPassword, label = "رمز عبور WordPress")
+            GlassPasswordField(value = wordpressPassword, onValueChange = { wordpressPassword = it }, label = "رمز عبور WordPress")
             when (val currentState = state) {
                 FeatureUiState.Loading -> GlassLoading("در حال اتصال…")
                 is FeatureUiState.Error -> GlassErrorState(currentState.message)
