@@ -20,7 +20,7 @@ class WooCommerceApi(private val client: HttpClient, private val credentials: Cr
     suspend fun getProduct(baseUrl: String, id: Long) = request(baseUrl, "/wp-json/wc/v3/products/$id")
     suspend fun createProduct(baseUrl: String, body: String) = request(baseUrl, "/wp-json/wc/v3/products", method = "POST", body = body)
     suspend fun updateProduct(baseUrl: String, id: Long, body: String) = request(baseUrl, "/wp-json/wc/v3/products/$id", method = "PUT", body = body)
-    suspend fun deleteProduct(baseUrl: String, force: Boolean = false) = request(baseUrl, "/wp-json/wc/v3/products/$id", params = params(force), method = "DELETE")
+    suspend fun deleteProduct(baseUrl: String, id: Long, force: Boolean = false) = request(baseUrl, "/wp-json/wc/v3/products/$id", params = params(force), method = "DELETE")
     suspend fun listProductCategories(baseUrl: String, page: Int = 1, perPage: Int = 100, search: String? = null) = request(baseUrl, "/wp-json/wc/v3/products/categories", params = params(page, perPage, search))
     suspend fun listVariations(baseUrl: String, productId: Long, page: Int = 1, perPage: Int = 20) = request(baseUrl, "/wp-json/wc/v3/products/$productId/variations", params = params(page, perPage))
     suspend fun getVariation(baseUrl: String, productId: Long, id: Long) = request(baseUrl, "/wp-json/wc/v3/products/$productId/variations/$id")
