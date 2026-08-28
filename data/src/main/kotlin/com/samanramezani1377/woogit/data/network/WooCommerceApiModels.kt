@@ -26,3 +26,11 @@ data class WooAttributeDto(val id: Long? = null, val name: String = "", val slug
 
 @Serializable
 data class WooImageDto(val id: Long? = null, val src: String = "", val name: String = "", val alt: String = "")
+
+@Serializable
+data class WooSalesReportDto(
+    val total_sales: String = "0",
+    val net_sales: String = "0",
+    val total_orders: Int = 0,
+    val total_items: Int = 0,
+)
