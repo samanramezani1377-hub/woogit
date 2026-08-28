@@ -27,15 +27,14 @@ import androidx.compose.ui.unit.dp
 import com.samanramezani1377.woogit.presentation.GlassCard
 import com.samanramezani1377.woogit.presentation.GlassEmptyState
 import com.samanramezani1377.woogit.presentation.GlassErrorState
-import com.samanramezani1377.woogit.presentation.GlassListItem
 import com.samanramezani1377.woogit.presentation.GlassLoading
 import com.samanramezani1377.woogit.presentation.GlassOfflineState
-import com.samanramezani1377.woogit.presentation.GlassPrimaryAction
 import com.samanramezani1377.woogit.presentation.GlassSearchField
 import com.samanramezani1377.woogit.presentation.GlassStatusBadge
 import com.samanramezani1377.woogit.presentation.GlassText
 import com.samanramezani1377.woogit.presentation.GlassTokens
 import com.samanramezani1377.woogit.presentation.GlassTopBar
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 
@@ -49,9 +48,13 @@ internal fun OrdersScreen(
     modifier: Modifier = Modifier,
 ) {
     var query by remember { mutableStateOf("") }
+    LaunchedEffect(query) {
+        delay(300L)
+        onSearch(query)
+    }
     Column(modifier.fillMaxSize()) {
         GlassTopBar("سفارش‌ها", "مدیریت سفارش‌های فروشگاه", Modifier.padding(horizontal = 18.dp, vertical = 8.dp))
-        GlassSearchField(query, { query = it; onSearch(it) }, label = "جستجوی سفارش", modifier = Modifier.padding(horizontal = 16.dp))
+        GlassSearchField(query, { query = it }, label = "جستجوی سفارش", modifier = Modifier.padding(horizontal = 16.dp))
         when (state) {
             OrdersUiState.Loading -> LoadingState(Modifier.weight(1f))
             OrdersUiState.Empty -> EmptyState(Modifier.weight(1f))
@@ -75,7 +78,7 @@ private fun OrdersList(state: OrdersUiState.Content, onOrderClick: (String) -> U
     LaunchedEffect(listState, state.hasMore, state.orders.size) {
         snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
             .distinctUntilChanged()
-            .filter { it >= (state.orders.size - 4).coerceAtLeast(0) }
+            .filter { it >= (state.orders.size - 8).coerceAtLeast(0) }
             .collect { if (state.hasMore) onLoadMore() }
     }
     LazyColumn(state = listState, modifier = modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(start = 16.dp, top = 10.dp, end = 16.dp, bottom = 120.dp)) {
