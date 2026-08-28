@@ -7,6 +7,7 @@ import com.samanramezani1377.woogit.core.domain.error.CoreResult
 import com.samanramezani1377.woogit.core.domain.model.ConnectionState
 import com.samanramezani1377.woogit.core.domain.model.Order
 import com.samanramezani1377.woogit.core.domain.model.Product
+import com.samanramezani1377.woogit.core.domain.model.SalesSummary
 import com.samanramezani1377.woogit.presentation.PresentationErrorMapper
 import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
 import kotlinx.coroutines.CancellationException
@@ -21,6 +22,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 internal data class DashboardUiState(
     val orders: List<Order> = emptyList(),
     val products: List<Product> = emptyList(),
+    val salesSummary: SalesSummary? = null,
     val connectionState: ConnectionState = ConnectionState.DISCONNECTED,
     val loading: Boolean = false,
     val error: String? = null,
@@ -29,7 +31,7 @@ internal data class DashboardUiState(
     val ordersCount: String get() = DashboardStateMapper.ordersCount(orders)
     val productsCount: String get() = DashboardStateMapper.productsCount(products)
     val pendingCount: String get() = DashboardStateMapper.pendingCount(orders)
-    val revenue: String get() = DashboardStateMapper.revenue(orders)
+    val revenue: String get() = DashboardStateMapper.revenue(salesSummary)
 }
 
 internal class DashboardViewModel(
@@ -73,18 +75,12 @@ internal class DashboardViewModel(
                     is CoreResult.Failure -> ConnectionState.ERROR
                 }
             } ?: ConnectionState.ERROR
-            _uiState.value = _uiState.value.copy(
-                connectionState = state,
-                lastConnectionCheckAtMillis = System.currentTimeMillis(),
-            )
+            _uiState.value = _uiState.value.copy(connectionState = state, lastConnectionCheckAtMillis = System.currentTimeMillis())
             state
         } catch (e: CancellationException) {
             throw e
         } catch (_: Throwable) {
-            _uiState.value = _uiState.value.copy(
-                connectionState = ConnectionState.ERROR,
-                lastConnectionCheckAtMillis = System.currentTimeMillis(),
-            )
+            _uiState.value = _uiState.value.copy(connectionState = ConnectionState.ERROR, lastConnectionCheckAtMillis = System.currentTimeMillis())
             ConnectionState.ERROR
         } finally {
             healthCheckInFlight = false
@@ -95,7 +91,6 @@ internal class DashboardViewModel(
         val allOrders = mutableListOf<Order>()
         var page = 1
         val perPage = 100
-
         while (true) {
             when (val result = dependencies.getOrders(storeId, page, perPage, null, null)) {
                 is CoreResult.Failure -> return result
@@ -107,7 +102,6 @@ internal class DashboardViewModel(
                 }
             }
         }
-
         return CoreResult.Success(allOrders)
     }
 
@@ -118,29 +112,26 @@ internal class DashboardViewModel(
         val orders = when (ordersResult) {
             is CoreResult.Success -> ordersResult.value
             is CoreResult.Failure -> {
-                _uiState.value = _uiState.value.copy(
-                    connectionState = connection,
-                    loading = false,
-                    error = PresentationErrorMapper.message(ordersResult.error),
-                )
+                _uiState.value = _uiState.value.copy(connectionState = connection, loading = false, error = PresentationErrorMapper.message(ordersResult.error))
                 return
             }
+        }
+        val salesSummary = when (val result = dependencies.getSalesSummary(storeId)) {
+            is CoreResult.Success -> result.value
+            is CoreResult.Failure -> _uiState.value.salesSummary
         }
         val productsResult = dependencies.getProducts(storeId, 1, 30, null)
         val products = when (productsResult) {
             is CoreResult.Success -> productsResult.value
             is CoreResult.Failure -> {
-                _uiState.value = _uiState.value.copy(
-                    connectionState = connection,
-                    loading = false,
-                    error = PresentationErrorMapper.message(productsResult.error),
-                )
+                _uiState.value = _uiState.value.copy(connectionState = connection, loading = false, error = PresentationErrorMapper.message(productsResult.error))
                 return
             }
         }
         _uiState.value = _uiState.value.copy(
             orders = orders,
             products = products,
+            salesSummary = salesSummary,
             connectionState = connection,
             loading = false,
             error = null,
