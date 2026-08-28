@@ -10,6 +10,7 @@ import com.samanramezani1377.woogit.core.domain.model.Product
 import com.samanramezani1377.woogit.core.domain.model.SalesSummary
 import com.samanramezani1377.woogit.presentation.PresentationErrorMapper
 import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
+import com.samanramezani1377.woogit.presentation.debug.PresentationTechnicalErrorReporter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -20,12 +21,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
 internal data class DashboardUiState(
-    val orders: List<Order> = emptyList(),
-    val products: List<Product> = emptyList(),
-    val salesSummary: SalesSummary? = null,
-    val connectionState: ConnectionState = ConnectionState.DISCONNECTED,
-    val loading: Boolean = false,
-    val error: String? = null,
+    val orders: List<Order> = emptyList(), val products: List<Product> = emptyList(), val salesSummary: SalesSummary? = null,
+    val connectionState: ConnectionState = ConnectionState.DISCONNECTED, val loading: Boolean = false, val error: String? = null,
     val lastConnectionCheckAtMillis: Long? = null,
 ) {
     val ordersCount: String get() = DashboardStateMapper.ordersCount(orders)
@@ -43,11 +40,7 @@ internal class DashboardViewModel(
     private var healthMonitorStarted = false
     private var healthCheckInFlight = false
 
-    fun refresh() {
-        if (_uiState.value.loading) return
-        viewModelScope.launch { refreshInternal() }
-    }
-
+    fun refresh() { if (_uiState.value.loading) return; viewModelScope.launch { refreshInternal() } }
     fun startConnectionHealthMonitor() {
         if (healthMonitorStarted) return
         healthMonitorStarted = true
@@ -60,10 +53,7 @@ internal class DashboardViewModel(
             }
         }
     }
-
-    fun onNetworkAvailable() {
-        viewModelScope.launch { checkConnection() }
-    }
+    fun onNetworkAvailable() { viewModelScope.launch { checkConnection() } }
 
     private suspend fun checkConnection(): ConnectionState {
         if (healthCheckInFlight) return _uiState.value.connectionState
@@ -72,34 +62,29 @@ internal class DashboardViewModel(
             val state = withTimeoutOrNull(5_000L) {
                 when (val result = dependencies.getConnectionState(storeId)) {
                     is CoreResult.Success -> result.value
-                    is CoreResult.Failure -> ConnectionState.ERROR
+                    is CoreResult.Failure -> {
+                        PresentationTechnicalErrorReporter.report("Dashboard", "DashboardViewModel.checkConnection", "Connection check", PresentationErrorMapper.message(result.error), result.error.reason)
+                        ConnectionState.ERROR
+                    }
                 }
-            } ?: ConnectionState.ERROR
+            } ?: ConnectionState.ERROR.also {
+                PresentationTechnicalErrorReporter.report("Dashboard", "DashboardViewModel.checkConnection", "Connection timeout", "وضعیت اتصال قابل بررسی نبود.", "Connection check timed out after 5000ms")
+            }
             _uiState.value = _uiState.value.copy(connectionState = state, lastConnectionCheckAtMillis = System.currentTimeMillis())
             state
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Throwable) {
+        } catch (e: CancellationException) { throw e } catch (e: Throwable) {
+            PresentationTechnicalErrorReporter.report("Dashboard", "DashboardViewModel.checkConnection", "Connection check", "ارتباط با فروشگاه برقرار نشد.", throwable = e)
             _uiState.value = _uiState.value.copy(connectionState = ConnectionState.ERROR, lastConnectionCheckAtMillis = System.currentTimeMillis())
             ConnectionState.ERROR
-        } finally {
-            healthCheckInFlight = false
-        }
+        } finally { healthCheckInFlight = false }
     }
 
     private suspend fun loadAllOrders(): CoreResult<List<Order>> {
-        val allOrders = mutableListOf<Order>()
-        var page = 1
-        val perPage = 100
+        val allOrders = mutableListOf<Order>(); var page = 1; val perPage = 100
         while (true) {
             when (val result = dependencies.getOrders(storeId, page, perPage, null, null)) {
                 is CoreResult.Failure -> return result
-                is CoreResult.Success -> {
-                    val batch = result.value
-                    allOrders += batch
-                    if (batch.size < perPage) break
-                    page++
-                }
+                is CoreResult.Success -> { val batch = result.value; allOrders += batch; if (batch.size < perPage) break; page++ }
             }
         }
         return CoreResult.Success(allOrders)
@@ -112,29 +97,27 @@ internal class DashboardViewModel(
         val orders = when (ordersResult) {
             is CoreResult.Success -> ordersResult.value
             is CoreResult.Failure -> {
-                _uiState.value = _uiState.value.copy(connectionState = connection, loading = false, error = PresentationErrorMapper.message(ordersResult.error))
-                return
+                val message = PresentationErrorMapper.message(ordersResult.error)
+                PresentationTechnicalErrorReporter.report("Dashboard", "DashboardViewModel.refreshInternal", "Load orders", message, ordersResult.error.reason)
+                _uiState.value = _uiState.value.copy(connectionState = connection, loading = false, error = message); return
             }
         }
         val salesSummary = when (val result = dependencies.getSalesSummary(storeId)) {
-            is CoreResult.Success -> result.value.copy(netSales = DashboardStateMapper.netSales(orders).toPlainString())
-            is CoreResult.Failure -> _uiState.value.salesSummary
+            is CoreResult.Success -> result.value
+            is CoreResult.Failure -> {
+                PresentationTechnicalErrorReporter.report("Dashboard", "DashboardViewModel.refreshInternal", "Load sales summary", PresentationErrorMapper.message(result.error), result.error.reason)
+                _uiState.value.salesSummary
+            }
         }
         val productsResult = dependencies.getProducts(storeId, 1, 30, null)
         val products = when (productsResult) {
             is CoreResult.Success -> productsResult.value
             is CoreResult.Failure -> {
-                _uiState.value = _uiState.value.copy(connectionState = connection, loading = false, error = PresentationErrorMapper.message(productsResult.error))
-                return
+                val message = PresentationErrorMapper.message(productsResult.error)
+                PresentationTechnicalErrorReporter.report("Dashboard", "DashboardViewModel.refreshInternal", "Load products", message, productsResult.error.reason)
+                _uiState.value = _uiState.value.copy(connectionState = connection, loading = false, error = message); return
             }
         }
-        _uiState.value = _uiState.value.copy(
-            orders = orders,
-            products = products,
-            salesSummary = salesSummary,
-            connectionState = connection,
-            loading = false,
-            error = null,
-        )
+        _uiState.value = _uiState.value.copy(orders = orders, products = products, salesSummary = salesSummary, connectionState = connection, loading = false, error = null)
     }
 }
