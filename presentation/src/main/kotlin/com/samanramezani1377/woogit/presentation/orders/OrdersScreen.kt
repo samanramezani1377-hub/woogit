@@ -2,25 +2,27 @@ package com.samanramezani1377.woogit.presentation.orders
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.samanramezani1377.woogit.presentation.GlassCard
+import com.samanramezani1377.woogit.presentation.GlassEmptyState
+import com.samanramezani1377.woogit.presentation.GlassErrorState
+import com.samanramezani1377.woogit.presentation.GlassListItem
+import com.samanramezani1377.woogit.presentation.GlassOfflineState
+import com.samanramezani1377.woogit.presentation.GlassStatusBadge
+import com.samanramezani1377.woogit.presentation.GlassText
+import com.samanramezani1377.woogit.presentation.GlassTopBar
 
-/**
- * Orders screen boundary.
- *
- * Networking and business decisions stay outside this composable.
- */
+/** Orders screen using the shared V1 Liquid Glass visual system. */
 @Composable
 internal fun OrdersScreen(
     state: OrdersUiState,
@@ -28,119 +30,78 @@ internal fun OrdersScreen(
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    when (state) {
-        OrdersUiState.Loading -> LoadingState(modifier)
-        OrdersUiState.Empty -> EmptyState(modifier)
-        is OrdersUiState.Content -> OrdersList(
-            state = state,
-            onOrderClick = onOrderClick,
-            modifier = modifier,
+    Column(modifier.fillMaxSize()) {
+        GlassTopBar(
+            title = "سفارش‌ها",
+            subtitle = "مدیریت سفارش‌های فروشگاه",
+            modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp),
         )
-        is OrdersUiState.Error -> ErrorState(
-            state = state,
-            onRetry = onRetry,
-            modifier = modifier,
-        )
-        is OrdersUiState.Offline -> OrdersList(
-            state = OrdersUiState.Content(
-                orders = state.cachedOrders,
-                hasMore = false,
-            ),
-            onOrderClick = onOrderClick,
-            modifier = modifier,
-        )
+        when (state) {
+            OrdersUiState.Loading -> LoadingState(Modifier.weight(1f))
+            OrdersUiState.Empty -> EmptyState(Modifier.weight(1f))
+            is OrdersUiState.Content -> OrdersList(state, onOrderClick, Modifier.weight(1f))
+            is OrdersUiState.Error -> ErrorState(state, onRetry, Modifier.weight(1f))
+            is OrdersUiState.Offline -> Column(Modifier.weight(1f)) {
+                GlassOfflineState()
+                OrdersList(
+                    OrdersUiState.Content(state.cachedOrders, false),
+                    onOrderClick,
+                    Modifier.weight(1f),
+                )
+            }
+        }
     }
 }
 
 @Composable
 private fun LoadingState(modifier: Modifier) {
-    Column(
-        modifier = modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        CircularProgressIndicator()
+    Column(modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+        GlassCard {
+            CircularProgressIndicator(color = androidx.compose.material3.MaterialTheme.colorScheme.primary)
+            GlassText("در حال بارگذاری سفارش‌ها…")
+        }
     }
 }
 
 @Composable
 private fun EmptyState(modifier: Modifier) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Text("سفارشی وجود ندارد")
+    Column(modifier.fillMaxSize().padding(18.dp), verticalArrangement = Arrangement.Center) {
+        GlassEmptyState("سفارشی برای نمایش وجود ندارد.")
     }
 }
 
 @Composable
-private fun ErrorState(
-    state: OrdersUiState.Error,
-    onRetry: () -> Unit,
-    modifier: Modifier,
-) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center,
-    ) {
-        Text(state.message)
-        if (state.canRetry) {
-            TextButton(onClick = onRetry) {
-                Text("تلاش دوباره")
-            }
-        }
+private fun ErrorState(state: OrdersUiState.Error, onRetry: () -> Unit, modifier: Modifier) {
+    Column(modifier.fillMaxSize().padding(18.dp), verticalArrangement = Arrangement.Center) {
+        GlassErrorState(state.message, if (state.canRetry) onRetry else null)
     }
 }
 
 @Composable
-private fun OrdersList(
-    state: OrdersUiState.Content,
-    onOrderClick: (String) -> Unit,
-    modifier: Modifier,
-) {
+private fun OrdersList(state: OrdersUiState.Content, onOrderClick: (String) -> Unit, modifier: Modifier) {
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(10.dp),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
     ) {
-        items(
-            items = state.orders,
-            key = { it.id },
-        ) { order ->
-            OrderRow(
-                order = order,
+        items(state.orders, key = { it.id }) { order ->
+            GlassListItem(
+                title = "#${order.id} · ${order.customerName.ifBlank { "مشتری نامشخص" }}",
+                subtitle = "${order.total} · ${order.createdAt}",
                 onClick = { onOrderClick(order.id) },
+                trailing = { GlassStatusBadge(order.status.glassLabel()) },
             )
         }
     }
 }
 
-@Composable
-private fun OrderRow(
-    order: OrderRowUiModel,
-    onClick: () -> Unit,
-) {
-    androidx.compose.material3.Card(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(Modifier.padding(16.dp)) {
-            Row(Modifier.fillMaxWidth()) {
-                Text(
-                    text = "#${order.id}",
-                    modifier = Modifier.weight(1f),
-                )
-                Text(order.status)
-            }
-            Text(order.customerName)
-            Text(order.total)
-            Text(order.createdAt)
-        }
-    }
+private fun String.glassLabel(): String = when (lowercase()) {
+    "pending" -> "در انتظار"
+    "processing" -> "در حال پردازش"
+    "completed" -> "تکمیل شده"
+    "cancelled" -> "لغو شده"
+    "refunded" -> "مسترد شده"
+    "failed" -> "ناموفق"
+    "on-hold", "on_hold" -> "در انتظار"
+    else -> this
 }
