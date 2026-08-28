@@ -28,10 +28,8 @@ dependencies {
     implementation(libs.kotlinx.datetime)
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.9.2")
     implementation("io.coil-kt:coil-compose:2.7.0")
-    implementation(libs.haze)
-    implementation(libs.haze.materials)
 
-    // Test integration: real AGSL Liquid Glass / refraction / chromatic aberration.
+    // Liquid Glass rendering is powered exclusively by Kyant0 Backdrop.
     implementation("io.github.kyant0:backdrop:1.0.6")
     implementation("io.github.kyant0:shapes:1.2.0")
 }
