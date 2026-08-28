@@ -1,54 +1,48 @@
 package com.samanramezani1377.woogit.presentation.dashboard
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-
-private val Surface = Color.White.copy(alpha = 0.58f)
-
-@Composable
-internal fun DashboardGlassSurface(
-    modifier: Modifier = Modifier,
-    content: @Composable ColumnScope.() -> Unit,
-) {
-    Column(
-        modifier = modifier.clip(RoundedCornerShape(26.dp)).background(Surface).padding(18.dp),
-        content = content,
-    )
-}
+import com.samanramezani1377.woogit.presentation.GlassCard
+import com.samanramezani1377.woogit.presentation.GlassTokens
 
 @Composable
 internal fun DashboardHero(storeName: String, connected: Boolean, modifier: Modifier = Modifier) {
-    DashboardGlassSurface(modifier.fillMaxWidth()) {
+    GlassCard(modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(12.dp).clip(RoundedCornerShape(50)).background(if (connected) Color(0xFF25B36A) else Color(0xFFE67E22)))
-            Spacer(Modifier.size(10.dp))
+            androidx.compose.foundation.layout.Box(
+                Modifier
+                    .size(10.dp)
+                    .then(
+                        Modifier
+                    ),
+            )
             Column(Modifier.weight(1f)) {
-                Text("WooGit", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text(storeName, style = MaterialTheme.typography.bodyMedium)
+                Text("وضعیت فروشگاه", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text(storeName, style = MaterialTheme.typography.bodyMedium, color = GlassTokens.muted)
             }
-            Text(if (connected) "متصل" else "قطع ارتباط", fontWeight = FontWeight.SemiBold)
+            Text(
+                if (connected) "متصل" else "قطع ارتباط",
+                color = if (connected) GlassTokens.live else GlassTokens.urgent,
+                fontWeight = FontWeight.Bold,
+            )
         }
     }
 }
@@ -69,49 +63,62 @@ internal fun DashboardStatGrid(orders: String, products: String, revenue: String
 
 @Composable
 private fun DashboardStat(title: String, value: String, modifier: Modifier = Modifier) {
-    DashboardGlassSurface(modifier) {
-        Text(title, style = MaterialTheme.typography.bodyMedium)
-        Spacer(Modifier.height(6.dp))
+    GlassCard(modifier) {
+        Text(title, style = MaterialTheme.typography.bodyMedium, color = GlassTokens.muted)
+        Spacer(Modifier.height(4.dp))
         Text(value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
     }
 }
 
 @Composable
-internal fun DashboardQuickAction(title: String, subtitle: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    androidx.compose.material3.Button(
+internal fun DashboardQuickAction(
+    title: String,
+    subtitle: String,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    OutlinedButton(
         onClick = onClick,
-        modifier = modifier.fillMaxWidth().height(58.dp),
+        modifier = modifier.fillMaxWidth().height(64.dp),
         shape = RoundedCornerShape(18.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, GlassTokens.glassBorder),
+        colors = ButtonDefaults.outlinedButtonColors(
+            containerColor = Color.White.copy(alpha = .28f),
+            contentColor = GlassTokens.ink,
+        ),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 18.dp),
-        colors = androidx.compose.material3.ButtonDefaults.buttonColors(containerColor = Color.Transparent),
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(title, color = Color.White, fontWeight = FontWeight.Bold)
-                Text(subtitle, color = Color.White.copy(alpha = .82f), style = MaterialTheme.typography.bodySmall)
+                Text(title, color = GlassTokens.ink, fontWeight = FontWeight.Bold)
+                Text(subtitle, color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
             }
+            Text("›", color = GlassTokens.faint, style = MaterialTheme.typography.titleLarge)
         }
     }
 }
 
 @Composable
 internal fun DashboardContent(
-    storeName: String, connected: Boolean, orders: String, products: String,
-    revenue: String, pending: String, modifier: Modifier = Modifier,
+    storeName: String,
+    connected: Boolean,
+    orders: String,
+    products: String,
+    revenue: String,
+    pending: String,
+    modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier.fillMaxSize().background(Color(0xFFEFF1F7)).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
+        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
+        Text(
+            "خلاصه وضعیت",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.padding(horizontal = 4.dp),
+        )
         DashboardHero(storeName, connected)
-        Text("خلاصه وضعیت", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         DashboardStatGrid(orders, products, revenue, pending)
-        DashboardGlassSurface(Modifier.fillMaxWidth()) {
-            Text("اقدامات سریع", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(12.dp))
-            DashboardQuickAction("سفارش‌ها", "مدیریت سفارش‌های فروشگاه", onClick = {})
-            Spacer(Modifier.height(8.dp))
-            DashboardQuickAction("محصولات", "مدیریت محصولات و موجودی", onClick = {})
-        }
     }
 }
