@@ -237,7 +237,7 @@ private fun WooProductTypedDto.toProductDomain() = Product(
     when (type) { "variable" -> ProductType.VARIABLE; "grouped" -> ProductType.GROUPED; "external" -> ProductType.EXTERNAL; else -> ProductType.SIMPLE },
     Pricing(regular_price, sale_price, on_sale),
     Stock(stock_quantity, when (stock_status) { "outofstock" -> StockStatus.OUT_OF_STOCK; "onbackorder" -> StockStatus.ON_BACKORDER; else -> StockStatus.IN_STOCK }, manage_stock),
-    images.map { ProductImage(it.id?.let { id -> EntityId(id.toString()) }, it.src, it.name, it.alt) },
+    images.map { ProductImage(it.id?.let { id -> EntityId(id.toString()) }, it.src.orEmpty(), it.name, it.alt) },
     categories.map { IdName(EntityId(it.id.toString()), it.name) },
     attributes.map { Attribute(it.id?.let { id -> EntityId(id.toString()) }, it.name, it.visible, it.variation, it.options) },
     date_modified_gmt,
@@ -249,7 +249,7 @@ private fun WooVariationTypedDto.toVariationDomain() = Variation(
     Pricing(regular_price, sale_price, sale_price != null),
     Stock(stock_quantity, when (stock_status) { "outofstock" -> StockStatus.OUT_OF_STOCK; "onbackorder" -> StockStatus.ON_BACKORDER; else -> StockStatus.IN_STOCK }, manage_stock),
     sku,
-    image?.let { ProductImage(it.id?.let { id -> EntityId(id.toString()) }, it.src, it.name, it.alt) },
+    image?.let { ProductImage(it.id?.let { id -> EntityId(id.toString()) }, it.src.orEmpty(), it.name, it.alt) },
     date_modified_gmt?.let { kotlinx.datetime.Instant.parse(it) },
 )
 
