@@ -15,7 +15,19 @@ internal object DashboardStateMapper {
         orders.count { it.status.name.equals("PENDING", ignoreCase = true) }.toString()
 
     fun revenue(orders: List<Order>): String {
-        val total = orders.sumOf { it.total?.toDoubleOrNull() ?: 0.0 }
+        // Revenue must contain only successfully completed/processing paid sales;
+        // cancelled, refunded and failed orders must never inflate the dashboard.
+        val total = orders
+            .asSequence()
+            .filter { order ->
+                when (order.status) {
+                    com.samanramezani1377.woogit.core.domain.model.OrderStatus.COMPLETED,
+                    com.samanramezani1377.woogit.core.domain.model.OrderStatus.PROCESSING -> true
+                    else -> false
+                }
+            }
+            .filter { it.payment?.paid != false }
+            .sumOf { it.total?.toDoubleOrNull() ?: 0.0 }
         return NumberFormat.getNumberInstance(Locale.US).apply {
             maximumFractionDigits = 0
             minimumFractionDigits = 0
