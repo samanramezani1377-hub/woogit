@@ -15,14 +15,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.samanramezani1377.woogit.core.domain.entity.EntityId
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
-import com.samanramezani1377.woogit.core.domain.error.CoreResult
 import com.samanramezani1377.woogit.core.domain.model.Attribute
 import com.samanramezani1377.woogit.core.domain.model.IdName
 import com.samanramezani1377.woogit.core.domain.model.Pricing
 import com.samanramezani1377.woogit.core.domain.model.Product
 import com.samanramezani1377.woogit.core.domain.model.ProductImage
-import com.samanramezani1377.woogit.core.domain.model.ProductStatus
-import com.samanramezani1377.woogit.core.domain.model.ProductType
 import com.samanramezani1377.woogit.core.domain.model.Stock
 import com.samanramezani1377.woogit.core.domain.model.StockStatus
 import com.samanramezani1377.woogit.presentation.FeatureUiState
@@ -36,9 +33,11 @@ internal fun ProductEditorRoute(dependencies: V1PresentationDependencies, storeI
     val context = LocalContext.current
     val vm = viewModel<ProductDetailViewModel>(factory = vmFactory { ProductDetailViewModel(dependencies) })
     val mediaVm = viewModel<SiteMediaViewModel>(key = "site-media-${storeId.value}", factory = vmFactory { SiteMediaViewModel(dependencies) })
+    val uploadVm = viewModel<ProductImageUploadViewModel>(key = "product-image-upload-${storeId.value}-${productId ?: "new"}", factory = vmFactory { ProductImageUploadViewModel(dependencies) })
     val state by vm.state.collectAsState()
     val categoryState by vm.categories.collectAsState()
     val mediaState by mediaVm.state.collectAsState()
+    val uploadState by uploadVm.state.collectAsState()
     val availableCategories = (categoryState as? FeatureUiState.Success)?.value.orEmpty()
     val availableMedia = (mediaState as? FeatureUiState.Success)?.value.orEmpty()
     var form by remember(productId) { mutableStateOf<ProductEditorUiState.Editing?>(null) }
@@ -60,26 +59,35 @@ internal fun ProductEditorRoute(dependencies: V1PresentationDependencies, storeI
         val uri = selectedUploadUri ?: return@LaunchedEffect
         selectedUploadUri = null
         mediaUploading = true
-        try {
-            val bytes = runCatching { context.contentResolver.openInputStream(uri)?.use { it.readBytes() } }.getOrNull()
-            val mime = context.contentResolver.getType(uri).orEmpty().ifBlank { "image/jpeg" }
-            val extension = mime.substringAfter('/').takeIf { it.isNotBlank() } ?: "jpeg"
-            if (bytes == null || bytes.isEmpty()) {
-                form = form?.copy(imageError = "خواندن تصویر انتخاب‌شده ناموفق بود.")
-            } else {
-                when (val result = dependencies.uploadMedia(storeId, "woogit-${System.currentTimeMillis()}.$extension", bytes, mime)) {
-                    is CoreResult.Success -> {
-                        val uploaded = result.value
-                        val id = uploaded.id?.value?.takeIf { it.isNotBlank() }
-                        val url = uploaded.src.trim().takeIf { it.isNotBlank() }
-                        uploadedImageUrl = url
-                        form = form?.copy(imageUrl = url, imageId = id, imageError = when { id == null -> "آپلود انجام شد اما شناسه رسانه از WordPress دریافت نشد."; url == null -> "تصویر آپلود شد، اما WordPress آدرس تصویر را برنگرداند."; else -> null })
-                    }
-                    is CoreResult.Failure -> form = form?.copy(imageError = "آپلود تصویر ناموفق بود: ${result.error}")
-                }
+        val bytes = runCatching { context.contentResolver.openInputStream(uri)?.use { it.readBytes() } }.getOrNull()
+        val mime = context.contentResolver.getType(uri).orEmpty().ifBlank { "image/jpeg" }
+        val extension = mime.substringAfter('/').takeIf { it.isNotBlank() } ?: "jpeg"
+        if (bytes == null || bytes.isEmpty()) {
+            form = form?.copy(imageError = "خواندن تصویر انتخاب‌شده ناموفق بود.")
+            mediaUploading = false
+        } else {
+            uploadVm.upload(storeId, "woogit-${System.currentTimeMillis()}.$extension", bytes, mime)
+        }
+    }
+    LaunchedEffect(uploadState) {
+        when (val result = uploadState) {
+            ProductImageUploadState.Idle -> Unit
+            ProductImageUploadState.Loading -> mediaUploading = true
+            is ProductImageUploadState.Success -> {
+                val uploaded = result.image
+                val id = uploaded.id?.value?.takeIf { it.isNotBlank() }
+                val url = uploaded.src.trim().takeIf { it.isNotBlank() }
+                uploadedImageUrl = url
+                form = form?.copy(imageUrl = url, imageId = id, imageError = when { id == null -> "آپلود انجام شد اما شناسه رسانه از WordPress دریافت نشد."; url == null -> "تصویر آپلود شد، اما WordPress آدرس تصویر را برنگرداند."; else -> null })
+                mediaUploading = false
+                uploadVm.reset()
             }
-        } catch (t: Throwable) { form = form?.copy(imageError = t.message ?: "آپلود تصویر ناموفق بود.") }
-        finally { mediaUploading = false }
+            is ProductImageUploadState.Error -> {
+                form = form?.copy(imageError = result.message)
+                mediaUploading = false
+                uploadVm.reset()
+            }
+        }
     }
     LaunchedEffect(state) {
         if (uploadedImageUrl != null) return@LaunchedEffect
@@ -104,7 +112,7 @@ internal fun ProductEditorRoute(dependencies: V1PresentationDependencies, storeI
             onCategoriesChanged = { form = form?.copy(categories = it) }, onAttributesChanged = { form = form?.copy(attributes = it) },
             onStatusChanged = { form = form?.copy(status = it) }, onTypeChanged = { form = form?.copy(type = it) },
             onSave = { val current = form ?: return@ProductEditorScreen; vm.save(storeId, current.toProduct(original, availableCategories), current.productId == null, onSaved); form = current.copy(saving = true) },
-            onRetry = { uploadedImageUrl = null; if (editing.productId != null) vm.load(storeId, EntityId(editing.productId)) else vm.loadCategories(storeId) }, onBack = onBack, modifier = modifier,
+            onRetry = { uploadedImageUrl = null; uploadVm.reset(); if (editing.productId != null) vm.load(storeId, EntityId(editing.productId)) else vm.loadCategories(storeId) }, onBack = onBack, modifier = modifier,
         )
         state is FeatureUiState.Loading -> ProductEditorScreen(state = ProductEditorUiState.Loading, availableCategories = availableCategories, onNameChanged = {}, onSkuChanged = {}, onShortDescriptionChanged = {}, onDescriptionChanged = {}, onPriceChanged = {}, onSalePriceChanged = {}, onStockChanged = {}, onImageUrlChanged = {}, onCategoriesChanged = {}, onAttributesChanged = {}, onStatusChanged = {}, onTypeChanged = {}, onSave = {}, onRetry = {}, onBack = onBack, modifier = modifier)
         state is FeatureUiState.Error -> { val error = state as FeatureUiState.Error; ProductEditorScreen(state = ProductEditorUiState.Error(error.message, error.retryable), availableCategories = availableCategories, onNameChanged = {}, onSkuChanged = {}, onShortDescriptionChanged = {}, onDescriptionChanged = {}, onPriceChanged = {}, onSalePriceChanged = {}, onStockChanged = {}, onImageUrlChanged = {}, onCategoriesChanged = {}, onAttributesChanged = {}, onStatusChanged = {}, onTypeChanged = {}, onSave = {}, onRetry = { if (productId != null) vm.load(storeId, EntityId(productId)) else vm.loadCategories(storeId) }, onBack = onBack, modifier = modifier) }
