@@ -2,6 +2,7 @@ package com.samanramezani1377.woogit.presentation.order
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -46,11 +47,11 @@ internal fun OrderDetailScreen(
                 OrderDetailUiState.NotFound -> GlassEmptyState("سفارش پیدا نشد.")
                 is OrderDetailUiState.Error -> {
                     GlassErrorState(state.message)
-                    if (state.canRetry) {
+                    if (state.retryable) {
                         GlassPrimaryAction(
                             label = "تلاش مجدد",
                             onClick = onRetry,
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp),
+                            modifier = Modifier.padding(horizontal = 18.dp),
                         )
                     }
                 }
@@ -65,7 +66,7 @@ private fun OrderDetailContent(state: OrderDetailUiState.Content) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
     ) {
         item {
             GlassCard {
