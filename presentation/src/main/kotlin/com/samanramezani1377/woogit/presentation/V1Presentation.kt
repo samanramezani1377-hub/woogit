@@ -32,7 +32,18 @@ private fun CoreResult.Failure.toUi()=FeatureUiState.Error(PresentationErrorMapp
 
 class ConnectionViewModel(private val d:V1PresentationDependencies):ViewModel(){
     private val _state=MutableStateFlow<FeatureUiState<StoreConnection>>(FeatureUiState.Empty);val state:StateFlow<FeatureUiState<StoreConnection>> = _state.asStateFlow()
-    fun connect(url:String,key:String,secret:String)=viewModelScope.launch{_state.value=FeatureUiState.Loading;val u=url.trim().trimEnd('/');if(!u.startsWith("https://")){_state.value=FeatureUiState.Error("آدرس فروشگاه باید با HTTPS شروع شود.",false);return@launch};when(val r=d.connectStore(StoreConnection(StoreId("store-${u.lowercase().hashCode().toUInt().toString(16)}"),u,ConnectionState.DISCONNECTED,null),key,secret)){is CoreResult.Success->{_state.value=FeatureUiState.Success(r.value);d.onStoreConnected(r.value.storeId.value)};is CoreResult.Failure->_state.value=r.toUi()}}
+    fun connect(url:String,key:String,secret:String)=viewModelScope.launch{
+        _state.value=FeatureUiState.Loading
+        val u=url.trim().trimEnd('/')
+        if (!u.startsWith("https://") && !u.startsWith("http://")) {
+            _state.value=FeatureUiState.Error("آدرس فروشگاه باید با HTTP یا HTTPS شروع شود.",false)
+            return@launch
+        }
+        when(val r=d.connectStore(StoreConnection(StoreId("store-${u.lowercase().hashCode().toUInt().toString(16)}"),u,ConnectionState.DISCONNECTED,null),key,secret)){
+            is CoreResult.Success->{_state.value=FeatureUiState.Success(r.value);d.onStoreConnected(r.value.storeId.value)}
+            is CoreResult.Failure->_state.value=r.toUi()
+        }
+    }
 }
 class OrdersViewModel(private val d:V1PresentationDependencies):ViewModel(){
     private val _state=MutableStateFlow<FeatureUiState<List<Order>>>(FeatureUiState.Loading);val state=_state.asStateFlow();var page=1;private var query="";private var job:Job?=null;private var loadingMore=false;private var hasMore=true
