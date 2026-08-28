@@ -1,5 +1,9 @@
 package com.samanramezani1377.woogit.presentation
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -26,7 +30,6 @@ import com.samanramezani1377.woogit.presentation.order.OrderDetailUiState
 import com.samanramezani1377.woogit.presentation.orders.OrderRowUiModel
 import com.samanramezani1377.woogit.presentation.orders.OrdersScreen
 import com.samanramezani1377.woogit.presentation.orders.OrdersUiState
-import com.samanramezani1377.woogit.presentation.product.ProductUiState
 import com.samanramezani1377.woogit.presentation.product.ProductsScreen
 
 @Composable
@@ -100,7 +103,50 @@ internal fun E11AppNavigation(dependencies: V1PresentationDependencies, initialO
             }
         }
         composable("products") {
-            ProductsScreen(state = ProductUiState.Empty, onProductClick = {}, onRetry = {})
+            val storeId = activeStore?.let(::StoreId)
+            if (storeId == null) {
+                navController.navigate("connection")
+            } else {
+                val vm = viewModel<ProductsViewModel>(factory = vmFactory { ProductsViewModel(dependencies) })
+                val state by vm.state.collectAsState()
+                LaunchedEffect(storeId) { vm.load(storeId) }
+                ProductsScreen(
+                    state = state,
+                    onProductClick = { /* Product editor is the next E11 surface. */ },
+                    onRetry = { vm.load(storeId) },
+                )
+            }
+        }
+        composable("settings") {
+            SettingsScreen(
+                storeName = activeStore.orEmpty(),
+                onDisconnect = {
+                    dependencies.onStoreDisconnected()
+                    activeStore = null
+                    navController.navigate("connection") { popUpTo(0) }
+                },
+            )
+        }
+    }
+}
+
+@Composable
+private fun SettingsScreen(storeName: String, onDisconnect: () -> Unit) {
+    GlassScaffold { paddingValues ->
+        Column(
+            Modifier.padding(paddingValues).padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            GlassTopBar(title = "تنظیمات", subtitle = "مدیریت اتصال و حساب فروشگاه")
+            GlassCard {
+                GlassText("فروشگاه متصل")
+                GlassText(storeName, style = androidx.compose.material3.MaterialTheme.typography.bodyMedium.copy(color = GlassTokens.muted))
+            }
+            GlassPrimaryAction(
+                label = "قطع اتصال",
+                onClick = onDisconnect,
+                modifier = Modifier.fillMaxWidth(),
+            )
         }
     }
 }
