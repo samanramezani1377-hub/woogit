@@ -50,10 +50,24 @@ internal fun OrdersScreen(
     modifier: Modifier = Modifier,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
+    var revealError by rememberSaveable { mutableStateOf(false) }
+
     LaunchedEffect(query) {
         delay(300L)
         onSearch(query.trim())
     }
+
+    LaunchedEffect(state) {
+        revealError = state !is OrdersUiState.Error
+        if (state is OrdersUiState.Error) {
+            // A slow first response can briefly surface a transport/timeout error before
+            // the normal request finishes. Keep the initial screen in a loading state for
+            // a short grace period instead of flashing a false failure to the user.
+            delay(3000L)
+            if (state is OrdersUiState.Error) revealError = true
+        }
+    }
+
     Column(modifier.fillMaxSize()) {
         GlassTopBar("سفارش‌ها", "مدیریت سفارش‌های فروشگاه", Modifier.padding(horizontal = 18.dp, vertical = 8.dp))
         GlassSearchField(query, { query = it }, label = "جستجوی سفارش", modifier = Modifier.padding(horizontal = 16.dp))
@@ -61,7 +75,11 @@ internal fun OrdersScreen(
             OrdersUiState.Loading -> OrdersSkeleton(Modifier.weight(1f))
             OrdersUiState.Empty -> EmptyState(Modifier.weight(1f))
             is OrdersUiState.Content -> OrdersList(state, onOrderClick, onLoadMore, Modifier.weight(1f))
-            is OrdersUiState.Error -> ErrorState(state, onRetry, Modifier.weight(1f))
+            is OrdersUiState.Error -> if (revealError) {
+                ErrorState(state, onRetry, Modifier.weight(1f))
+            } else {
+                OrdersSkeleton(Modifier.weight(1f))
+            }
             is OrdersUiState.Offline -> Column(Modifier.weight(1f)) {
                 GlassOfflineState()
                 OrdersList(OrdersUiState.Content(state.cachedOrders, false), onOrderClick, {}, Modifier.weight(1f))
