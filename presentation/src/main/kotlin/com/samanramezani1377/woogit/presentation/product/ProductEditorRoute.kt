@@ -66,8 +66,17 @@ internal fun ProductEditorRoute(dependencies: V1PresentationDependencies, storeI
             val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
             if (bytes != null && bytes.isNotEmpty()) {
                 val mime = context.contentResolver.getType(uri).orEmpty().ifBlank { "image/jpeg" }
-                when (val result = dependencies.uploadMedia(storeId, "woogit-${System.currentTimeMillis()}.jpg", bytes, mime)) {
-                    is CoreResult.Success -> form = editing.copy(imageUrl = result.value.src, imageId = result.value.id?.value?.toString())
+                val extension = mime.substringAfter('/').takeIf { it.isNotBlank() } ?: "jpeg"
+                when (val result = dependencies.uploadMedia(storeId, "woogit-${System.currentTimeMillis()}.$extension", bytes, mime)) {
+                    is CoreResult.Success -> {
+                        val uploaded = result.value
+                        // Keep both references: the URL is the editable/preview value,
+                        // while the Media ID is the authoritative WooCommerce association.
+                        form = editing.copy(
+                            imageUrl = uploaded.src.takeIf { it.isNotBlank() },
+                            imageId = uploaded.id?.value?.toString(),
+                        )
+                    }
                     is CoreResult.Failure -> form = editing.copy(saving = false)
                 }
             }
@@ -108,7 +117,17 @@ internal fun ProductEditorRoute(dependencies: V1PresentationDependencies, storeI
 }
 
 private fun ProductEditorUiState.Editing.toProduct(original: Product?, availableCategories: List<IdName>): Product {
-    val image = imageUrl?.takeIf { it.isNotBlank() }?.let { ProductImage(imageId?.let(::EntityId), it, original?.images?.firstOrNull()?.name, name) }
+    // A freshly uploaded WordPress attachment may have a valid Media ID even when
+    // its URL is temporarily unavailable. The ID is sufficient for WooCommerce to
+    // associate the attachment, so do not drop the image just because imageUrl is blank.
+    val image = if (!imageId.isNullOrBlank() || !imageUrl.isNullOrBlank()) {
+        ProductImage(
+            imageId?.takeIf { it.isNotBlank() }?.let(::EntityId),
+            imageUrl.orEmpty(),
+            original?.images?.firstOrNull()?.name,
+            name,
+        )
+    } else null
     val categoryNames = categories.split(',').map { it.trim() }.filter { it.isNotBlank() }.distinct()
     val cats = categoryNames.mapNotNull { value -> availableCategories.firstOrNull { it.name == value } ?: original?.categories?.firstOrNull { it.name == value } }
     val attrs = attributes.split('|').mapNotNull { raw ->
