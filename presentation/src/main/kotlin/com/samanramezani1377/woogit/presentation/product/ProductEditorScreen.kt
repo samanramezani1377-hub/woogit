@@ -28,9 +28,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.samanramezani1377.woogit.core.domain.model.IdName
-import com.samanramezani1377.woogit.core.domain.model.ProductImage
-import com.samanramezani1377.woogit.core.domain.model.ProductStatus
-import com.samanramezani1377.woogit.core.domain.model.ProductType
 import com.samanramezani1377.woogit.presentation.GlassCard
 import com.samanramezani1377.woogit.presentation.GlassErrorState
 import com.samanramezani1377.woogit.presentation.GlassLoading
@@ -39,6 +36,9 @@ import com.samanramezani1377.woogit.presentation.GlassScaffold
 import com.samanramezani1377.woogit.presentation.GlassText
 import com.samanramezani1377.woogit.presentation.GlassTextField
 import com.samanramezani1377.woogit.presentation.GlassTopBar
+import com.samanramezani1377.woogit.core.domain.model.ProductImage
+import com.samanramezani1377.woogit.core.domain.model.ProductStatus
+import com.samanramezani1377.woogit.core.domain.model.ProductType
 
 @Composable
 internal fun ProductEditorScreen(
@@ -88,6 +88,9 @@ internal fun ProductEditorScreen(
                             AsyncImage(model = url, contentDescription = state.name, modifier = Modifier.fillMaxWidth().height(180.dp).clip(RoundedCornerShape(14.dp)), contentScale = ContentScale.Crop)
                         }
                         GlassTextField(state.imageUrl.orEmpty(), onImageUrlChanged, "آدرس تصویر")
+                        state.imageError?.takeIf { it.isNotBlank() }?.let { error ->
+                            GlassText(error, style = MaterialTheme.typography.bodySmall)
+                        }
                         GlassPrimaryAction(if (imageUploading) "در حال آپلود…" else "انتخاب تصویر از گوشی", onUploadImage, enabled = !imageUploading)
                         GlassPrimaryAction("انتخاب از رسانه‌های سایت", onOpenMediaPicker, enabled = !imageUploading)
                     } }
@@ -118,7 +121,7 @@ internal fun ProductEditorScreen(
                         GlassText("ویژگی‌ها", style = MaterialTheme.typography.titleMedium)
                         GlassTextField(state.attributes, onAttributesChanged, "مثلاً رنگ:قرمز,آبی | سایز:کوچک,بزرگ")
                     } }
-                    GlassPrimaryAction(if (state.saving) "در حال ذخیره…" else "ذخیره محصول", onSave, Modifier.padding(top = 4.dp), enabled = !state.saving && state.name.isNotBlank())
+                    GlassPrimaryAction(if (state.saving) "در حال ذخیره…" else "ذخیره محصول", onSave, Modifier.padding(top = 4.dp), enabled = !state.saving && !imageUploading && state.name.isNotBlank())
                     GlassPrimaryAction("بازگشت", onBack, Modifier.padding(bottom = 20.dp))
                 }
                 is ProductEditorUiState.Error -> { GlassErrorState(state.message); if (state.canRetry) GlassPrimaryAction("تلاش مجدد", onRetry); GlassPrimaryAction("بازگشت", onBack) }
