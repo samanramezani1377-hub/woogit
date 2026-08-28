@@ -42,7 +42,7 @@ internal fun E11AppNavigation(dependencies: V1PresentationDependencies, initialO
         composable(E11Routes.DASHBOARD) {
             val s = activeStore?.let(::StoreId)
             if (s == null) LaunchedEffect(Unit) { navController.navigate(E11Routes.CONNECTION) } else {
-                val vm = viewModel<DashboardViewModel>(key = "dashboard-${s.value}", factory = DashboardViewModelFactory(dependencies, s)); val st by vm.uiState.collectAsState(); LaunchedEffect(s) { vm.refresh() }; val r = st.orders.firstOrNull()
+                val vm = viewModel<DashboardViewModel>(key = "dashboard-${s.value}", factory = DashboardViewModelFactory(dependencies, s)); val st by vm.uiState.collectAsState(); LaunchedEffect(s) { vm.refresh(); vm.startConnectionHealthMonitor() }; val r = st.orders.firstOrNull()
                 DashboardScreen(s.value, st.connectionState == ConnectionState.CONNECTED, st.ordersCount, st.productsCount, st.revenue, st.pendingCount, r?.number, r?.customer?.name.orEmpty(), formatMoney(r?.total), r?.status, { r?.number?.let { navController.navigate(E11Routes.order(it)) } }, { navController.navigate(E11Routes.ORDERS) }, { navController.navigate(E11Routes.PRODUCTS) }, { navController.navigate(E11Routes.SETTINGS) }, { navController.navigate(E11Routes.SYNC) }, { navController.navigate(E11Routes.CONFLICTS) }, DashboardDestination.DASHBOARD, { d -> when (d) { DashboardDestination.DASHBOARD -> Unit; DashboardDestination.ORDERS -> navController.navigate(E11Routes.ORDERS); DashboardDestination.PRODUCTS -> navController.navigate(E11Routes.PRODUCTS); DashboardDestination.SETTINGS -> navController.navigate(E11Routes.SETTINGS) } })
             }
         }
