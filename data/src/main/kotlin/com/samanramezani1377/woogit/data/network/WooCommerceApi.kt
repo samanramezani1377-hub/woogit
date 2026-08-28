@@ -35,7 +35,7 @@ class WooCommerceApi(private val client: HttpClient, private val credentials: Cr
     suspend fun getAttributeTerm(baseUrl: String, attributeId: Long, id: Long) = request(baseUrl, "/wp-json/wc/v3/products/attributes/$attributeId/terms/$id")
     suspend fun createAttributeTerm(baseUrl: String, attributeId: Long, body: String) = request(baseUrl, "/wp-json/wc/v3/products/attributes/$attributeId/terms", "POST", body)
     suspend fun updateAttributeTerm(baseUrl: String, attributeId: Long, id: Long, body: String) = request(baseUrl, "/wp-json/wc/v3/products/attributes/$attributeId/terms/$id", "PUT", body)
-    suspend fun deleteAttributeTerm(baseUrl: String, attributeId: Long, id: Long, force: Boolean = false) = request(baseUrl, "/wp-json/wc/v3/products/attributes/$attributeId/terms", "DELETE", params = params(force))
+    suspend fun deleteAttributeTerm(baseUrl: String, attributeId: Long, id: Long, force: Boolean = false) = request(baseUrl, "/wp-json/wc/v3/products/attributes/$attributeId/terms/$id", "DELETE", params = params(force))
     suspend fun listMedia(baseUrl: String, page: Int = 1, perPage: Int = 30, search: String? = null) = requestPublic(baseUrl, "/wp-json/wp/v2/media", params = params(page, perPage, search))
     suspend fun uploadMedia(baseUrl: String, fileName: String, bytes: ByteArray, mediaType: String) = decodeMediaUpload(baseUrl, fileName, bytes, mediaType)
     suspend fun deleteMedia(baseUrl: String, mediaId: Long, force: Boolean = true) = request(baseUrl, "/wp-json/wp/v2/media/$mediaId", "DELETE", params = params(force))
