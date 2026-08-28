@@ -15,7 +15,7 @@ class WooCommerceApi(private val client: HttpClient, private val credentials: Cr
     suspend fun updateOrder(baseUrl: String, id: Long, body: String) = request(baseUrl, "/wp-json/wc/v3/orders/$id", "PUT", body)
     suspend fun addOrderNote(baseUrl: String, id: Long, body: String) = request(baseUrl, "/wp-json/wc/v3/orders/$id/notes", "POST", body)
     suspend fun deleteOrder(baseUrl: String, id: Long, force: Boolean = false) = request(baseUrl, "/wp-json/wc/v3/orders/$id", "DELETE", params = mapOf("force" to force))
-    suspend fun listProducts(baseUrl: String, page: Int = 1, perPage: Int = 20, search: String? = null) = request(baseUrl, "/wp-json/wc/v3/products", params = params(page, perPage, search))
+    suspend fun listProducts(baseUrl: String, page: Int = 1, perPage: Int = 20, search: String? = null, modifiedAfter: String? = null) = request(baseUrl, "/wp-json/wc/v3/products", params = params(page, perPage, search, null, modifiedAfter))
     suspend fun getProduct(baseUrl: String, id: Long) = request(baseUrl, "/wp-json/wc/v3/products/$id")
     suspend fun createProduct(baseUrl: String, body: String) = request(baseUrl, "/wp-json/wc/v3/products", "POST", body)
     suspend fun updateProduct(baseUrl: String, id: Long, body: String) = request(baseUrl, "/wp-json/wc/v3/products/$id", "PUT", body)
@@ -49,12 +49,7 @@ class WooCommerceApi(private val client: HttpClient, private val credentials: Cr
     }
 
     private suspend fun execute(url: Url, method: String, body: String?, params: Map<String, Any>, queryCredentials: Boolean): HttpResponse {
-        val requestUrl = URLBuilder(url).apply {
-            if (queryCredentials) {
-                parameters.append("consumer_key", credentials.consumerKey)
-                parameters.append("consumer_secret", credentials.consumerSecret)
-            }
-        }.build()
+        val requestUrl = URLBuilder(url).apply { if (queryCredentials) { parameters.append("consumer_key", credentials.consumerKey); parameters.append("consumer_secret", credentials.consumerSecret) } }.build()
         return when (method) {
             "POST" -> client.post(requestUrl) { common(params, queryCredentials); contentType(ContentType.Application.Json); setBody(body ?: "{}") }
             "PUT" -> client.put(requestUrl) { common(params, queryCredentials); contentType(ContentType.Application.Json); setBody(body ?: "{}") }
@@ -69,32 +64,15 @@ class WooCommerceApi(private val client: HttpClient, private val credentials: Cr
         require(url.protocol.name == "https") { "WooCommerce API requires HTTPS" }
         val safeFileName = fileName.substringAfterLast('/').substringAfterLast('\\').ifBlank { "image-${System.currentTimeMillis()}.jpg" }
         val normalizedMediaType = mediaType.ifBlank { "application/octet-stream" }
-        val authenticated = client.post(url) {
-            header(HttpHeaders.Authorization, basicAuth())
-            header(HttpHeaders.Accept, ContentType.Application.Json.toString())
-            header(HttpHeaders.ContentDisposition, "attachment; filename=\"$safeFileName\"")
-            header(HttpHeaders.ContentType, normalizedMediaType)
-            setBody(bytes)
-        }
+        val authenticated = client.post(url) { header(HttpHeaders.Authorization, basicAuth()); header(HttpHeaders.Accept, ContentType.Application.Json.toString()); header(HttpHeaders.ContentDisposition, "attachment; filename=\"$safeFileName\""); header(HttpHeaders.ContentType, normalizedMediaType); setBody(bytes) }
         if (authenticated.status.value != HttpStatusCode.Unauthorized.value) return ApiResponse(authenticated.status.value, authenticated.bodyAsText())
-        val queryAuthenticated = client.post(url) {
-            parameter("consumer_key", credentials.consumerKey)
-            parameter("consumer_secret", credentials.consumerSecret)
-            header(HttpHeaders.Accept, ContentType.Application.Json.toString())
-            header(HttpHeaders.ContentDisposition, "attachment; filename=\"$safeFileName\"")
-            header(HttpHeaders.ContentType, normalizedMediaType)
-            setBody(bytes)
-        }
+        val queryAuthenticated = client.post(url) { parameter("consumer_key", credentials.consumerKey); parameter("consumer_secret", credentials.consumerSecret); header(HttpHeaders.Accept, ContentType.Application.Json.toString()); header(HttpHeaders.ContentDisposition, "attachment; filename=\"$safeFileName\""); header(HttpHeaders.ContentType, normalizedMediaType); setBody(bytes) }
         return ApiResponse(queryAuthenticated.status.value, queryAuthenticated.bodyAsText())
     }
 
-    private fun HttpRequestBuilder.common(params: Map<String, Any>, queryCredentials: Boolean) {
-        if (!queryCredentials) header(HttpHeaders.Authorization, basicAuth())
-        params.forEach { (key, value) -> parameter(key, value) }
-    }
-
+    private fun HttpRequestBuilder.common(params: Map<String, Any>, queryCredentials: Boolean) { if (!queryCredentials) header(HttpHeaders.Authorization, basicAuth()); params.forEach { (key, value) -> parameter(key, value) } }
     private fun basicAuth(): String = "Basic ${Base64.getEncoder().encodeToString("${credentials.consumerKey}:${credentials.consumerSecret}".toByteArray())}"
-    private fun params(page: Int, perPage: Int, search: String? = null, status: String? = null) = buildMap<String, Any> { put("page", page); put("per_page", perPage); if (!search.isNullOrBlank()) put("search", search); if (!status.isNullOrBlank()) put("status", status) }
+    private fun params(page: Int, perPage: Int, search: String? = null, status: String? = null, modifiedAfter: String? = null) = buildMap<String, Any> { put("page", page); put("per_page", perPage); if (!search.isNullOrBlank()) put("search", search); if (!status.isNullOrBlank()) put("status", status); if (!modifiedAfter.isNullOrBlank()) { put("modified_after", modifiedAfter); put("dates_are_gmt", true) } }
     private fun params(value: Boolean) = mapOf<String, Any>("force" to value)
 }
 
