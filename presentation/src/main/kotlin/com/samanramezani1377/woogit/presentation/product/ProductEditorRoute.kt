@@ -64,11 +64,12 @@ internal fun ProductEditorRoute(dependencies: V1PresentationDependencies, storeI
         mediaUploading = true
         try {
             val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-            if (bytes == null || bytes.isEmpty()) return@LaunchedEffect
-            val mime = context.contentResolver.getType(uri).orEmpty().ifBlank { "image/jpeg" }
-            when (val result = dependencies.uploadMedia(storeId, "woogit-${System.currentTimeMillis()}.jpg", bytes, mime)) {
-                is CoreResult.Success -> form = editing.copy(imageUrl = result.value.src)
-                is CoreResult.Failure -> form = editing.copy(saving = false)
+            if (bytes != null && bytes.isNotEmpty()) {
+                val mime = context.contentResolver.getType(uri).orEmpty().ifBlank { "image/jpeg" }
+                when (val result = dependencies.uploadMedia(storeId, "woogit-${System.currentTimeMillis()}.jpg", bytes, mime)) {
+                    is CoreResult.Success -> form = editing.copy(imageUrl = result.value.src)
+                    is CoreResult.Failure -> form = editing.copy(saving = false)
+                }
             }
         } finally { mediaUploading = false }
     }
@@ -81,9 +82,14 @@ internal fun ProductEditorRoute(dependencies: V1PresentationDependencies, storeI
     val editing = form
     when {
         editing != null -> ProductEditorScreen(
-            state = editing, availableCategories = availableCategories, availableMedia = availableMedia, mediaPickerOpen = mediaPickerOpen,
-            mediaLoading = mediaUploading || mediaState is FeatureUiState.Loading,
-            onOpenMediaPicker = { mediaPickerOpen = true }, onCloseMediaPicker = { mediaPickerOpen = false },
+            state = editing,
+            availableCategories = availableCategories,
+            availableMedia = availableMedia,
+            mediaPickerOpen = mediaPickerOpen,
+            mediaLoading = mediaState is FeatureUiState.Loading,
+            imageUploading = mediaUploading,
+            onOpenMediaPicker = { mediaPickerOpen = true },
+            onCloseMediaPicker = { mediaPickerOpen = false },
             onPickMedia = { media -> form = editing.copy(imageUrl = media.src); mediaPickerOpen = false },
             onUploadImage = { imagePicker.launch("image/*") },
             onNameChanged = { form = editing.copy(name = it) }, onSkuChanged = { form = editing.copy(sku = it) },
