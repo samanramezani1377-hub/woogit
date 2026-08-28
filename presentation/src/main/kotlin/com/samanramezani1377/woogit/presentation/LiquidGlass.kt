@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -23,11 +25,19 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.kyant.backdrop.backdrops.LayerBackdrop
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.kyant.backdrop.drawBackdrop
+import com.kyant.backdrop.effects.blur
+import com.kyant.backdrop.effects.lens
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.hazeEffect
 import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
+
+private val LocalLiquidBackdrop = compositionLocalOf<LayerBackdrop?> { null }
 
 private val LiquidBackground = Color(0xFFEFF1F7)
 private val MintBlob = Color(0xFFBEEFDC)
@@ -36,12 +46,18 @@ private val LavenderBlob = Color(0xFFD8CEFF)
 private val SkyBlob = Color(0xFFC6E6FF)
 private val Ink = Color(0xFF1B1F2A)
 
+/**
+ * Full-screen visual foundation. Kyant0's backdrop captures only the background
+ * layer, so glass surfaces can refract the live pixels behind them instead of
+ * merely painting a translucent gradient.
+ */
 @Composable
 fun LiquidGlassEnvironment(
     modifier: Modifier = Modifier,
     content: @Composable BoxScope.(HazeState) -> Unit,
 ) {
     val hazeState = remember { HazeState() }
+    val liquidBackdrop = rememberLayerBackdrop()
     val transition = rememberInfiniteTransition(label = "liquid-glass-motion")
     val drift = transition.animateFloat(
         initialValue = 0f,
@@ -51,24 +67,32 @@ fun LiquidGlassEnvironment(
     )
 
     Box(modifier = modifier.fillMaxSize().background(LiquidBackground)) {
-        AmbientBlob(Modifier.offset(x = (-105 + drift.value * 10f).dp, y = (-65).dp), 330.dp, MintBlob)
-        AmbientBlob(Modifier.offset(x = (245 - drift.value * 10f).dp, y = (20 + drift.value * 8f).dp), 320.dp, PeachBlob)
-        AmbientBlob(Modifier.offset(x = (-85 + drift.value * 8f).dp, y = 570.dp), 350.dp, LavenderBlob)
-        AmbientBlob(Modifier.offset(x = (215 - drift.value * 8f).dp, y = (505 - drift.value * 6f).dp), 340.dp, SkyBlob)
-
         Box(
             Modifier
                 .fillMaxSize()
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(Color.White.copy(.46f), Color.White.copy(.12f), Color.Transparent),
-                        radius = 1250f,
-                    ),
-                )
-                .hazeSource(state = hazeState, zIndex = 0f),
-        )
+                .layerBackdrop(liquidBackdrop),
+        ) {
+            AmbientBlob(Modifier.offset(x = (-105 + drift.value * 10f).dp, y = (-65).dp), 330.dp, MintBlob)
+            AmbientBlob(Modifier.offset(x = (245 - drift.value * 10f).dp, y = (20 + drift.value * 8f).dp), 320.dp, PeachBlob)
+            AmbientBlob(Modifier.offset(x = (-85 + drift.value * 8f).dp, y = 570.dp), 350.dp, LavenderBlob)
+            AmbientBlob(Modifier.offset(x = (215 - drift.value * 8f).dp, y = (505 - drift.value * 6f).dp), 340.dp, SkyBlob)
 
-        content(hazeState)
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.radialGradient(
+                            colors = listOf(Color.White.copy(.46f), Color.White.copy(.12f), Color.Transparent),
+                            radius = 1250f,
+                        ),
+                    )
+                    .hazeSource(state = hazeState, zIndex = 0f),
+            )
+        }
+
+        CompositionLocalProvider(LocalLiquidBackdrop provides liquidBackdrop) {
+            content(hazeState)
+        }
 
         Box(
             Modifier
@@ -104,15 +128,30 @@ fun Modifier.liquidGlass(
     shape: RoundedCornerShape = RoundedCornerShape(26.dp),
     material: dev.chrisbanes.haze.HazeStyle = HazeMaterials.thin(),
     elevation: Dp = 8.dp,
-): Modifier = this
-    .shadow(elevation, shape, ambientColor = Ink.copy(.11f), spotColor = Ink.copy(.09f))
-    .hazeEffect(state = hazeState, style = material)
-    .background(
-        Brush.verticalGradient(
-            colors = listOf(Color.White.copy(.58f), Color.White.copy(.32f), Color.White.copy(.17f)),
-        ),
-        shape,
-    )
+): Modifier {
+    val backdrop = LocalLiquidBackdrop.current
+    return if (backdrop != null) {
+        this
+            .drawBackdrop(
+                backdrop = backdrop,
+                shape = { shape },
+                effects = {
+                    blur(8.dp.toPx())
+                    lens(
+                        refractionHeight = 18.dp.toPx(),
+                        refractionAmount = 30.dp.toPx(),
+                        depthEffect = true,
+                        chromaticAberration = true,
+                    )
+                },
+            )
+            .shadow(elevation, shape, ambientColor = Ink.copy(.11f), spotColor = Ink.copy(.09f))
+    } else {
+        this
+            .shadow(elevation, shape, ambientColor = Ink.copy(.11f), spotColor = Ink.copy(.09f))
+            .hazeEffect(state = hazeState, style = material)
+    }
+}
 
 @Composable
 fun LiquidGlassSurface(
@@ -126,7 +165,7 @@ fun LiquidGlassSurface(
             .liquidGlass(hazeState, shape, elevation = 10.dp)
             .background(
                 Brush.linearGradient(
-                    colors = listOf(Color.White.copy(.62f), Color.White.copy(.12f), Color.White.copy(.20f)),
+                    colors = listOf(Color.White.copy(.58f), Color.White.copy(.12f), Color.White.copy(.20f)),
                 ),
                 shape,
             ),
