@@ -38,15 +38,8 @@ internal fun ProductEditorScreen(
     modifier: Modifier = Modifier,
 ) {
     GlassScaffold(modifier) { paddingValues ->
-        Column(
-            Modifier.fillMaxSize().padding(paddingValues).padding(horizontal = 16.dp, vertical = 12.dp)
-                .verticalScroll(rememberScrollState()).imePadding(),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            GlassTopBar(
-                title = if ((state as? ProductEditorUiState.Editing)?.productId == null) "افزودن محصول" else "ویرایش محصول",
-                subtitle = "اطلاعات کامل محصول",
-            )
+        Column(Modifier.fillMaxSize().padding(paddingValues).padding(horizontal = 16.dp, vertical = 12.dp).verticalScroll(rememberScrollState()).imePadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            GlassTopBar(if ((state as? ProductEditorUiState.Editing)?.productId == null) "افزودن محصول" else "ویرایش محصول", "اطلاعات کامل محصول")
             when (state) {
                 ProductEditorUiState.Loading -> GlassLoading("در حال بارگذاری محصول…")
                 is ProductEditorUiState.Editing -> {
@@ -69,12 +62,7 @@ internal fun ProductEditorScreen(
                             GlassTextField(state.attributes, onAttributesChanged, "ویژگی‌ها (مثلاً رنگ:قرمز|آبی)")
                         }
                     }
-                    GlassPrimaryAction(
-                        if (state.saving) "در حال ذخیره…" else "ذخیره محصول",
-                        onSave,
-                        Modifier.padding(top = 4.dp),
-                        enabled = !state.saving && state.name.isNotBlank(),
-                    )
+                    GlassPrimaryAction(if (state.saving) "در حال ذخیره…" else "ذخیره محصول", onSave, Modifier.padding(top = 4.dp), enabled = !state.saving && state.name.isNotBlank())
                     GlassPrimaryAction("بازگشت", onBack, Modifier.padding(bottom = 20.dp))
                 }
                 is ProductEditorUiState.Error -> {
