@@ -1,0 +1,3 @@
+[submodule "tools/compose-performance-skills"]
+	path = tools/compose-performance-skills
+	url = https://github.com/skydoves/compose-performance-skills.git
