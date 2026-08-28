@@ -36,7 +36,6 @@ jobs:
         with:
           distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
-          cache: gradle
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
         with:
@@ -55,7 +54,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: ${{ env.GRADLE_VERSION }}
-          cache-cleanup: always
+          cache-cleanup: on-success
       - name: Verify toolchain
         shell: bash
         run: |
@@ -69,25 +68,25 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gradle assembleDebug --console=plain --warning-mode=all --stacktrace --no-daemon 2>&1 | tee debug-ci.log
+          gradle assembleDebug --console=plain --warning-mode=all --stacktrace 2>&1 | tee debug-ci.log
       - name: Build release
         id: release_build
         shell: bash
         run: |
           set -euo pipefail
-          gradle assembleRelease --console=plain --warning-mode=all --stacktrace --no-daemon 2>&1 | tee release-ci.log
+          gradle assembleRelease --console=plain --warning-mode=all --stacktrace 2>&1 | tee release-ci.log
       - name: Unit tests
         id: tests
         shell: bash
         run: |
           set -euo pipefail
-          gradle test --console=plain --warning-mode=all --stacktrace --no-daemon 2>&1 | tee test-ci.log
+          gradle test --console=plain --warning-mode=all --stacktrace 2>&1 | tee test-ci.log
       - name: Android lint
         id: lint
         shell: bash
         run: |
           set -euo pipefail
-          gradle lint --console=plain --warning-mode=all --stacktrace --no-daemon 2>&1 | tee lint-ci.log
+          gradle lint --console=plain --warning-mode=all --stacktrace 2>&1 | tee lint-ci.log
       - name: Verify APK
         id: verify_apk
         shell: bash
