@@ -1,6 +1,7 @@
 package com.samanramezani1377.woogit.presentation.dashboard
 
 import com.samanramezani1377.woogit.core.domain.model.Order
+import com.samanramezani1377.woogit.core.domain.model.OrderStatus
 import com.samanramezani1377.woogit.core.domain.model.Product
 import java.text.NumberFormat
 import java.util.Locale
@@ -12,25 +13,27 @@ internal object DashboardStateMapper {
     fun productsCount(products: List<Product>): String = products.size.toString()
 
     fun pendingCount(orders: List<Order>): String =
-        orders.count { it.status.name.equals("PENDING", ignoreCase = true) }.toString()
+        orders.count { it.status == OrderStatus.PENDING }.toString()
 
     fun revenue(orders: List<Order>): String {
-        // Revenue must contain only successfully completed/processing paid sales;
-        // cancelled, refunded and failed orders must never inflate the dashboard.
-        val total = orders
+        // Only genuinely successful sales contribute to revenue. Explicitly exclude
+        // every non-final/non-success status, regardless of the payment flag.
+        val totalRial = orders
             .asSequence()
             .filter { order ->
-                when (order.status) {
-                    com.samanramezani1377.woogit.core.domain.model.OrderStatus.COMPLETED,
-                    com.samanramezani1377.woogit.core.domain.model.OrderStatus.PROCESSING -> true
-                    else -> false
-                }
+                order.status == OrderStatus.COMPLETED ||
+                    order.status == OrderStatus.PROCESSING
             }
-            .filter { it.payment?.paid != false }
+            .filter { order -> order.payment?.paid == true }
             .sumOf { it.total?.toDoubleOrNull() ?: 0.0 }
+
+        // WooCommerce/Iranian stores commonly expose prices in IRT (rial) while the
+        // dashboard is labelled in toman. Convert exactly once at presentation time.
+        val totalToman = kotlin.math.round(totalRial / 10.0)
+
         return NumberFormat.getNumberInstance(Locale.US).apply {
             maximumFractionDigits = 0
             minimumFractionDigits = 0
-        }.format(total)
+        }.format(totalToman)
     }
 }
