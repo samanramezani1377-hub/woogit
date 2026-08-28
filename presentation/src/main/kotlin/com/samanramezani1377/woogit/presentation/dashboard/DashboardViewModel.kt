@@ -45,11 +45,11 @@ internal class DashboardViewModel(
         if (healthMonitorStarted) return
         healthMonitorStarted = true
         viewModelScope.launch {
-            var delayMillis = 10_000L
+            var interval = 10_000L
             while (isActive) {
-                val result = checkConnection()
-                delayMillis = if (result == ConnectionState.CONNECTED) 10_000L else (delayMillis * 2).coerceAtMost(60_000L)
-                delay(delayMillis)
+                val state = checkConnection()
+                interval = if (state == ConnectionState.CONNECTED) 10_000L else (interval * 2).coerceAtMost(60_000L)
+                delay(interval)
             }
         }
     }
@@ -62,17 +62,17 @@ internal class DashboardViewModel(
         if (healthCheckInFlight) return _uiState.value.connectionState
         healthCheckInFlight = true
         return try {
-            val connection = withTimeoutOrNull(5_000L) {
+            val state = withTimeoutOrNull(5_000L) {
                 when (val result = dependencies.getConnectionState(storeId)) {
                     is CoreResult.Success -> result.value
                     is CoreResult.Failure -> ConnectionState.ERROR
                 }
             } ?: ConnectionState.ERROR
             _uiState.value = _uiState.value.copy(
-                connectionState = connection,
+                connectionState = state,
                 lastConnectionCheckAtMillis = kotlin.time.Clock.System.now().toEpochMilliseconds(),
             )
-            connection
+            state
         } catch (e: CancellationException) {
             throw e
         } catch (_: Throwable) {
