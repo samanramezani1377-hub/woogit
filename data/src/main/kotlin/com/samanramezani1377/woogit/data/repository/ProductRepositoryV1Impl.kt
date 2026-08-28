@@ -34,11 +34,7 @@ private fun Product.toDto(operationId: String? = null) = WooProductTypedDto(
     short_description = shortDescription, status = status.name.lowercase(), type = type.name.lowercase(),
     regular_price = pricing.regular, sale_price = pricing.sale, on_sale = pricing.onSale,
     stock_quantity = stock?.quantity,
-    stock_status = when (stock?.status) {
-        StockStatus.OUT_OF_STOCK -> "outofstock"
-        StockStatus.ON_BACKORDER -> "onbackorder"
-        StockStatus.IN_STOCK, null -> "instock"
-    },
+    stock_status = when (stock?.status) { StockStatus.OUT_OF_STOCK -> "outofstock"; StockStatus.ON_BACKORDER -> "onbackorder"; StockStatus.IN_STOCK, null -> "instock" },
     manage_stock = stock?.manageStock ?: false,
     images = images.map { image -> WooImageTypedDto(image.id?.value?.toLongOrNull(), image.src, image.name, image.alt) },
     categories = categories.map { category -> WooCategoryDto(category.id.value.toLongOrNull() ?: 0L, category.name) },
@@ -56,15 +52,25 @@ class ProductRepositoryV1Impl(
     )
 
     override suspend fun list(storeId: StoreId, page: Int, perPage: Int, search: String?): CoreResult<List<Product>> {
-        val cached = if (page == 1) local.list(storeId) else null
-        return provider.client(storeId).fold(
-            { (store, api) -> api.products(store.baseUrl, page, perPage, search).fold(
-                onSuccess = { remote -> remote.map(WooProductTypedDto::toDomain).also { values -> values.forEach { local.upsert(storeId, it) } }.let { CoreResult.Success(it) } },
-                onFailure = { error -> cached ?: CoreResult.Failure(error.toDomain()) },
-            ) },
-            { cached ?: CoreResult.Failure(it) },
-        )
+        // Navigation/list rendering is local-first. Remote refresh is deliberately explicit so
+        // changing screens never causes a full catalog download.
+        if (page == 1 && search.isNullOrBlank()) {
+            val cached = local.list(storeId)
+            if (cached is CoreResult.Success && cached.value.isNotEmpty()) return cached
+        }
+        return refresh(storeId, page, perPage, search)
     }
+
+    override suspend fun refresh(storeId: StoreId, page: Int, perPage: Int): CoreResult<List<Product>> =
+        refresh(storeId, page, perPage, null)
+
+    private suspend fun refresh(storeId: StoreId, page: Int, perPage: Int, search: String?): CoreResult<List<Product>> = provider.client(storeId).fold(
+        { (store, api) -> api.products(store.baseUrl, page, perPage, search).fold(
+            onSuccess = { remote -> remote.map(WooProductTypedDto::toDomain).also { values -> values.forEach { local.upsert(storeId, it) } }.let { CoreResult.Success(it) } },
+            onFailure = { error -> if (page == 1 && search.isNullOrBlank()) local.list(storeId) else CoreResult.Failure(error.toDomain()) },
+        ) },
+        { error -> if (page == 1 && search.isNullOrBlank()) local.list(storeId) else CoreResult.Failure(error) },
+    )
 
     override suspend fun create(storeId: StoreId, product: Product): CoreResult<Product> {
         val payload = productJson.encodeToString(product.toDto())
@@ -112,16 +118,7 @@ private fun Throwable?.isRetryableHttp() = this is HttpApiException && statusCod
 private fun Throwable?.toDomain(): DomainError = when (this) {
     is HttpApiException -> {
         val message = WordPressErrorMapper.message(statusCode, body)
-        when (statusCode) {
-            401 -> DomainError.Authentication(message)
-            403 -> DomainError.Permission(message)
-            404 -> DomainError.NotFound("remote", message)
-            409 -> DomainError.Conflict(message)
-            422, 400, 405, 415 -> DomainError.Validation(message)
-            429 -> DomainError.RateLimited(message)
-            in 500..599 -> DomainError.Server(message)
-            else -> DomainError.Unknown(message)
-        }
+        when (statusCode) { 401 -> DomainError.Authentication(message); 403 -> DomainError.Permission(message); 404 -> DomainError.NotFound("remote", message); 409 -> DomainError.Conflict(message); 422, 400, 405, 415 -> DomainError.Validation(message); 429 -> DomainError.RateLimited(message); in 500..599 -> DomainError.Server(message); else -> DomainError.Unknown(message) }
     }
     null -> DomainError.Unknown("خطای نامشخصی در ارتباط با فروشگاه رخ داد. لطفاً دوباره تلاش کنید.")
     else -> DomainError.Network(message ?: "ارتباط با فروشگاه برقرار نشد. اتصال اینترنت و آدرس فروشگاه را بررسی کنید.")
