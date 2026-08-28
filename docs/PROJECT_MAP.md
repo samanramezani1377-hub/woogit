@@ -1,107 +1,64 @@
 # WooGit — Project Documentation Map
 
-این فایل نقشه‌ی مرکزی مستندات پروژه است. قبل از هر تصمیم معماری، قابلیت جدید یا تغییر مهم، باید مشخص شود تصمیم مربوط به کدام سند است.
+این فایل نقشه‌ی مرکزی مستندات پروژه است.
 
-## Source of Truth
+## Source of Truth hierarchy
 
-### 1. PRODUCT_VISION.md
-مرجع اصلی «چه چیزی می‌سازیم و چرا؟»
+### 1. `CURRENT_IMPLEMENTATION.md`
+مرجع وضعیت واقعی implementation فعلی است؛ شامل مرزهای اجرایی، رفتارهای پیاده‌شده و قراردادهای حساس مانند مسیر تصویر محصول.
 
-شامل:
-- سه محور اصلی محصول
-- اولویت و فوریت هر محور
-- اهداف UX
-- داشبورد
-- Multi-Store vision
-- اصل عدم حذف قابلیت‌های قبلی
+### 2. `PRODUCT_VISION.md`
+مرجع «چه چیزی می‌سازیم و چرا؟» است.
 
-### 2. ARCHITECTURE.md
-مرجع اصلی «چطور باید ساخته شود؟»
+### 3. `ARCHITECTURE.md`
+مرجع «چطور باید ساخته شود؟» است.
 
-شامل:
-- Core-Out Architecture
-- KMP
-- Clean Architecture
-- Local-first / Offline-first
-- Sync Engine
-- Data Versioning
-- Store isolation
-- AI/Assistant boundary
+### 4. `V1_*` contracts
+قراردادهای اجرایی V1 هستند و باید با implementation فعلی سازگار بمانند.
 
-### 3. NOTIFICATIONS_AND_EVENTS.md
-مرجع اصلی «رویدادها و اعلان‌ها چگونه باید طراحی شوند؟»
+### 5. `ROADMAP.md`
+مرجع قابلیت‌های آینده و اولویت‌بندی نسخه‌هاست؛ roadmap به‌تنهایی implementation را اثبات نمی‌کند.
 
-شامل:
-- New Order Notification
-- Event-driven Core
-- Notification Center
-- Live information
-- User Tracker
-- Login events
-- Event subscriptions/preferences
-- Multi-Store event source
-- Chatbot/Site Assistant integration boundary
+## موضوعات اصلی
 
-### 4. ORDERS_AND_PRODUCTS.md
-مرجع اصلی نیازمندی‌های عملیاتی سفارش و محصول.
+- `ORDERS_AND_PRODUCTS.md` — رفتار عملیاتی سفارش و محصول.
+- `V1_API_CONTRACT.md` — مرز WooCommerce REST API و قرارداد mutationها.
+- `CONNECTION_AND_SYNC.md` — اتصال، Sync و reconciliation.
+- `OFFLINE_QUEUE_AND_PUSH.md` — queue و push.
+- `CONFLICT_RESOLUTION.md` — conflict handling.
+- `NOTIFICATIONS_AND_EVENTS.md` — event و notification.
+- `SECURITY_AND_PERMISSIONS.md` — امنیت و سطح دسترسی.
+- `PROJECT_MAP.md` — همین نقشه.
 
-باید شامل:
-- خلاصه سفارش
-- جزئیات کامل سفارش
-- عملیات سفارش
-- مدیریت کامل محصول
-- افزودن سریع محصول
-- ویرایش سریع محصول
+## قوانین قطعی مستندات
 
-### 5. SECURITY_AND_PERMISSIONS.md
-مرجع احراز هویت، نقش‌ها، سطح دسترسی، امنیت Store Connection و حریم خصوصی.
-
-### 6. ROADMAP.md
-مرجع اولویت نسخه‌ها و اینکه چه چیزی در V1، بعد از V1 و در آینده فعال می‌شود.
-
-## قوانین مدیریت مستندات
-
-1. README نباید تبدیل به محل نگهداری تمام جزئیات شود.
-2. README فقط معرفی پروژه و لینک/راهنمای ورود به مستندات است.
-3. هیچ قابلیت موجود بدون تصمیم صریح حذف نمی‌شود.
-4. هر قابلیت آینده باید دو وضعیت داشته باشد:
-   - معماری از امروز آماده باشد.
-   - فعال‌سازی/پیاده‌سازی در نسخه‌ی مناسب انجام شود.
-5. تصمیم‌های متناقض باید در یک سند واحد حل شوند؛ نباید یک تصمیم در چند فایل با متن متفاوت تکرار شود.
-6. اگر یک تصمیم روی چند بخش اثر دارد، سند اصلی آن تصمیم باید مشخص باشد و سایر فایل‌ها فقط به آن ارجاع دهند.
-7. هر پاسخ جدید کاربر که یک تصمیم محصولی یا معماری محسوب شود، باید قبل از ادامه‌ی سؤال بعدی در سند مربوط ثبت شود.
-8. تغییرات مستندات باید commit جداگانه و با پیام واضح انجام شوند.
+1. دستور صریح و جدید کاربر بر مستندات قبلی مقدم است.
+2. بعد از تصمیم جدید، سند مربوط باید به‌روزرسانی شود.
+3. README نمای کلی است؛ جزئیات در docs نگهداری می‌شوند.
+4. هیچ قابلیت موجود بدون تصمیم صریح حذف نمی‌شود.
+5. قابلیت آینده نباید به‌عنوان implemented نوشته شود.
+6. تغییرات کد باید حداقلی باشند و diff آن‌ها قبل از commit بررسی شود.
+7. برای رفع CI نباید منطق موجود حذف یا با نسخه ناقص جایگزین شود.
+8. تغییر مستندات نباید به‌صورت ناخواسته کد یا قرارداد اجرایی را تغییر دهد.
 
 ## Knowledge Graph
 
-برای پروژه یک مدل ذهنی/گراف دانش سبک نگه می‌داریم، اما فعلاً آن را به‌صورت یک فایل Mermaid نگه می‌داریم تا بدون ابزار خارجی قابل مشاهده و نسخه‌بندی باشد.
-
 ```mermaid
 flowchart TD
-    Product[WooGit Product]
-    Product --> Immediate[New Order Notification]
-    Product --> Orders[Orders Management]
-    Product --> Products[Product Management]
-    Product --> Dashboard[Operational Dashboard]
-
-    Immediate --> Events[Event Core]
-    Orders --> Core[Shared Core]
+    Product[WooGit]
+    Product --> Dashboard[Dashboard]
+    Product --> Orders[Orders]
+    Product --> Products[Products]
+    Product --> Notifications[Notifications]
+    Dashboard --> Core[Core]
+    Orders --> Core
     Products --> Core
-    Events --> Core
-    Dashboard --> Core
-
-    Core --> Sync[Sync Engine]
+    Notifications --> Core
     Core --> Local[Local Data]
-    Core --> Store[Store Connection]
-    Core --> KMP[Kotlin Multiplatform]
-
-    Events --> Tracker[Future User Tracker]
-    Events --> Live[Future Live Notification Center]
-    Core --> Assistant[Future AI / Site Assistant]
-    Tracker --> Assistant
-    Live --> Assistant
-
+    Core --> Sync[Sync Engine]
+    Core --> Store[WooCommerce Store]
+    Products --> Media[WooCommerce Media]
+    Media --> ProductImage[Product Image Association]
     Store --> Multi[Future Multi-Store]
-    Multi --> Dashboard
-    Multi --> Events
+    Core --> Assistant[Future Assistant Boundary]
 ```
