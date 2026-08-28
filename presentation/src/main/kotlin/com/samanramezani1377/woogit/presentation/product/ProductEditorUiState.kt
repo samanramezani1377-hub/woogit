@@ -17,6 +17,7 @@ internal sealed interface ProductEditorUiState {
         val stock: String,
         val imageUrl: String?,
         val imageId: String? = null,
+        val imageError: String? = null,
         val categories: String,
         val attributes: String,
         val status: ProductStatus = ProductStatus.DRAFT,
