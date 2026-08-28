@@ -23,72 +23,64 @@ import com.samanramezani1377.woogit.presentation.GlassTopBar
 internal fun ProductEditorScreen(
     state: ProductEditorUiState,
     onNameChanged: (String) -> Unit,
+    onSkuChanged: (String) -> Unit,
+    onShortDescriptionChanged: (String) -> Unit,
     onDescriptionChanged: (String) -> Unit,
     onPriceChanged: (String) -> Unit,
+    onSalePriceChanged: (String) -> Unit,
     onStockChanged: (String) -> Unit,
-    onMediaClick: () -> Unit,
+    onImageUrlChanged: (String) -> Unit,
+    onCategoriesChanged: (String) -> Unit,
+    onAttributesChanged: (String) -> Unit,
     onSave: () -> Unit,
     onRetry: () -> Unit,
+    onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     GlassScaffold(modifier) { paddingValues ->
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(horizontal = 16.dp, vertical = 12.dp)
-                .verticalScroll(rememberScrollState())
-                .imePadding(),
+            Modifier.fillMaxSize().padding(paddingValues).padding(horizontal = 16.dp, vertical = 12.dp)
+                .verticalScroll(rememberScrollState()).imePadding(),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             GlassTopBar(
                 title = if ((state as? ProductEditorUiState.Editing)?.productId == null) "افزودن محصول" else "ویرایش محصول",
-                subtitle = "اطلاعات محصول",
+                subtitle = "اطلاعات کامل محصول",
             )
-
             when (state) {
                 ProductEditorUiState.Loading -> GlassLoading("در حال بارگذاری محصول…")
                 is ProductEditorUiState.Editing -> {
                     GlassCard {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            GlassTextField(
-                                value = state.name,
-                                onValueChange = onNameChanged,
-                                label = "نام محصول",
-                            )
-                            GlassTextField(
-                                value = state.description,
-                                onValueChange = onDescriptionChanged,
-                                label = "توضیحات",
-                            )
-                            GlassTextField(
-                                value = state.price,
-                                onValueChange = onPriceChanged,
-                                label = "قیمت",
-                            )
-                            GlassTextField(
-                                value = state.stock,
-                                onValueChange = onStockChanged,
-                                label = "موجودی",
-                            )
+                            GlassTextField(state.name, onNameChanged, "نام محصول")
+                            GlassTextField(state.sku, onSkuChanged, "SKU")
+                            GlassTextField(state.shortDescription, onShortDescriptionChanged, "توضیح کوتاه")
+                            GlassTextField(state.description, onDescriptionChanged, "توضیحات")
+                            GlassTextField(state.price, onPriceChanged, "قیمت اصلی")
+                            GlassTextField(state.salePrice, onSalePriceChanged, "قیمت فروش ویژه")
+                            GlassTextField(state.stock, onStockChanged, "موجودی")
+                            GlassTextField(state.imageUrl.orEmpty(), onImageUrlChanged, "آدرس تصویر")
+                        }
+                    }
+                    GlassCard {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            GlassText("دسته‌بندی‌ها و ویژگی‌ها")
+                            GlassTextField(state.categories, onCategoriesChanged, "دسته‌بندی‌ها (با کاما جدا کنید)")
+                            GlassTextField(state.attributes, onAttributesChanged, "ویژگی‌ها (مثلاً رنگ:قرمز|آبی)")
                         }
                     }
                     GlassPrimaryAction(
-                        label = if (state.imageUrl == null) "انتخاب تصویر" else "تغییر تصویر",
-                        onClick = onMediaClick,
-                    )
-                    GlassPrimaryAction(
-                        label = if (state.saving) "در حال ذخیره…" else "ذخیره محصول",
-                        onClick = onSave,
-                        modifier = Modifier.padding(bottom = 20.dp),
+                        if (state.saving) "در حال ذخیره…" else "ذخیره محصول",
+                        onSave,
+                        Modifier.padding(top = 4.dp),
                         enabled = !state.saving && state.name.isNotBlank(),
                     )
+                    GlassPrimaryAction("بازگشت", onBack, Modifier.padding(bottom = 20.dp))
                 }
                 is ProductEditorUiState.Error -> {
                     GlassErrorState(state.message)
-                    if (state.canRetry) {
-                        GlassPrimaryAction("تلاش مجدد", onRetry)
-                    }
+                    if (state.canRetry) GlassPrimaryAction("تلاش مجدد", onRetry)
+                    GlassPrimaryAction("بازگشت", onBack)
                 }
                 ProductEditorUiState.Saved -> GlassCard { GlassText("محصول با موفقیت ذخیره شد.") }
             }
