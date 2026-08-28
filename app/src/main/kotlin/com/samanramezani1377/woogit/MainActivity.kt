@@ -6,9 +6,8 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.mutableStateOf
+import androidx.activity.compose.setContent
 import androidx.core.app.ActivityCompat
 import com.samanramezani1377.woogit.presentation.E11ReleaseApp
 import com.samanramezani1377.woogit.presentation.WooGitTheme
@@ -18,7 +17,6 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
         notificationOrderId.value = intentOrderId(intent)
         requestNotificationPermissionIfNeeded()
         val composition = (application as WooGitApplication).composition
