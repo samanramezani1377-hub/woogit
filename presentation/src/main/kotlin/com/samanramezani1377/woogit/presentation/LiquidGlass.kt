@@ -31,11 +31,6 @@ import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
-import dev.chrisbanes.haze.HazeState
-import dev.chrisbanes.haze.hazeEffect
-import dev.chrisbanes.haze.hazeSource
-import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
-import dev.chrisbanes.haze.materials.HazeMaterials
 
 private val LocalLiquidBackdrop = compositionLocalOf<LayerBackdrop?> { null }
 
@@ -46,17 +41,11 @@ private val LavenderBlob = Color(0xFFD8CEFF)
 private val SkyBlob = Color(0xFFC6E6FF)
 private val Ink = Color(0xFF1B1F2A)
 
-/**
- * Full-screen visual foundation. Kyant0's backdrop captures only the background
- * layer, so glass surfaces can refract the live pixels behind them instead of
- * merely painting a translucent gradient.
- */
 @Composable
 fun LiquidGlassEnvironment(
     modifier: Modifier = Modifier,
-    content: @Composable BoxScope.(HazeState) -> Unit,
+    content: @Composable BoxScope.() -> Unit,
 ) {
-    val hazeState = remember { HazeState() }
     val liquidBackdrop = rememberLayerBackdrop()
     val transition = rememberInfiniteTransition(label = "liquid-glass-motion")
     val drift = transition.animateFloat(
@@ -85,13 +74,12 @@ fun LiquidGlassEnvironment(
                             colors = listOf(Color.White.copy(.46f), Color.White.copy(.12f), Color.Transparent),
                             radius = 1250f,
                         ),
-                    )
-                    .hazeSource(state = hazeState, zIndex = 0f),
+                    ),
             )
         }
 
         CompositionLocalProvider(LocalLiquidBackdrop provides liquidBackdrop) {
-            content(hazeState)
+            content()
         }
 
         Box(
@@ -121,12 +109,9 @@ private fun AmbientBlob(modifier: Modifier, size: Dp, color: Color) {
     )
 }
 
-@OptIn(ExperimentalHazeMaterialsApi::class)
 @Composable
 fun Modifier.liquidGlass(
-    hazeState: HazeState,
     shape: RoundedCornerShape = RoundedCornerShape(26.dp),
-    material: dev.chrisbanes.haze.HazeStyle = HazeMaterials.thin(),
     elevation: Dp = 8.dp,
 ): Modifier {
     val backdrop = LocalLiquidBackdrop.current
@@ -147,22 +132,19 @@ fun Modifier.liquidGlass(
             )
             .shadow(elevation, shape, ambientColor = Ink.copy(.11f), spotColor = Ink.copy(.09f))
     } else {
-        this
-            .shadow(elevation, shape, ambientColor = Ink.copy(.11f), spotColor = Ink.copy(.09f))
-            .hazeEffect(state = hazeState, style = material)
+        this.shadow(elevation, shape, ambientColor = Ink.copy(.11f), spotColor = Ink.copy(.09f))
     }
 }
 
 @Composable
 fun LiquidGlassSurface(
-    hazeState: HazeState,
     modifier: Modifier = Modifier,
     shape: RoundedCornerShape = RoundedCornerShape(26.dp),
     content: @Composable BoxScope.() -> Unit,
 ) {
     Box(
         modifier = modifier
-            .liquidGlass(hazeState, shape, elevation = 10.dp)
+            .liquidGlass(shape, elevation = 10.dp)
             .background(
                 Brush.linearGradient(
                     colors = listOf(Color.White.copy(.58f), Color.White.copy(.12f), Color.White.copy(.20f)),
