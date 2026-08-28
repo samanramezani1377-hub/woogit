@@ -19,11 +19,9 @@ class GetMediaUseCase(private val r: MediaRepository) : GetMedia { override susp
 class UploadMediaUseCase(private val r: MediaRepository) : UploadMedia { override suspend fun invoke(storeId: StoreId, fileName: String, bytes: ByteArray, mediaType: String) = r.upload(storeId, fileName, bytes, mediaType) }
 class DeleteMediaUseCase(private val r: MediaRepository) : DeleteMedia { override suspend fun invoke(storeId: StoreId, mediaId: EntityId) = r.delete(storeId, mediaId) }
 class GetStoreUseCase(private val r: StoreRepository) : GetStore { override suspend fun invoke(storeId: StoreId) = r.get(storeId) }
-class ConnectStoreUseCase(private val r: StoreRepository) : ConnectStore { override suspend fun invoke(store: StoreConnection, consumerKey: String, consumerSecret: String) = r.connect(store, consumerKey, consumerSecret) }
+class ConnectStoreUseCase(private val r: StoreRepository) : ConnectStore { override suspend fun invoke(store: StoreConnection, consumerKey: String, consumerSecret: String, wordpressUsername: String?, wordpressApplicationPassword: String?) = r.connect(store, consumerKey, consumerSecret, wordpressUsername, wordpressApplicationPassword) }
 class DisconnectStoreUseCase(private val r: StoreRepository) : DisconnectStore { override suspend fun invoke(storeId: StoreId) = r.disconnect(storeId) }
-class GetConnectionStateUseCase(private val r: StoreRepository) : GetConnectionState {
-    override suspend fun invoke(storeId: StoreId) = r.get(storeId).let { result -> if (result is CoreResult.Success) CoreResult.Success(result.value.state) else CoreResult.Failure((result as CoreResult.Failure).error) }
-}
+class GetConnectionStateUseCase(private val r: StoreRepository) : GetConnectionState { override suspend fun invoke(storeId: StoreId) = r.get(storeId).let { result -> if (result is CoreResult.Success) CoreResult.Success(result.value.state) else CoreResult.Failure((result as CoreResult.Failure).error) } }
 class GetPendingOperationsUseCase(private val r: PendingOperationRepository) : GetPendingOperations { override suspend fun invoke(storeId: StoreId) = r.getPending(storeId) }
 class EnqueueOperationUseCase(private val r: PendingOperationRepository) : EnqueueOperation { override suspend fun invoke(operation: PendingOperation) = r.enqueue(operation) }
 class GetSyncStateUseCase(private val r: SyncRepository) : GetSyncState { override suspend fun invoke(storeId: StoreId) = r.getState(storeId) }
