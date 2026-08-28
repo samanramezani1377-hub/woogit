@@ -46,7 +46,7 @@ private fun WooOrderTypedDto.toDomain(): Order {
         customer_id.takeIf { it != 0L }?.let { Customer(EntityId(it.toString()), listOfNotNull(billing?.first_name, billing?.last_name).joinToString(" "), billing?.phone) },
         billing?.let { Address(it.first_name, it.last_name, it.company, it.address_1, it.address_2, it.city, it.state, it.postcode, it.country, it.phone) },
         shipping?.let { Address(it.first_name, it.last_name, it.company, it.address_1, it.address_2, it.city, it.state, it.postcode, it.country, it.phone) },
-        Payment(payment_method, payment_method_title, transaction_id, !payment_method.isNullOrBlank()),
+        Payment(payment_method, payment_method_title, transaction_id, set_paid == true),
         shipping_lines.map { ShippingLine(it.method_id, it.method_title, it.total) },
         coupon_lines.map { Discount(it.code, it.discount) },
         emptyList(),
