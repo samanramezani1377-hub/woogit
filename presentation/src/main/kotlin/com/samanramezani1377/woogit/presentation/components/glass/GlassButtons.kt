@@ -4,7 +4,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.sizeIn
@@ -35,7 +34,12 @@ fun GlassButton(
         onClick = onClick,
         modifier = modifier
             .heightIn(min = 56.dp)
-            .shadow(8.dp, shape, ambientColor = GlassTokens.accent.copy(alpha = .16f), spotColor = GlassTokens.accent.copy(alpha = .18f)),
+            .shadow(
+                8.dp,
+                shape,
+                ambientColor = GlassTokens.accent.copy(alpha = .16f),
+                spotColor = GlassTokens.accent.copy(alpha = .18f),
+            ),
         enabled = enabled,
         shape = shape,
         colors = ButtonDefaults.buttonColors(
@@ -49,7 +53,7 @@ fun GlassButton(
         Box(
             Modifier
                 .fillMaxWidth()
-                .fillMaxHeight()
+                .heightIn(min = 56.dp)
                 .background(
                     if (enabled) AccentGradient else Brush.linearGradient(
                         listOf(Color.Gray.copy(alpha = .25f), Color.Gray.copy(alpha = .18f)),
