@@ -2,12 +2,18 @@ package com.samanramezani1377.woogit.presentation.settings
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material3.Button
-import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.samanramezani1377.woogit.presentation.GlassCard
+import com.samanramezani1377.woogit.presentation.GlassPrimaryAction
+import com.samanramezani1377.woogit.presentation.GlassScaffold
+import com.samanramezani1377.woogit.presentation.GlassText
+import com.samanramezani1377.woogit.presentation.GlassTopBar
 
 internal data class SettingsUiModel(
     val storeName: String,
@@ -23,38 +29,25 @@ internal fun SettingsScreen(
     onSave: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Text("تنظیمات")
-        Text("فروشگاه: ${settings.storeName}")
-        Text(
-            if (settings.connected) {
-                "وضعیت اتصال: متصل"
-            } else {
-                "وضعیت اتصال: قطع"
-            },
-        )
-
-        Button(onClick = onConnectionClick) {
-            Text("مدیریت اتصال")
-        }
-
-        Button(
-            onClick = { onAutoSyncChanged(!settings.autoSyncEnabled) },
+    GlassScaffold(modifier) { paddingValues ->
+        Column(
+            modifier = Modifier.fillMaxSize().padding(paddingValues).padding(horizontal = 16.dp, vertical = 12.dp)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(
-                if (settings.autoSyncEnabled) {
-                    "همگام‌سازی خودکار: فعال"
-                } else {
-                    "همگام‌سازی خودکار: غیرفعال"
-                },
+            GlassTopBar("تنظیمات", "مدیریت فروشگاه و همگام‌سازی")
+            GlassCard {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    GlassText("فروشگاه: ${settings.storeName}")
+                    GlassText(if (settings.connected) "وضعیت اتصال: متصل" else "وضعیت اتصال: قطع")
+                }
+            }
+            GlassPrimaryAction("مدیریت اتصال", onConnectionClick)
+            GlassPrimaryAction(
+                if (settings.autoSyncEnabled) "همگام‌سازی خودکار: فعال" else "همگام‌سازی خودکار: غیرفعال",
+                { onAutoSyncChanged(!settings.autoSyncEnabled) },
             )
-        }
-
-        Button(onClick = onSave) {
-            Text("ذخیره تنظیمات")
+            GlassPrimaryAction("ذخیره تنظیمات", onSave, Modifier.padding(bottom = 24.dp))
         }
     }
 }
