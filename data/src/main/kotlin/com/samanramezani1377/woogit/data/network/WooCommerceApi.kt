@@ -87,7 +87,7 @@ class WooCommerceApi(private val client: HttpClient, private val credentials: Cr
 
     private suspend fun execute(url: Url, method: String, body: String?, params: Map<String, Any>): HttpResponse {
         val requestUrl = URLBuilder(url).apply {
-            parameters.appendAll(params.map { (key, value) -> key to value.toString() })
+            params.forEach { (key, value) -> parameters.append(key, value.toString()) }
             parameters.append("consumer_key", credentials.consumerKey)
             parameters.append("consumer_secret", credentials.consumerSecret)
         }.build()
