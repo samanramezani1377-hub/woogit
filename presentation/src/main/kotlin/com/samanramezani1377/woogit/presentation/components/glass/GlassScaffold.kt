@@ -2,17 +2,12 @@ package com.samanramezani1377.woogit.presentation
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import dev.chrisbanes.haze.HazeState
-
-internal val LocalWooGitGlassHaze = staticCompositionLocalOf<HazeState?> { null }
 
 @Composable
 fun GlassScaffold(
@@ -20,15 +15,13 @@ fun GlassScaffold(
     content: @Composable (PaddingValues) -> Unit,
 ) {
     LiquidGlassEnvironment(modifier = modifier) {
-        CompositionLocalProvider(LocalWooGitGlassHaze provides null) {
-            Scaffold(
-                modifier = Modifier.fillMaxSize(),
-                containerColor = Color.Transparent,
-                contentColor = MaterialTheme.colorScheme.onBackground,
-                contentWindowInsets = WindowInsets.safeDrawing,
-                content = content,
-            )
-        }
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            containerColor = Color.Transparent,
+            contentColor = MaterialTheme.colorScheme.onBackground,
+            contentWindowInsets = WindowInsets.safeDrawing,
+            content = content,
+        )
     }
 }
 
