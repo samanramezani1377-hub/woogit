@@ -9,12 +9,14 @@ import com.samanramezani1377.woogit.core.domain.model.Order
 import com.samanramezani1377.woogit.core.domain.model.Product
 import com.samanramezani1377.woogit.presentation.PresentationErrorMapper
 import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 internal data class DashboardUiState(
     val orders: List<Order> = emptyList(),
@@ -22,12 +24,8 @@ internal data class DashboardUiState(
     val connectionState: ConnectionState = ConnectionState.DISCONNECTED,
     val loading: Boolean = false,
     val error: String? = null,
-) {
-    val ordersCount: String get() = DashboardStateMapper.ordersCount(orders)
-    val productsCount: String get() = DashboardStateMapper.productsCount(products)
-    val pendingCount: String get() = DashboardStateMapper.pendingCount(orders)
-    val revenue: String get() = DashboardStateMapper.revenue(orders)
-}
+    val lastConnectionCheckAtMillis: Long? = null,
+)
 
 internal class DashboardViewModel(
     private val dependencies: V1PresentationDependencies,
@@ -36,41 +34,61 @@ internal class DashboardViewModel(
     private val _uiState = MutableStateFlow(DashboardUiState())
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
     private var healthMonitorStarted = false
+    private var healthCheckInFlight = false
 
     fun refresh() {
         if (_uiState.value.loading) return
-        viewModelScope.launch { refreshInternal(includeData = true) }
+        viewModelScope.launch { refreshInternal() }
     }
 
     fun startConnectionHealthMonitor() {
         if (healthMonitorStarted) return
         healthMonitorStarted = true
         viewModelScope.launch {
+            var delayMillis = 10_000L
             while (isActive) {
-                checkConnection()
-                delay(10_000L)
+                val result = checkConnection()
+                delayMillis = if (result == ConnectionState.CONNECTED) 10_000L else (delayMillis * 2).coerceAtMost(60_000L)
+                delay(delayMillis)
             }
         }
     }
 
-    private suspend fun checkConnection() {
-        val connection = when (val result = dependencies.getConnectionState(storeId)) {
-            is CoreResult.Success -> result.value
-            is CoreResult.Failure -> ConnectionState.ERROR
-        }
-        _uiState.value = _uiState.value.copy(connectionState = connection)
+    fun onNetworkAvailable() {
+        viewModelScope.launch { checkConnection() }
     }
 
-    private suspend fun refreshInternal(includeData: Boolean) {
-        _uiState.value = _uiState.value.copy(loading = includeData, error = null)
-        val connection = when (val result = dependencies.getConnectionState(storeId)) {
-            is CoreResult.Success -> result.value
-            is CoreResult.Failure -> ConnectionState.ERROR
+    private suspend fun checkConnection(): ConnectionState {
+        if (healthCheckInFlight) return _uiState.value.connectionState
+        healthCheckInFlight = true
+        return try {
+            val connection = withTimeoutOrNull(5_000L) {
+                when (val result = dependencies.getConnectionState(storeId)) {
+                    is CoreResult.Success -> result.value
+                    is CoreResult.Failure -> ConnectionState.ERROR
+                }
+            } ?: ConnectionState.ERROR
+            _uiState.value = _uiState.value.copy(
+                connectionState = connection,
+                lastConnectionCheckAtMillis = kotlin.time.Clock.System.now().toEpochMilliseconds(),
+            )
+            connection
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Throwable) {
+            _uiState.value = _uiState.value.copy(
+                connectionState = ConnectionState.ERROR,
+                lastConnectionCheckAtMillis = kotlin.time.Clock.System.now().toEpochMilliseconds(),
+            )
+            ConnectionState.ERROR
+        } finally {
+            healthCheckInFlight = false
         }
-        if (!includeData) {
-            _uiState.value = _uiState.value.copy(connectionState = connection)
-            return
-        }
+    }
+
+    private suspend fun refreshInternal() {
+        _uiState.value = _uiState.value.copy(loading = true, error = null)
+        val connection = checkConnection()
         val orders = when (val result = dependencies.getOrders(storeId, 1, 30, null, null)) {
             is CoreResult.Success -> result.value
             is CoreResult.Failure -> {
@@ -85,6 +103,6 @@ internal class DashboardViewModel(
                 return
             }
         }
-        _uiState.value = DashboardUiState(orders = orders, products = products, connectionState = connection)
+        _uiState.value = _uiState.value.copy(orders = orders, products = products, connectionState = connection, loading = false)
     }
 }
