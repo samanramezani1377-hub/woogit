@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,19 +21,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
-/**
- * Liquid-glass dashboard presentation primitives.
- * Data and navigation remain outside this file.
- */
-private val Purple = Color(0xFF6C5CE7)
-private val Pink = Color(0xFFE84393)
 private val Surface = Color.White.copy(alpha = 0.58f)
-private val Border = Color.White.copy(alpha = 0.78f)
 
 @Composable
 internal fun DashboardGlassSurface(
@@ -40,28 +33,16 @@ internal fun DashboardGlassSurface(
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(26.dp))
-            .background(Surface)
-            .padding(18.dp),
+        modifier = modifier.clip(RoundedCornerShape(26.dp)).background(Surface).padding(18.dp),
         content = content,
     )
 }
 
 @Composable
-internal fun DashboardHero(
-    storeName: String,
-    connected: Boolean,
-    modifier: Modifier = Modifier,
-) {
+internal fun DashboardHero(storeName: String, connected: Boolean, modifier: Modifier = Modifier) {
     DashboardGlassSurface(modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                Modifier
-                    .size(12.dp)
-                    .clip(RoundedCornerShape(50))
-                    .background(if (connected) Color(0xFF25B36A) else Color(0xFFE67E22))
-            )
+            Box(Modifier.size(12.dp).clip(RoundedCornerShape(50)).background(if (connected) Color(0xFF25B36A) else Color(0xFFE67E22)))
             Spacer(Modifier.size(10.dp))
             Column(Modifier.weight(1f)) {
                 Text("WooGit", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
@@ -73,12 +54,7 @@ internal fun DashboardHero(
 }
 
 @Composable
-internal fun DashboardStatGrid(
-    orders: String,
-    products: String,
-    revenue: String,
-    pending: String,
-) {
+internal fun DashboardStatGrid(orders: String, products: String, revenue: String, pending: String) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             DashboardStat("سفارش‌ها", orders, Modifier.weight(1f))
@@ -101,12 +77,7 @@ private fun DashboardStat(title: String, value: String, modifier: Modifier = Mod
 }
 
 @Composable
-internal fun DashboardQuickAction(
-    title: String,
-    subtitle: String,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
-) {
+internal fun DashboardQuickAction(title: String, subtitle: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     androidx.compose.material3.Button(
         onClick = onClick,
         modifier = modifier.fillMaxWidth().height(58.dp),
@@ -125,20 +96,11 @@ internal fun DashboardQuickAction(
 
 @Composable
 internal fun DashboardContent(
-    storeName: String,
-    connected: Boolean,
-    orders: String,
-    products: String,
-    revenue: String,
-    pending: String,
-    modifier: Modifier = Modifier,
+    storeName: String, connected: Boolean, orders: String, products: String,
+    revenue: String, pending: String, modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(Color(0xFFEFF1F7))
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+        modifier = modifier.fillMaxSize().background(Color(0xFFEFF1F7)).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         DashboardHero(storeName, connected)
