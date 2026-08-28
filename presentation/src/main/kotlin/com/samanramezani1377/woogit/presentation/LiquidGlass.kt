@@ -17,7 +17,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.shadow
@@ -94,6 +93,21 @@ fun LiquidGlassEnvironment(
     }
 }
 
+/**
+ * Source-compatibility overload for shared Glass components that still expose
+ * the old HazeState-shaped environment callback. No Haze renderer or dependency
+ * is used; the actual Liquid Glass renderer remains Kyant Backdrop above.
+ */
+@Composable
+fun LiquidGlassEnvironment(
+    modifier: Modifier = Modifier,
+    content: @Composable (dev.chrisbanes.haze.HazeState) -> Unit,
+) {
+    LiquidGlassEnvironment(modifier) {
+        content(dev.chrisbanes.haze.HazeState())
+    }
+}
+
 @Composable
 private fun AmbientBlob(modifier: Modifier, size: Dp, color: Color) {
     Box(
@@ -135,6 +149,14 @@ fun Modifier.liquidGlass(
         this.shadow(elevation, shape, ambientColor = Ink.copy(.11f), spotColor = Ink.copy(.09f))
     }
 }
+
+/** Source-compatible overload for legacy GlassComponents call sites. */
+@Composable
+fun Modifier.liquidGlass(
+    hazeState: dev.chrisbanes.haze.HazeState,
+    shape: RoundedCornerShape = RoundedCornerShape(26.dp),
+    elevation: Dp = 8.dp,
+): Modifier = liquidGlass(shape = shape, elevation = elevation)
 
 @Composable
 fun LiquidGlassSurface(
