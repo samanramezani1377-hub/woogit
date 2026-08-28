@@ -1,13 +1,11 @@
 package dev.chrisbanes.haze
 
-import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 
 /**
- * Legacy source-compatibility surface for WooGit components that still accept
- * a HazeState parameter. No Haze runtime or rendering is used anymore.
- * All actual glass rendering is provided by Kyant0 Backdrop.
+ * Source-compatibility types only. The Haze dependency and renderer are removed;
+ * Kyant0 Backdrop is the sole Liquid Glass renderer.
  */
 class HazeState
 
@@ -18,10 +16,12 @@ data class HazeStyle(
 )
 
 fun Modifier.hazeSource(state: HazeState, zIndex: Float = 0f): Modifier = this
-
 fun Modifier.hazeEffect(state: HazeState, style: HazeStyle): Modifier = this
 
 object HazeMaterials {
-    @Composable
     fun thin(): HazeStyle = HazeStyle()
 }
+
+@Target(AnnotationTarget.CLASS, AnnotationTarget.FUNCTION, AnnotationTarget.PROPERTY)
+@Retention(AnnotationRetention.BINARY)
+annotation class ExperimentalHazeMaterialsApi
