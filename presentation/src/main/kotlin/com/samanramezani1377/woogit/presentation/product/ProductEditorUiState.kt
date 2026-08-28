@@ -1,5 +1,8 @@
 package com.samanramezani1377.woogit.presentation.product
 
+import com.samanramezani1377.woogit.core.domain.model.ProductStatus
+import com.samanramezani1377.woogit.core.domain.model.ProductType
+
 internal sealed interface ProductEditorUiState {
     data object Loading : ProductEditorUiState
 
@@ -15,6 +18,8 @@ internal sealed interface ProductEditorUiState {
         val imageUrl: String?,
         val categories: String,
         val attributes: String,
+        val status: ProductStatus = ProductStatus.DRAFT,
+        val type: ProductType = ProductType.SIMPLE,
         val saving: Boolean = false,
     ) : ProductEditorUiState
 
