@@ -1,5 +1,6 @@
 package com.samanramezani1377.woogit.presentation.product
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,86 +9,104 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.samanramezani1377.woogit.core.domain.model.Product
+import com.samanramezani1377.woogit.presentation.FeatureUiState
+import com.samanramezani1377.woogit.presentation.GlassCard
+import com.samanramezani1377.woogit.presentation.GlassErrorState
+import com.samanramezani1377.woogit.presentation.GlassLoading
+import com.samanramezani1377.woogit.presentation.GlassPrimaryAction
+import com.samanramezani1377.woogit.presentation.GlassScaffold
+import com.samanramezani1377.woogit.presentation.GlassText
+import com.samanramezani1377.woogit.presentation.GlassTopBar
+import com.samanramezani1377.woogit.presentation.GlassTokens
 
 @Composable
 internal fun ProductsScreen(
-    state: ProductUiState,
+    state: FeatureUiState<List<Product>>,
     onProductClick: (String) -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(16.dp),
-    ) {
-        Text(
-            text = "محصولات",
-            style = MaterialTheme.typography.headlineSmall,
-        )
-
-        when (state) {
-            ProductUiState.Loading -> {
-                CircularProgressIndicator()
-            }
-
-            is ProductUiState.Content -> {
-                LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    items(state.products) { product ->
-                        ProductRow(
-                            product = product,
-                            onClick = { onProductClick(product.id) },
+    GlassScaffold(modifier) { paddingValues ->
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            GlassTopBar(title = "محصولات", subtitle = "مدیریت محصولات فروشگاه")
+            when (state) {
+                FeatureUiState.Loading, FeatureUiState.Pending -> GlassLoading("در حال بارگذاری محصولات…")
+                FeatureUiState.Empty -> {
+                    GlassCard {
+                        GlassText("محصولی برای نمایش وجود ندارد.")
+                    }
+                }
+                is FeatureUiState.Error -> {
+                    GlassErrorState(state.message)
+                    if (state.retryable) {
+                        GlassPrimaryAction(
+                            label = "تلاش مجدد",
+                            onClick = onRetry,
+                            modifier = Modifier.fillMaxWidth(),
                         )
                     }
                 }
-            }
-
-            ProductUiState.Empty -> {
-                Text("محصولی برای نمایش وجود ندارد.")
-            }
-
-            is ProductUiState.Error -> {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(state.message)
-                    Button(onClick = onRetry) {
-                        Text("تلاش مجدد")
+                is FeatureUiState.Success -> {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        items(state.value, key = { it.id.value }) { product ->
+                            ProductRow(product, onClick = { onProductClick(product.id.value) })
+                        }
                     }
                 }
+                FeatureUiState.Offline -> GlassErrorState("اتصال فروشگاه در دسترس نیست.")
+                is FeatureUiState.Conflict -> GlassErrorState("تعارضی در داده‌های محصولات وجود دارد.")
             }
         }
     }
 }
 
 @Composable
-private fun ProductRow(
-    product: ProductUiModel,
-    onClick: () -> Unit,
-) {
-    Button(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
+private fun ProductRow(product: Product, onClick: () -> Unit) {
+    GlassCard(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Column {
-                Text(product.name)
-                Text(product.status)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                GlassText(product.name, fontWeightStyle())
+                GlassText(product.status.toDisplayName(), style = MaterialTheme.typography.bodySmall.copy(color = GlassTokens.muted))
             }
-            Column {
-                Text(product.price)
-                Text("موجودی: ${product.stock}")
+            Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
+                GlassText(product.pricing.sale ?: product.pricing.regular ?: "—", fontWeightStyle())
+                GlassText(
+                    product.stock?.quantity?.toString()?.removeSuffix(".0")?.let { "موجودی: $it" } ?: "موجودی نامشخص",
+                    style = MaterialTheme.typography.bodySmall.copy(color = GlassTokens.muted),
+                )
             }
         }
     }
+}
+
+private fun fontWeightStyle() = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+
+private fun com.samanramezani1377.woogit.core.domain.model.ProductStatus.toDisplayName(): String = when (this) {
+    com.samanramezani1377.woogit.core.domain.model.ProductStatus.PUBLISHED -> "منتشر شده"
+    com.samanramezani1377.woogit.core.domain.model.ProductStatus.DRAFT -> "پیش‌نویس"
+    com.samanramezani1377.woogit.core.domain.model.ProductStatus.PENDING -> "در انتظار"
+    com.samanramezani1377.woogit.core.domain.model.ProductStatus.PRIVATE -> "خصوصی"
+    com.samanramezani1377.woogit.core.domain.model.ProductStatus.OTHER -> "سایر"
 }
