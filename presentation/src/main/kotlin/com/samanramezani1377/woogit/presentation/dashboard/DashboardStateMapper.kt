@@ -1,11 +1,15 @@
 package com.samanramezani1377.woogit.presentation.dashboard
 
 import com.samanramezani1377.woogit.core.domain.model.Order
+import com.samanramezani1377.woogit.core.domain.model.OrderStatus
 import com.samanramezani1377.woogit.core.domain.model.SalesSummary
 import com.samanramezani1377.woogit.core.domain.model.Product
 import java.math.BigDecimal
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
+
+/** Order statuses that must never contribute to the dashboard revenue total. */
+private val EXCLUDED_REVENUE_STATUSES = setOf(OrderStatus.CANCELLED, OrderStatus.FAILED)
 
 /** Keeps domain-to-dashboard presentation mapping outside the composable. */
 internal object DashboardStateMapper {
@@ -14,6 +18,12 @@ internal object DashboardStateMapper {
     fun productsCount(products: List<Product>): String = products.size.toString()
 
     fun pendingCount(orders: List<Order>): String = orders.count { it.status.name == "PENDING" }.toString()
+
+    /** Sums order totals for the dashboard revenue box, excluding cancelled and failed orders. */
+    fun netSales(orders: List<Order>): BigDecimal =
+        orders
+            .filterNot { it.status in EXCLUDED_REVENUE_STATUSES }
+            .fold(BigDecimal.ZERO) { acc, order -> acc + (order.total?.toBigDecimalOrNull() ?: BigDecimal.ZERO) }
 
     fun revenue(summary: SalesSummary?): String {
         if (summary == null) return "—"

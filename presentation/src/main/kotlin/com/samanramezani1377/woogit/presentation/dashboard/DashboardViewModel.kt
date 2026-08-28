@@ -117,7 +117,7 @@ internal class DashboardViewModel(
             }
         }
         val salesSummary = when (val result = dependencies.getSalesSummary(storeId)) {
-            is CoreResult.Success -> result.value
+            is CoreResult.Success -> result.value.copy(netSales = DashboardStateMapper.netSales(orders).toPlainString())
             is CoreResult.Failure -> _uiState.value.salesSummary
         }
         val productsResult = dependencies.getProducts(storeId, 1, 30, null)
