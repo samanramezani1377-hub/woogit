@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -45,11 +47,11 @@ internal fun DashboardFloatingNavigation(
 
 @Composable
 private fun DashboardNavItem(label: String, selected: Boolean, onClick: () -> Unit) {
-    androidx.compose.material3.TextButton(
+    TextButton(
         onClick = onClick,
         modifier = Modifier.padding(horizontal = 1.dp),
         shape = RoundedCornerShape(14.dp),
-        colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+        colors = ButtonDefaults.textButtonColors(
             contentColor = if (selected) GlassTokens.accent else GlassTokens.muted,
             containerColor = if (selected) GlassTokens.accent.copy(alpha = .12f) else Color.Transparent,
         ),
