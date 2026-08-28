@@ -8,6 +8,7 @@ import com.samanramezani1377.woogit.core.domain.model.*
 
 class GetOrderUseCase(private val r: OrderRepository) : GetOrder { override suspend fun invoke(storeId: StoreId, id: EntityId) = r.get(storeId, id) }
 class GetOrdersUseCase(private val r: OrderRepository) : GetOrders { override suspend fun invoke(storeId: StoreId, page: Int, perPage: Int, search: String?, status: String?) = r.list(storeId, page, perPage, search, status) }
+class GetSalesSummaryUseCase(private val r: OrderRepository) : GetSalesSummary { override suspend fun invoke(storeId: StoreId) = r.salesSummary(storeId) }
 class UpdateOrderUseCase(private val r: OrderRepository) : UpdateOrder { override suspend fun invoke(storeId: StoreId, id: EntityId, value: Order) = r.update(storeId, id, value) }
 class GetProductUseCase(private val r: ProductRepository) : GetProduct { override suspend fun invoke(storeId: StoreId, id: EntityId) = r.get(storeId, id) }
 class GetProductsUseCase(private val r: ProductRepository) : GetProducts { override suspend fun invoke(storeId: StoreId, page: Int, perPage: Int, search: String?) = r.list(storeId, page, perPage, search) }
