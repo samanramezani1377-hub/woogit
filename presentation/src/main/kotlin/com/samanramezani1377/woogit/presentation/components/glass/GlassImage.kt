@@ -9,5 +9,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 
-@Composable fun GlassImageContainer(modifier:Modifier=Modifier,content:@Composable BoxScope.()->Unit){val shape=RoundedCornerShape(GlassTokens.radiusMd);Surface(modifier.fillMaxWidth(),shape=shape,color=Color.White.copy(alpha=.36f),border=BorderStroke(1f,Color.White.copy(alpha=.56f))){Box(Modifier.fillMaxWidth(),content=content)}}
+@Composable fun GlassImageContainer(modifier:Modifier=Modifier,content:@Composable BoxScope.()->Unit){val shape=RoundedCornerShape(GlassTokens.radiusMd);Surface(modifier.fillMaxWidth(),shape=shape,color=Color.White.copy(alpha=.36f),border=BorderStroke(1.dp,Color.White.copy(alpha=.56f))){Box(Modifier.fillMaxWidth(),content=content)}}
