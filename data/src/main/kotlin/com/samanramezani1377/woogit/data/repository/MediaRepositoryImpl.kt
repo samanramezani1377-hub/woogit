@@ -12,6 +12,18 @@ import com.samanramezani1377.woogit.data.network.WooCommerceClientProvider
 import com.samanramezani1377.woogit.data.network.WordPressErrorMapper
 
 class MediaRepositoryImpl(private val provider: WooCommerceClientProvider) : MediaRepository {
+    override suspend fun list(storeId: StoreId, page: Int, perPage: Int, search: String?): CoreResult<List<ProductImage>> =
+        provider.client(storeId).fold(
+            { (store, api) ->
+                runCatching { api.media(store.baseUrl, page, perPage, search).getOrThrow() }
+                    .fold(
+                        { media -> CoreResult.Success(media.map { ProductImage(EntityId(it.id.toString()), it.source_url, it.title?.rendered, it.alt_text) }) },
+                        { CoreResult.Failure(it.toDomain()) },
+                    )
+            },
+            { CoreResult.Failure(it) },
+        )
+
     override suspend fun upload(storeId: StoreId, fileName: String, bytes: ByteArray, mediaType: String): CoreResult<ProductImage> =
         provider.client(storeId).fold(
             { (store, api) ->
