@@ -61,7 +61,11 @@ internal fun ConnectionScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             GlassTopBar(title = "اتصال فروشگاه", subtitle = "WooCommerce")
-            GlassTextField(value = storeUrl, onValueChange = { storeUrl = it }, label = "آدرس فروشگاه HTTPS")
+            GlassTextField(
+                value = storeUrl,
+                onValueChange = { storeUrl = normalizeStoreUrlInput(it) },
+                label = "آدرس فروشگاه HTTPS",
+            )
             GlassTextField(value = consumerKey, onValueChange = { consumerKey = it }, label = "Consumer Key")
             GlassPasswordField(value = consumerSecret, onValueChange = { consumerSecret = it })
             GlassText("دسترسی WordPress برای تصاویر")
@@ -74,7 +78,13 @@ internal fun ConnectionScreen(
             }
             GlassPrimaryAction(
                 label = "بررسی و اتصال",
-                onClick = { connectionViewModel.connect(storeUrl, consumerKey, consumerSecret + "\u0001" + wordpressUser + "\u0001" + wordpressPassword) },
+                onClick = {
+                    connectionViewModel.connect(
+                        normalizeStoreUrlInput(storeUrl),
+                        consumerKey,
+                        consumerSecret + "\u0001" + wordpressUser + "\u0001" + wordpressPassword,
+                    )
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(bottom = 20.dp),
@@ -83,3 +93,5 @@ internal fun ConnectionScreen(
         }
     }
 }
+
+private fun normalizeStoreUrlInput(value: String): String = value.trim().removePrefix("/").removePrefix("/").trimEnd('/')
