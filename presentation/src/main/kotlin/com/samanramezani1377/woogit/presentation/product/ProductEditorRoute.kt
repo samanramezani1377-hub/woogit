@@ -51,7 +51,7 @@ internal fun ProductEditorRoute(dependencies: V1PresentationDependencies, storeI
 
     LaunchedEffect(storeId, productId) {
         vm.loadCategories(storeId)
-        if (productId == null) form = ProductEditorUiState.Editing(null, "", "", "", "", "", "", "", null, "", "")
+        if (productId == null) form = ProductEditorUiState.Editing(null, "", "", "", "", "", "", "", null, null, "", "")
         else vm.load(storeId, EntityId(productId))
     }
     LaunchedEffect(mediaPickerOpen, storeId) {
@@ -67,7 +67,7 @@ internal fun ProductEditorRoute(dependencies: V1PresentationDependencies, storeI
             if (bytes != null && bytes.isNotEmpty()) {
                 val mime = context.contentResolver.getType(uri).orEmpty().ifBlank { "image/jpeg" }
                 when (val result = dependencies.uploadMedia(storeId, "woogit-${System.currentTimeMillis()}.jpg", bytes, mime)) {
-                    is CoreResult.Success -> form = editing.copy(imageUrl = result.value.src)
+                    is CoreResult.Success -> form = editing.copy(imageUrl = result.value.src, imageId = result.value.id?.value?.toString())
                     is CoreResult.Failure -> form = editing.copy(saving = false)
                 }
             }
@@ -76,7 +76,8 @@ internal fun ProductEditorRoute(dependencies: V1PresentationDependencies, storeI
     LaunchedEffect(state) {
         val product = (state as? FeatureUiState.Success)?.value ?: return@LaunchedEffect
         original = product
-        form = ProductEditorUiState.Editing(product.id.value, product.name, product.sku.orEmpty(), product.shortDescription.orEmpty(), product.description.orEmpty(), product.pricing.regular.orEmpty(), product.pricing.sale.orEmpty(), product.stock?.quantity?.toString().orEmpty(), product.images.firstOrNull()?.src, product.categories.joinToString(", ") { it.name }, product.attributes.joinToString(" | ") { a -> "${a.name}:${a.options.joinToString(",")}" }, product.status, product.type)
+        val firstImage = product.images.firstOrNull()
+        form = ProductEditorUiState.Editing(product.id.value, product.name, product.sku.orEmpty(), product.shortDescription.orEmpty(), product.description.orEmpty(), product.pricing.regular.orEmpty(), product.pricing.sale.orEmpty(), product.stock?.quantity?.toString().orEmpty(), firstImage?.src, firstImage?.id?.value?.toString(), product.categories.joinToString(", ") { it.name }, product.attributes.joinToString(" | ") { a -> "${a.name}:${a.options.joinToString(",")}" }, product.status, product.type)
     }
 
     val editing = form
@@ -90,12 +91,12 @@ internal fun ProductEditorRoute(dependencies: V1PresentationDependencies, storeI
             imageUploading = mediaUploading,
             onOpenMediaPicker = { mediaPickerOpen = true },
             onCloseMediaPicker = { mediaPickerOpen = false },
-            onPickMedia = { media -> form = editing.copy(imageUrl = media.src); mediaPickerOpen = false },
+            onPickMedia = { media -> form = editing.copy(imageUrl = media.src, imageId = media.id?.value?.toString()); mediaPickerOpen = false },
             onUploadImage = { imagePicker.launch("image/*") },
             onNameChanged = { form = editing.copy(name = it) }, onSkuChanged = { form = editing.copy(sku = it) },
             onShortDescriptionChanged = { form = editing.copy(shortDescription = it) }, onDescriptionChanged = { form = editing.copy(description = it) },
             onPriceChanged = { form = editing.copy(price = it) }, onSalePriceChanged = { form = editing.copy(salePrice = it) },
-            onStockChanged = { form = editing.copy(stock = it) }, onImageUrlChanged = { form = editing.copy(imageUrl = it.ifBlank { null }) },
+            onStockChanged = { form = editing.copy(stock = it) }, onImageUrlChanged = { form = editing.copy(imageUrl = it.ifBlank { null }, imageId = null) },
             onCategoriesChanged = { form = editing.copy(categories = it) }, onAttributesChanged = { form = editing.copy(attributes = it) },
             onStatusChanged = { form = editing.copy(status = it) }, onTypeChanged = { form = editing.copy(type = it) },
             onSave = { vm.save(storeId, editing.toProduct(original, availableCategories), editing.productId == null, onSaved); form = editing.copy(saving = true) },
@@ -107,7 +108,7 @@ internal fun ProductEditorRoute(dependencies: V1PresentationDependencies, storeI
 }
 
 private fun ProductEditorUiState.Editing.toProduct(original: Product?, availableCategories: List<IdName>): Product {
-    val image = imageUrl?.takeIf { it.isNotBlank() }?.let { ProductImage(original?.images?.firstOrNull()?.id, it, original?.images?.firstOrNull()?.name, name) }
+    val image = imageUrl?.takeIf { it.isNotBlank() }?.let { ProductImage(imageId?.let(::EntityId), it, original?.images?.firstOrNull()?.name, name) }
     val categoryNames = categories.split(',').map { it.trim() }.filter { it.isNotBlank() }.distinct()
     val cats = categoryNames.mapNotNull { value -> availableCategories.firstOrNull { it.name == value } ?: original?.categories?.firstOrNull { it.name == value } }
     val attrs = attributes.split('|').mapNotNull { raw ->
