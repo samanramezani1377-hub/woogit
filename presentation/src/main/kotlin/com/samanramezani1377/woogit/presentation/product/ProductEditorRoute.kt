@@ -34,8 +34,8 @@ internal fun ProductEditorRoute(dependencies:V1PresentationDependencies,storeId:
     val editing=form
     when{
         editing!=null->ProductEditorScreen(editing,{form=editing.copy(name=it)},{form=editing.copy(sku=it)},{form=editing.copy(shortDescription=it)},{form=editing.copy(description=it)},{form=editing.copy(price=it)},{form=editing.copy(salePrice=it)},{form=editing.copy(stock=it)},{form=editing.copy(imageUrl=it.ifBlank{null})},{form=editing.copy(categories=it)},{form=editing.copy(attributes=it)},{val p=editing.toProduct();vm.save(storeId,p,editing.productId==null,onSaved);form=editing.copy(saving=true)},{if(productId!=null)vm.load(storeId,EntityId(productId))},onBack,modifier)
-        state is FeatureUiState.Loading->ProductEditorScreen(ProductEditorUiState.Loading,{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {},onBack=onBack,modifier=modifier)
-        state is FeatureUiState.Error->ProductEditorScreen(ProductEditorUiState.Error(state.message,state.retryable),{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {},onBack=onBack,onRetry={if(productId!=null)vm.load(storeId,EntityId(productId))},modifier=modifier)
+        state is FeatureUiState.Loading->ProductEditorScreen(ProductEditorUiState.Loading,{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, onBack=onBack,modifier=modifier)
+        state is FeatureUiState.Error->ProductEditorScreen(ProductEditorUiState.Error(state.message,state.retryable),{}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, onBack=onBack,onRetry={if(productId!=null)vm.load(storeId,EntityId(productId))},modifier=modifier)
     }
 }
 
@@ -43,5 +43,5 @@ private fun ProductEditorUiState.Editing.toProduct():Product{
     val image=imageUrl?.takeIf{it.isNotBlank()}?.let{ProductImage(null,it,null,name)}
     val cats=categories.split(',').map{it.trim()}.filter{it.isNotBlank()}.mapIndexed{index,value->IdName(EntityId("category-$index"),value)}
     val attrs=attributes.split('|').mapNotNull{raw->val parts=raw.split(':',limit=2);if(parts.size!=2||parts[0].isBlank())null else Attribute(null,parts[0].trim(),true,true,parts[1].split(',').map{it.trim()}.filter{it.isNotBlank()})}
-    return Product(EntityId(productId? : "new"),name.trim(),sku.trim().ifBlank{null},description.ifBlank{null},shortDescription.ifBlank{null},ProductStatus.DRAFT,ProductType.SIMPLE,Pricing(price.trim().ifBlank{null},salePrice.trim().ifBlank{null},salePrice.isNotBlank()),stock.toDoubleOrNull()?.let{Stock(it,if(it>0)StockStatus.IN_STOCK else StockStatus.OUT_OF_STOCK,true)},listOfNotNull(image),cats,attrs,null)
+    return Product(EntityId(productId ?: "new"),name.trim(),sku.trim().ifBlank{null},description.ifBlank{null},shortDescription.ifBlank{null},ProductStatus.DRAFT,ProductType.SIMPLE,Pricing(price.trim().ifBlank{null},salePrice.trim().ifBlank{null},salePrice.isNotBlank()),stock.toDoubleOrNull()?.let{Stock(it,if(it>0)StockStatus.IN_STOCK else StockStatus.OUT_OF_STOCK,true)},listOfNotNull(image),cats,attrs,null)
 }
