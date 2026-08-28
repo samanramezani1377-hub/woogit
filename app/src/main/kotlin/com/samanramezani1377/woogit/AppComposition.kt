@@ -58,6 +58,7 @@ class AppComposition(context: Context) {
     val disconnectStore = DisconnectStoreUseCase(storeRepository)
     val getConnectionState = GetConnectionStateUseCase(storeRepository)
     val getOrders = GetOrdersUseCase(orderRepository)
+    val getSalesSummary = GetSalesSummaryUseCase(orderRepository)
     val getOrder = GetOrderUseCase(orderRepository)
     val updateOrder = UpdateOrderUseCase(orderRepository)
     val addOrderNote = AddOrderNoteUseCase(orderNoteRepository)
@@ -107,7 +108,7 @@ class AppComposition(context: Context) {
     private val resolveConflictFn: suspend (StoreId, com.samanramezani1377.woogit.core.domain.entity.EntityId, ConflictResolution) -> CoreResult<Unit> = { storeId, conflictId, resolution -> resolveConflict(storeId, conflictId, resolution) }
 
     val v1Presentation = V1PresentationDependencies(
-        getStore, connectStore, disconnectStore, getOrders, getOrder, updateOrder, addOrderNote,
+        getStore, connectStore, disconnectStore, getOrders, getSalesSummary, getOrder, updateOrder, addOrderNote,
         getProducts, getProduct, createProduct, updateProduct, deleteProduct, getProductCategories,
         getMedia, getVariations, getVariation, createVariation, updateVariation, deleteVariation,
         getAttributes, getAttribute, createAttribute, updateAttribute, deleteAttribute,
