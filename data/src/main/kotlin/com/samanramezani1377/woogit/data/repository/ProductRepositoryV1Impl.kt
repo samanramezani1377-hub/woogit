@@ -28,7 +28,7 @@ private fun WooProductTypedDto.toDomain() = Product(
     type = when (type) { "grouped" -> ProductType.GROUPED; "external" -> ProductType.EXTERNAL; "variable" -> ProductType.VARIABLE; else -> ProductType.SIMPLE },
     pricing = Pricing(regular_price, sale_price, on_sale),
     stock = Stock(stock_quantity, when (stock_status) { "outofstock" -> StockStatus.OUT_OF_STOCK; "onbackorder" -> StockStatus.ON_BACKORDER; else -> StockStatus.IN_STOCK }, manage_stock),
-    images = images.map { image -> ProductImage(image.id?.toString()?.let(::EntityId), image.src, image.name, image.alt) },
+    images = images.map { image -> ProductImage(image.id?.toString()?.let(::EntityId), image.src.orEmpty(), image.name, image.alt) },
     categories = categories.map { category -> IdName(EntityId(category.id.toString()), category.name) },
     attributes = attributes.map { attribute -> Attribute(attribute.id?.toString()?.let(::EntityId), attribute.name, attribute.visible, attribute.variation, attribute.options) },
     modifiedAt = date_modified_gmt,
@@ -43,7 +43,18 @@ private fun Product.toDto(operationId: String? = null) = WooProductTypedDto(
     stock_quantity = stock?.quantity,
     stock_status = when (stock?.status) { StockStatus.OUT_OF_STOCK -> "outofstock"; StockStatus.ON_BACKORDER -> "onbackorder"; StockStatus.IN_STOCK, null -> "instock" },
     manage_stock = stock?.manageStock ?: false,
-    images = images.map { image -> WooImageTypedDto(image.id?.value?.toLongOrNull(), image.src, image.name, image.alt) },
+    // WooCommerce should associate an uploaded WordPress attachment by ID. Sending both
+    // id and src can make the API treat the image as a new/external image instead of the
+    // already-uploaded attachment. Use the attachment ID when available and fall back to
+    // the URL only for manually-entered image URLs.
+    images = images.map { image ->
+        WooImageTypedDto(
+            id = image.id?.value?.toLongOrNull(),
+            src = if (image.id == null) image.src else null,
+            name = image.name,
+            alt = image.alt,
+        )
+    },
     categories = categories.mapNotNull { category -> category.id.value.toLongOrNull()?.let { WooCategoryDto(it, category.name) } },
     attributes = attributes.map { attribute -> WooProductAttributeDto(attribute.id?.value?.toLongOrNull(), attribute.name, attribute.visible, attribute.variation, attribute.options) },
     meta_data = operationId?.let { listOf(WooMetaDataDto(key = "_woogit_operation_id", value = JsonPrimitive(it))) } ?: emptyList(),
