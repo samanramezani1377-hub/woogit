@@ -91,10 +91,30 @@ internal class DashboardViewModel(
         }
     }
 
+    private suspend fun loadAllOrders(): CoreResult<List<Order>> {
+        val allOrders = mutableListOf<Order>()
+        var page = 1
+        val perPage = 100
+
+        while (true) {
+            when (val result = dependencies.getOrders(storeId, page, perPage, null, null)) {
+                is CoreResult.Failure -> return result
+                is CoreResult.Success -> {
+                    val batch = result.value
+                    allOrders += batch
+                    if (batch.size < perPage) break
+                    page++
+                }
+            }
+        }
+
+        return CoreResult.Success(allOrders)
+    }
+
     private suspend fun refreshInternal() {
         _uiState.value = _uiState.value.copy(loading = true, error = null)
         val connection = checkConnection()
-        val ordersResult = dependencies.getOrders(storeId, 1, 30, null, null)
+        val ordersResult = loadAllOrders()
         val orders = when (ordersResult) {
             is CoreResult.Success -> ordersResult.value
             is CoreResult.Failure -> {
