@@ -71,7 +71,7 @@ private fun DebugLogsCard(context: Context) {
                 GlassCard {
                     Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                         GlassText("${entry.time} · ${entry.feature} · ${entry.type}")
-                        GlassText(entry.technicalMessage.ifBlank { entry.message })
+                        GlassText(entry.technicalMessage.ifBlank { entry.userMessage })
                         if (entry.userMessage.isNotBlank()) GlassText("پیام کاربر: ${entry.userMessage}")
                         TextButton(onClick = { clipboard.setText(AnnotatedString(entry.asCopyText())) }) { GlassText("کپی خطا") }
                     }
