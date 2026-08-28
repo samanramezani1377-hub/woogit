@@ -36,7 +36,6 @@ private val LavenderBlob = Color(0xFFD8CEFF)
 private val SkyBlob = Color(0xFFC6E6FF)
 private val Ink = Color(0xFF1B1F2A)
 
-/** Full-screen visual foundation used by every WooGit screen. */
 @Composable
 fun LiquidGlassEnvironment(
     modifier: Modifier = Modifier,
@@ -52,39 +51,17 @@ fun LiquidGlassEnvironment(
     )
 
     Box(modifier = modifier.fillMaxSize().background(LiquidBackground)) {
-        AmbientBlob(
-            modifier = Modifier.offset(x = (-105 + (drift.value * 10f)).dp, y = (-65).dp),
-            size = 330.dp,
-            color = MintBlob,
-        )
-        AmbientBlob(
-            modifier = Modifier.offset(x = (245 - (drift.value * 10f)).dp, y = (20 + drift.value * 8f).dp),
-            size = 320.dp,
-            color = PeachBlob,
-        )
-        AmbientBlob(
-            modifier = Modifier.offset(x = (-85 + drift.value * 8f).dp, y = 570.dp),
-            size = 350.dp,
-            color = LavenderBlob,
-        )
-        AmbientBlob(
-            modifier = Modifier.offset(x = (215 - drift.value * 8f).dp, y = (505 - drift.value * 6f).dp),
-            size = 340.dp,
-            color = SkyBlob,
-        )
+        AmbientBlob(Modifier.offset(x = (-105 + drift.value * 10f).dp, y = (-65).dp), 330.dp, MintBlob)
+        AmbientBlob(Modifier.offset(x = (245 - drift.value * 10f).dp, y = (20 + drift.value * 8f).dp), 320.dp, PeachBlob)
+        AmbientBlob(Modifier.offset(x = (-85 + drift.value * 8f).dp, y = 570.dp), 350.dp, LavenderBlob)
+        AmbientBlob(Modifier.offset(x = (215 - drift.value * 8f).dp, y = (505 - drift.value * 6f).dp), 340.dp, SkyBlob)
 
-        // Soft global illumination reproduces the reference's depth without
-        // introducing an opaque surface behind the actual glass components.
         Box(
             Modifier
                 .fillMaxSize()
                 .background(
                     Brush.radialGradient(
-                        colors = listOf(
-                            Color.White.copy(alpha = 0.42f),
-                            Color.White.copy(alpha = 0.10f),
-                            Color.Transparent,
-                        ),
+                        colors = listOf(Color.White.copy(.46f), Color.White.copy(.12f), Color.Transparent),
                         radius = 1250f,
                     ),
                 )
@@ -93,18 +70,12 @@ fun LiquidGlassEnvironment(
 
         content(hazeState)
 
-        // Specular wash sits above the scene but contains no pointer handlers,
-        // so it remains purely visual and does not steal touch events.
         Box(
             Modifier
                 .fillMaxSize()
                 .background(
                     Brush.linearGradient(
-                        colors = listOf(
-                            Color.White.copy(alpha = 0.045f),
-                            Color.Transparent,
-                            Color.White.copy(alpha = 0.025f),
-                        ),
+                        colors = listOf(Color.White.copy(.055f), Color.Transparent, Color.White.copy(.03f)),
                     ),
                 ),
         )
@@ -119,11 +90,7 @@ private fun AmbientBlob(modifier: Modifier, size: Dp, color: Color) {
             .blur(86.dp)
             .background(
                 Brush.radialGradient(
-                    colors = listOf(
-                        color.copy(alpha = 0.78f),
-                        color.copy(alpha = 0.28f),
-                        Color.Transparent,
-                    ),
+                    colors = listOf(color.copy(.82f), color.copy(.30f), Color.Transparent),
                 ),
                 CircleShape,
             ),
@@ -138,20 +105,11 @@ fun Modifier.liquidGlass(
     material: dev.chrisbanes.haze.HazeStyle = HazeMaterials.thin(),
     elevation: Dp = 8.dp,
 ): Modifier = this
-    .shadow(
-        elevation = elevation,
-        shape = shape,
-        ambientColor = Ink.copy(alpha = 0.10f),
-        spotColor = Ink.copy(alpha = 0.08f),
-    )
+    .shadow(elevation, shape, ambientColor = Ink.copy(.11f), spotColor = Ink.copy(.09f))
     .hazeEffect(state = hazeState, style = material)
     .background(
         Brush.verticalGradient(
-            colors = listOf(
-                Color.White.copy(alpha = 0.52f),
-                Color.White.copy(alpha = 0.30f),
-                Color.White.copy(alpha = 0.18f),
-            ),
+            colors = listOf(Color.White.copy(.58f), Color.White.copy(.32f), Color.White.copy(.17f)),
         ),
         shape,
     )
@@ -165,14 +123,10 @@ fun LiquidGlassSurface(
 ) {
     Box(
         modifier = modifier
-            .liquidGlass(hazeState = hazeState, shape = shape, elevation = 10.dp)
+            .liquidGlass(hazeState, shape, elevation = 10.dp)
             .background(
                 Brush.linearGradient(
-                    colors = listOf(
-                        Color.White.copy(alpha = 0.56f),
-                        Color.Transparent,
-                        Color.White.copy(alpha = 0.14f),
-                    ),
+                    colors = listOf(Color.White.copy(.62f), Color.White.copy(.12f), Color.White.copy(.20f)),
                 ),
                 shape,
             ),
@@ -183,10 +137,6 @@ fun LiquidGlassSurface(
 fun liquidGlassBorder(): BorderStroke = BorderStroke(
     1.dp,
     Brush.verticalGradient(
-        colors = listOf(
-            Color.White.copy(alpha = 0.82f),
-            Color.White.copy(alpha = 0.42f),
-            Color.White.copy(alpha = 0.58f),
-        ),
+        colors = listOf(Color.White.copy(.88f), Color.White.copy(.42f), Color.White.copy(.62f)),
     ),
 )
