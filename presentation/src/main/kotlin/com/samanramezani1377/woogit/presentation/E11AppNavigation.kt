@@ -9,7 +9,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.rememberSaveable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -23,25 +23,19 @@ import com.samanramezani1377.woogit.core.domain.entity.EntityId
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.core.domain.model.*
 import com.samanramezani1377.woogit.presentation.connection.ConnectionScreen
-import com.samanramezani1377.woogit.presentation.dashboard.DashboardDestination
-import com.samanramezani1377.woogit.presentation.dashboard.DashboardScreen
-import com.samanramezani1377.woogit.presentation.dashboard.DashboardViewModel
-import com.samanramezani1377.woogit.presentation.dashboard.DashboardViewModelFactory
+import com.samanramezani1377.woogit.presentation.dashboard.*
 import com.samanramezani1377.woogit.presentation.order.OrderDetailScreen
 import com.samanramezani1377.woogit.presentation.order.OrderDetailUiState
 import com.samanramezani1377.woogit.presentation.orders.OrderRowUiModel
 import com.samanramezani1377.woogit.presentation.orders.OrdersScreen
 import com.samanramezani1377.woogit.presentation.orders.OrdersUiState
 import com.samanramezani1377.woogit.presentation.product.*
-import com.samanramezani1377.woogit.presentation.sync.ConflictsScreen
-import com.samanramezani1377.woogit.presentation.sync.ConflictUiModel
-import com.samanramezani1377.woogit.presentation.sync.SyncScreen
-import com.samanramezani1377.woogit.presentation.sync.SyncUiState
+import com.samanramezani1377.woogit.presentation.sync.*
 
 @Composable
 internal fun E11AppNavigation(dependencies: V1PresentationDependencies, initialOrderId: String?) {
     val navController = rememberNavController()
-    var activeStore by rememberSaveable { mutableStateOf(dependencies.initialStoreId) }
+    var activeStore by remember { mutableStateOf(dependencies.initialStoreId) }
     val startDestination = when {
         activeStore == null -> E11Routes.CONNECTION
         initialOrderId != null -> E11Routes.order(initialOrderId)
@@ -63,7 +57,7 @@ internal fun E11AppNavigation(dependencies: V1PresentationDependencies, initialO
                 val st by vm.uiState.collectAsState()
                 LaunchedEffect(s) { vm.refresh() }
                 val r = st.orders.firstOrNull()
-                DashboardScreen(s.value, true, st.ordersCount, st.productsCount, st.revenue, st.pendingCount, r?.number, r?.customer?.name.orEmpty(), formatMoney(r?.total), r?.status,
+                DashboardScreen(s.value, st.connectionState == ConnectionState.CONNECTED, st.ordersCount, st.productsCount, st.revenue, st.pendingCount, r?.number, r?.customer?.name.orEmpty(), formatMoney(r?.total), r?.status,
                     { r?.number?.let { navController.navigate(E11Routes.order(it)) } }, { navController.navigate(E11Routes.ORDERS) }, { navController.navigate(E11Routes.PRODUCTS) }, { navController.navigate(E11Routes.SETTINGS) }, { navController.navigate(E11Routes.SYNC) }, { navController.navigate(E11Routes.CONFLICTS) }, DashboardDestination.DASHBOARD,
                     { d -> when (d) { DashboardDestination.DASHBOARD -> Unit; DashboardDestination.ORDERS -> navController.navigate(E11Routes.ORDERS); DashboardDestination.PRODUCTS -> navController.navigate(E11Routes.PRODUCTS); DashboardDestination.SETTINGS -> navController.navigate(E11Routes.SETTINGS) } })
             }
