@@ -1,5 +1,7 @@
 package com.samanramezani1377.woogit.presentation.dashboard
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -10,7 +12,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.samanramezani1377.woogit.presentation.GlassTokens
 
 internal enum class DashboardDestination {
     DASHBOARD,
@@ -31,35 +36,20 @@ internal fun DashboardFloatingNavigation(
             .navigationBarsPadding()
             .padding(horizontal = 16.dp, vertical = 10.dp),
         shape = RoundedCornerShape(22.dp),
-        tonalElevation = 6.dp,
-        shadowElevation = 10.dp,
+        color = Color.White.copy(alpha = .72f),
+        border = BorderStroke(1.dp, GlassTokens.glassBorder),
+        shadowElevation = 14.dp,
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 8.dp),
+                .padding(horizontal = 6.dp, vertical = 7.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
         ) {
-            DashboardNavItem(
-                label = "داشبورد",
-                selected = selected == DashboardDestination.DASHBOARD,
-                onClick = { onDestinationSelected(DashboardDestination.DASHBOARD) },
-            )
-            DashboardNavItem(
-                label = "سفارش‌ها",
-                selected = selected == DashboardDestination.ORDERS,
-                onClick = { onDestinationSelected(DashboardDestination.ORDERS) },
-            )
-            DashboardNavItem(
-                label = "محصولات",
-                selected = selected == DashboardDestination.PRODUCTS,
-                onClick = { onDestinationSelected(DashboardDestination.PRODUCTS) },
-            )
-            DashboardNavItem(
-                label = "تنظیمات",
-                selected = selected == DashboardDestination.SETTINGS,
-                onClick = { onDestinationSelected(DashboardDestination.SETTINGS) },
-            )
+            DashboardNavItem("داشبورد", selected == DashboardDestination.DASHBOARD) { onDestinationSelected(DashboardDestination.DASHBOARD) }
+            DashboardNavItem("سفارش‌ها", selected == DashboardDestination.ORDERS) { onDestinationSelected(DashboardDestination.ORDERS) }
+            DashboardNavItem("محصولات", selected == DashboardDestination.PRODUCTS) { onDestinationSelected(DashboardDestination.PRODUCTS) }
+            DashboardNavItem("تنظیمات", selected == DashboardDestination.SETTINGS) { onDestinationSelected(DashboardDestination.SETTINGS) }
         }
     }
 }
@@ -72,8 +62,13 @@ private fun DashboardNavItem(
 ) {
     androidx.compose.material3.TextButton(
         onClick = onClick,
-        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.padding(horizontal = 1.dp),
+        shape = RoundedCornerShape(14.dp),
+        colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+            contentColor = if (selected) GlassTokens.accent else GlassTokens.muted,
+            containerColor = if (selected) GlassTokens.accent.copy(alpha = .12f) else Color.Transparent,
+        ),
     ) {
-        Text(label)
+        Text(label, fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold)
     }
 }
