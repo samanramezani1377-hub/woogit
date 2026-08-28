@@ -2,156 +2,110 @@
 
 ## Purpose
 
-E11 is the presentation layer for the WooGit V1 Android application. Its implementation must remain modular, readable and consistent with `V1_DESIGN_SPEC.md` and the Liquid Glass HTML reference.
+E11 is the presentation layer for WooGit V1. It must remain modular, readable, testable and consistent with `V1_DESIGN_SPEC.md` and the Liquid Glass HTML reference.
 
-The goal is to keep screen composition, navigation, state handling and shared visual primitives separate. Large monolithic or minified Kotlin files are not an acceptable final form.
+Large monolithic or minified Kotlin files are not an acceptable final form.
 
-## Source of Visual Truth
-
-The visual source of truth is:
+## Visual Source of Truth
 
 `ui-reference/liquid-glass/woogit-liquid-glass-v1-fixed.html`
 
-Presentation decisions must follow the shared Liquid Glass contract. Existing WooCommerce behavior, security, accessibility and offline requirements remain mandatory.
+The reference defines composition, hierarchy, spacing, glass surfaces, states, controls, scrolling and floating navigation. Reusing a glass background alone is not sufficient for visual completion.
 
-## Module Responsibilities
+## Architecture
 
-### App entry
+```text
+E11ReleaseApp.kt
+    ↓
+E11Routes.kt
+    ↓
+Screen layer
+    ├── ConnectionScreen
+    ├── DashboardScreen
+    ├── OrdersScreen
+    ├── OrderDetailScreen
+    ├── ProductsScreen
+    ├── ProductEditorScreen
+    ├── VariationsScreen
+    ├── AttributesScreen
+    ├── SyncScreen
+    ├── ConflictsScreen
+    └── SettingsScreen
+         ↓
+Presentation state / callbacks
+         ↓
+Existing domain + data/network layer
+```
 
-`E11ReleaseApp.kt`
+## Dashboard
 
-Responsible only for application-level composition and wiring. It must not contain the complete implementation of every screen.
+Dashboard presentation belongs under the dashboard package. It must consume real application state and navigation callbacks; it must never become a static mock.
 
-### Navigation
-
-`E11Routes.kt`
-
-Contains the canonical E11 destinations and route definitions. Screens receive navigation callbacks instead of hard-coding navigation inside reusable UI components.
-
-### Screens
-
-Each production screen should have its own file or a small, clearly related group of files:
-
-- `ConnectionScreen.kt`
-- `DashboardScreen.kt`
-- `OrdersScreen.kt`
-- `OrderDetailScreen.kt`
-- `ProductsScreen.kt`
-- `ProductEditorScreen.kt`
-- `VariationsScreen.kt`
-- `AttributesScreen.kt`
-- `SyncScreen.kt`
-- `ConflictsScreen.kt`
-- `SettingsScreen.kt`
-
-Additional files may be introduced when a screen contains a genuinely independent feature such as media selection.
-
-### Dashboard
-
-Dashboard presentation belongs under the dashboard package. The dashboard is composed from reusable Liquid Glass surfaces and receives real application state and navigation callbacks.
-
-Current modular dashboard presentation files include:
+Current dashboard pieces:
 
 - `dashboard/DashboardDesign.kt`
 - `dashboard/DashboardActions.kt`
 
-The dashboard must not be replaced by a static mock. Displayed values, connection state and actions must come from the application/domain state.
+The final Dashboard must reproduce the reference composition, including connection status, sync summary, recent/urgent information, compact statistics, quick actions and floating navigation.
 
-### Shared Glass UI
+## Shared Liquid Glass UI
 
-Shared visual primitives belong under the glass component package and are split by responsibility. They must remain multi-line, readable Kotlin source.
+Shared primitives are separated by responsibility: tokens/environment, scaffold, buttons, cards, text fields, input controls, top bar, list/status components, states, overlays and image/media primitives.
 
-Current responsibilities include:
-
-- tokens and environment
-- scaffold
-- buttons
-- cards
-- text fields
-- input controls
-- top bar
-- list/status components
-- states
-- overlays
-- image/media primitives
-
-No screen should recreate the glass system with unrelated one-off Material styling when an appropriate shared primitive exists.
+There must be one canonical implementation for each shared primitive. Screens must not introduce unrelated one-off Material styling where a shared primitive is appropriate.
 
 ## Layout Rules
 
-- Content cards are content-driven; do not use arbitrary fixed heights for content.
-- Minimum interactive touch target is 48dp.
-- Use logical `start`/`end` for RTL/LTR behavior.
-- Main content scrolls independently from persistent navigation.
-- Floating navigation remains visually separated from the scrollable content.
-- Primary actions use the shared purple-to-pink Liquid Glass treatment.
-- Primary button content padding must not create visible empty bands inside the colored surface.
-- Button positions, widths and surrounding spacing must not change when correcting the visual height of an existing action.
+- Content cards use content-driven height.
+- Interactive targets are at least 48dp.
+- RTL/LTR positioning uses logical `start`/`end`.
+- The content region scrolls independently from persistent navigation.
+- Floating navigation remains visually separated from scrollable content.
+- Primary actions use the shared purple-to-pink treatment.
+- Button content padding must not create visible empty bands inside the colored surface.
+- Typography must remain usable with dynamic/system font scaling.
 
-## State Rules
+## State Contract
 
-Every relevant screen must account for:
-
-- loading
-- content
-- empty
-- offline/stale
-- recoverable error
-- blocking error
-- pending mutation
-- conflict
-
-State rendering belongs in presentation components and must not leak network implementation details into reusable UI.
+Relevant screens must define intentional UI for loading, content, empty, offline/stale, recoverable error, blocking error, pending mutation and conflict.
 
 ## Network/UI Boundary
 
-Screens must not construct ad-hoc network clients for WooCommerce operations. Network requests belong to the data/network layer and receive credentials through the established credential boundary.
+Presentation code must not create ad-hoc WooCommerce network clients. Network operations remain in the data/network layer and use the established credential boundary.
 
-For WordPress Media operations specifically:
+WordPress Media operations specifically require the standard authenticated HTTP client, the required `Authorization`, `Content-Type` and `Content-Disposition` headers, preservation of WordPress error payloads, and distinct handling of invalid credentials versus capability errors such as `rest_cannot_create`.
 
-- use the project's standard authenticated HTTP client;
-- send the required `Authorization` header;
-- send the correct `Content-Type`;
-- send the correct `Content-Disposition`;
-- preserve WordPress error information;
-- distinguish invalid credentials from capability errors such as `rest_cannot_create`.
+A `401 rest_cannot_create` response must not automatically be presented as an invalid username/password: WordPress may have authenticated the request while denying the user's capability to create media.
 
-A `401 rest_cannot_create` response must not automatically be treated as an invalid username/password. It can mean that the authenticated WordPress user lacks the capability required to create media.
-
-## Code Quality Rules
+## Code Quality
 
 - No minified or intentionally single-line production Kotlin.
 - One responsibility per file/component where practical.
 - Prefer small composables over giant functions.
 - Keep business logic out of pure visual components.
-- Avoid duplicate declarations of the same visual primitive.
+- Avoid duplicate declarations of shared primitives.
 - Keep imports explicit and minimal.
-- Preserve existing behavior while refactoring presentation.
-- Refactoring is not complete until the project compiles and relevant tests pass.
+- Preserve WooCommerce behavior during presentation refactoring.
+- Do not claim completion based on documentation alone.
+- Compilation and relevant tests are required before refactoring is considered complete.
 
-## Definition of Done for E11 Modularization
+## Definition of Done
 
-1. App entry is small and readable.
-2. Navigation is centralized.
-3. Screens are independently readable.
-4. Dashboard is independently composable and connected to real state.
-5. Shared Glass primitives are reusable and non-duplicated.
-6. No production UI source is minified or intentionally single-line.
-7. No functional WooCommerce behavior is removed during UI refactoring.
-8. UI tests/compile checks pass before the refactor is considered complete.
-9. Documentation reflects the actual implementation rather than planned-only work.
+E11 modularization is complete only when the app entry is small, navigation is centralized, screens are independently readable, Dashboard is connected to real state, shared Glass primitives are reusable and non-duplicated, no production UI source is minified, no WooCommerce capability is removed, the Dashboard matches the reference interaction model, accessibility/states are implemented, and compile/tests plus the full CI quality gate pass.
 
-## Current Refactor Status
+## Current Status
 
 - [x] Canonical E11 route definitions extracted.
 - [x] Shared Glass UI responsibilities split into dedicated files where implemented.
 - [x] Dashboard presentation primitives extracted.
 - [x] Dashboard quick actions extracted and callback-driven.
+- [x] E11 architecture documentation established.
 - [ ] Replace remaining monolithic E11 screen implementations.
 - [ ] Connect Dashboard presentation to real application state.
 - [ ] Implement reference-accurate floating navigation.
-- [ ] Complete all Dashboard reference states.
-- [ ] Add/finish UI tests for the refactored screens.
+- [ ] Complete Dashboard reference states.
+- [ ] Finish Media upload authentication/error tests.
+- [ ] Add/finish UI tests for refactored screens.
 - [ ] Run the full CI quality gate.
 
-This status intentionally distinguishes completed refactoring from work that still requires verification.
+The checklist deliberately distinguishes implemented changes from items that still require verification.
