@@ -24,10 +24,16 @@ import dev.chrisbanes.haze.hazeSource
 import dev.chrisbanes.haze.materials.ExperimentalHazeMaterialsApi
 import dev.chrisbanes.haze.materials.HazeMaterials
 
+private val LiquidBackground = Color(0xFFEFF1F7)
+private val MintBlob = Color(0xFFBEEFDC)
+private val PeachBlob = Color(0xFFFFE1C2)
+private val LavenderBlob = Color(0xFFD8CEFF)
+private val SkyBlob = Color(0xFFC6E6FF)
+
 /**
- * Shared Liquid Glass environment based on the project UI reference.
- * Ambient color blobs provide the visual variation that makes translucent
- * surfaces read as glass rather than opaque cards.
+ * Global Liquid Glass environment used by every WooGit screen.
+ * The environment deliberately owns the ambient background while individual
+ * components own their glass surface, border and elevation.
  */
 @Composable
 fun LiquidGlassEnvironment(
@@ -39,32 +45,27 @@ fun LiquidGlassEnvironment(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(
-                Brush.radialGradient(
-                    colors = listOf(Color(0xFFEFF1F7), Color(0xFFF8F9FC)),
-                    radius = 1500f,
-                ),
-            ),
+            .background(LiquidBackground),
     ) {
         AmbientBlob(
-            modifier = Modifier.offset(x = (-90).dp, y = (-40).dp),
-            size = 300.dp,
-            color = Color(0xFFBEEFDC),
+            modifier = Modifier.offset(x = (-105).dp, y = (-65).dp),
+            size = 330.dp,
+            color = MintBlob,
         )
         AmbientBlob(
-            modifier = Modifier.offset(x = 260.dp, y = 30.dp),
-            size = 300.dp,
-            color = Color(0xFFFFE1C2),
-        )
-        AmbientBlob(
-            modifier = Modifier.offset(x = (-70).dp, y = 600.dp),
+            modifier = Modifier.offset(x = 245.dp, y = 20.dp),
             size = 320.dp,
-            color = Color(0xFFD8CEFF),
+            color = PeachBlob,
         )
         AmbientBlob(
-            modifier = Modifier.offset(x = 230.dp, y = 520.dp),
-            size = 320.dp,
-            color = Color(0xFFC6E6FF),
+            modifier = Modifier.offset(x = (-85).dp, y = 570.dp),
+            size = 350.dp,
+            color = LavenderBlob,
+        )
+        AmbientBlob(
+            modifier = Modifier.offset(x = 215.dp, y = 505.dp),
+            size = 340.dp,
+            color = SkyBlob,
         )
 
         Box(
@@ -72,8 +73,12 @@ fun LiquidGlassEnvironment(
                 .fillMaxSize()
                 .background(
                     Brush.radialGradient(
-                        colors = listOf(Color.White.copy(alpha = .42f), Color.Transparent),
-                        radius = 1100f,
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.38f),
+                            Color.White.copy(alpha = 0.08f),
+                            Color.Transparent,
+                        ),
+                        radius = 1250f,
                     ),
                 )
                 .hazeSource(state = hazeState, zIndex = 0f),
@@ -92,17 +97,21 @@ private fun AmbientBlob(
     Box(
         modifier = modifier
             .size(size)
-            .blur(82.dp)
+            .blur(86.dp)
             .background(
                 Brush.radialGradient(
-                    colors = listOf(color.copy(alpha = .68f), Color.Transparent),
+                    colors = listOf(
+                        color.copy(alpha = 0.72f),
+                        color.copy(alpha = 0.22f),
+                        Color.Transparent,
+                    ),
                 ),
                 CircleShape,
             ),
     )
 }
 
-/** Reusable translucent, blurred, highlighted Liquid Glass material. */
+/** Reusable translucent, blurred and highlighted Liquid Glass material. */
 @OptIn(ExperimentalHazeMaterialsApi::class)
 fun Modifier.liquidGlass(
     hazeState: HazeState,
@@ -115,8 +124,9 @@ fun Modifier.liquidGlass(
     .background(
         Brush.verticalGradient(
             colors = listOf(
-                Color.White.copy(alpha = .34f),
-                Color.White.copy(alpha = .14f),
+                Color.White.copy(alpha = 0.34f),
+                Color.White.copy(alpha = 0.16f),
+                Color.White.copy(alpha = 0.08f),
             ),
         ),
         shape = shape,
@@ -135,9 +145,9 @@ fun LiquidGlassSurface(
             .background(
                 Brush.linearGradient(
                     colors = listOf(
-                        Color.White.copy(alpha = .38f),
+                        Color.White.copy(alpha = 0.40f),
                         Color.Transparent,
-                        Color.White.copy(alpha = .08f),
+                        Color.White.copy(alpha = 0.09f),
                     ),
                 ),
                 shape = shape,
@@ -150,8 +160,8 @@ fun liquidGlassBorder(): BorderStroke = BorderStroke(
     width = 1.dp,
     brush = Brush.verticalGradient(
         colors = listOf(
-            Color.White.copy(alpha = .72f),
-            Color.White.copy(alpha = .28f),
+            Color.White.copy(alpha = 0.76f),
+            Color.White.copy(alpha = 0.28f),
         ),
     ),
 )
