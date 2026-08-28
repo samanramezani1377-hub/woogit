@@ -53,60 +53,26 @@ internal fun ConnectionScreen(
         }
     }
 
-    val ready = storeUrl.isNotBlank() &&
-        consumerKey.isNotBlank() &&
-        consumerSecret.isNotBlank() &&
-        wordpressUser.isNotBlank() &&
-        wordpressPassword.isNotBlank()
+    val ready = storeUrl.isNotBlank() && consumerKey.isNotBlank() &&
+        consumerSecret.isNotBlank() && wordpressUser.isNotBlank() && wordpressPassword.isNotBlank()
 
     GlassScaffold { paddingValues ->
         Column(
-            modifier = Modifier
-                .padding(paddingValues)
-                .padding(20.dp),
+            modifier = Modifier.padding(paddingValues).padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            GlassTopBar(
-                title = "اتصال فروشگاه",
-                subtitle = "WooCommerce",
-            )
-
-            GlassTextField(
-                value = storeUrl,
-                onValueChange = { storeUrl = it },
-                label = "آدرس فروشگاه HTTPS",
-            )
-
-            GlassTextField(
-                value = consumerKey,
-                onValueChange = { consumerKey = it },
-                label = "Consumer Key",
-            )
-
-            GlassPasswordField(
-                value = consumerSecret,
-                onValueChange = { consumerSecret = it },
-            )
-
+            GlassTopBar(title = "اتصال فروشگاه", subtitle = "WooCommerce")
+            GlassTextField(value = storeUrl, onValueChange = { storeUrl = it }, label = "آدرس فروشگاه HTTPS")
+            GlassTextField(value = consumerKey, onValueChange = { consumerKey = it }, label = "Consumer Key")
+            GlassPasswordField(value = consumerSecret, onValueChange = { consumerSecret = it })
             GlassText("دسترسی WordPress برای تصاویر")
-
-            GlassTextField(
-                value = wordpressUser,
-                onValueChange = { wordpressUser = it },
-                label = "نام کاربری WordPress",
-            )
-
-            GlassPasswordField(
-                value = wordpressPassword,
-                onValueChange = { wordpressPassword = it },
-            )
-
+            GlassTextField(value = wordpressUser, onValueChange = { wordpressUser = it }, label = "نام کاربری WordPress")
+            GlassPasswordField(value = wordpressPassword, onValueChange = { wordpressPassword = it })
             when (val currentState = state) {
                 FeatureUiState.Loading -> GlassLoading("در حال اتصال…")
                 is FeatureUiState.Error -> GlassErrorState(currentState.message)
                 else -> Unit
             }
-
             GlassPrimaryAction(
                 text = "بررسی و اتصال",
                 onClick = {
