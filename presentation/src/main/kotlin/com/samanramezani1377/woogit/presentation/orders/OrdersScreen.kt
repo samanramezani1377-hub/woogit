@@ -29,7 +29,6 @@ import androidx.compose.ui.unit.dp
 import com.samanramezani1377.woogit.presentation.GlassCard
 import com.samanramezani1377.woogit.presentation.GlassEmptyState
 import com.samanramezani1377.woogit.presentation.GlassErrorState
-import com.samanramezani1377.woogit.presentation.GlassLoading
 import com.samanramezani1377.woogit.presentation.GlassOfflineState
 import com.samanramezani1377.woogit.presentation.GlassSearchField
 import com.samanramezani1377.woogit.presentation.GlassStatusBadge
@@ -58,14 +57,13 @@ internal fun OrdersScreen(
     }
 
     LaunchedEffect(state) {
-        revealError = state !is OrdersUiState.Error
-        if (state is OrdersUiState.Error) {
-            // A slow first response can briefly surface a transport/timeout error before
-            // the normal request finishes. Keep the initial screen in a loading state for
-            // a short grace period instead of flashing a false failure to the user.
-            delay(3000L)
-            if (state is OrdersUiState.Error) revealError = true
+        if (state !is OrdersUiState.Error) {
+            revealError = false
+            return@LaunchedEffect
         }
+        revealError = false
+        delay(3000L)
+        revealError = true
     }
 
     Column(modifier.fillMaxSize()) {
@@ -75,11 +73,7 @@ internal fun OrdersScreen(
             OrdersUiState.Loading -> OrdersSkeleton(Modifier.weight(1f))
             OrdersUiState.Empty -> EmptyState(Modifier.weight(1f))
             is OrdersUiState.Content -> OrdersList(state, onOrderClick, onLoadMore, Modifier.weight(1f))
-            is OrdersUiState.Error -> if (revealError) {
-                ErrorState(state, onRetry, Modifier.weight(1f))
-            } else {
-                OrdersSkeleton(Modifier.weight(1f))
-            }
+            is OrdersUiState.Error -> if (revealError) ErrorState(state, onRetry, Modifier.weight(1f)) else OrdersSkeleton(Modifier.weight(1f))
             is OrdersUiState.Offline -> Column(Modifier.weight(1f)) {
                 GlassOfflineState()
                 OrdersList(OrdersUiState.Content(state.cachedOrders, false), onOrderClick, {}, Modifier.weight(1f))
