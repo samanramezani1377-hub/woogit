@@ -38,6 +38,7 @@ internal fun ProductEditorScreen(
     availableMedia: List<ProductImage> = emptyList(),
     mediaPickerOpen: Boolean = false,
     mediaLoading: Boolean = false,
+    imageUploading: Boolean = false,
     onOpenMediaPicker: () -> Unit = {},
     onCloseMediaPicker: () -> Unit = {},
     onPickMedia: (ProductImage) -> Unit = {},
@@ -75,8 +76,8 @@ internal fun ProductEditorScreen(
                         GlassTextField(state.stock, onStockChanged, "موجودی")
                         GlassText("تصویر محصول", style = MaterialTheme.typography.titleMedium)
                         GlassTextField(state.imageUrl.orEmpty(), onImageUrlChanged, "آدرس تصویر")
-                        GlassPrimaryAction(if (mediaLoading) "در حال بارگذاری تصویر…" else "آپلود تصویر", onUploadImage, enabled = !mediaLoading)
-                        GlassPrimaryAction("انتخاب از رسانه‌های سایت", onOpenMediaPicker, enabled = !mediaLoading)
+                        GlassPrimaryAction(if (imageUploading) "در حال آپلود…" else "انتخاب تصویر از گوشی", onUploadImage, enabled = !imageUploading)
+                        GlassPrimaryAction("انتخاب از رسانه‌های سایت", onOpenMediaPicker, enabled = !imageUploading)
                         state.imageUrl?.takeIf { it.isNotBlank() }?.let { GlassText("تصویر انتخاب‌شده: $it", style = MaterialTheme.typography.bodySmall) }
                     } }
                     GlassCard { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
