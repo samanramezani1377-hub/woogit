@@ -52,21 +52,15 @@ internal fun ProductsScreen(
 ) {
     var query by remember { mutableStateOf("") }
     GlassScaffold(modifier) { paddingValues ->
-        Column(
-            Modifier.fillMaxSize().padding(paddingValues).padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
+        Column(Modifier.fillMaxSize().padding(paddingValues).padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             GlassTopBar(title = "محصولات", subtitle = "مدیریت محصولات فروشگاه")
             GlassSearchField(query, { query = it; onSearch(it) }, label = "جستجوی محصول")
             GlassPrimaryAction("افزودن محصول", onAddProduct)
             when (state) {
                 FeatureUiState.Loading, FeatureUiState.Pending -> GlassLoading("در حال بارگذاری محصولات…")
                 FeatureUiState.Empty -> GlassEmptyState("محصولی برای نمایش وجود ندارد.")
-                is FeatureUiState.Error -> {
-                    GlassErrorState(state.message)
-                    if (state.retryable) GlassPrimaryAction("تلاش مجدد", onRetry)
-                }
-                is FeatureUiState.Success -> ProductList(state.value, onProductClick, onLoadMore)
+                is FeatureUiState.Error -> { GlassErrorState(state.message); if (state.retryable) GlassPrimaryAction("تلاش مجدد", onRetry) }
+                is FeatureUiState.Success -> ProductList(state.value, onProductClick, onLoadMore, Modifier.weight(1f))
                 FeatureUiState.Offline -> GlassErrorState("اتصال فروشگاه در دسترس نیست.")
                 is FeatureUiState.Conflict -> GlassErrorState("تعارضی در داده‌های محصولات وجود دارد.")
             }
@@ -75,7 +69,7 @@ internal fun ProductsScreen(
 }
 
 @Composable
-private fun ProductList(products: List<Product>, onProductClick: (String) -> Unit, onLoadMore: () -> Unit) {
+private fun ProductList(products: List<Product>, onProductClick: (String) -> Unit, onLoadMore: () -> Unit, modifier: Modifier) {
     val listState = rememberLazyListState()
     LaunchedEffect(listState, products.size) {
         snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
@@ -83,18 +77,9 @@ private fun ProductList(products: List<Product>, onProductClick: (String) -> Uni
             .filter { it >= (products.size - 4).coerceAtLeast(0) }
             .collect { onLoadMore() }
     }
-    LazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxWidth().weight(1f),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        contentPadding = PaddingValues(bottom = 104.dp),
-    ) {
+    LazyColumn(state = listState, modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 104.dp)) {
         items(products, key = { it.id.value }) { product -> ProductRow(product) { onProductClick(product.id.value) } }
-        item {
-            Column(Modifier.fillMaxWidth().padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                CircularProgressIndicator(modifier = Modifier.padding(4.dp), strokeWidth = 2.dp)
-            }
-        }
+        item { Column(Modifier.fillMaxWidth().padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) { CircularProgressIndicator(modifier = Modifier.padding(4.dp), strokeWidth = 2.dp) } }
     }
 }
 
