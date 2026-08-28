@@ -18,7 +18,7 @@ interface GetMedia { suspend operator fun invoke(storeId: StoreId, page: Int = 1
 interface UploadMedia { suspend operator fun invoke(storeId: StoreId, fileName: String, bytes: ByteArray, mediaType: String): CoreResult<ProductImage> }
 interface DeleteMedia { suspend operator fun invoke(storeId: StoreId, mediaId: EntityId): CoreResult<Unit> }
 interface GetStore { suspend operator fun invoke(storeId: StoreId): CoreResult<StoreConnection> }
-interface ConnectStore { suspend operator fun invoke(store: StoreConnection, consumerKey: String, consumerSecret: String): CoreResult<StoreConnection> }
+interface ConnectStore { suspend operator fun invoke(store: StoreConnection, consumerKey: String, consumerSecret: String, wordpressUsername: String? = null, wordpressApplicationPassword: String? = null): CoreResult<StoreConnection> }
 interface DisconnectStore { suspend operator fun invoke(storeId: StoreId): CoreResult<Unit> }
 interface GetConnectionState { suspend operator fun invoke(storeId: StoreId): CoreResult<ConnectionState> }
 interface SyncPendingOperations { suspend operator fun invoke(storeId: StoreId): CoreResult<Unit> }
