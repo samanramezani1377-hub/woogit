@@ -25,13 +25,13 @@ class WooCommerceApi(private val client: HttpClient, private val credentials: Cr
     suspend fun getVariation(baseUrl: String, productId: Long, id: Long) = request(baseUrl, "/wp-json/wc/v3/products/$productId/variations/$id")
     suspend fun createVariation(baseUrl: String, productId: Long, body: String) = request(baseUrl, "/wp-json/wc/v3/products/$productId/variations", "POST", body)
     suspend fun updateVariation(baseUrl: String, productId: Long, id: Long, body: String) = request(baseUrl, "/wp-json/wc/v3/products/$productId/variations/$id", "PUT", body)
-    suspend fun deleteVariation(baseUrl: String, productId: Long, id: Long, force: Boolean = false) = request(baseUrl, "/wp-json/wc/v3/products/$productId/variations/$id", "DELETE", params = params(force))
+    suspend fun deleteVariation(baseUrl: String, productId: Long, id: Long, force: Boolean = false) = request(baseUrl, "/wp-json/wc/v3/products/$productId/variations/$id", "DELETE", params(force))
     suspend fun listAttributes(baseUrl: String, page: Int = 1, perPage: Int = 100) = request(baseUrl, "/wp-json/wc/v3/products/attributes", params = params(page, perPage))
     suspend fun getAttribute(baseUrl: String, id: Long) = request(baseUrl, "/wp-json/wc/v3/products/attributes/$id")
     suspend fun createAttribute(baseUrl: String, body: String) = request(baseUrl, "/wp-json/wc/v3/products/attributes", "POST", body)
     suspend fun updateAttribute(baseUrl: String, id: Long, body: String) = request(baseUrl, "/wp-json/wc/v3/products/attributes/$id", "PUT", body)
-    suspend fun deleteAttribute(baseUrl: String, id: Long, force: Boolean = false) = request(baseUrl, "/wp-json/wc/v3/products/attributes/$id", "DELETE", params = params(force))
-    suspend fun listAttributeTerms(baseUrl: String, attributeId: Long, page: Int = 1, perPage: Int = 100) = request(baseUrl, "/wp-json/wc/v3/products/attributes/$attributeId/terms", params = params(page, perPage))
+    suspend fun deleteAttribute(baseUrl: String, id: Long, force: Boolean = false) = request(baseUrl, "/wp-json/wc/v3/products/attributes/$id", "DELETE", params(force))
+    suspend fun listAttributeTerms(baseUrl: String, attributeId: Long, page: Int = 1, perPage: Int = 100) = request(baseUrl, "/wp-json/wc/v3/products/attributes/$attributeId/terms", params(page, perPage))
     suspend fun getAttributeTerm(baseUrl: String, attributeId: Long, id: Long) = request(baseUrl, "/wp-json/wc/v3/products/attributes/$attributeId/terms/$id")
     suspend fun createAttributeTerm(baseUrl: String, attributeId: Long, body: String) = request(baseUrl, "/wp-json/wc/v3/products/attributes/$attributeId/terms", "POST", body)
     suspend fun updateAttributeTerm(baseUrl: String, attributeId: Long, id: Long, body: String) = request(baseUrl, "/wp-json/wc/v3/products/attributes/$attributeId/terms/$id", "PUT", body)
@@ -55,6 +55,16 @@ class WooCommerceApi(private val client: HttpClient, private val credentials: Cr
     }
 
     suspend fun deleteMedia(baseUrl: String, mediaId: Long, force: Boolean = true): ApiResponse = wordpressRequest(baseUrl, "/wp-json/wp/v2/media/$mediaId", params(force), "DELETE")
+
+    private suspend fun request(baseUrl: String, path: String, params: Map<String, Any> = emptyMap(), method: String = "GET", body: String? = null): ApiResponse {
+        val url = Url("${baseUrl.trimEnd('/')}$path")
+        require(url.protocol.name == "https") { "WooCommerce API requires HTTPS" }
+        val response = execute(url, method, body, params, queryCredentials = true)
+        return ApiResponse(response.status.value, response.bodyAsText())
+    }
+
+    private suspend fun request(baseUrl: String, path: String, method: String, body: String): ApiResponse =
+        request(baseUrl, path, emptyMap(), method, body)
 
     private suspend fun wordpressRequest(baseUrl: String, path: String, params: Map<String, Any> = emptyMap(), method: String = "GET"): ApiResponse {
         val url = Url("${baseUrl.trimEnd('/')}$path")
