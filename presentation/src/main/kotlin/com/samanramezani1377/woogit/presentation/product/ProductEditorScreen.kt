@@ -4,16 +4,22 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.samanramezani1377.woogit.core.domain.model.IdName
+import com.samanramezani1377.woogit.core.domain.model.ProductImage
 import com.samanramezani1377.woogit.core.domain.model.ProductStatus
 import com.samanramezani1377.woogit.core.domain.model.ProductType
 import com.samanramezani1377.woogit.presentation.GlassCard
@@ -29,6 +35,13 @@ import com.samanramezani1377.woogit.presentation.GlassTopBar
 internal fun ProductEditorScreen(
     state: ProductEditorUiState,
     availableCategories: List<IdName> = emptyList(),
+    availableMedia: List<ProductImage> = emptyList(),
+    mediaPickerOpen: Boolean = false,
+    mediaLoading: Boolean = false,
+    onOpenMediaPicker: () -> Unit = {},
+    onCloseMediaPicker: () -> Unit = {},
+    onPickMedia: (ProductImage) -> Unit = {},
+    onUploadImage: () -> Unit = {},
     onNameChanged: (String) -> Unit,
     onSkuChanged: (String) -> Unit,
     onShortDescriptionChanged: (String) -> Unit,
@@ -60,7 +73,11 @@ internal fun ProductEditorScreen(
                         GlassTextField(state.price, onPriceChanged, "قیمت اصلی")
                         GlassTextField(state.salePrice, onSalePriceChanged, "قیمت فروش ویژه")
                         GlassTextField(state.stock, onStockChanged, "موجودی")
+                        GlassText("تصویر محصول", style = MaterialTheme.typography.titleMedium)
                         GlassTextField(state.imageUrl.orEmpty(), onImageUrlChanged, "آدرس تصویر")
+                        GlassPrimaryAction(if (mediaLoading) "در حال بارگذاری تصویر…" else "آپلود تصویر", onUploadImage, enabled = !mediaLoading)
+                        GlassPrimaryAction("انتخاب از رسانه‌های سایت", onOpenMediaPicker, enabled = !mediaLoading)
+                        state.imageUrl?.takeIf { it.isNotBlank() }?.let { GlassText("تصویر انتخاب‌شده: $it", style = MaterialTheme.typography.bodySmall) }
                     } }
                     GlassCard { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         GlassText("وضعیت انتشار", style = MaterialTheme.typography.titleMedium)
@@ -82,11 +99,7 @@ internal fun ProductEditorScreen(
                             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 val selected = state.categories.split(',').map { it.trim() }.filter { it.isNotBlank() }.toSet()
                                 availableCategories.forEach { category ->
-                                    FilterChip(selected = category.name in selected, onClick = {
-                                        val next = selected.toMutableSet()
-                                        if (!next.add(category.name)) next.remove(category.name)
-                                        onCategoriesChanged(next.joinToString(", "))
-                                    }, label = { GlassText(category.name) })
+                                    FilterChip(selected = category.name in selected, onClick = { val next = selected.toMutableSet(); if (!next.add(category.name)) next.remove(category.name); onCategoriesChanged(next.joinToString(", ")) }, label = { GlassText(category.name) })
                                 }
                             }
                         } else GlassText("دسته‌بندی‌ای از فروشگاه دریافت نشد.")
@@ -100,5 +113,16 @@ internal fun ProductEditorScreen(
                 ProductEditorUiState.Saved -> GlassCard { GlassText("محصول با موفقیت ذخیره شد.") }
             }
         }
+    }
+    if (mediaPickerOpen) {
+        AlertDialog(onDismissRequest = onCloseMediaPicker, title = { GlassText("انتخاب از رسانه‌های سایت") }, text = {
+            if (mediaLoading) GlassLoading("در حال دریافت رسانه‌های فروشگاه…")
+            else if (availableMedia.isEmpty()) GlassText("رسانه‌ای در فروشگاه پیدا نشد.")
+            else LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                items(availableMedia, key = { it.id?.value ?: it.src }) { media ->
+                    TextButton(onClick = { onPickMedia(media) }, modifier = Modifier.fillMaxWidth()) { GlassText(media.name?.takeIf { it.isNotBlank() } ?: media.src) }
+                }
+            }
+        }, confirmButton = { TextButton(onClick = onCloseMediaPicker) { GlassText("بستن") } })
     }
 }
