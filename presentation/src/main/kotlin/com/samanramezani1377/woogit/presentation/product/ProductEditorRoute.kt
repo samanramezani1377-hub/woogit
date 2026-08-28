@@ -46,6 +46,7 @@ internal fun ProductEditorRoute(dependencies: V1PresentationDependencies, storeI
     var mediaPickerOpen by remember { mutableStateOf(false) }
     var selectedUploadUri by remember { mutableStateOf<Uri?>(null) }
     var mediaUploading by remember { mutableStateOf(false) }
+    var uploadedImageUrl by remember(productId) { mutableStateOf<String?>(null) }
 
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri -> selectedUploadUri = uri }
 
@@ -71,6 +72,7 @@ internal fun ProductEditorRoute(dependencies: V1PresentationDependencies, storeI
                         val uploaded = result.value
                         val id = uploaded.id?.value?.takeIf { it.isNotBlank() }
                         val url = uploaded.src.trim().takeIf { it.isNotBlank() }
+                        uploadedImageUrl = url
                         form = form?.copy(imageUrl = url, imageId = id, imageError = when { id == null -> "آپلود انجام شد اما شناسه رسانه از WordPress دریافت نشد."; url == null -> "تصویر آپلود شد، اما WordPress آدرس تصویر را برنگرداند."; else -> null })
                     }
                     is CoreResult.Failure -> form = form?.copy(imageError = "آپلود تصویر ناموفق بود: ${result.error}")
@@ -80,6 +82,7 @@ internal fun ProductEditorRoute(dependencies: V1PresentationDependencies, storeI
         finally { mediaUploading = false }
     }
     LaunchedEffect(state) {
+        if (uploadedImageUrl != null) return@LaunchedEffect
         val product = (state as? FeatureUiState.Success)?.value ?: return@LaunchedEffect
         original = product
         val firstImage = product.images.firstOrNull()
@@ -92,16 +95,16 @@ internal fun ProductEditorRoute(dependencies: V1PresentationDependencies, storeI
             state = editing, availableCategories = availableCategories, availableMedia = availableMedia, mediaPickerOpen = mediaPickerOpen,
             mediaLoading = mediaState is FeatureUiState.Loading, imageUploading = mediaUploading,
             onOpenMediaPicker = { mediaPickerOpen = true }, onCloseMediaPicker = { mediaPickerOpen = false },
-            onPickMedia = { media -> form = form?.copy(imageUrl = media.src, imageId = media.id?.value?.toString(), imageError = null); mediaPickerOpen = false },
+            onPickMedia = { media -> uploadedImageUrl = media.src; form = form?.copy(imageUrl = media.src, imageId = media.id?.value?.toString(), imageError = null); mediaPickerOpen = false },
             onUploadImage = { imagePicker.launch("image/*") },
             onNameChanged = { form = form?.copy(name = it) }, onSkuChanged = { form = form?.copy(sku = it) },
             onShortDescriptionChanged = { form = form?.copy(shortDescription = it) }, onDescriptionChanged = { form = form?.copy(description = it) },
             onPriceChanged = { form = form?.copy(price = it) }, onSalePriceChanged = { form = form?.copy(salePrice = it) },
-            onStockChanged = { form = form?.copy(stock = it) }, onImageUrlChanged = { form = form?.copy(imageUrl = it.ifBlank { null }, imageId = null, imageError = null) },
+            onStockChanged = { form = form?.copy(stock = it) }, onImageUrlChanged = { uploadedImageUrl = it.takeIf { value -> value.isNotBlank() }; form = form?.copy(imageUrl = it.ifBlank { null }, imageId = null, imageError = null) },
             onCategoriesChanged = { form = form?.copy(categories = it) }, onAttributesChanged = { form = form?.copy(attributes = it) },
             onStatusChanged = { form = form?.copy(status = it) }, onTypeChanged = { form = form?.copy(type = it) },
             onSave = { val current = form ?: return@ProductEditorScreen; vm.save(storeId, current.toProduct(original, availableCategories), current.productId == null, onSaved); form = current.copy(saving = true) },
-            onRetry = { if (editing.productId != null) vm.load(storeId, EntityId(editing.productId)) else vm.loadCategories(storeId) }, onBack = onBack, modifier = modifier,
+            onRetry = { uploadedImageUrl = null; if (editing.productId != null) vm.load(storeId, EntityId(editing.productId)) else vm.loadCategories(storeId) }, onBack = onBack, modifier = modifier,
         )
         state is FeatureUiState.Loading -> ProductEditorScreen(state = ProductEditorUiState.Loading, availableCategories = availableCategories, onNameChanged = {}, onSkuChanged = {}, onShortDescriptionChanged = {}, onDescriptionChanged = {}, onPriceChanged = {}, onSalePriceChanged = {}, onStockChanged = {}, onImageUrlChanged = {}, onCategoriesChanged = {}, onAttributesChanged = {}, onStatusChanged = {}, onTypeChanged = {}, onSave = {}, onRetry = {}, onBack = onBack, modifier = modifier)
         state is FeatureUiState.Error -> { val error = state as FeatureUiState.Error; ProductEditorScreen(state = ProductEditorUiState.Error(error.message, error.retryable), availableCategories = availableCategories, onNameChanged = {}, onSkuChanged = {}, onShortDescriptionChanged = {}, onDescriptionChanged = {}, onPriceChanged = {}, onSalePriceChanged = {}, onStockChanged = {}, onImageUrlChanged = {}, onCategoriesChanged = {}, onAttributesChanged = {}, onStatusChanged = {}, onTypeChanged = {}, onSave = {}, onRetry = { if (productId != null) vm.load(storeId, EntityId(productId)) else vm.loadCategories(storeId) }, onBack = onBack, modifier = modifier) }
