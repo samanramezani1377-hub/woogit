@@ -12,6 +12,10 @@ import kotlinx.datetime.Instant
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import java.math.BigDecimal
+import java.text.DecimalFormat
+import java.text.DecimalFormatSymbols
+import java.time.LocalDate
 import java.security.MessageDigest
 
 private val mutationJson = Json { ignoreUnknownKeys = true; explicitNulls = false }
@@ -58,6 +62,24 @@ private fun WooOrderTypedDto.toDomain(): Order {
     )
 }
 
+private fun formatWooMoney(value: String, settings: WooSystemStatusSettingsDto): String {
+    val amount = value.toBigDecimalOrNull() ?: BigDecimal.ZERO
+    val symbols = DecimalFormatSymbols().apply {
+        groupingSeparator = settings.thousand_separator.firstOrNull() ?: ','
+        decimalSeparator = settings.decimal_separator.firstOrNull() ?: '.'
+    }
+    val decimals = settings.number_of_decimals.coerceAtLeast(0)
+    val pattern = if (decimals == 0) "#,##0" else "#,##0." + "0".repeat(decimals)
+    val formatted = DecimalFormat(pattern, symbols).format(amount)
+    val symbol = settings.currency_symbol.ifBlank { settings.currency }
+    return when (settings.currency_position) {
+        "right" -> "$formatted$symbol"
+        "left_space" -> "$symbol $formatted"
+        "right_space" -> "$formatted $symbol"
+        else -> "$symbol$formatted"
+    }
+}
+
 class OrderRepositoryV1Impl(
     private val local: LocalOrderDataSource<Order>,
     private val provider: WooCommerceClientProvider,
@@ -80,6 +102,31 @@ class OrderRepositoryV1Impl(
             { cached ?: CoreResult.Failure(it) },
         )
     }
+
+    override suspend fun salesSummary(storeId: StoreId): CoreResult<SalesSummary> = provider.client(storeId).fold(
+        { (store, api) ->
+            val settingsResult = api.validate(store.baseUrl)
+            val reportResult = api.salesReport(store.baseUrl, "2000-01-01", LocalDate.now().toString())
+            if (settingsResult.isFailure || reportResult.isFailure) {
+                val error = settingsResult.exceptionOrNull() ?: reportResult.exceptionOrNull() ?: Exception("WooCommerce sales report failed")
+                return@fold CoreResult.Failure(error.toDomain())
+            }
+            val settings = settingsResult.getOrThrow().settings
+            val report = reportResult.getOrThrow()
+            CoreResult.Success(
+                SalesSummary(
+                    netSales = report.net_sales,
+                    currency = settings.currency,
+                    currencySymbol = settings.currency_symbol,
+                    currencyPosition = settings.currency_position,
+                    thousandSeparator = settings.thousand_separator,
+                    decimalSeparator = settings.decimal_separator,
+                    numberOfDecimals = settings.number_of_decimals,
+                )
+            )
+        },
+        { CoreResult.Failure(it) },
+    )
 
     override suspend fun update(storeId: StoreId, id: EntityId, order: Order): CoreResult<Order> {
         val wooStatus = order.status.toWooValue()
