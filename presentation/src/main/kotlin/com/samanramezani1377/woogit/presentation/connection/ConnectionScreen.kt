@@ -14,6 +14,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.samanramezani1377.woogit.core.domain.model.StoreConnection
 import com.samanramezani1377.woogit.presentation.ConnectionViewModel
 import com.samanramezani1377.woogit.presentation.FeatureUiState
 import com.samanramezani1377.woogit.presentation.GlassErrorState
@@ -24,7 +25,6 @@ import com.samanramezani1377.woogit.presentation.GlassScaffold
 import com.samanramezani1377.woogit.presentation.GlassText
 import com.samanramezani1377.woogit.presentation.GlassTextField
 import com.samanramezani1377.woogit.presentation.GlassTopBar
-import com.samanramezani1377.woogit.presentation.StoreConnection
 import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
 import com.samanramezani1377.woogit.presentation.vmFactory
 
@@ -53,8 +53,7 @@ internal fun ConnectionScreen(
         }
     }
 
-    val ready = storeUrl.isNotBlank() && consumerKey.isNotBlank() &&
-        consumerSecret.isNotBlank() && wordpressUser.isNotBlank() && wordpressPassword.isNotBlank()
+    val ready = storeUrl.isNotBlank() && consumerKey.isNotBlank() && consumerSecret.isNotBlank() && wordpressUser.isNotBlank() && wordpressPassword.isNotBlank()
 
     GlassScaffold { paddingValues ->
         Column(
@@ -76,11 +75,7 @@ internal fun ConnectionScreen(
             GlassPrimaryAction(
                 text = "بررسی و اتصال",
                 onClick = {
-                    connectionViewModel.connect(
-                        storeUrl,
-                        consumerKey,
-                        consumerSecret + "\u0001" + wordpressUser + "\u0001" + wordpressPassword,
-                    )
+                    connectionViewModel.connect(storeUrl, consumerKey, consumerSecret + "\u0001" + wordpressUser + "\u0001" + wordpressPassword)
                 },
                 modifier = Modifier.fillMaxWidth(),
                 enabled = ready,
