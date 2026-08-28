@@ -12,7 +12,7 @@ private val typedJson = Json { ignoreUnknownKeys = true; explicitNulls = false }
 @Serializable data class WooCouponLineDto(val code:String="",val discount:String="0")
 @Serializable data class WooOrderTypedDto(val id:Long,val number:String="",val status:String="",val total:String="0",val currency:String="",val customer_id:Long=0,val billing:WooAddressDto?=null,val shipping:WooAddressDto?=null,val payment_method:String?=null,val payment_method_title:String?=null,val transaction_id:String?=null,val set_paid:Boolean?=null,val date_paid_gmt:String?=null,val date_modified_gmt:String?=null,val line_items:List<WooLineItemDto> = emptyList(),val shipping_lines:List<WooShippingLineDto> = emptyList(),val coupon_lines:List<WooCouponLineDto> = emptyList())
 @Serializable data class WooOrderNoteDto(val id:Long=0,val note:String,val customer_note:Boolean=false,val date_created_gmt:String?=null)
-@Serializable data class WooImageTypedDto(val id:Long?=null,val src:String="",val name:String?=null,val alt:String?=null)
+@Serializable data class WooImageTypedDto(val id:Long?=null,val src:String?=null,val name:String?=null,val alt:String?=null)
 @Serializable data class WooCategoryDto(val id:Long=0,val name:String="")
 @Serializable data class WooProductAttributeDto(val id:Long?=null,val name:String="",val visible:Boolean=true,val variation:Boolean=false,val options:List<String> = emptyList())
 @Serializable data class WooMetaDataDto(val id:Long=0,val key:String="",val value:JsonElement?=null)
