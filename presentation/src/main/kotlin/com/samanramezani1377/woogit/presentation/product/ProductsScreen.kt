@@ -15,6 +15,10 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -24,10 +28,12 @@ import com.samanramezani1377.woogit.core.domain.model.Product
 import com.samanramezani1377.woogit.core.domain.model.ProductStatus
 import com.samanramezani1377.woogit.presentation.FeatureUiState
 import com.samanramezani1377.woogit.presentation.GlassCard
+import com.samanramezani1377.woogit.presentation.GlassEmptyState
 import com.samanramezani1377.woogit.presentation.GlassErrorState
 import com.samanramezani1377.woogit.presentation.GlassLoading
 import com.samanramezani1377.woogit.presentation.GlassPrimaryAction
 import com.samanramezani1377.woogit.presentation.GlassScaffold
+import com.samanramezani1377.woogit.presentation.GlassSearchField
 import com.samanramezani1377.woogit.presentation.GlassText
 import com.samanramezani1377.woogit.presentation.GlassTopBar
 import com.samanramezani1377.woogit.presentation.GlassTokens
@@ -40,17 +46,22 @@ internal fun ProductsScreen(
     onProductClick: (String) -> Unit,
     onRetry: () -> Unit,
     onLoadMore: () -> Unit = {},
+    onSearch: (String) -> Unit = {},
+    onAddProduct: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    var query by remember { mutableStateOf("") }
     GlassScaffold(modifier) { paddingValues ->
         Column(
             Modifier.fillMaxSize().padding(paddingValues).padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             GlassTopBar(title = "محصولات", subtitle = "مدیریت محصولات فروشگاه")
+            GlassSearchField(query, { query = it; onSearch(it) }, label = "جستجوی محصول")
+            GlassPrimaryAction("افزودن محصول", onAddProduct)
             when (state) {
                 FeatureUiState.Loading, FeatureUiState.Pending -> GlassLoading("در حال بارگذاری محصولات…")
-                FeatureUiState.Empty -> GlassCard { GlassText("محصولی برای نمایش وجود ندارد.") }
+                FeatureUiState.Empty -> GlassEmptyState("محصولی برای نمایش وجود ندارد.")
                 is FeatureUiState.Error -> {
                     GlassErrorState(state.message)
                     if (state.retryable) GlassPrimaryAction("تلاش مجدد", onRetry)
@@ -74,13 +85,11 @@ private fun ProductList(products: List<Product>, onProductClick: (String) -> Uni
     }
     LazyColumn(
         state = listState,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().weight(1f),
         verticalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = PaddingValues(bottom = 104.dp),
     ) {
-        items(products, key = { it.id.value }) { product ->
-            ProductRow(product, onClick = { onProductClick(product.id.value) })
-        }
+        items(products, key = { it.id.value }) { product -> ProductRow(product) { onProductClick(product.id.value) } }
         item {
             Column(Modifier.fillMaxWidth().padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 CircularProgressIndicator(modifier = Modifier.padding(4.dp), strokeWidth = 2.dp)
@@ -95,7 +104,7 @@ private fun ProductRow(product: Product, onClick: () -> Unit) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 GlassText(product.name, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-                GlassText(product.status.toDisplayName(), style = MaterialTheme.typography.bodySmall.copy(color = GlassTokens.muted))
+                GlassText("${product.status.toDisplayName()} · SKU: ${product.sku ?: "—"}", style = MaterialTheme.typography.bodySmall.copy(color = GlassTokens.muted))
             }
             Column(horizontalAlignment = Alignment.End) {
                 GlassText(product.pricing.sale ?: product.pricing.regular ?: "—", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
