@@ -11,10 +11,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 /**
- * Dashboard screen boundary.
- *
- * The content region owns scrolling; the floating navigation remains separated
- * from the scrollable content as required by the V1 visual contract.
+ * Dashboard shell. Content scrolls independently while the floating navigation
+ * remains visually separated and fixed at the bottom.
  */
 @Composable
 internal fun DashboardScreen(
@@ -37,7 +35,9 @@ internal fun DashboardScreen(
         Column(
             modifier = Modifier
                 .weight(1f)
-                .verticalScroll(rememberScrollState()),
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = 8.dp),
         ) {
             DashboardContent(
                 storeName = storeName,
@@ -50,7 +50,7 @@ internal fun DashboardScreen(
             DashboardActions(
                 onOrdersClick = onOrdersClick,
                 onProductsClick = onProductsClick,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             )
         }
 
