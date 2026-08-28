@@ -101,6 +101,7 @@ fun GlassScaffold(
     }
 }
 
+@Composable
 private fun Modifier.glassMaterial(shape: RoundedCornerShape): Modifier {
     val haze = LocalWooGitGlassHaze.current
     return if (haze != null) liquidGlass(hazeState = haze, shape = shape) else this
@@ -168,52 +169,29 @@ fun GlassSection(title: String, modifier: Modifier = Modifier, content: @Composa
     }
 
 @Composable
-fun GlassDivider(modifier: Modifier = Modifier) =
-    HorizontalDivider(modifier, color = Color.White.copy(alpha = 0.38f))
+fun GlassDivider(modifier: Modifier = Modifier) = HorizontalDivider(modifier, color = Color.White.copy(alpha = 0.38f))
 
 @Composable
 fun GlassButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
     val shape = RoundedCornerShape(GlassTokens.radiusSm)
-    Button(
-        onClick = onClick,
-        modifier = modifier.heightIn(min = 50.dp).glassMaterial(shape),
-        enabled = enabled,
-        shape = shape,
-        colors = ButtonDefaults.buttonColors(
-            containerColor = GlassTokens.accent,
-            contentColor = Color.White,
-            disabledContainerColor = GlassTokens.accent.copy(alpha = 0.35f),
-        ),
-        elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp, pressedElevation = 1.dp),
-    ) { Text(label.glassLabel()) }
+    Button(onClick = onClick, modifier = modifier.heightIn(min = 50.dp).glassMaterial(shape), enabled = enabled, shape = shape,
+        colors = ButtonDefaults.buttonColors(containerColor = GlassTokens.accent, contentColor = Color.White, disabledContainerColor = GlassTokens.accent.copy(alpha = 0.35f)),
+        elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp, pressedElevation = 1.dp)) { Text(label.glassLabel()) }
 }
 
 @Composable
 fun GlassSecondaryButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
     val shape = RoundedCornerShape(GlassTokens.radiusSm)
-    FilledTonalButton(
-        onClick,
-        modifier.heightIn(min = 50.dp).glassMaterial(shape),
-        enabled = enabled,
-        shape = shape,
-        colors = ButtonDefaults.filledTonalButtonColors(
-            containerColor = GlassTokens.glassFillStrong,
-            contentColor = MaterialTheme.colorScheme.onSurface,
-        ),
-    ) { Text(label.glassLabel()) }
+    FilledTonalButton(onClick, modifier.heightIn(min = 50.dp).glassMaterial(shape), enabled = enabled, shape = shape,
+        colors = ButtonDefaults.filledTonalButtonColors(containerColor = GlassTokens.glassFillStrong, contentColor = MaterialTheme.colorScheme.onSurface)) { Text(label.glassLabel()) }
 }
 
 @Composable
 fun GlassOutlinedButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
     val shape = RoundedCornerShape(GlassTokens.radiusSm)
-    OutlinedButton(
-        onClick,
-        modifier.heightIn(min = 50.dp).glassMaterial(shape),
-        enabled = enabled,
-        shape = shape,
+    OutlinedButton(onClick, modifier.heightIn(min = 50.dp).glassMaterial(shape), enabled = enabled, shape = shape,
         border = BorderStroke(1.dp, GlassTokens.glassBorder),
-        colors = ButtonDefaults.outlinedButtonColors(containerColor = GlassTokens.glassFill, contentColor = MaterialTheme.colorScheme.onSurface),
-    ) { Text(label.glassLabel()) }
+        colors = ButtonDefaults.outlinedButtonColors(containerColor = GlassTokens.glassFill, contentColor = MaterialTheme.colorScheme.onSurface)) { Text(label.glassLabel()) }
 }
 
 @Composable
@@ -222,144 +200,63 @@ fun GlassTextButton(label: String, onClick: () -> Unit, modifier: Modifier = Mod
 
 @Composable
 fun GlassIconButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
-    IconButton(
-        onClick,
-        modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp).glassMaterial(RoundedCornerShape(12.dp)),
-        enabled = enabled,
-    ) {
+    IconButton(onClick, modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp).glassMaterial(RoundedCornerShape(12.dp)), enabled = enabled) {
         Text(label, Modifier.semantics { contentDescription = label; role = Role.Button })
     }
 }
 
 @Composable
 fun GlassFloatingActionButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier) =
-    FloatingActionButton(
-        onClick,
-        modifier.sizeIn(minWidth = 52.dp, minHeight = 52.dp).glassMaterial(RoundedCornerShape(GlassTokens.radiusMd)),
-        shape = RoundedCornerShape(GlassTokens.radiusMd),
-        containerColor = GlassTokens.accent,
-        contentColor = Color.White,
-    ) { Text(label) }
+    FloatingActionButton(onClick, modifier.sizeIn(minWidth = 52.dp, minHeight = 52.dp).glassMaterial(RoundedCornerShape(GlassTokens.radiusMd)), shape = RoundedCornerShape(GlassTokens.radiusMd), containerColor = GlassTokens.accent, contentColor = Color.White) { Text(label) }
 
 @Composable
 fun GlassTextField(value: String, onValueChange: (String) -> Unit, label: String, modifier: Modifier = Modifier, enabled: Boolean = true, singleLine: Boolean = true) {
     val richText = label == "توضیحات" || label == "توضیح کوتاه"
     val displayValue = if (richText) value.stripHtml() else value
-    OutlinedTextField(
-        displayValue,
-        { onValueChange(if (richText) it.toWooHtml() else it) },
-        modifier.fillMaxWidth().heightIn(min = 54.dp),
-        enabled = enabled,
-        singleLine = singleLine,
-        label = { Text(label) },
-        shape = RoundedCornerShape(GlassTokens.radiusSm),
-        colors = OutlinedTextFieldDefaults.colors(
-            unfocusedContainerColor = Color.White.copy(alpha = 0.16f),
-            focusedContainerColor = Color.White.copy(alpha = 0.28f),
-            unfocusedBorderColor = GlassTokens.glassBorder,
-            focusedBorderColor = MaterialTheme.colorScheme.primary,
-        ),
-    )
+    OutlinedTextField(displayValue, { onValueChange(if (richText) it.toWooHtml() else it) }, modifier.fillMaxWidth().heightIn(min = 54.dp), enabled = enabled, singleLine = singleLine,
+        label = { Text(label) }, shape = RoundedCornerShape(GlassTokens.radiusSm), colors = OutlinedTextFieldDefaults.colors(unfocusedContainerColor = Color.White.copy(alpha = 0.16f), focusedContainerColor = Color.White.copy(alpha = 0.28f), unfocusedBorderColor = GlassTokens.glassBorder, focusedBorderColor = MaterialTheme.colorScheme.primary))
 }
 
 @Composable
 fun GlassPasswordField(value: String, onValueChange: (String) -> Unit, label: String = "Consumer Secret", modifier: Modifier = Modifier, enabled: Boolean = true) =
-    OutlinedTextField(
-        value,
-        onValueChange,
-        modifier.fillMaxWidth().heightIn(min = 54.dp),
-        enabled = enabled,
-        singleLine = true,
-        label = { Text(label) },
-        visualTransformation = PasswordVisualTransformation(),
-        shape = RoundedCornerShape(GlassTokens.radiusSm),
-        colors = OutlinedTextFieldDefaults.colors(
-            unfocusedContainerColor = Color.White.copy(alpha = 0.16f),
-            focusedContainerColor = Color.White.copy(alpha = 0.28f),
-            unfocusedBorderColor = GlassTokens.glassBorder,
-            focusedBorderColor = MaterialTheme.colorScheme.primary,
-        ),
-    )
+    OutlinedTextField(value, onValueChange, modifier.fillMaxWidth().heightIn(min = 54.dp), enabled = enabled, singleLine = true, label = { Text(label) }, visualTransformation = PasswordVisualTransformation(), shape = RoundedCornerShape(GlassTokens.radiusSm), colors = OutlinedTextFieldDefaults.colors(unfocusedContainerColor = Color.White.copy(alpha = 0.16f), focusedContainerColor = Color.White.copy(alpha = 0.28f), unfocusedBorderColor = GlassTokens.glassBorder, focusedBorderColor = MaterialTheme.colorScheme.primary))
 
 @Composable
 fun GlassSearchField(value: String, onValueChange: (String) -> Unit, label: String = "جستجو", modifier: Modifier = Modifier, onClear: (() -> Unit)? = null) =
-    OutlinedTextField(
-        value,
-        onValueChange,
-        modifier.fillMaxWidth().heightIn(min = 54.dp),
-        singleLine = true,
-        label = { Text(label) },
-        trailingIcon = { if (value.isNotEmpty()) GlassTextButton("پاک", { onClear?.invoke() ?: onValueChange("") }) },
-        shape = RoundedCornerShape(GlassTokens.radiusSm),
-        colors = OutlinedTextFieldDefaults.colors(
-            unfocusedContainerColor = Color.White.copy(alpha = 0.16f),
-            focusedContainerColor = Color.White.copy(alpha = 0.28f),
-            unfocusedBorderColor = GlassTokens.glassBorder,
-            focusedBorderColor = MaterialTheme.colorScheme.primary,
-        ),
-    )
+    OutlinedTextField(value, onValueChange, modifier.fillMaxWidth().heightIn(min = 54.dp), singleLine = true, label = { Text(label) }, trailingIcon = { if (value.isNotEmpty()) GlassTextButton("پاک", { onClear?.invoke() ?: onValueChange("") }) }, shape = RoundedCornerShape(GlassTokens.radiusSm), colors = OutlinedTextFieldDefaults.colors(unfocusedContainerColor = Color.White.copy(alpha = 0.16f), focusedContainerColor = Color.White.copy(alpha = 0.28f), unfocusedBorderColor = GlassTokens.glassBorder, focusedBorderColor = MaterialTheme.colorScheme.primary))
 
 @Composable
 fun <T> GlassDropdown(label: String, selected: T, options: List<T>, optionLabel: (T) -> String, onSelected: (T) -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
     var expanded by remember { mutableStateOf(false) }
     Box(modifier.fillMaxWidth()) {
         GlassOutlinedButton(optionLabel(selected).glassLabel(), { expanded = true }, Modifier.fillMaxWidth(), enabled)
-        DropdownMenu(expanded, { expanded = false }) {
-            options.forEach { option ->
-                DropdownMenuItem(
-                    text = { Text(optionLabel(option).glassLabel()) },
-                    onClick = { expanded = false; onSelected(option) },
-                )
-            }
-        }
+        DropdownMenu(expanded, { expanded = false }) { options.forEach { option -> DropdownMenuItem(text = { Text(optionLabel(option).glassLabel()) }, onClick = { expanded = false; onSelected(option) }) } }
     }
 }
 
 @Composable
-fun GlassCheckbox(checked: Boolean, onCheckedChange: (Boolean) -> Unit, label: String, modifier: Modifier = Modifier) =
-    Row(modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) { Checkbox(checked, onCheckedChange); Text(label) }
+fun GlassCheckbox(checked: Boolean, onCheckedChange: (Boolean) -> Unit, label: String, modifier: Modifier = Modifier) = Row(modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) { Checkbox(checked, onCheckedChange); Text(label) }
 
 @Composable
-fun GlassSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit, label: String, modifier: Modifier = Modifier) =
-    Row(modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) { Text(label, Modifier.weight(1f)); Switch(checked, onCheckedChange) }
+fun GlassSwitch(checked: Boolean, onCheckedChange: (Boolean) -> Unit, label: String, modifier: Modifier = Modifier) = Row(modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) { Text(label, Modifier.weight(1f)); Switch(checked, onCheckedChange) }
 
 @Composable
-fun GlassRadioButton(selected: Boolean, onClick: () -> Unit, label: String, modifier: Modifier = Modifier) =
-    Row(modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) { RadioButton(selected, onClick); Text(label) }
+fun GlassRadioButton(selected: Boolean, onClick: () -> Unit, label: String, modifier: Modifier = Modifier) = Row(modifier.fillMaxWidth().heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) { RadioButton(selected, onClick); Text(label) }
 
 @Composable
-fun GlassChip(label: String, modifier: Modifier = Modifier) =
-    AssistChip(onClick = {}, label = { Text(label.glassLabel()) }, modifier = modifier.heightIn(min = 40.dp))
+fun GlassChip(label: String, modifier: Modifier = Modifier) = AssistChip(onClick = {}, label = { Text(label.glassLabel()) }, modifier = modifier.heightIn(min = 40.dp))
 
 @Composable
 fun GlassStatusBadge(label: String, modifier: Modifier = Modifier) {
-    Surface(
-        modifier,
-        shape = RoundedCornerShape(50),
-        color = Color.White.copy(alpha = 0.28f),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.52f)),
-    ) {
-        Text(label.glassLabel(), Modifier.padding(horizontal = 12.dp, vertical = 7.dp), style = MaterialTheme.typography.labelMedium)
-    }
+    Surface(modifier, shape = RoundedCornerShape(50), color = Color.White.copy(alpha = 0.28f), border = BorderStroke(1.dp, Color.White.copy(alpha = 0.52f))) { Text(label.glassLabel(), Modifier.padding(horizontal = 12.dp, vertical = 7.dp), style = MaterialTheme.typography.labelMedium) }
 }
 
 @Composable
 fun GlassListItem(title: String, subtitle: String? = null, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, trailing: (@Composable () -> Unit)? = null) {
     val shape = RoundedCornerShape(GlassTokens.radiusMd)
-    Surface(
-        modifier = modifier.fillMaxWidth().heightIn(min = 68.dp).glassMaterial(shape),
-        shape = shape,
-        color = Color.White.copy(alpha = 0.20f),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.46f)),
-    ) {
-        Row(
-            Modifier.fillMaxWidth().then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier).padding(horizontal = 15.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f)) {
-                Text(title.stripHtml(), style = MaterialTheme.typography.titleSmall)
-                if (!subtitle.isNullOrBlank()) Text(subtitle.stripHtml(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+    Surface(modifier = modifier.fillMaxWidth().heightIn(min = 68.dp).glassMaterial(shape), shape = shape, color = Color.White.copy(alpha = 0.20f), border = BorderStroke(1.dp, Color.White.copy(alpha = 0.46f))) {
+        Row(Modifier.fillMaxWidth().then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier).padding(horizontal = 15.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) { Text(title.stripHtml(), style = MaterialTheme.typography.titleSmall); if (!subtitle.isNullOrBlank()) Text(subtitle.stripHtml(), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             trailing?.invoke()
         }
     }
@@ -369,11 +266,7 @@ fun GlassListItem(title: String, subtitle: String? = null, modifier: Modifier = 
 @Composable fun GlassDestructiveAction(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) = GlassOutlinedButton(label, onClick, modifier, enabled)
 
 @Composable
-fun GlassLoading(label: String = "در حال بارگذاری…") = Column(
-    Modifier.fillMaxWidth().padding(GlassTokens.spacingXl),
-    horizontalAlignment = Alignment.CenterHorizontally,
-    verticalArrangement = Arrangement.spacedBy(GlassTokens.spacingSm),
-) { CircularProgressIndicator(); Text(label) }
+fun GlassLoading(label: String = "در حال بارگذاری…") = Column(Modifier.fillMaxWidth().padding(GlassTokens.spacingXl), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(GlassTokens.spacingSm)) { CircularProgressIndicator(); Text(label) }
 
 @Composable fun GlassSyncIndicator(label: String = "در حال همگام‌سازی…") = GlassStatusBadge(label)
 @Composable fun GlassEmptyState(message: String, actionLabel: String? = null, onAction: (() -> Unit)? = null) = GlassCard { Text(message); if (actionLabel != null && onAction != null) GlassButton(actionLabel, onAction, Modifier.fillMaxWidth()) }
@@ -384,17 +277,7 @@ fun GlassLoading(label: String = "در حال بارگذاری…") = Column(
 
 @Composable
 fun GlassDialog(show: Boolean, title: String, onDismiss: () -> Unit, confirmLabel: String = "تأیید", onConfirm: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
-    if (show) {
-        AlertDialog(
-            onDismissRequest = onDismiss,
-            title = { Text(title) },
-            text = { Column(content = content) },
-            confirmButton = { TextButton(onClick = onConfirm) { Text(confirmLabel) } },
-            dismissButton = { TextButton(onClick = onDismiss) { Text("انصراف") } },
-            containerColor = Color.White.copy(alpha = 0.92f),
-            shape = RoundedCornerShape(GlassTokens.radiusLg),
-        )
-    }
+    if (show) AlertDialog(onDismissRequest = onDismiss, title = { Text(title) }, text = { Column(content = content) }, confirmButton = { TextButton(onClick = onConfirm) { Text(confirmLabel) } }, dismissButton = { TextButton(onClick = onDismiss) { Text("انصراف") } }, containerColor = Color.White.copy(alpha = 0.92f), shape = RoundedCornerShape(GlassTokens.radiusLg))
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -414,21 +297,14 @@ fun GlassImageContainer(modifier: Modifier = Modifier, content: @Composable BoxS
 @Composable
 fun GlassNavigation(modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) {
     val shape = RoundedCornerShape(22.dp)
-    Surface(modifier.fillMaxWidth().glassMaterial(shape), shape = shape, color = Color.White.copy(alpha = 0.42f), border = BorderStroke(1.dp, Color.White.copy(alpha = 0.58f)), shadowElevation = 10.dp) {
-        Row(Modifier.fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.SpaceEvenly, content = content)
-    }
+    Surface(modifier.fillMaxWidth().glassMaterial(shape), shape = shape, color = Color.White.copy(alpha = 0.42f), border = BorderStroke(1.dp, Color.White.copy(alpha = 0.58f)), shadowElevation = 10.dp) { Row(Modifier.fillMaxWidth().padding(8.dp), horizontalArrangement = Arrangement.SpaceEvenly, content = content) }
 }
 
 @Composable fun GlassBottomBar(modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) = GlassNavigation(modifier, content)
 
 @Composable
 fun GlassSegmentedControl(modifier: Modifier = Modifier, options: List<String>, selectedIndex: Int, onSelected: (Int) -> Unit) {
-    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        options.forEachIndexed { index, option ->
-            if (index == selectedIndex) GlassButton(option, { onSelected(index) }, Modifier.weight(1f))
-            else GlassOutlinedButton(option, { onSelected(index) }, Modifier.weight(1f))
-        }
-    }
+    Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) { options.forEachIndexed { index, option -> if (index == selectedIndex) GlassButton(option, { onSelected(index) }, Modifier.weight(1f)) else GlassOutlinedButton(option, { onSelected(index) }, Modifier.weight(1f)) } }
 }
 
 @Composable fun GlassProductCard(name: String, subtitle: String? = null, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, trailing: (@Composable () -> Unit)? = null) = GlassListItem(name, subtitle, modifier, onClick, trailing)
