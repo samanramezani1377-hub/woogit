@@ -2,11 +2,14 @@ package com.samanramezani1377.woogit.presentation.connection
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -14,9 +17,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.samanramezani1377.woogit.core.domain.model.StoreConnection
 import com.samanramezani1377.woogit.presentation.ConnectionViewModel
 import com.samanramezani1377.woogit.presentation.FeatureUiState
@@ -32,13 +35,11 @@ import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
 import com.samanramezani1377.woogit.presentation.vmFactory
 
 @Composable
-internal fun ConnectionScreen(
-    dependencies: V1PresentationDependencies,
-    onConnected: (String) -> Unit,
-) {
+internal fun ConnectionScreen(dependencies: V1PresentationDependencies, onConnected: (String) -> Unit) {
     val connectionViewModel = viewModel<ConnectionViewModel>(factory = vmFactory { ConnectionViewModel(dependencies) })
     val state by connectionViewModel.state.collectAsState()
-    var storeUrl by rememberSaveable { mutableStateOf("") }
+    var storeHost by rememberSaveable { mutableStateOf("") }
+    var useHttps by rememberSaveable { mutableStateOf(true) }
     var consumerKey by rememberSaveable { mutableStateOf("") }
     var consumerSecret by rememberSaveable { mutableStateOf("") }
     var wordpressUser by rememberSaveable { mutableStateOf("") }
@@ -49,23 +50,24 @@ internal fun ConnectionScreen(
         if (success != null) onConnected(success.value.storeId.value)
     }
 
-    val ready = storeUrl.isNotBlank() && consumerKey.isNotBlank() && consumerSecret.isNotBlank() && wordpressUser.isNotBlank() && wordpressPassword.isNotBlank()
+    val ready = storeHost.isNotBlank() && consumerKey.isNotBlank() && consumerSecret.isNotBlank() && wordpressUser.isNotBlank() && wordpressPassword.isNotBlank()
     GlassScaffold { paddingValues ->
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(paddingValues)
-                .padding(horizontal = 20.dp, vertical = 16.dp)
-                .verticalScroll(rememberScrollState())
-                .imePadding(),
+            modifier = Modifier.fillMaxWidth().padding(paddingValues).padding(horizontal = 20.dp, vertical = 16.dp)
+                .verticalScroll(rememberScrollState()).imePadding(),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             GlassTopBar(title = "اتصال فروشگاه", subtitle = "WooCommerce")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(selected = useHttps, onClick = { useHttps = true }, label = { Text("HTTPS") })
+                FilterChip(selected = !useHttps, onClick = { useHttps = false }, label = { Text("HTTP") })
+            }
             GlassTextField(
-                value = storeUrl,
-                onValueChange = { storeUrl = normalizeStoreUrlInput(it) },
-                label = "آدرس فروشگاه HTTPS",
+                value = storeHost,
+                onValueChange = { storeHost = normalizeStoreHostInput(it) },
+                label = "آدرس فروشگاه",
             )
+            GlassText("فقط نام دامنه را وارد کنید؛ مثلاً senoobar.ir")
             GlassTextField(value = consumerKey, onValueChange = { consumerKey = it }, label = "Consumer Key")
             GlassPasswordField(value = consumerSecret, onValueChange = { consumerSecret = it })
             GlassText("دسترسی WordPress برای تصاویر")
@@ -79,19 +81,17 @@ internal fun ConnectionScreen(
             GlassPrimaryAction(
                 label = "بررسی و اتصال",
                 onClick = {
-                    connectionViewModel.connect(
-                        normalizeStoreUrlInput(storeUrl),
-                        consumerKey,
-                        consumerSecret + "\u0001" + wordpressUser + "\u0001" + wordpressPassword,
-                    )
+                    connectionViewModel.connect(buildStoreUrl(useHttps, storeHost), consumerKey, consumerSecret + "\u0001" + wordpressUser + "\u0001" + wordpressPassword)
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 20.dp),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp),
                 enabled = ready,
             )
         }
     }
 }
 
-private fun normalizeStoreUrlInput(value: String): String = value.trim().removePrefix("/").removePrefix("/").trimEnd('/')
+private fun normalizeStoreHostInput(value: String): String = value.trim()
+    .removePrefix("https://").removePrefix("http://").trim().trimStart('/').trimEnd('/')
+
+private fun buildStoreUrl(useHttps: Boolean, host: String): String =
+    "${if (useHttps) "https" else "http"}://${normalizeStoreHostInput(host)}"
