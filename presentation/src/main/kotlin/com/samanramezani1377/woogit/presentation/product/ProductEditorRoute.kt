@@ -21,6 +21,7 @@ import com.samanramezani1377.woogit.core.domain.model.ProductType
 import com.samanramezani1377.woogit.core.domain.model.Stock
 import com.samanramezani1377.woogit.core.domain.model.StockStatus
 import com.samanramezani1377.woogit.presentation.FeatureUiState
+import com.samanramezani1377.woogit.presentation.ProductDetailViewModel
 import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
 import com.samanramezani1377.woogit.presentation.vmFactory
 
