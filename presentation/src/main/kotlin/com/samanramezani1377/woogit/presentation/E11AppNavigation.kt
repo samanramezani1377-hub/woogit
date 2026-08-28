@@ -22,6 +22,7 @@ import androidx.navigation.navArgument
 import com.samanramezani1377.woogit.core.domain.entity.EntityId
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.core.domain.model.Order
+import com.samanramezani1377.woogit.core.domain.model.OrderStatus
 import com.samanramezani1377.woogit.presentation.connection.ConnectionScreen
 import com.samanramezani1377.woogit.presentation.dashboard.DashboardDestination
 import com.samanramezani1377.woogit.presentation.dashboard.DashboardScreen
@@ -68,6 +69,7 @@ internal fun E11AppNavigation(dependencies: V1PresentationDependencies, initialO
                     pending = state.pendingCount,
                     onOrdersClick = { navController.navigate("orders") },
                     onProductsClick = { navController.navigate("products") },
+                    onSettingsClick = { navController.navigate("settings") },
                     selectedDestination = DashboardDestination.DASHBOARD,
                     onDestinationSelected = { destination ->
                         when (destination) {
@@ -88,7 +90,12 @@ internal fun E11AppNavigation(dependencies: V1PresentationDependencies, initialO
                 val vm = viewModel<OrdersViewModel>(factory = vmFactory { OrdersViewModel(dependencies) })
                 val state by vm.state.collectAsState()
                 LaunchedEffect(storeId) { vm.load(storeId) }
-                OrdersScreen(state = mapOrdersState(state), onOrderClick = { id -> navController.navigate("orders/$id") }, onRetry = { vm.load(storeId) })
+                OrdersScreen(
+                    state = mapOrdersState(state),
+                    onOrderClick = { id -> navController.navigate("orders/$id") },
+                    onRetry = { vm.load(storeId) },
+                    onLoadMore = { vm.nextPage(storeId) },
+                )
             }
         }
         composable("orders/{orderId}", arguments = listOf(navArgument("orderId") { type = NavType.StringType })) { entry ->
@@ -100,7 +107,15 @@ internal fun E11AppNavigation(dependencies: V1PresentationDependencies, initialO
                 val vm = viewModel<OrderDetailViewModel>(factory = vmFactory { OrderDetailViewModel(dependencies) })
                 val state by vm.state.collectAsState()
                 LaunchedEffect(storeId, orderId) { vm.load(storeId, EntityId(orderId)) }
-                OrderDetailScreen(state = mapOrderDetailState(state), onRetry = { vm.load(storeId, EntityId(orderId)) }, onBack = { navController.popBackStack() })
+                OrderDetailScreen(
+                    state = mapOrderDetailState(state),
+                    onRetry = { vm.load(storeId, EntityId(orderId)) },
+                    onBack = { navController.popBackStack() },
+                    onStatusChange = { status ->
+                        val current = (state as? FeatureUiState.Success)?.value
+                        if (current != null) vm.update(storeId, current.copy(status = status))
+                    },
+                )
             }
         }
         composable("products") {
@@ -115,6 +130,7 @@ internal fun E11AppNavigation(dependencies: V1PresentationDependencies, initialO
                     state = state,
                     onProductClick = { id -> navController.navigate("products/$id") },
                     onRetry = { vm.load(storeId) },
+                    onLoadMore = { vm.nextPage(storeId) },
                 )
             }
         }
@@ -131,7 +147,7 @@ internal fun E11AppNavigation(dependencies: V1PresentationDependencies, initialO
                     is FeatureUiState.Success -> ProductDetailScreen(
                         product = current.value,
                         onBack = { navController.popBackStack() },
-                        onEdit = { /* editor wiring follows the existing V1 editor contract */ },
+                        onEdit = { },
                     )
                     FeatureUiState.Loading, FeatureUiState.Pending -> GlassScaffold { GlassLoading("در حال بارگذاری محصول…") }
                     FeatureUiState.Empty -> GlassScaffold { GlassCard { GlassText("محصول پیدا نشد.") } }
@@ -159,10 +175,7 @@ private fun SettingsScreen(storeName: String, onDisconnect: () -> Unit) {
     GlassScaffold { paddingValues ->
         Column(Modifier.padding(paddingValues).padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             GlassTopBar(title = "تنظیمات", subtitle = "مدیریت اتصال و حساب فروشگاه")
-            GlassCard {
-                GlassText("فروشگاه متصل")
-                GlassText(storeName, style = androidx.compose.material3.MaterialTheme.typography.bodyMedium.copy(color = GlassTokens.muted))
-            }
+            GlassCard { GlassText("فروشگاه متصل"); GlassText(storeName, style = androidx.compose.material3.MaterialTheme.typography.bodyMedium.copy(color = GlassTokens.muted)) }
             GlassPrimaryAction("قطع اتصال", onDisconnect, Modifier.fillMaxWidth())
         }
     }
@@ -174,7 +187,20 @@ private fun mapOrdersState(state: FeatureUiState<List<Order>>): OrdersUiState = 
     is FeatureUiState.Error -> OrdersUiState.Error(state.message, state.retryable)
     FeatureUiState.Offline -> OrdersUiState.Offline()
     is FeatureUiState.Conflict -> OrdersUiState.Error("تعارض در داده‌های سفارش وجود دارد.", false)
-    is FeatureUiState.Success -> OrdersUiState.Content(state.value.map { order -> OrderRowUiModel(order.id.value, order.customer?.name.orEmpty(), order.status.name, "${order.total.orEmpty()} ${order.currency.orEmpty()}".trim(), order.modifiedAt?.toString().orEmpty()) }, state.value.size >= 30)
+    is FeatureUiState.Success -> OrdersUiState.Content(
+        state.value.map { order ->
+            OrderRowUiModel(
+                id = order.number,
+                customerName = order.customer?.name.orEmpty(),
+                customerEmail = order.customer?.email.orEmpty(),
+                status = order.status.name,
+                total = formatMoney(order.total),
+                payment = order.payment?.methodTitle.orEmpty(),
+                createdAt = order.modifiedAt?.toString().orEmpty(),
+            )
+        },
+        state.value.size >= 30,
+    )
 }
 
 private fun mapOrderDetailState(state: FeatureUiState<Order>): OrderDetailUiState = when (state) {
@@ -183,5 +209,10 @@ private fun mapOrderDetailState(state: FeatureUiState<Order>): OrderDetailUiStat
     is FeatureUiState.Error -> OrderDetailUiState.Error(state.message)
     FeatureUiState.Offline -> OrderDetailUiState.Error("سفارش در حالت آفلاین در دسترس نیست.")
     is FeatureUiState.Conflict -> OrderDetailUiState.Error("تعارض در داده‌های سفارش وجود دارد.")
-    is FeatureUiState.Success -> OrderDetailUiState.Content(state.value.id.value, state.value.status.name, state.value.customer?.name.orEmpty(), "${state.value.total.orEmpty()} ${state.value.currency.orEmpty()}".trim(), state.value.items.map { item -> com.samanramezani1377.woogit.presentation.order.OrderLineUiModel(item.name, item.quantity.toString(), item.total) })
+    is FeatureUiState.Success -> OrderDetailUiState.Content(state.value)
+}
+
+private fun formatMoney(value: String?): String {
+    val amount = value?.toDoubleOrNull() ?: return "—"
+    return "${java.text.NumberFormat.getNumberInstance(java.util.Locale.US).apply { maximumFractionDigits = 0; minimumFractionDigits = 0 }.format(amount)} تومان"
 }
