@@ -40,7 +40,7 @@ class ConnectionViewModel(private val d:V1PresentationDependencies):ViewModel(){
             return@launch
         }
         when(val r=d.connectStore(StoreConnection(StoreId("store-${u.lowercase().hashCode().toUInt().toString(16)}"),u,ConnectionState.DISCONNECTED,null),key,secret)){
-            is CoreResult.Success->{_state.value=FeatureUiState.Success(r.value);d.onStoreConnected(r.value.storeId.value)}
+            is CoreResult.Success->{_state.value=FeatureUiState.Success(r.value)}
             is CoreResult.Failure->_state.value=r.toUi()
         }
     }
