@@ -1,47 +1,66 @@
-# WooGit Agent Policy — Mandatory Superpowers + Kotlin Agent Skills Workflow
+# WooGit Agent Policy — Mandatory Agent Engineering Stack
 
 ## NON-NEGOTIABLE
 
-Every AI coding agent that inspects, modifies, reviews, debugs, refactors, builds, tests, or otherwise performs engineering work in this repository MUST use both:
+Every AI coding agent that inspects, modifies, reviews, debugs, refactors, builds, tests, or otherwise performs engineering work in this repository MUST use ALL of the following applicable engineering resources:
 
 1. **Superpowers** methodology:
    https://github.com/obra/superpowers
-2. **Kotlin Agent Skills** from the official Kotlin organization:
+2. **Addy Osmani Agent Skills**:
+   https://github.com/addyosmani/agent-skills
+3. **Official Kotlin Agent Skills** from the Kotlin organization:
    https://github.com/Kotlin/kotlin-agent-skills
+4. **Android Agent Skills**:
+   https://github.com/new-silvermoon/awesome-android-agent-skills
+5. **WooGit CI Verification** is a mandatory acceptance gate for repository changes.
 
 These are required engineering workflows for WooGit, not optional suggestions.
 
 ## Before doing project work
 
 1. Verify that Superpowers is installed/active in the current coding-agent environment.
-2. Verify that the official Kotlin Agent Skills are available/installed in the current coding-agent environment.
-3. Use the relevant Superpowers skills before acting. In particular:
-   - `using-superpowers`
-   - `brainstorming` for non-trivial changes
-   - `writing-plans` before multi-step implementation
-   - `systematic-debugging` for failures and bugs
-   - `test-driven-development` where behavior can be tested
-   - `requesting-code-review` between meaningful implementation stages
-   - `verification-before-completion` before claiming success
-   - `finishing-a-development-branch` when work is complete
-4. For Kotlin/Android/Gradle engineering, use the relevant **Kotlin Agent Skills** in addition to Superpowers. Prefer the official Kotlin skills over ad-hoc Kotlin guidance whenever a matching skill exists.
-5. Do not skip required workflow steps merely because the requested change appears small.
-6. Do not declare a task complete from inspection or assumption. Verify the actual result.
+2. Verify that Addy Osmani Agent Skills are available/installed and use the applicable skills for the task.
+3. Verify that the official Kotlin Agent Skills are available/installed and use any applicable Kotlin skill before Kotlin/Android/Gradle implementation.
+4. Verify that the Android Agent Skills are available/installed and use the applicable Android/Compose/testing skill for Android work.
+5. Use the relevant Superpowers workflow for planning, implementation, debugging, review, testing, and verification.
+6. Do not skip a required applicable resource merely because the requested change appears small.
+7. Do not declare completion from inspection or assumption. Verify the actual result.
 
-## Kotlin Agent Skills — mandatory usage
+## Skill responsibilities
 
-For every Kotlin-related task, the agent MUST first check the official Kotlin Agent Skills collection and activate/use any applicable skill before implementation.
+- **Superpowers:** structured problem solving, brainstorming, planning, systematic debugging, TDD, code review, verification, and finishing work.
+- **Addy Osmani Agent Skills:** production engineering practices, implementation quality, review discipline, performance, accessibility, testing, and shipping workflows where applicable.
+- **Official Kotlin Agent Skills:** Kotlin language/tooling/Gradle-specific guidance and migrations where applicable.
+- **Android Agent Skills:** Android, Jetpack Compose, UI, architecture, testing, emulator/QA, and Android build workflows where applicable.
 
-Official source:
-https://github.com/Kotlin/kotlin-agent-skills
+For overlapping guidance, use the most directly applicable authoritative skill while preserving all repository requirements.
 
-Current official skill categories include Kotlin tooling and backend skills. Relevant examples include:
-- `kotlin-tooling-agp9-migration` for Android Gradle Plugin 9 migration work
-- `kotlin-tooling-java-to-kotlin` for Java-to-Kotlin migration work
-- `kotlin-tooling-immutable-collections-0-5-x-migration` for the corresponding immutable-collections migration
-- `kotlin-tooling-native-build-performance` for Kotlin/Native build-performance work
+## CI Verification — MANDATORY
 
-If no official Kotlin Agent Skill matches the task, continue using Superpowers and the repository's existing engineering rules; do not invent a claim that a Kotlin skill was used.
+Every substantive repository change MUST be verified through the project's actual CI workflow.
+
+Required gates must remain enabled and must pass:
+- Debug build
+- Release build
+- Unit tests
+- Android lint
+- APK verification
+- Final CI gate
+
+The agent MUST:
+1. Push the implementation.
+2. Wait for the GitHub Actions run triggered by the implementation.
+3. Inspect the actual CI result and relevant logs.
+4. If CI fails, diagnose the real failure, fix it, push again, and re-run verification.
+5. Repeat until all required CI gates are green, or stop only when a genuine external blocker prevents verification and report it explicitly.
+
+Never:
+- remove tests to make CI green;
+- skip required builds/checks;
+- weaken quality gates;
+- use `continue-on-error` to hide failures;
+- fake a successful CI result;
+- declare success before the actual CI result is green.
 
 ## WooGit-specific expectations
 
@@ -51,14 +70,20 @@ For performance-sensitive Compose changes, consider stability/recomposition, laz
 
 For WooCommerce synchronization changes, explicitly consider pagination, incremental sync, deletion reconciliation, retries/429, idempotency, conflicts, offline behavior, and API rate/hosting limitations.
 
-## If either required methodology is unavailable
+## If a required resource is unavailable
 
-If Superpowers is unavailable, or if the applicable official Kotlin Agent Skills cannot be made available in the current coding-agent environment, do not silently substitute an ad-hoc workflow. State the missing prerequisite before making substantive repository changes.
+If an applicable required resource cannot be made available in the current coding-agent environment, report that prerequisite before making substantive changes rather than silently substituting an unrelated workflow.
 
 ## Sources
 
-Official Superpowers repository:
+Superpowers:
 https://github.com/obra/superpowers
 
-Official Kotlin Agent Skills repository:
+Addy Osmani Agent Skills:
+https://github.com/addyosmani/agent-skills
+
+Official Kotlin Agent Skills:
 https://github.com/Kotlin/kotlin-agent-skills
+
+Android Agent Skills:
+https://github.com/new-silvermoon/awesome-android-agent-skills
