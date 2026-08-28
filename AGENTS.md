@@ -43,17 +43,6 @@ Current official skill categories include Kotlin tooling and backend skills. Rel
 
 If no official Kotlin Agent Skill matches the task, continue using Superpowers and the repository's existing engineering rules; do not invent a claim that a Kotlin skill was used.
 
-## UNLAZY rule
-
-An agent MUST continue working through the relevant implementation, build, test, review, and verification loop until the requested acceptance criteria are actually satisfied or a genuine external blocker prevents progress.
-
-Do not:
-- stop after making a partial change;
-- claim success because code looks correct;
-- replace a failed verification with a fake result;
-- hide, disable, weaken, or bypass tests/checks to obtain green CI;
-- leave known errors unresolved without explicitly reporting the blocker.
-
 ## WooGit-specific expectations
 
 For Android/Compose work, preserve and improve the project's Local-first architecture, WooCommerce REST API constraints, synchronization correctness, performance, and Liquid Glass UI quality. Prefer evidence from builds, tests, benchmarks, source code, and real API behavior over assumptions.
