@@ -19,6 +19,15 @@ data class Order(
     val total: String? = null,
     val currency: String? = null,
 )
+data class SalesSummary(
+    val netSales: String,
+    val currency: String,
+    val currencySymbol: String,
+    val currencyPosition: String,
+    val thousandSeparator: String,
+    val decimalSeparator: String,
+    val numberOfDecimals: Int,
+)
 data class OrderItem(val id: EntityId,val productId: EntityId?,val variationId: EntityId?,val name: String,val quantity: Double,val subtotal: String,val total: String)
 data class Customer(val id: EntityId?,val name: String,val email: String?)
 data class Address(val firstName: String?,val lastName: String?,val company: String?,val address1: String?,val address2: String?,val city: String?,val state: String?,val postcode: String?,val country: String?,val phone: String?)
