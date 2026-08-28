@@ -63,9 +63,10 @@ internal fun ProductEditorRoute(dependencies: V1PresentationDependencies, storeI
             val bytes = runCatching { context.contentResolver.openInputStream(uri)?.use { it.readBytes() } }.getOrNull()
             val mime = context.contentResolver.getType(uri).orEmpty().ifBlank { "image/jpeg" }
             val extension = mime.substringAfter('/').takeIf { it.isNotBlank() } ?: "jpeg"
-            when {
-                bytes.isNullOrEmpty() -> form = form?.copy(imageError = "خواندن تصویر انتخاب‌شده ناموفق بود.")
-                else -> when (val result = dependencies.uploadMedia(storeId, "woogit-${System.currentTimeMillis()}.$extension", bytes, mime)) {
+            if (bytes == null || bytes.isEmpty()) {
+                form = form?.copy(imageError = "خواندن تصویر انتخاب‌شده ناموفق بود.")
+            } else {
+                when (val result = dependencies.uploadMedia(storeId, "woogit-${System.currentTimeMillis()}.$extension", bytes, mime)) {
                     is CoreResult.Success -> {
                         val uploaded = result.value
                         val id = uploaded.id?.value?.takeIf { it.isNotBlank() }
