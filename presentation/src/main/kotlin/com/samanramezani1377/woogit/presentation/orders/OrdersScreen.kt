@@ -4,8 +4,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.lazy.LazyColumn
@@ -18,7 +20,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -47,16 +49,16 @@ internal fun OrdersScreen(
     onSearch: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    var query by remember { mutableStateOf("") }
+    var query by rememberSaveable { mutableStateOf("") }
     LaunchedEffect(query) {
         delay(300L)
-        onSearch(query)
+        onSearch(query.trim())
     }
     Column(modifier.fillMaxSize()) {
         GlassTopBar("سفارش‌ها", "مدیریت سفارش‌های فروشگاه", Modifier.padding(horizontal = 18.dp, vertical = 8.dp))
         GlassSearchField(query, { query = it }, label = "جستجوی سفارش", modifier = Modifier.padding(horizontal = 16.dp))
         when (state) {
-            OrdersUiState.Loading -> LoadingState(Modifier.weight(1f))
+            OrdersUiState.Loading -> OrdersSkeleton(Modifier.weight(1f))
             OrdersUiState.Empty -> EmptyState(Modifier.weight(1f))
             is OrdersUiState.Content -> OrdersList(state, onOrderClick, onLoadMore, Modifier.weight(1f))
             is OrdersUiState.Error -> ErrorState(state, onRetry, Modifier.weight(1f))
@@ -68,7 +70,21 @@ internal fun OrdersScreen(
     }
 }
 
-@Composable private fun LoadingState(modifier: Modifier) = Column(modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) { GlassLoading("در حال بارگذاری سفارش‌ها…") }
+@Composable private fun OrdersSkeleton(modifier: Modifier) {
+    Column(modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        repeat(5) { index ->
+            GlassCard {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Spacer(Modifier.fillMaxWidth(if (index % 2 == 0) .72f else .58f).height(18.dp))
+                    Spacer(Modifier.fillMaxWidth(.42f).height(14.dp))
+                    Spacer(Modifier.fillMaxWidth(.88f).height(12.dp))
+                    Spacer(Modifier.fillMaxWidth(.32f).height(12.dp))
+                }
+            }
+        }
+    }
+}
+
 @Composable private fun EmptyState(modifier: Modifier) = Column(modifier.fillMaxSize().padding(18.dp), verticalArrangement = Arrangement.Center) { GlassEmptyState("سفارشی برای نمایش وجود ندارد.") }
 @Composable private fun ErrorState(state: OrdersUiState.Error, onRetry: () -> Unit, modifier: Modifier) = Column(modifier.fillMaxSize().padding(18.dp), verticalArrangement = Arrangement.Center) { GlassErrorState(state.message, if (state.canRetry) onRetry else null) }
 
@@ -81,8 +97,13 @@ private fun OrdersList(state: OrdersUiState.Content, onOrderClick: (String) -> U
             .filter { it >= (state.orders.size - 8).coerceAtLeast(0) }
             .collect { if (state.hasMore) onLoadMore() }
     }
-    LazyColumn(state = listState, modifier = modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(start = 16.dp, top = 10.dp, end = 16.dp, bottom = 120.dp)) {
-        items(state.orders, key = { it.id }) { order ->
+    LazyColumn(
+        state = listState,
+        modifier = modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+        contentPadding = PaddingValues(start = 16.dp, top = 10.dp, end = 16.dp, bottom = 120.dp),
+    ) {
+        items(state.orders, key = { it.id }, contentType = { "order" }) { order ->
             GlassCard {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -97,7 +118,10 @@ private fun OrdersList(state: OrdersUiState.Content, onOrderClick: (String) -> U
                 }
             }
         }
-        if (state.hasMore) item { CircularProgressIndicator(modifier = Modifier.fillMaxWidth().padding(10.dp).wrapContentWidth(), strokeWidth = 2.dp) }
+        if (state.hasMore) item(key = "orders-loading", contentType = "loading") {
+            CircularProgressIndicator(modifier = Modifier.fillMaxWidth().padding(10.dp).wrapContentWidth(), strokeWidth = 2.dp)
+        }
+        item(key = "orders-bottom-safe-area") { Spacer(Modifier.height(8.dp)) }
     }
 }
 
