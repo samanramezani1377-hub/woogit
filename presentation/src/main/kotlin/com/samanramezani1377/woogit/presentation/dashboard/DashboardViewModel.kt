@@ -25,7 +25,12 @@ internal data class DashboardUiState(
     val loading: Boolean = false,
     val error: String? = null,
     val lastConnectionCheckAtMillis: Long? = null,
-)
+) {
+    val ordersCount: String get() = DashboardStateMapper.ordersCount(orders)
+    val productsCount: String get() = DashboardStateMapper.productsCount(products)
+    val pendingCount: String get() = DashboardStateMapper.pendingCount(orders)
+    val revenue: String get() = DashboardStateMapper.revenue(orders)
+}
 
 internal class DashboardViewModel(
     private val dependencies: V1PresentationDependencies,
@@ -70,7 +75,7 @@ internal class DashboardViewModel(
             } ?: ConnectionState.ERROR
             _uiState.value = _uiState.value.copy(
                 connectionState = state,
-                lastConnectionCheckAtMillis = kotlin.time.Clock.System.now().toEpochMilliseconds(),
+                lastConnectionCheckAtMillis = System.currentTimeMillis(),
             )
             state
         } catch (e: CancellationException) {
@@ -78,7 +83,7 @@ internal class DashboardViewModel(
         } catch (_: Throwable) {
             _uiState.value = _uiState.value.copy(
                 connectionState = ConnectionState.ERROR,
-                lastConnectionCheckAtMillis = kotlin.time.Clock.System.now().toEpochMilliseconds(),
+                lastConnectionCheckAtMillis = System.currentTimeMillis(),
             )
             ConnectionState.ERROR
         } finally {
@@ -89,20 +94,36 @@ internal class DashboardViewModel(
     private suspend fun refreshInternal() {
         _uiState.value = _uiState.value.copy(loading = true, error = null)
         val connection = checkConnection()
-        val orders = when (val result = dependencies.getOrders(storeId, 1, 30, null, null)) {
-            is CoreResult.Success -> result.value
+        val ordersResult = dependencies.getOrders(storeId, 1, 30, null, null)
+        val orders = when (ordersResult) {
+            is CoreResult.Success -> ordersResult.value
             is CoreResult.Failure -> {
-                _uiState.value = _uiState.value.copy(connectionState = connection, loading = false, error = PresentationErrorMapper.message(result.error))
+                _uiState.value = _uiState.value.copy(
+                    connectionState = connection,
+                    loading = false,
+                    error = PresentationErrorMapper.message(ordersResult.error),
+                )
                 return
             }
         }
-        val products = when (val result = dependencies.getProducts(storeId, 1, 30, null)) {
-            is CoreResult.Success -> result.value
+        val productsResult = dependencies.getProducts(storeId, 1, 30, null)
+        val products = when (productsResult) {
+            is CoreResult.Success -> productsResult.value
             is CoreResult.Failure -> {
-                _uiState.value = _uiState.value.copy(connectionState = connection, loading = false, error = PresentationErrorMapper.message(result.error))
+                _uiState.value = _uiState.value.copy(
+                    connectionState = connection,
+                    loading = false,
+                    error = PresentationErrorMapper.message(productsResult.error),
+                )
                 return
             }
         }
-        _uiState.value = _uiState.value.copy(orders = orders, products = products, connectionState = connection, loading = false)
+        _uiState.value = _uiState.value.copy(
+            orders = orders,
+            products = products,
+            connectionState = connection,
+            loading = false,
+            error = null,
+        )
     }
 }
