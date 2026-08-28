@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.core.domain.error.CoreResult
+import com.samanramezani1377.woogit.core.domain.model.ConnectionState
 import com.samanramezani1377.woogit.core.domain.model.Order
 import com.samanramezani1377.woogit.core.domain.model.Product
 import com.samanramezani1377.woogit.presentation.PresentationErrorMapper
@@ -16,6 +17,7 @@ import kotlinx.coroutines.launch
 internal data class DashboardUiState(
     val orders: List<Order> = emptyList(),
     val products: List<Product> = emptyList(),
+    val connectionState: ConnectionState = ConnectionState.DISCONNECTED,
     val loading: Boolean = false,
     val error: String? = null,
 ) {
@@ -25,47 +27,36 @@ internal data class DashboardUiState(
     val revenue: String get() = DashboardStateMapper.revenue(orders)
 }
 
-/** Loads dashboard data from the real presentation dependencies. */
 internal class DashboardViewModel(
     private val dependencies: V1PresentationDependencies,
     private val storeId: StoreId,
 ) : ViewModel() {
-
     private val _uiState = MutableStateFlow(DashboardUiState())
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
 
     fun refresh() {
         if (_uiState.value.loading) return
-
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(loading = true, error = null)
-
+            val connection = when (val result = dependencies.getConnectionState(storeId)) {
+                is CoreResult.Success -> result.value
+                is CoreResult.Failure -> ConnectionState.ERROR
+            }
             val orders = when (val result = dependencies.getOrders(storeId, 1, 30, null, null)) {
                 is CoreResult.Success -> result.value
                 is CoreResult.Failure -> {
-                    _uiState.value = _uiState.value.copy(
-                        loading = false,
-                        error = PresentationErrorMapper.message(result.error),
-                    )
+                    _uiState.value = _uiState.value.copy(connectionState = connection, loading = false, error = PresentationErrorMapper.message(result.error))
                     return@launch
                 }
             }
-
             val products = when (val result = dependencies.getProducts(storeId, 1, 30, null)) {
                 is CoreResult.Success -> result.value
                 is CoreResult.Failure -> {
-                    _uiState.value = _uiState.value.copy(
-                        loading = false,
-                        error = PresentationErrorMapper.message(result.error),
-                    )
+                    _uiState.value = _uiState.value.copy(connectionState = connection, loading = false, error = PresentationErrorMapper.message(result.error))
                     return@launch
                 }
             }
-
-            _uiState.value = DashboardUiState(
-                orders = orders,
-                products = products,
-            )
+            _uiState.value = DashboardUiState(orders = orders, products = products, connectionState = connection)
         }
     }
 }
