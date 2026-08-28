@@ -123,7 +123,7 @@ internal fun E11AppNavigation(dependencies: V1PresentationDependencies, initialO
                 onDisconnect = {
                     dependencies.onStoreDisconnected()
                     activeStore = null
-                    navController.navigate("connection") { popUpTo(0) }
+                    navController.navigate("connection") { popUpTo("settings") { inclusive = true } }
                 },
             )
         }
