@@ -18,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import com.samanramezani1377.woogit.debug.DebugConfig
@@ -61,7 +62,7 @@ private fun DebugLogsCard(context: Context) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 GlassText("لاگ‌های فنی (موقت)")
                 Row {
-                    TextButton(onClick = { clipboard.setText(AnnotatedString(entries.joinToString("\n\n", DebugLogEntry::asCopyText))) }) { GlassText("کپی همه") }
+                    TextButton(onClick = { clipboard.setText(AnnotatedString(entries.joinToString("\n\n") { it.asCopyText() })) }) { GlassText("کپی همه") }
                     TextButton(onClick = { DebugLogStore.clear(context); entries = emptyList() }) { GlassText("پاک کردن") }
                 }
             }
@@ -70,8 +71,8 @@ private fun DebugLogsCard(context: Context) {
                 GlassCard {
                     Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
                         GlassText("${entry.time} · ${entry.feature} · ${entry.type}")
-                        GlassText(entry.message)
-                        if (entry.details.isNotBlank()) GlassText(entry.details)
+                        GlassText(entry.technicalMessage.ifBlank { entry.message })
+                        if (entry.userMessage.isNotBlank()) GlassText("پیام کاربر: ${entry.userMessage}")
                         TextButton(onClick = { clipboard.setText(AnnotatedString(entry.asCopyText())) }) { GlassText("کپی خطا") }
                     }
                 }
