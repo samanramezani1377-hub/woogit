@@ -3,7 +3,10 @@ package com.samanramezani1377.woogit.presentation.connection
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -14,6 +17,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.samanramezani1377.woogit.core.domain.model.StoreConnection
 import com.samanramezani1377.woogit.presentation.ConnectionViewModel
 import com.samanramezani1377.woogit.presentation.FeatureUiState
 import com.samanramezani1377.woogit.presentation.GlassErrorState
@@ -24,7 +28,6 @@ import com.samanramezani1377.woogit.presentation.GlassScaffold
 import com.samanramezani1377.woogit.presentation.GlassText
 import com.samanramezani1377.woogit.presentation.GlassTextField
 import com.samanramezani1377.woogit.presentation.GlassTopBar
-import com.samanramezani1377.woogit.core.domain.model.StoreConnection
 import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
 import com.samanramezani1377.woogit.presentation.vmFactory
 
@@ -48,14 +51,22 @@ internal fun ConnectionScreen(
 
     val ready = storeUrl.isNotBlank() && consumerKey.isNotBlank() && consumerSecret.isNotBlank() && wordpressUser.isNotBlank() && wordpressPassword.isNotBlank()
     GlassScaffold { paddingValues ->
-        Column(Modifier.padding(paddingValues).padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(paddingValues)
+                .padding(horizontal = 20.dp, vertical = 16.dp)
+                .verticalScroll(rememberScrollState())
+                .imePadding(),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
             GlassTopBar(title = "اتصال فروشگاه", subtitle = "WooCommerce")
             GlassTextField(value = storeUrl, onValueChange = { storeUrl = it }, label = "آدرس فروشگاه HTTPS")
             GlassTextField(value = consumerKey, onValueChange = { consumerKey = it }, label = "Consumer Key")
-            GlassPasswordField(value = consumerSecret, onValueChange = { consumerSecret = it })
+            GlassPasswordField(value = consumerSecret)
             GlassText("دسترسی WordPress برای تصاویر")
             GlassTextField(value = wordpressUser, onValueChange = { wordpressUser = it }, label = "نام کاربری WordPress")
-            GlassPasswordField(value = wordpressPassword, onValueChange = { wordpressPassword = it }, label = "رمز عبور WordPress")
+            GlassPasswordField(value = wordpressPassword, label = "رمز عبور WordPress")
             when (val currentState = state) {
                 FeatureUiState.Loading -> GlassLoading("در حال اتصال…")
                 is FeatureUiState.Error -> GlassErrorState(currentState.message)
@@ -64,7 +75,9 @@ internal fun ConnectionScreen(
             GlassPrimaryAction(
                 label = "بررسی و اتصال",
                 onClick = { connectionViewModel.connect(storeUrl, consumerKey, consumerSecret + "\u0001" + wordpressUser + "\u0001" + wordpressPassword) },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 20.dp),
                 enabled = ready,
             )
         }
