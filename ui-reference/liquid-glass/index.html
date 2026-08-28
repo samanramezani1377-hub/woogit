@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>WooGit — Liquid Glass V1</title>
+  <style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#EFF1F7}iframe{display:block;width:100%;height:100%;border:0}</style>
+</head>
+<body>
+  <iframe id="preview" src="woogit-liquid-glass-v1-fixed.html" title="WooGit Liquid Glass V1"></iframe>
+  <script>
+    const frame=document.getElementById('preview');
+    frame.addEventListener('load',()=>{
+      try{
+        const doc=frame.contentDocument;
+        const style=doc.createElement('style');
+        style.textContent=`
+          .statusbar{display:none!important}
+          .screen{height:100dvh!important;min-height:100dvh!important;overflow:hidden!important}
+          .app{height:100dvh!important;min-height:100dvh!important;overflow:hidden!important}
+          .feed{flex:1 1 auto!important;min-height:0!important;overflow-y:auto!important;overflow-x:hidden!important;-webkit-overflow-scrolling:touch!important}
+        `;
+        doc.head.appendChild(style);
+      }catch(e){console.error(e)}
+    });
+  </script>
+</body>
+</html>
