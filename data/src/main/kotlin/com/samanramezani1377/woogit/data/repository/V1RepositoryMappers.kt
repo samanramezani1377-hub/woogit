@@ -28,7 +28,7 @@ object OrderRepositoryV1Mapper {
         },
         v.billing?.let { Address(it.first_name, it.last_name, it.company, it.address_1, it.address_2, it.city, it.state, it.postcode, it.country, it.phone) },
         v.shipping?.let { Address(it.first_name, it.last_name, it.company, it.address_1, it.address_2, it.city, it.state, it.postcode, it.country, it.phone) },
-        Payment(v.payment_method, v.payment_method_title, v.transaction_id, v.set_paid == true),
+        Payment(v.payment_method, v.payment_method_title, v.transaction_id, v.date_paid_gmt?.isNotBlank() == true),
         v.shipping_lines.map { ShippingLine(it.method_id, it.method_title, it.total) },
         v.coupon_lines.map { Discount(it.code, it.discount) },
         emptyList(),
