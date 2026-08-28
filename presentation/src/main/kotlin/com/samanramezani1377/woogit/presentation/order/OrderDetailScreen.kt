@@ -3,9 +3,7 @@ package com.samanramezani1377.woogit.presentation.order
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -47,13 +45,11 @@ internal fun OrderDetailScreen(
                 OrderDetailUiState.NotFound -> GlassEmptyState("سفارش پیدا نشد.")
                 is OrderDetailUiState.Error -> {
                     GlassErrorState(state.message)
-                    if (state.retryable) {
-                        GlassPrimaryAction(
-                            label = "تلاش مجدد",
-                            onClick = onRetry,
-                            modifier = Modifier.padding(horizontal = 18.dp),
-                        )
-                    }
+                    GlassPrimaryAction(
+                        label = "تلاش مجدد",
+                        onClick = onRetry,
+                        modifier = Modifier.padding(horizontal = 18.dp),
+                    )
                 }
                 is OrderDetailUiState.Content -> OrderDetailContent(state)
             }
