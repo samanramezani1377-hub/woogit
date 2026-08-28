@@ -5,7 +5,7 @@ import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.core.domain.error.CoreResult
 import com.samanramezani1377.woogit.core.domain.model.*
 
-interface OrderRepository { suspend fun get(storeId:StoreId,id:EntityId):CoreResult<Order>; suspend fun list(storeId:StoreId,page:Int=1,perPage:Int=20,search:String?=null,status:String?=null):CoreResult<List<Order>>; suspend fun update(storeId:StoreId,id:EntityId,order:Order):CoreResult<Order> }
+interface OrderRepository { suspend fun get(storeId:StoreId,id:EntityId):CoreResult<Order>; suspend fun list(storeId:StoreId,page:Int=1,perPage:Int=20,search:String?=null,status:String?=null):CoreResult<List<Order>>; suspend fun salesSummary(storeId:StoreId):CoreResult<SalesSummary>; suspend fun update(storeId:StoreId,id:EntityId,order:Order):CoreResult<Order> }
 interface OrderNoteRepository { suspend fun addNote(storeId:StoreId,orderId:EntityId,content:String,customerNote:Boolean=false):CoreResult<OrderNote> }
 interface ProductRepository { suspend fun get(storeId:StoreId,id:EntityId):CoreResult<Product>; suspend fun list(storeId:StoreId,page:Int=1,perPage:Int=20,search:String?=null):CoreResult<List<Product>>; suspend fun refresh(storeId:StoreId,page:Int=1,perPage:Int=100,modifiedAfter:String?=null):CoreResult<List<Product>>; suspend fun create(storeId:StoreId,product:Product):CoreResult<Product>; suspend fun update(storeId:StoreId,id:EntityId,product:Product):CoreResult<Product>; suspend fun delete(storeId:StoreId,id:EntityId):CoreResult<Unit> }
 interface ProductCategoryRepository { suspend fun list(storeId:StoreId,page:Int=1,perPage:Int=100,search:String?=null):CoreResult<List<IdName>> }
