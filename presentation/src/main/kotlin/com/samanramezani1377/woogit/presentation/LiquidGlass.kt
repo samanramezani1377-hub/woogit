@@ -25,7 +25,7 @@ import com.kyant.backdrop.backdrops.LayerBackdrop
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 
-private val LocalLiquidBackdrop = compositionLocalOf<LayerBackdrop?> { null }
+val LocalLiquidBackdrop = compositionLocalOf<LayerBackdrop?> { null }
 
 private val LiquidBackground = Color(0xFFEFF1F7)
 private val MintBlob = Color(0xFFBEEFDC)
@@ -36,7 +36,7 @@ private val SkyBlob = Color(0xFFC6E6FF)
 @Composable
 fun LiquidGlassEnvironment(
     modifier: Modifier = Modifier,
-    content: @Composable BoxScope.() -> Unit,
+    content: @Composable (BoxScope) -> Unit,
 ) {
     val liquidBackdrop = rememberLayerBackdrop()
     val transition = rememberInfiniteTransition(label = "liquid-glass-motion")
@@ -71,7 +71,7 @@ fun LiquidGlassEnvironment(
         }
 
         CompositionLocalProvider(LocalLiquidBackdrop provides liquidBackdrop) {
-            content()
+            BoxScopeContainer(content)
         }
 
         Box(
@@ -84,6 +84,11 @@ fun LiquidGlassEnvironment(
                 ),
         )
     }
+}
+
+@Composable
+private fun BoxScope.BoxScopeContainer(content: @Composable (BoxScope) -> Unit) {
+    content(this)
 }
 
 @Composable
