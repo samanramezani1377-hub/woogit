@@ -33,6 +33,7 @@ import com.samanramezani1377.woogit.presentation.GlassText
 import com.samanramezani1377.woogit.presentation.GlassTextField
 import com.samanramezani1377.woogit.presentation.GlassTopBar
 import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
+import com.samanramezani1377.woogit.presentation.VariationEditorViewModel
 import com.samanramezani1377.woogit.presentation.vmFactory
 
 @Composable
@@ -49,7 +50,7 @@ internal fun VariationEditorRoute(dependencies: V1PresentationDependencies, stor
             vm.save(storeId, EntityId(productId), EntityId(variationId ?: "new"), v, variationId == null, onSaved)
         }, onBack)
         state is FeatureUiState.Loading -> GlassScaffold { GlassLoading("در حال بارگذاری تنوع…") }
-        state is FeatureUiState.Error -> GlassScaffold { GlassErrorState(state.message) }
+        state is FeatureUiState.Error -> { val error = state as FeatureUiState.Error; GlassScaffold { GlassErrorState(error.message) } }
     }
 }
 
