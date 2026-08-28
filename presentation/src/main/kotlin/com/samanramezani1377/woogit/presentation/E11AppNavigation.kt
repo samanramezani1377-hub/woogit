@@ -23,8 +23,9 @@ import com.samanramezani1377.woogit.presentation.dashboard.DashboardViewModel
 import com.samanramezani1377.woogit.presentation.dashboard.DashboardViewModelFactory
 import com.samanramezani1377.woogit.presentation.order.OrderDetailScreen
 import com.samanramezani1377.woogit.presentation.order.OrderDetailUiState
-import com.samanramezani1377.woogit.presentation.orders.OrdersScreen
 import com.samanramezani1377.woogit.presentation.orders.OrderRowUiModel
+import com.samanramezani1377.woogit.presentation.orders.OrdersScreen
+import com.samanramezani1377.woogit.presentation.orders.OrdersUiState
 import com.samanramezani1377.woogit.presentation.product.ProductUiState
 import com.samanramezani1377.woogit.presentation.product.ProductsScreen
 
@@ -52,14 +53,21 @@ internal fun E11AppNavigation(dependencies: V1PresentationDependencies, initialO
                 val vm = viewModel<DashboardViewModel>(key = "dashboard-${storeId.value}", factory = DashboardViewModelFactory(dependencies, storeId))
                 val state by vm.uiState.collectAsState()
                 LaunchedEffect(storeId) { vm.refresh() }
-                DashboardScreen(storeName = storeId.value, connected = true, orders = state.ordersCount, products = state.productsCount, revenue = state.revenue, pending = state.pendingCount, onOrdersClick = { navController.navigate("orders") }, onProductsClick = { navController.navigate("products") }, selectedDestination = DashboardDestination.DASHBOARD, onDestinationSelected = { destination ->
-                    when (destination) {
-                        DashboardDestination.DASHBOARD -> Unit
-                        DashboardDestination.ORDERS -> navController.navigate("orders")
-                        DashboardDestination.PRODUCTS -> navController.navigate("products")
-                        DashboardDestination.SETTINGS -> navController.navigate("settings")
-                    }
-                })
+                DashboardScreen(
+                    storeName = storeId.value, connected = true, orders = state.ordersCount,
+                    products = state.productsCount, revenue = state.revenue, pending = state.pendingCount,
+                    onOrdersClick = { navController.navigate("orders") },
+                    onProductsClick = { navController.navigate("products") },
+                    selectedDestination = DashboardDestination.DASHBOARD,
+                    onDestinationSelected = { destination ->
+                        when (destination) {
+                            DashboardDestination.DASHBOARD -> Unit
+                            DashboardDestination.ORDERS -> navController.navigate("orders")
+                            DashboardDestination.PRODUCTS -> navController.navigate("products")
+                            DashboardDestination.SETTINGS -> navController.navigate("settings")
+                        }
+                    },
+                )
             }
         }
         composable("orders") {
@@ -84,7 +92,11 @@ internal fun E11AppNavigation(dependencies: V1PresentationDependencies, initialO
                 val vm = viewModel<OrderDetailViewModel>(factory = vmFactory { OrderDetailViewModel(dependencies) })
                 val state by vm.state.collectAsState()
                 LaunchedEffect(storeId, orderId) { vm.load(storeId, EntityId(orderId)) }
-                OrderDetailScreen(state = mapOrderDetailState(state), onRetry = { vm.load(storeId, EntityId(orderId)) }, onBack = { navController.popBackStack() })
+                OrderDetailScreen(
+                    state = mapOrderDetailState(state),
+                    onRetry = { vm.load(storeId, EntityId(orderId)) },
+                    onBack = { navController.popBackStack() },
+                )
             }
         }
         composable("products") {
@@ -93,13 +105,24 @@ internal fun E11AppNavigation(dependencies: V1PresentationDependencies, initialO
     }
 }
 
-private fun mapOrdersState(state: FeatureUiState<List<Order>>): com.samanramezani1377.woogit.presentation.orders.OrdersUiState = when (state) {
-    FeatureUiState.Loading, FeatureUiState.Pending -> com.samanramezani1377.woogit.presentation.orders.OrdersUiState.Loading
-    FeatureUiState.Empty -> com.samanramezani1377.woogit.presentation.orders.OrdersUiState.Empty
-    is FeatureUiState.Error -> com.samanramezani1377.woogit.presentation.orders.OrdersUiState.Error(state.message, state.retryable)
-    FeatureUiState.Offline -> com.samanramezani1377.woogit.presentation.orders.OrdersUiState.Offline()
-    is FeatureUiState.Conflict -> com.samanramezani1377.woogit.presentation.orders.OrdersUiState.Error("تعارض در داده‌های سفارش وجود دارد.", false)
-    is FeatureUiState.Success -> com.samanramezani1377.woogit.presentation.orders.OrdersUiState.Content(state.value.map { order -> OrderRowUiModel(order.id.value, order.customer?.name.orEmpty(), order.status.name, "${order.total.orEmpty()} ${order.currency.orEmpty()}".trim(), order.createdAt?.toString().orEmpty()) }, state.value.size >= 30)
+private fun mapOrdersState(state: FeatureUiState<List<Order>>): OrdersUiState = when (state) {
+    FeatureUiState.Loading, FeatureUiState.Pending -> OrdersUiState.Loading
+    FeatureUiState.Empty -> OrdersUiState.Empty
+    is FeatureUiState.Error -> OrdersUiState.Error(state.message, state.retryable)
+    FeatureUiState.Offline -> OrdersUiState.Offline()
+    is FeatureUiState.Conflict -> OrdersUiState.Error("تعارض در داده‌های سفارش وجود دارد.", false)
+    is FeatureUiState.Success -> OrdersUiState.Content(
+        state.value.map { order ->
+            OrderRowUiModel(
+                order.id.value,
+                order.customer?.name.orEmpty(),
+                order.status.name,
+                "${order.total.orEmpty()} ${order.currency.orEmpty()}".trim(),
+                order.modifiedAt?.toString().orEmpty(),
+            )
+        },
+        state.value.size >= 30,
+    )
 }
 
 private fun mapOrderDetailState(state: FeatureUiState<Order>): OrderDetailUiState = when (state) {
@@ -108,5 +131,13 @@ private fun mapOrderDetailState(state: FeatureUiState<Order>): OrderDetailUiStat
     is FeatureUiState.Error -> OrderDetailUiState.Error(state.message)
     FeatureUiState.Offline -> OrderDetailUiState.Error("سفارش در حالت آفلاین در دسترس نیست.")
     is FeatureUiState.Conflict -> OrderDetailUiState.Error("تعارض در داده‌های سفارش وجود دارد.")
-    is FeatureUiState.Success -> OrderDetailUiState.Content(state.value.id.value, state.value.status.name, state.value.customer?.name.orEmpty(), "${state.value.total.orEmpty()} ${state.value.currency.orEmpty()}".trim(), state.value.items.map { item -> com.samanramezani1377.woogit.presentation.order.OrderLineUiModel(item.name, item.quantity.toString(), item.total.orEmpty()) })
+    is FeatureUiState.Success -> OrderDetailUiState.Content(
+        state.value.id.value,
+        state.value.status.name,
+        state.value.customer?.name.orEmpty(),
+        "${state.value.total.orEmpty()} ${state.value.currency.orEmpty()}".trim(),
+        state.value.items.map { item ->
+            com.samanramezani1377.woogit.presentation.order.OrderLineUiModel(item.name, item.quantity.toString(), item.total)
+        },
+    )
 }
