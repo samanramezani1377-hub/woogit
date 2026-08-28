@@ -3,7 +3,6 @@ package com.samanramezani1377.woogit.presentation.product
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -52,28 +51,43 @@ internal fun ProductEditorScreen(
                 is ProductEditorUiState.Editing -> {
                     GlassCard {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            GlassTextField(state.name, onNameChanged, Modifier.fillMaxWidth(), "نام محصول")
-                            GlassTextField(state.description, onDescriptionChanged, Modifier.fillMaxWidth(), "توضیحات")
-                            GlassTextField(state.price, onPriceChanged, Modifier.fillMaxWidth(), "قیمت")
-                            GlassTextField(state.stock, onStockChanged, Modifier.fillMaxWidth(), "موجودی")
+                            GlassTextField(
+                                value = state.name,
+                                onValueChange = onNameChanged,
+                                label = "نام محصول",
+                            )
+                            GlassTextField(
+                                value = state.description,
+                                onValueChange = onDescriptionChanged,
+                                label = "توضیحات",
+                            )
+                            GlassTextField(
+                                value = state.price,
+                                onValueChange = onPriceChanged,
+                                label = "قیمت",
+                            )
+                            GlassTextField(
+                                value = state.stock,
+                                onValueChange = onStockChanged,
+                                label = "موجودی",
+                            )
                         }
                     }
                     GlassPrimaryAction(
                         label = if (state.imageUrl == null) "انتخاب تصویر" else "تغییر تصویر",
                         onClick = onMediaClick,
-                        modifier = Modifier.fillMaxWidth(),
                     )
                     GlassPrimaryAction(
                         label = if (state.saving) "در حال ذخیره…" else "ذخیره محصول",
                         onClick = onSave,
-                        modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp),
+                        modifier = Modifier.padding(bottom = 20.dp),
                         enabled = !state.saving && state.name.isNotBlank(),
                     )
                 }
                 is ProductEditorUiState.Error -> {
                     GlassErrorState(state.message)
                     if (state.canRetry) {
-                        GlassPrimaryAction("تلاش مجدد", onRetry, Modifier.fillMaxWidth())
+                        GlassPrimaryAction("تلاش مجدد", onRetry)
                     }
                 }
                 ProductEditorUiState.Saved -> GlassCard { GlassText("محصول با موفقیت ذخیره شد.") }
