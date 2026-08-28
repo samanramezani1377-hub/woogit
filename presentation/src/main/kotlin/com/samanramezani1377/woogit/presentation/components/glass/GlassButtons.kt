@@ -4,9 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -29,7 +27,7 @@ fun GlassButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
 ) {
-    val shape = RoundedCornerShape(18.dp)
+    val shape = RoundedCornerShape(12.dp)
     Button(
         onClick = onClick,
         modifier = modifier
@@ -47,19 +45,16 @@ fun GlassButton(
             contentColor = Color.White,
             disabledContainerColor = Color.Transparent,
         ),
-        contentPadding = PaddingValues(0.dp),
+        contentPadding = PaddingValues(horizontal = 20.dp, vertical = 14.dp),
         elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp, pressedElevation = 0.dp),
     ) {
         Box(
-            Modifier
-                .fillMaxWidth()
-                .heightIn(min = 56.dp)
-                .background(
-                    if (enabled) AccentGradient else Brush.linearGradient(
-                        listOf(Color.Gray.copy(alpha = .25f), Color.Gray.copy(alpha = .18f)),
-                    ),
-                    shape,
+            Modifier.background(
+                if (enabled) AccentGradient else Brush.linearGradient(
+                    listOf(Color.Gray.copy(alpha = .25f), Color.Gray.copy(alpha = .18f)),
                 ),
+                shape,
+            ),
             contentAlignment = Alignment.Center,
         ) {
             Text(label.glassLabel(), fontWeight = FontWeight.Bold)
@@ -82,7 +77,7 @@ fun GlassOutlinedButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
 ) {
-    val shape = RoundedCornerShape(16.dp)
+    val shape = RoundedCornerShape(12.dp)
     androidx.compose.material3.OutlinedButton(
         onClick = onClick,
         modifier = modifier.heightIn(min = 52.dp),
@@ -121,7 +116,7 @@ fun GlassIconButton(
     enabled: Boolean = true,
 ) = androidx.compose.material3.IconButton(
     onClick,
-    modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp),
+    modifier.heightIn(min = 48.dp),
     enabled = enabled,
 ) {
     Text(label)
@@ -134,8 +129,8 @@ fun GlassFloatingActionButton(
     modifier: Modifier = Modifier,
 ) = androidx.compose.material3.FloatingActionButton(
     onClick,
-    modifier.sizeIn(minWidth = 56.dp, minHeight = 56.dp),
-    shape = RoundedCornerShape(18.dp),
+    modifier.heightIn(min = 56.dp),
+    shape = RoundedCornerShape(16.dp),
     containerColor = GlassTokens.accent,
     contentColor = Color.White,
 ) {
