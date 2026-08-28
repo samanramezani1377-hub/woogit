@@ -3,21 +3,30 @@ package com.samanramezani1377.woogit.presentation.product
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.samanramezani1377.woogit.core.domain.model.IdName
 import com.samanramezani1377.woogit.core.domain.model.ProductImage
 import com.samanramezani1377.woogit.core.domain.model.ProductStatus
@@ -119,9 +128,17 @@ internal fun ProductEditorScreen(
         AlertDialog(onDismissRequest = onCloseMediaPicker, title = { GlassText("انتخاب از رسانه‌های سایت") }, text = {
             if (mediaLoading) GlassLoading("در حال دریافت رسانه‌های فروشگاه…")
             else if (availableMedia.isEmpty()) GlassText("رسانه‌ای در فروشگاه پیدا نشد.")
-            else LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            else LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth().height(420.dp)) {
                 items(availableMedia, key = { it.id?.value ?: it.src }) { media ->
-                    TextButton(onClick = { onPickMedia(media) }, modifier = Modifier.fillMaxWidth()) { GlassText(media.name?.takeIf { it.isNotBlank() } ?: media.src) }
+                    TextButton(onClick = { onPickMedia(media) }, modifier = Modifier.fillMaxWidth()) {
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            AsyncImage(model = media.src, contentDescription = media.alt ?: media.name, modifier = Modifier.size(56.dp).clip(RoundedCornerShape(10.dp)), contentScale = ContentScale.Crop)
+                            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                GlassText(media.name?.takeIf { it.isNotBlank() } ?: media.src)
+                                media.name?.takeIf { it.isNotBlank() }?.let { GlassText(media.src, style = MaterialTheme.typography.bodySmall.copy(fontSize = 10.sp)) }
+                            }
+                        }
+                    }
                 }
             }
         }, confirmButton = { TextButton(onClick = onCloseMediaPicker) { GlassText("بستن") } })
