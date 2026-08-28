@@ -52,24 +52,19 @@ class ProductRepositoryV1Impl(
     )
 
     override suspend fun list(storeId: StoreId, page: Int, perPage: Int, search: String?): CoreResult<List<Product>> {
-        // Navigation/list rendering is local-first. Remote refresh is deliberately explicit so
-        // changing screens never causes a full catalog download.
         if (page == 1 && search.isNullOrBlank()) {
             val cached = local.list(storeId)
             if (cached is CoreResult.Success && cached.value.isNotEmpty()) return cached
         }
-        return refresh(storeId, page, perPage, search)
+        return refresh(storeId, page, perPage, null)
     }
 
-    override suspend fun refresh(storeId: StoreId, page: Int, perPage: Int): CoreResult<List<Product>> =
-        refresh(storeId, page, perPage, null)
-
-    private suspend fun refresh(storeId: StoreId, page: Int, perPage: Int, search: String?): CoreResult<List<Product>> = provider.client(storeId).fold(
-        { (store, api) -> api.products(store.baseUrl, page, perPage, search).fold(
+    override suspend fun refresh(storeId: StoreId, page: Int, perPage: Int, modifiedAfter: String?): CoreResult<List<Product>> = provider.client(storeId).fold(
+        { (store, api) -> api.products(store.baseUrl, page, perPage, null, modifiedAfter).fold(
             onSuccess = { remote -> remote.map(WooProductTypedDto::toDomain).also { values -> values.forEach { local.upsert(storeId, it) } }.let { CoreResult.Success(it) } },
-            onFailure = { error -> if (page == 1 && search.isNullOrBlank()) local.list(storeId) else CoreResult.Failure(error.toDomain()) },
+            onFailure = { error -> if (page == 1 && modifiedAfter == null) local.list(storeId) else CoreResult.Failure(error.toDomain()) },
         ) },
-        { error -> if (page == 1 && search.isNullOrBlank()) local.list(storeId) else CoreResult.Failure(error) },
+        { error -> if (page == 1 && modifiedAfter == null) local.list(storeId) else CoreResult.Failure(error) },
     )
 
     override suspend fun create(storeId: StoreId, product: Product): CoreResult<Product> {
@@ -79,10 +74,7 @@ class ProductRepositoryV1Impl(
         val localResult = coordinator.execute(operation) { local.upsert(storeId, product) }
         if (localResult is CoreResult.Failure) return localResult
         return provider.client(storeId).fold(
-            { (store, api) -> api.createProduct(store.baseUrl, product.toDto(operationId)).fold(
-                onSuccess = { remote -> local.upsert(storeId, remote.toDomain()); pending.markSucceeded(operation.id); CoreResult.Success(remote.toDomain()) },
-                onFailure = { error -> if (error.isRetryableHttp()) CoreResult.Success(product) else CoreResult.Failure(error.toDomain()) },
-            ) },
+            { (store, api) -> api.createProduct(store.baseUrl, product.toDto(operationId)).fold(onSuccess = { remote -> local.upsert(storeId, remote.toDomain()); pending.markSucceeded(operation.id); CoreResult.Success(remote.toDomain()) }, onFailure = { error -> if (error.isRetryableHttp()) CoreResult.Success(product) else CoreResult.Failure(error.toDomain()) }) },
             { error -> if (error.recoverable) CoreResult.Success(product) else CoreResult.Failure(error) },
         )
     }
@@ -93,10 +85,7 @@ class ProductRepositoryV1Impl(
         val localResult = coordinator.execute(operation) { local.upsert(storeId, product) }
         if (localResult is CoreResult.Failure) return localResult
         return provider.client(storeId).fold(
-            { (store, api) -> api.updateProduct(store.baseUrl, id.value.toLong(), product.toDto()).fold(
-                onSuccess = { remote -> local.upsert(storeId, remote.toDomain()); pending.markSucceeded(operation.id); CoreResult.Success(remote.toDomain()) },
-                onFailure = { error -> if (error.isRetryableHttp()) CoreResult.Success(product) else CoreResult.Failure(error.toDomain()) },
-            ) },
+            { (store, api) -> api.updateProduct(store.baseUrl, id.value.toLong(), product.toDto()).fold(onSuccess = { remote -> local.upsert(storeId, remote.toDomain()); pending.markSucceeded(operation.id); CoreResult.Success(remote.toDomain()) }, onFailure = { error -> if (error.isRetryableHttp()) CoreResult.Success(product) else CoreResult.Failure(error.toDomain()) }) },
             { error -> if (error.recoverable) CoreResult.Success(product) else CoreResult.Failure(error) },
         )
     }
@@ -114,12 +103,8 @@ class ProductRepositoryV1Impl(
 }
 
 private fun Throwable?.isRetryableHttp() = this is HttpApiException && statusCode in 408..599
-
 private fun Throwable?.toDomain(): DomainError = when (this) {
-    is HttpApiException -> {
-        val message = WordPressErrorMapper.message(statusCode, body)
-        when (statusCode) { 401 -> DomainError.Authentication(message); 403 -> DomainError.Permission(message); 404 -> DomainError.NotFound("remote", message); 409 -> DomainError.Conflict(message); 422, 400, 405, 415 -> DomainError.Validation(message); 429 -> DomainError.RateLimited(message); in 500..599 -> DomainError.Server(message); else -> DomainError.Unknown(message) }
-    }
+    is HttpApiException -> { val message = WordPressErrorMapper.message(statusCode, body); when (statusCode) { 401 -> DomainError.Authentication(message); 403 -> DomainError.Permission(message); 404 -> DomainError.NotFound("remote", message); 409 -> DomainError.Conflict(message); 422, 400, 405, 415 -> DomainError.Validation(message); 429 -> DomainError.RateLimited(message); in 500..599 -> DomainError.Server(message); else -> DomainError.Unknown(message) } }
     null -> DomainError.Unknown("خطای نامشخصی در ارتباط با فروشگاه رخ داد. لطفاً دوباره تلاش کنید.")
     else -> DomainError.Network(message ?: "ارتباط با فروشگاه برقرار نشد. اتصال اینترنت و آدرس فروشگاه را بررسی کنید.")
 }
