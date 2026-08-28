@@ -6,9 +6,10 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
-import androidx.compose.runtime.mutableStateOf
 import androidx.activity.compose.setContent
+import androidx.compose.runtime.mutableStateOf
 import androidx.core.app.ActivityCompat
+import androidx.core.view.WindowCompat
 import com.samanramezani1377.woogit.presentation.E11ReleaseApp
 import com.samanramezani1377.woogit.presentation.WooGitTheme
 
@@ -17,13 +18,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        WindowCompat.setDecorFitsSystemWindows(window, true)
         notificationOrderId.value = intentOrderId(intent)
         requestNotificationPermissionIfNeeded()
         val composition = (application as WooGitApplication).composition
         setContent {
-            WooGitTheme {
-                E11ReleaseApp(composition.v1Presentation, notificationOrderId.value)
-            }
+            WooGitTheme { E11ReleaseApp(composition.v1Presentation, notificationOrderId.value) }
         }
     }
 
@@ -34,14 +34,11 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun intentOrderId(intent: Intent?): String? = intent?.let {
-        it.getStringExtra("order_id")
-            ?: it.getLongExtra("order_id", -1L).takeIf { id -> id > 0L }?.toString()
+        it.getStringExtra("order_id") ?: it.getLongExtra("order_id", -1L).takeIf { id -> id > 0L }?.toString()
     }
 
     private fun requestNotificationPermissionIfNeeded() {
-        if (Build.VERSION.SDK_INT >= 33 &&
-            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) {
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), REQUEST_NOTIFICATIONS)
         }
     }
