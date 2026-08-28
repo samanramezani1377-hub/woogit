@@ -4,14 +4,21 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.samanramezani1377.woogit.presentation.GlassCard
+import com.samanramezani1377.woogit.presentation.GlassErrorState
+import com.samanramezani1377.woogit.presentation.GlassLoading
+import com.samanramezani1377.woogit.presentation.GlassPrimaryAction
+import com.samanramezani1377.woogit.presentation.GlassScaffold
+import com.samanramezani1377.woogit.presentation.GlassText
+import com.samanramezani1377.woogit.presentation.GlassTextField
+import com.samanramezani1377.woogit.presentation.GlassTopBar
 
 @Composable
 internal fun ProductEditorScreen(
@@ -25,90 +32,51 @@ internal fun ProductEditorScreen(
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        when (state) {
-            ProductEditorUiState.Loading -> {
-                CircularProgressIndicator()
-            }
+    GlassScaffold(modifier) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .verticalScroll(rememberScrollState())
+                .imePadding(),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            GlassTopBar(
+                title = if ((state as? ProductEditorUiState.Editing)?.productId == null) "افزودن محصول" else "ویرایش محصول",
+                subtitle = "اطلاعات محصول",
+            )
 
-            is ProductEditorUiState.Editing -> {
-                OutlinedTextField(
-                    value = state.name,
-                    onValueChange = onNameChanged,
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("نام محصول") },
-                    singleLine = true,
-                )
-
-                OutlinedTextField(
-                    value = state.description,
-                    onValueChange = onDescriptionChanged,
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("توضیحات") },
-                    minLines = 4,
-                )
-
-                OutlinedTextField(
-                    value = state.price,
-                    onValueChange = onPriceChanged,
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("قیمت") },
-                    singleLine = true,
-                )
-
-                OutlinedTextField(
-                    value = state.stock,
-                    onValueChange = onStockChanged,
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text("موجودی") },
-                    singleLine = true,
-                )
-
-                Button(
-                    onClick = onMediaClick,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(
-                        text = if (state.imageUrl == null) {
-                            "انتخاب تصویر"
-                        } else {
-                            "تغییر تصویر"
-                        },
+            when (state) {
+                ProductEditorUiState.Loading -> GlassLoading("در حال بارگذاری محصول…")
+                is ProductEditorUiState.Editing -> {
+                    GlassCard {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            GlassTextField(state.name, onNameChanged, Modifier.fillMaxWidth(), "نام محصول")
+                            GlassTextField(state.description, onDescriptionChanged, Modifier.fillMaxWidth(), "توضیحات")
+                            GlassTextField(state.price, onPriceChanged, Modifier.fillMaxWidth(), "قیمت")
+                            GlassTextField(state.stock, onStockChanged, Modifier.fillMaxWidth(), "موجودی")
+                        }
+                    }
+                    GlassPrimaryAction(
+                        label = if (state.imageUrl == null) "انتخاب تصویر" else "تغییر تصویر",
+                        onClick = onMediaClick,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    GlassPrimaryAction(
+                        label = if (state.saving) "در حال ذخیره…" else "ذخیره محصول",
+                        onClick = onSave,
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp),
+                        enabled = !state.saving && state.name.isNotBlank(),
                     )
                 }
-
-                Button(
-                    onClick = onSave,
-                    enabled = !state.saving,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(
-                        text = if (state.saving) {
-                            "در حال ذخیره..."
-                        } else {
-                            "ذخیره محصول"
-                        },
-                    )
-                }
-            }
-
-            is ProductEditorUiState.Error -> {
-                Text(state.message)
-
-                if (state.canRetry) {
-                    Button(onClick = onRetry) {
-                        Text("تلاش مجدد")
+                is ProductEditorUiState.Error -> {
+                    GlassErrorState(state.message)
+                    if (state.canRetry) {
+                        GlassPrimaryAction("تلاش مجدد", onRetry, Modifier.fillMaxWidth())
                     }
                 }
-            }
-
-            ProductEditorUiState.Saved -> {
-                Text("محصول با موفقیت ذخیره شد.")
+                ProductEditorUiState.Saved -> GlassCard { GlassText("محصول با موفقیت ذخیره شد.") }
             }
         }
     }
