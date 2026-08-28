@@ -1,6 +1,8 @@
 package com.samanramezani1377.woogit.presentation.dashboard
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -8,15 +10,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -27,13 +29,12 @@ import com.samanramezani1377.woogit.presentation.GlassTokens
 internal fun DashboardHero(storeName: String, connected: Boolean, modifier: Modifier = Modifier) {
     GlassCard(modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            androidx.compose.foundation.layout.Box(
+            Box(
                 Modifier
                     .size(10.dp)
-                    .then(
-                        Modifier
-                    ),
+                    .background(if (connected) GlassTokens.live else GlassTokens.urgent, CircleShape),
             )
+            Spacer(Modifier.size(10.dp))
             Column(Modifier.weight(1f)) {
                 Text("وضعیت فروشگاه", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Text(storeName, style = MaterialTheme.typography.bodyMedium, color = GlassTokens.muted)
@@ -93,7 +94,7 @@ internal fun DashboardQuickAction(
                 Text(title, color = GlassTokens.ink, fontWeight = FontWeight.Bold)
                 Text(subtitle, color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
             }
-            Text("›", color = GlassTokens.faint, style = MaterialTheme.typography.titleLarge)
+            Text("‹", color = GlassTokens.faint, style = MaterialTheme.typography.titleLarge)
         }
     }
 }
