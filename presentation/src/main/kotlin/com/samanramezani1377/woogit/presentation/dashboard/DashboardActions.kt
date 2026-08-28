@@ -10,37 +10,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
-/**
- * Dashboard quick-action section.
- * Navigation callbacks are supplied by the screen instead of being hard-coded here.
- */
 @Composable
 internal fun DashboardActions(
     onOrdersClick: () -> Unit,
     onProductsClick: () -> Unit,
+    onSettingsClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(vertical = 2.dp),
+        modifier = modifier.fillMaxWidth().padding(vertical = 2.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text(
-            text = "اقدامات سریع",
-            style = MaterialTheme.typography.titleMedium,
-        )
-
-        DashboardQuickAction(
-            title = "سفارش‌ها",
-            subtitle = "مدیریت سفارش‌های فروشگاه",
-            onClick = onOrdersClick,
-        )
-
-        DashboardQuickAction(
-            title = "محصولات",
-            subtitle = "مدیریت محصولات و موجودی",
-            onClick = onProductsClick,
-        )
+        Text("اقدامات سریع", style = MaterialTheme.typography.titleMedium)
+        DashboardQuickAction("سفارش‌ها", "مدیریت سفارش‌های فروشگاه", onClick = onOrdersClick)
+        DashboardQuickAction("محصولات", "مدیریت محصولات و موجودی", onClick = onProductsClick)
+        DashboardQuickAction("تنظیمات فروشگاه", "اتصال، حساب و مدیریت فروشگاه", onClick = onSettingsClick)
     }
 }
