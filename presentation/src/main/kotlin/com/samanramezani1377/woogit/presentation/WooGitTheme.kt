@@ -13,6 +13,81 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.shape.RoundedCornerShape
 
 enum class AppThemeMode { SYSTEM, LIGHT, DARK }
-private val GlassLight = lightColorScheme(primary=Color(0xFF315B7D),onPrimary=Color.White,primaryContainer=Color(0xFFD2E8FA),onPrimaryContainer=Color(0xFF0B2F48),secondary=Color(0xFF5C6874),onSecondary=Color.White,secondaryContainer=Color(0xFFDDE6EE),onSecondaryContainer=Color(0xFF17232D),background=Color(0xFFF4F7FA),onBackground=Color(0xFF18212A),surface=Color(0xFFEFF3F7),onSurface=Color(0xFF18212A),surfaceVariant=Color(0xFFDDE5EC),onSurfaceVariant=Color(0xFF43515C),outline=Color(0xFF71808C),error=Color(0xFFBA1A1A),onError=Color.White,errorContainer=Color(0xFFFFDAD6),onErrorContainer=Color(0xFF410002))
-private val GlassDark = darkColorScheme(primary=Color(0xFFA9CBEA),onPrimary=Color(0xFF08344F),primaryContainer=Color(0xFF214C6B),onPrimaryContainer=Color(0xFFD2E8FA),secondary=Color(0xFFB7C7D5),onSecondary=Color(0xFF202B34),secondaryContainer=Color(0xFF38454F),onSecondaryContainer=Color(0xFFDDE6EE),background=Color(0xFF101419),onBackground=Color(0xFFE1E7EC),surface=Color(0xFF171D23),onSurface=Color(0xFFE1E7EC),surfaceVariant=Color(0xFF26313B),onSurfaceVariant=Color(0xFFC1CBD4),outline=Color(0xFF8A98A4),error=Color(0xFFFFB4AB),onError=Color(0xFF690005),errorContainer=Color(0xFF93000A),onErrorContainer=Color(0xFFFFDAD6))
-@Composable fun WooGitTheme(mode: AppThemeMode = AppThemeMode.SYSTEM, content: @Composable () -> Unit) { val dark=when(mode){AppThemeMode.SYSTEM->isSystemInDarkTheme();AppThemeMode.LIGHT->false;AppThemeMode.DARK->true}; MaterialTheme(colorScheme=if(dark)GlassDark else GlassLight,typography=Typography().let{it.copy(titleLarge=it.titleLarge.copy(fontWeight=FontWeight.SemiBold))},shapes=Shapes(extraSmall=RoundedCornerShape(10.dp),small=RoundedCornerShape(GlassTokens.radiusSm),medium=RoundedCornerShape(GlassTokens.radiusMd),large=RoundedCornerShape(24.dp),extraLarge=RoundedCornerShape(GlassTokens.radiusLg)),content=content) }
+
+private val LiquidLight = lightColorScheme(
+    primary = Color(0xFF6C5CE7),
+    onPrimary = Color.White,
+    primaryContainer = Color(0xFFE6E1FF),
+    onPrimaryContainer = Color(0xFF21155E),
+    secondary = Color(0xFFE84393),
+    onSecondary = Color.White,
+    secondaryContainer = Color(0xFFFFD9EA),
+    onSecondaryContainer = Color(0xFF3D1027),
+    tertiary = Color(0xFF22C55E),
+    onTertiary = Color.White,
+    background = Color(0xFFEFF1F7),
+    onBackground = Color(0xFF1B1F2A),
+    surface = Color(0xFFF7F8FC),
+    onSurface = Color(0xFF1B1F2A),
+    surfaceVariant = Color(0xFFE5E7EF),
+    onSurfaceVariant = Color(0xFF4B5263),
+    outline = Color(0xFF767D8C),
+    error = Color(0xFFFF6B4A),
+    onError = Color.White,
+    errorContainer = Color(0xFFFFE1DA),
+    onErrorContainer = Color(0xFF5C170B),
+)
+
+private val LiquidDark = darkColorScheme(
+    primary = Color(0xFFB9AEFF),
+    onPrimary = Color(0xFF31216F),
+    primaryContainer = Color(0xFF5142A0),
+    onPrimaryContainer = Color(0xFFE6E1FF),
+    secondary = Color(0xFFFFA9CF),
+    onSecondary = Color(0xFF5A1739),
+    secondaryContainer = Color(0xFF7B2853),
+    onSecondaryContainer = Color(0xFFFFD9EA),
+    tertiary = Color(0xFF86EFAC),
+    onTertiary = Color(0xFF003916),
+    background = Color(0xFF171821),
+    onBackground = Color(0xFFE9E8F0),
+    surface = Color(0xFF20212B),
+    onSurface = Color(0xFFE9E8F0),
+    surfaceVariant = Color(0xFF343541),
+    onSurfaceVariant = Color(0xFFC4C4D0),
+    outline = Color(0xFF9695A2),
+    error = Color(0xFFFF9A83),
+    onError = Color(0xFF5C170B),
+    errorContainer = Color(0xFF8B2F1D),
+    onErrorContainer = Color(0xFFFFDAD3),
+)
+
+@Composable
+fun WooGitTheme(
+    mode: AppThemeMode = AppThemeMode.SYSTEM,
+    content: @Composable () -> Unit,
+) {
+    val dark = when (mode) {
+        AppThemeMode.SYSTEM -> isSystemInDarkTheme()
+        AppThemeMode.LIGHT -> false
+        AppThemeMode.DARK -> true
+    }
+
+    MaterialTheme(
+        colorScheme = if (dark) LiquidDark else LiquidLight,
+        typography = Typography().let {
+            it.copy(
+                titleLarge = it.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+                titleMedium = it.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+            )
+        },
+        shapes = Shapes(
+            extraSmall = RoundedCornerShape(12.dp),
+            small = RoundedCornerShape(GlassTokens.radiusSm),
+            medium = RoundedCornerShape(GlassTokens.radiusMd),
+            large = RoundedCornerShape(26.dp),
+            extraLarge = RoundedCornerShape(GlassTokens.radiusLg),
+        ),
+        content = content,
+    )
+}
