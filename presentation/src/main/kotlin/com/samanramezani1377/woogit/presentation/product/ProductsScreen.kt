@@ -15,7 +15,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -86,9 +85,15 @@ private fun ProductList(products: List<Product>, onProductClick: (String) -> Uni
             .filter { it >= (products.size - 4).coerceAtLeast(0) }
             .collect { onLoadMore() }
     }
-    LazyColumn(state = listState, modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 104.dp)) {
-        items(products, key = { it.id.value }) { product -> ProductRow(product) { onProductClick(product.id.value) } }
-        item { Column(Modifier.fillMaxWidth().padding(8.dp), horizontalAlignment = Alignment.CenterHorizontally) { CircularProgressIndicator(modifier = Modifier.padding(4.dp), strokeWidth = 2.dp) } }
+    LazyColumn(
+        state = listState,
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(bottom = 104.dp),
+    ) {
+        items(products, key = { it.id.value }) { product ->
+            ProductRow(product) { onProductClick(product.id.value) }
+        }
     }
 }
 
