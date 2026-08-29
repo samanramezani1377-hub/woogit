@@ -14,18 +14,16 @@ private val EXCLUDED_REVENUE_STATUSES = setOf(OrderStatus.CANCELLED, OrderStatus
 /** Removes HTML markup that WooCommerce may include in its currency symbol. */
 private fun sanitizeCurrencySymbol(value: String): String = value.replace(Regex("<[^>]*>"), "").trim()
 
-/** Keeps domain-to-dashboard presentation mapping outside the composable. */
 internal object DashboardStateMapper {
     fun ordersCount(orders: List<Order>): String = orders.size.toString()
     fun productsCount(products: List<Product>): String = products.size.toString()
     fun pendingCount(orders: List<Order>): String = orders.count { it.status.name == "PENDING" }.toString()
 
-    /** Sums order totals for the dashboard revenue box, excluding cancelled and failed orders. */
     fun netSales(orders: List<Order>): BigDecimal =
         orders.filterNot { it.status in EXCLUDED_REVENUE_STATUSES }
             .fold(BigDecimal.ZERO) { acc, order -> acc + (order.total?.toBigDecimalOrNull() ?: BigDecimal.ZERO) }
 
-    /** Formats the dashboard revenue using WooCommerce currency settings and the locally calculated order total. */
+    /** Formats only the numeric revenue value; the currency is presented in the card title. */
     fun revenue(orders: List<Order>, summary: SalesSummary?): String {
         if (summary == null) return "—"
         val amount = netSales(orders)
@@ -35,13 +33,12 @@ internal object DashboardStateMapper {
         }
         val decimals = summary.numberOfDecimals.coerceAtLeast(0)
         val pattern = if (decimals == 0) "#,##0" else "#,##0." + "0".repeat(decimals)
-        val formatted = DecimalFormat(pattern, symbols).format(amount)
-        val symbol = sanitizeCurrencySymbol(summary.currencySymbol).ifBlank { summary.currency }
-        return when (summary.currencyPosition) {
-            "right" -> "$formatted$symbol"
-            "left_space" -> "$symbol $formatted"
-            "right_space" -> "$formatted $symbol"
-            else -> "$symbol$formatted"
-        }
+        return DecimalFormat(pattern, symbols).format(amount)
+    }
+
+    /** Returns the WooCommerce currency label without HTML markup. */
+    fun currencyLabel(summary: SalesSummary?): String {
+        if (summary == null) return "تومان"
+        return sanitizeCurrencySymbol(summary.currencySymbol).ifBlank { summary.currency }.ifBlank { "تومان" }
     }
 }
