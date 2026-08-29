@@ -30,7 +30,7 @@ internal data class DashboardUiState(
     val ordersCount: String get() = DashboardStateMapper.ordersCount(orders)
     val productsCount: String get() = DashboardStateMapper.productsCount(products)
     val pendingCount: String get() = DashboardStateMapper.pendingCount(orders)
-    val revenue: String get() = DashboardStateMapper.revenue(salesSummary)
+    val revenue: String get() = DashboardStateMapper.revenue(orders, salesSummary)
 }
 
 internal class DashboardViewModel(
@@ -64,9 +64,7 @@ internal class DashboardViewModel(
         healthMonitorJob = null
     }
 
-    fun onNetworkAvailable() {
-        viewModelScope.launch { checkConnection() }
-    }
+    fun onNetworkAvailable() { viewModelScope.launch { checkConnection() } }
 
     override fun onCleared() {
         healthMonitorJob?.cancel()
@@ -96,9 +94,7 @@ internal class DashboardViewModel(
             PresentationTechnicalErrorReporter.report("Dashboard", "DashboardViewModel.checkConnection", "Connection check", "ارتباط با فروشگاه برقرار نشد.", throwable = e)
             _uiState.value = _uiState.value.copy(connectionState = ConnectionState.ERROR, lastConnectionCheckAtMillis = System.currentTimeMillis())
             ConnectionState.ERROR
-        } finally {
-            healthCheckInFlight = false
-        }
+        } finally { healthCheckInFlight = false }
     }
 
     private suspend fun loadAllOrders(): CoreResult<List<Order>> {
