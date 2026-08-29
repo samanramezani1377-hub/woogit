@@ -106,8 +106,8 @@ internal fun DashboardQuickAction(title: String, subtitle: String, modifier: Mod
 @Composable
 internal fun DashboardContent(
     storeName: String, connected: Boolean, orders: String, products: String, revenue: String, pending: String,
-    currency: String = "تومان", recentOrderId: String?, recentCustomer: String, recentTotal: String, recentStatus: OrderStatus?, onRecentOrderClick: () -> Unit,
-    modifier: Modifier = Modifier,
+    recentOrderId: String?, recentCustomer: String, recentTotal: String, recentStatus: OrderStatus?, onRecentOrderClick: () -> Unit,
+    currency: String = "تومان", modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("خلاصه وضعیت", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 4.dp))
