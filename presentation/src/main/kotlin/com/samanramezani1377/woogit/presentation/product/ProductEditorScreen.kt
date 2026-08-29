@@ -36,6 +36,7 @@ import com.samanramezani1377.woogit.presentation.GlassScaffold
 import com.samanramezani1377.woogit.presentation.GlassText
 import com.samanramezani1377.woogit.presentation.GlassTextField
 import com.samanramezani1377.woogit.presentation.GlassTopBar
+import com.samanramezani1377.woogit.presentation.toPersianPrice
 import com.samanramezani1377.woogit.core.domain.model.ProductImage
 import com.samanramezani1377.woogit.core.domain.model.ProductStatus
 import com.samanramezani1377.woogit.core.domain.model.ProductType
@@ -81,31 +82,27 @@ internal fun ProductEditorScreen(
                         GlassTextField(state.shortDescription, onShortDescriptionChanged, "توضیح کوتاه")
                         GlassTextField(state.description, onDescriptionChanged, "توضیحات")
                         GlassTextField(state.price, onPriceChanged, "قیمت اصلی")
+                        state.price.takeIf { it.isNotBlank() }?.let { GlassText("قیمت نمایش: ${it.toPersianPrice()} تومان", style = MaterialTheme.typography.bodySmall) }
                         GlassTextField(state.salePrice, onSalePriceChanged, "قیمت فروش ویژه")
+                        state.salePrice.takeIf { it.isNotBlank() }?.let { GlassText("قیمت ویژه نمایش: ${it.toPersianPrice()} تومان", style = MaterialTheme.typography.bodySmall) }
                         GlassTextField(state.stock, onStockChanged, "موجودی")
                         GlassText("تصویر محصول", style = MaterialTheme.typography.titleMedium)
                         state.imageUrl?.takeIf { it.isNotBlank() }?.let { url ->
                             AsyncImage(model = url, contentDescription = state.name, modifier = Modifier.fillMaxWidth().height(180.dp).clip(RoundedCornerShape(14.dp)), contentScale = ContentScale.Crop)
                         }
                         GlassTextField(state.imageUrl.orEmpty(), onImageUrlChanged, "آدرس تصویر")
-                        state.imageError?.takeIf { it.isNotBlank() }?.let { error ->
-                            GlassText(error, style = MaterialTheme.typography.bodySmall)
-                        }
+                        state.imageError?.takeIf { it.isNotBlank() }?.let { error -> GlassText(error, style = MaterialTheme.typography.bodySmall) }
                         GlassPrimaryAction(if (imageUploading) "در حال آپلود…" else "انتخاب تصویر از گوشی", onUploadImage, enabled = !imageUploading)
                         GlassPrimaryAction("انتخاب از رسانه‌های سایت", onOpenMediaPicker, enabled = !imageUploading)
                     } }
                     GlassCard { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         GlassText("وضعیت انتشار", style = MaterialTheme.typography.titleMedium)
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            listOf(ProductStatus.PUBLISHED to "منتشر شده", ProductStatus.DRAFT to "پیش‌نویس", ProductStatus.PENDING to "در انتظار", ProductStatus.PRIVATE to "خصوصی").forEach { (value, label) ->
-                                FilterChip(selected = state.status == value, onClick = { onStatusChanged(value) }, label = { GlassText(label) })
-                            }
+                            listOf(ProductStatus.PUBLISHED to "منتشر شده", ProductStatus.DRAFT to "پیش‌نویس", ProductStatus.PENDING to "در انتظار", ProductStatus.PRIVATE to "خصوصی").forEach { (value, label) -> FilterChip(selected = state.status == value, onClick = { onStatusChanged(value) }, label = { GlassText(label) }) }
                         }
                         GlassText("نوع محصول", style = MaterialTheme.typography.titleMedium)
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            listOf(ProductType.SIMPLE to "ساده", ProductType.VARIABLE to "متغیر", ProductType.GROUPED to "گروهی", ProductType.EXTERNAL to "خارجی").forEach { (value, label) ->
-                                FilterChip(selected = state.type == value, onClick = { onTypeChanged(value) }, label = { GlassText(label) })
-                            }
+                            listOf(ProductType.SIMPLE to "ساده", ProductType.VARIABLE to "متغیر", ProductType.GROUPED to "گروهی", ProductType.EXTERNAL to "خارجی").forEach { (value, label) -> FilterChip(selected = state.type == value, onClick = { onTypeChanged(value) }, label = { GlassText(label) }) }
                         }
                     } }
                     GlassCard { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -113,9 +110,7 @@ internal fun ProductEditorScreen(
                         if (availableCategories.isNotEmpty()) {
                             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 val selected = state.categories.split(',').map { it.trim() }.filter { it.isNotBlank() }.toSet()
-                                availableCategories.forEach { category ->
-                                    FilterChip(selected = category.name in selected, onClick = { val next = selected.toMutableSet(); if (!next.add(category.name)) next.remove(category.name); onCategoriesChanged(next.joinToString(", ")) }, label = { GlassText(category.name) })
-                                }
+                                availableCategories.forEach { category -> FilterChip(selected = category.name in selected, onClick = { val next = selected.toMutableSet(); if (!next.add(category.name)) next.remove(category.name); onCategoriesChanged(next.joinToString(", ")) }, label = { GlassText(category.name) }) }
                             }
                         } else GlassText("دسته‌بندی‌ای از فروشگاه دریافت نشد.")
                         GlassText("ویژگی‌ها", style = MaterialTheme.typography.titleMedium)
