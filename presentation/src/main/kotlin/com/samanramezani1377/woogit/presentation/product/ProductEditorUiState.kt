@@ -18,13 +18,13 @@ internal sealed interface ProductEditorUiState {
         val stock: String,
         val imageUrl: String?,
         val imageId: String? = null,
-        val images: List<ProductImage> = emptyList(),
         val imageError: String? = null,
         val categories: String,
         val attributes: String,
         val status: ProductStatus = ProductStatus.DRAFT,
         val type: ProductType = ProductType.SIMPLE,
         val saving: Boolean = false,
+        val images: List<ProductImage> = emptyList(),
     ) : ProductEditorUiState
 
     data class Error(
