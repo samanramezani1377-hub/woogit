@@ -25,5 +25,33 @@ data class ProductTransferManifest(
 @Serializable data class TransferImage(val id:String?=null,val src:String,val name:String?=null,val alt:String?=null,val file:String)
 
 data class TransferValidatedPackage(val manifest:ProductTransferManifest,val products:List<TransferProduct>,val mediaNames:Set<String>,val invalidProductIds:Set<String>,val validationErrors:List<String>,val globalAttributes:List<TransferGlobalAttribute> = emptyList())
-data class TransferMediaOutcome(val images:Map<String,ProductImage>,val failed:Int,val errors:List<String>,val uploaded:Int)
-data class RobustProductTransferResult(val created:Int=0,val updated:Int=0,val failed:Int=0,val imagesUploaded:Int=0,val variationsCreated:Int=0,val variationsUpdated:Int=0,val errors:List<String> = emptyList(),val variationsFailed:Int=0,val imagesFailed:Int=0,val imagesUnused:Int=0,val skuChanged:Int=0,val validationErrors:List<String> = emptyList(),val importErrors:List<String> = emptyList(),val drafted:Int=0,val categoriesCreated:Int=0,val categoriesResolved:Int=0,val attributesCreated:Int=0,val attributesResolved:Int=0,val termsCreated:Int=0,val termsResolved:Int=0)
+data class TransferMediaOutcome(
+    val images:Map<String,ProductImage>,
+    val failed:Int,
+    val errors:List<String>,
+    val uploaded:Int,
+    val reused:Int=0,
+)
+data class RobustProductTransferResult(
+    val created:Int=0,
+    val updated:Int=0,
+    val failed:Int=0,
+    val imagesUploaded:Int=0,
+    val variationsCreated:Int=0,
+    val variationsUpdated:Int=0,
+    val errors:List<String> = emptyList(),
+    val variationsFailed:Int=0,
+    val imagesFailed:Int=0,
+    val imagesUnused:Int=0,
+    val skuChanged:Int=0,
+    val validationErrors:List<String> = emptyList(),
+    val importErrors:List<String> = emptyList(),
+    val drafted:Int=0,
+    val categoriesCreated:Int=0,
+    val categoriesResolved:Int=0,
+    val attributesCreated:Int=0,
+    val attributesResolved:Int=0,
+    val termsCreated:Int=0,
+    val termsResolved:Int=0,
+    val imagesReused:Int=0,
+)
