@@ -1,25 +1,29 @@
 # WooGit Product Import / Export
 
-> این سند **وضعیت واقعی کد فعلی** را مستند می‌کند؛ قرارداد ایده‌آل یا roadmap نیست. مرجع کد بررسی‌شده، پیاده‌سازی موجود در `main` است. هر قابلیت فقط در صورتی اینجا implemented محسوب می‌شود که در کد فعلی وجود داشته باشد.
+> مرجع **implementation واقعی فعلی** است، نه roadmap. در اختلاف کد و سند، کد فعلی اولویت دارد و این سند باید sync شود.
 
-## 1. Format contract
+## 1. Scope و Source of Truth
 
-WooGit از فایل `.woogit` برای انتقال محصولات استفاده می‌کند. فایل یک ZIP نسخه‌دار است و در پیاده‌سازی فعلی شامل این اجزای منطقی است:
+WooGit برای انتقال Productهای WooCommerce از فایل `.woogit` استفاده می‌کند. Package یک ZIP نسخه‌دار شامل Product، Variation، Category، Attribute/Term و Media است.
 
-- `manifest.json` — فرمت، نسخه منطقی، نسخه layout، URL فروشگاه مبدأ و تعداد محصولات/تصاویر.
-- `products.json` — Productها، Categoryها، Attributeها، Global Attribute/Termها، Image referenceها و Variationها.
-- `media/` — فایل واقعی تصاویر Product و Variation.
+Source of Truthهای این قابلیت:
 
-مقادیر فعلی از `ProductTransferFormat.kt` گرفته می‌شوند:
+- `ProductTransferFormat.kt`
+- `ProductTransferArchive.kt`
+- `ProductTransferValidation.kt`
+- `ProductTransferMedia.kt`
+- `ProductTransferModels.kt`
+- `ProductTransferMappers.kt`
+- `ProductTransferRepositoryReader.kt`
+- `RobustProductTransferService.kt`
+- repositoryهای Product/Variation/Media/Category/Attribute
+- Settings UI مربوط به Import/Export
 
-- Format: `woogit-products`
-- Format version: `1`
-- Layout version: `1`
-- هر دو نسخه در حال حاضر **TEMPORARY** هستند.
+Source ID و Destination ID مستقل‌اند و Source ID نباید بدون mapping/lookup به Destination mutation تبدیل شود.
 
-`ProductTransferFormat` مرجع مسیرهای ZIP است و نوشتن Entryهای Export از gateway آن عبور می‌کند. Import نیز مسیرها را با همان Layout اعتبارسنجی می‌کند. fileciteturn46file0L2-L6
+## 2. `.woogit` Format
 
-### Layout فعلی v1
+Layout فعلی v1:
 
 ```text
 .woogit
@@ -30,32 +34,47 @@ WooGit از فایل `.woogit` برای انتقال محصولات استفاد
     └── v-<variation-id>.<ext>
 ```
 
-فرمت‌های Media مجاز در Layout فعلی: `jpg`, `jpeg`, `png`, `webp`, `gif`, `svg` هستند. مسیرهای absolute، `..` و backslash رد می‌شوند. fileciteturn46file0L2-L6
+قرارداد فعلی:
 
-## 2. Export — وضعیت واقعی
+- format: `woogit-products`
+- format version: `1`
+- layout version: `1`
+- نسخه‌های فعلی در کد temporary هستند.
+- Media extensionهای مجاز: `jpg`, `jpeg`, `png`, `webp`, `gif`, `svg`.
+- pathهای absolute، `..` و backslash مجاز نیستند.
+- `manifest.json` اطلاعات format/version/layout، source store و countها را دارد.
+- `products.json` داده Product/Variation و referenceهای انتقال را دارد.
+- `media/` فایل واقعی تصاویر را دارد.
 
-Export در حال حاضر:
+## 3. Export
 
-1. فروشگاه را resolve می‌کند.
-2. محصولات را از Product repository می‌خواند.
-3. سقف فعلی Product برابر `10,000` است.
-4. Categoryها و Global Attribute/Termهای استفاده‌شده را جمع‌آوری می‌کند.
-5. Productهای Variable و Variationهایشان را Export می‌کند.
-6. تصاویر Product و Variation را از URL مبدأ دریافت می‌کند.
-7. برای هر تصویر یک فایل در `media/` می‌نویسد.
-8. شناسه، URL، نام و alt تصویر را در `TransferImage` نگه می‌دارد.
-9. `manifest.json` و `products.json` را در ZIP قرار می‌دهد.
-10. حجم کل package حداکثر `1 GiB` و حجم هر Entry حداکثر `50 MiB` است.
+Pipeline واقعی Export:
 
-### نکته مهم درباره Export Media
+1. Resolve فروشگاه.
+2. Read Productها از repository.
+3. enforce سقف `10,000` Product.
+4. جمع‌آوری Category و Global Attribute/Termهای لازم.
+5. Read Variable Product و Variationها.
+6. دریافت Media URLها.
+7. نوشتن Media entryها.
+8. ساخت Image referenceها (`id`/`url`/`name`/`alt`/file reference).
+9. تولید `manifest.json` و `products.json`.
+10. ساخت ZIP `.woogit`.
 
-در implementation فعلی **Media Dedup در Export انجام نمی‌شود**. اگر یک تصویر چند بار در Product/Variationهای مختلف استفاده شود، ممکن است چند Entry مستقل با مسیرهای مختلف داخل package قرار گیرد. Dedup فعلی مربوط به مسیر Import است، نه Export.
+Limits:
 
-Export در صورت شکست دریافت یک تصویر، package را موفق اعلام نمی‌کند و ساخت خروجی fail می‌شود؛ بنابراین خروجی ناقص به‌عنوان Export موفق برگردانده نمی‌شود. نوشتن ZIP نیز از Layout kernel عبور می‌کند. fileciteturn59file0L2-L6
+- Product: `10,000`
+- هر Entry: `50 MiB`
+- `products.json`: `100 MiB`
+- کل Package: `1 GiB`
 
-## 3. Import — مراحل فعلی
+### Export Media Dedup
 
-Import به‌صورت کلی این pipeline را دارد:
+**در Export تضمین نشده است.** تصویر مشترک ممکن است چند بار با pathهای متفاوت وارد package شود. Dedup/reuse اصلی در Import انجام می‌شود.
+
+Failure در ساخت داده ضروری یا دریافت Media نباید package ناقص را به‌عنوان Export موفق تحویل دهد.
+
+## 4. Import Pipeline
 
 ```text
 Read ZIP
@@ -66,7 +85,7 @@ Resolve destination Media
   ↓
 Read destination Products
   ↓
-Resolve Categories / Global Attributes
+Resolve Categories / Global Attributes / Terms
   ↓
 Match Product
   ↓
@@ -74,163 +93,200 @@ Create / Update Product
   ↓
 Match + Create / Update Variations
   ↓
-Produce result statistics
+Aggregate Result
 ```
 
-### Validation قبل از Mutation
+Package-level validation قبل از mutation انجام می‌شود.
 
-قبل از mutation، موارد زیر بررسی می‌شوند:
+## 5. Validation
 
-- وجود `manifest.json`
-- وجود `products.json`
-- format صحیح
-- format version پشتیبانی‌شده
-- layout version پشتیبانی‌شده
-- مجاز بودن ZIP entryها
-- جلوگیری از path traversal
-- عدم وجود Entry تکراری
-- سقف package برابر `1 GiB`
-- سقف `products.json` برابر `100 MiB`
-- سقف Entry برابر `50 MiB`
-- تطبیق تعداد Productهای manifest با `products.json`
-- تطبیق تعداد تصاویر manifest با Media entryها
-- سقف Product برابر `10,000`
-- شناسه و نام و نوع و status معتبر Product
-- معتبر بودن `ProductType` و `ProductStatus`
-- اعتبار Attributeهای Variation
-- duplicate Product ID داخل package
+Validation فعلی شامل:
+
+- وجود `manifest.json` و `products.json`
+- format/version/layout معتبر
+- ZIP entry معتبر
+- path traversal، absolute path و backslash protection
+- duplicate ZIP entry
+- package/entry/`products.json` limits
+- تطبیق countهای manifest با محتوا
+- Product limit
+- Product ID/name/type/status
+- ProductType/ProductStatus
+- Variation attribute validity
+- duplicate Product ID
 - duplicate SKU داخل package
-- وجود Media referenceهای Product/Variation در package
-- اعتبار Global Attribute و Termها و duplicate Termهای هر Attribute
+- وجود Media referenceهای لازم
+- Global Attribute/Term validity
+- duplicate Termهای یک Attribute
 
-Validation فعلی **package-level** است؛ اگر validation error وجود داشته باشد، mutation محصولات شروع نمی‌شود و خطاها در `validationErrors` گزارش می‌شوند. fileciteturn47file0L2-L6
+Validation **package-level** است. اگر validation error وجود داشته باشد mutation شروع نمی‌شود و خطا در `validationErrors` می‌آید. این با mutation failure فرق دارد.
 
-## 4. Product matching
+## 6. Product Mapping
 
-در Import، مقصد از Productهای موجود فروشگاه ساخته می‌شود و lookupهای مختلف برای match آماده می‌شوند. حالت `UPDATE_EXISTING` برای پیدا کردن Product موجود استفاده می‌شود و حالت `CREATE_NEW_DRAFT`/ایجاد جدید اجازه Create را می‌دهد.
+Destination state برای lookupهای Create/Update خوانده می‌شود. Source Product ID هویت مبدأ است و Destination ID باید از mapping/lookup مقصد به‌دست آید.
 
-Source Product ID یک شناسه مبدأ است و نباید به‌عنوان Destination ID نوشته شود مگر اینکه mapping همان فروشگاه آن را به یک Product موجود مقصد resolve کرده باشد.
+**Idempotency کامل بدون SKU تضمین نشده است.** Import مجدد package بدون SKU الزاماً همان Product مقصد را پیدا نمی‌کند.
 
-> جزئیات دقیق اولویت match باید با implementation `findProductMatch` هم‌زمان نگه داشته شود؛ این سند عمداً الگوریتمی را که در کد مستقل و صریح به‌عنوان قرارداد عمومی ثبت نشده، به‌عنوان guarantee جدید معرفی نمی‌کند.
+## 7. Variation Mapping
 
-## 5. Variation mapping
+Variation شامل Source ID، SKU، Attribute combination و Media reference است.
 
-Variation دارای Source ID، SKU، Attribute combination و Media reference است. Source Variation ID برای شناسایی/lookup مبدأ نگهداری می‌شود و ID مقصد هنگام mutation از Variation موجود یا `NEW_ID_PLACEHOLDER` گرفته می‌شود؛ بنابراین Source ID مستقیماً به‌عنوان Destination Variation ID نوشته نمی‌شود. مدل انتقال این جداسازی را حفظ می‌کند. fileciteturn38file0L2-L6
+قواعد فعلی:
 
-در حالت same-store، implementation می‌تواند Source Variation ID را برای پیدا کردن Variation موجود بررسی کند و در ادامه content-based matching نیز دارد. در cross-store، matching بر اساس محتوای Variation انجام می‌شود. این بخش باید با implementation فعلی هماهنگ بماند و نباید بدون تغییر کد، «mapping table پایدار» فرض شود.
+- Source Variation ID مستقیماً Destination Variation ID نیست.
+- Variation جدید با `savedProduct.id` به **Product مقصد** متصل می‌شود.
+- same-store می‌تواند Source Variation ID را برای lookup بررسی کند.
+- cross-store از content-based matching استفاده می‌کند.
+- canonical attribute combination باید مستقل از ترتیب Attributeها باشد.
+- mapping database دائمی Source → Destination وجود ندارد.
+- Variation اضافه مقصد حذف نمی‌شود.
 
-Variation جدید به `savedProduct.id` مقصد متصل می‌شود؛ بنابراین parent Product مقصد مرجع mutation Variation است.
+ترتیب معماری موردنظر برای تطبیق: **mapping → SKU → canonical attribute combination**. جزئیات lookup باید همیشه با `ProductTransferMappers` و Service هماهنگ باشد.
 
-Variation اضافه مقصد حذف نمی‌شود؛ مسیر Import عملیات delete برای Variationهای unmatched ندارد.
+## 8. SKU Reservation
 
-## 6. SKU handling
+SKUهای موجود مقصد و SKUهای رزروشده برای جلوگیری از collision در همان Import مدیریت می‌شوند.
 
-SKUهای موجود مقصد در ابتدای Import جمع‌آوری می‌شوند و SKUهای Product و Variation برای جلوگیری از collision در مجموعه reservation استفاده می‌شوند.
+```text
+reserve
+  ↓
+mutation
+  ├── success → retained
+  └── failure / exception → released
+```
 
-Mutation برای entity جدید می‌تواند SKU را reserve کند. Reservation باید در failure آزاد شود و در success باقی بماند. هدف reservation جلوگیری از collision در همان Import است؛ این reservation یک database lock دائمی نیست.
+Reservation database lock دائمی نیست. SKU خالی identity مبتنی بر SKU نمی‌سازد و idempotency بدون SKU تضمین نشده است.
 
-SKU خالی یک identity مستقل و قابل‌اعتماد مبتنی بر SKU ایجاد نمی‌کند؛ بنابراین idempotency بدون SKU هنوز نباید به‌عنوان guarantee این سند تلقی شود.
+## 9. Partial Failure
 
-## 7. Partial Failure و Result
+Isolation باید در هر سه سطح حفظ شود:
 
-پیاده‌سازی فعلی failure isolation را در چند سطح انجام می‌دهد:
+- شکست یک Product، Productهای بعدی را متوقف نمی‌کند.
+- شکست یک Variation، Variationهای بعدی را متوقف نمی‌کند.
+- شکست یک Media، Mediaهای دیگر یا Product loop را متوقف نمی‌کند.
+- exception کلی Media به outcome failure تبدیل می‌شود تا Import ادامه یابد.
+- Product موفقی که Variation آن fail شده همچنان Product موفق است.
 
-- failure یک Product نباید loop سایر Productها را متوقف کند.
-- failure یک Variation نباید Variationهای بعدی را متوقف کند.
-- failure یک Media entry نباید Media entryهای دیگر یا loop Productها را متوقف کند.
-- failure کلی در Media processing به `TransferMediaOutcome` تبدیل می‌شود تا Import Product ادامه پیدا کند.
+Import transaction سراسری و rollback کل package ندارد؛ رفتار فعلی **partial-success** است.
 
-Result شامل آمار جداگانه برای Product، Variation و Media است، از جمله:
+## 10. Result و Statistics
 
-- `created`
-- `updated`
-- `failed`
-- `drafted`
+Counterها فقط بر اساس operation واقعی ثبت می‌شوند.
+
+### Product
+
+- `created`: Create موفق
+- `updated`: Update موفق
+- `failed`: شکست mutation خود Product
+- `drafted`: ایجاد موفق در مسیر Draft
+
+### Variation
+
 - `variationsCreated`
 - `variationsUpdated`
 - `variationsFailed`
-- `imagesUploaded`
-- `imagesReused`
-- `imagesFailed`
-- `imagesUnused`
-- `skuChanged`
-- آمار Category / Attribute / Term
-- `validationErrors`
-- `importErrors`
 
-مدل Result فعلی این فیلدها را به‌صورت مستقل نگه می‌دارد. fileciteturn40file0L2-L6
+### Media
 
-## 8. Media import و Dedup
+- `imagesUploaded`: Upload موفق
+- `imagesReused`: reuse واقعی مقصد
+- `imagesFailed`: failure واقعی Media
+- `imagesUnused`: Mediaهای unused طبق semantics فعلی
 
-Media Import قبل از Upload، Mediaهای مقصد را بررسی می‌کند. ترتیب فعلی تطبیق شامل:
+### Errors
 
-1. تطبیق URL canonical شده همراه با بررسی hash محتوای مقصد.
-2. Mediaای که در همین Import قبلاً با همان content hash resolve شده است.
-3. تطبیق filename همراه با بررسی hash محتوای مقصد.
-4. در صورت عدم تطبیق، Upload به MediaRepository.
+- `validationErrors`: failure قبل از mutation
+- `importErrors`: failure هنگام Import/mutation
 
-برای Media مقصد، hash با دریافت محتوای URL محاسبه می‌شود. بنابراین Dedup بر اساس content hash قوی‌تر از filename/URL است، ولی اگر Media مقصد قابل دریافت نباشد، guarantee مطلق Dedup وجود ندارد و ممکن است Upload انجام شود.
+Failure Variation/Media نباید Product موفق را failed کند.
 
-هر Media entry در `try/catch` مستقل پردازش می‌شود. خطای Upload یا پردازش فقط همان entry را failed می‌کند. `uploaded` و `reused` فقط برای outcome واقعی Media محاسبه می‌شوند. fileciteturn51file0L2-L6
+## 11. Media Import / Reuse
 
-## 9. Category / Global Attribute / Term
+Matching فعلی به‌صورت کلی:
 
-Import قبل از Product mutation، Category mapping و Global Attribute mapping را resolve می‌کند.
+1. canonical URL + content hash مقصد
+2. Media resolve‌شده قبلی در همان Import با content hash
+3. filename + hash مقصد
+4. Upload در صورت نبود match
 
-- Categoryهای مقصد از repository خوانده می‌شوند.
+Hash مقصد با دریافت محتوای URL محاسبه می‌شود. اگر Media مقصد قابل دریافت نباشد Dedup مطلق تضمین نمی‌شود و ممکن است Upload جدید انجام شود.
+
+هر Media entry مستقل پردازش می‌شود و `uploaded`/`reused` فقط از outcome واقعی می‌آیند.
+
+## 12. Category / Attribute / Term
+
 - Category chain در مقصد resolve می‌شود.
-- Global Attribute در same-store می‌تواند با ID حفظ شود.
-- در حالت دیگر matching با slug/name انجام می‌شود.
-- Termهای Global Attribute با name/slug مقصد resolve یا create می‌شوند.
+- Global Attribute در same-store می‌تواند با ID شناسایی شود.
+- cross-store از slug/name استفاده می‌کند.
+- Term با name/slug مقصد resolve یا create می‌شود.
+- mapping دائمی Source → Destination برای این موجودیت‌ها guarantee نشده است.
 
-این resolutionها بخشی از pipeline Import هستند؛ اما هنوز نباید به‌عنوان یک mapping database دائمی بین دو فروشگاه تلقی شوند.
+## 13. Data Coverage
 
-## 10. Security / resource limits
+Transfer model فقط **فیلدهای صراحتاً تعریف‌شده در مدل انتقال** را حمل می‌کند. انتقال تمام WooCommerce metadata یا تمام فیلدهای API تضمین نشده است.
 
-ZIP reader این موارد را enforce می‌کند:
+هر فیلد جدید تا زمانی که در Transfer model، mapper، archive و mutation پشتیبانی نشود، supported محسوب نمی‌شود.
 
-- Path traversal protection
-- Duplicate entry detection
-- Package size limit: `1 GiB`
-- General entry limit: `50 MiB`
-- `products.json` limit: `100 MiB`
-- Product limit: `10,000`
+## 14. Security / Limits
 
-این محدودیت‌ها علاوه بر validation ساختاری هستند. fileciteturn47file0L2-L6
+- path traversal ممنوع
+- absolute path ممنوع
+- backslash ممنوع
+- duplicate entry ممنوع
+- package ≤ `1 GiB`
+- entry ≤ `50 MiB`
+- `products.json` ≤ `100 MiB`
+- Product ≤ `10,000`
 
-## 11. چیزی که فعلاً implemented نیست
+## 15. Explicit Non-Guarantees
 
-موارد زیر عمداً در این سند به‌عنوان قابلیت موجود معرفی نمی‌شوند:
+فعلاً این موارد implemented/guaranteed نیستند:
 
-- Export Media Dedup واقعی
-- Idempotency تضمینی برای Import محصول بدون SKU
-- Mapping table پایدار بین Source ID و Destination ID برای Importهای آینده
-- checksum مستقل برای تمام entryهای package
-- migration واقعی بین نسخه‌های مختلف schema/layout
-- حذف خودکار Variationهای اضافه مقصد
-- Partial validation در سطح هر Product به‌جای رد کل package در صورت validation error
+- Idempotency کامل بدون SKU
+- Export Media Dedup قطعی
+- mapping database دائمی Source → Destination
+- checksum کامل همه entryها
+- migration خودکار نسخه‌های آینده format
+- حذف Variationهای اضافه مقصد
+- rollback تراکنشی کل Import
 
-این موارد می‌توانند در آینده اضافه شوند، اما تا زمانی که کدشان وجود نداشته باشد، نباید در documentation به‌عنوان implemented نوشته شوند.
+## 16. وضعیت فعلی
 
-## 12. Source of truth فایل‌ها
+| قابلیت | وضعیت |
+|---|---|
+| `.woogit` ZIP format | 🟢 Implemented |
+| Manifest / Products JSON | 🟢 Implemented |
+| Product Create/Update | 🟢 Implemented |
+| Variable Product / Variation | 🟢 Implemented |
+| Product partial failure | 🟢 Implemented |
+| Variation partial failure | 🟢 Implemented |
+| Media partial failure | 🟢 Implemented |
+| SKU reservation cleanup | 🟢 Implemented |
+| Validation/mutation error separation | 🟢 Implemented |
+| Product/Variation/Media statistics | 🟢 Implemented |
+| Source/Destination Variation ID separation | 🟢 Implemented |
+| Destination Product parent integrity | 🟢 Implemented |
+| Preserve extra destination Variations | 🟢 Implemented |
+| Media reuse on Import | 🟢 Implemented |
+| Export Media Dedup | 🔴 Not guaranteed |
+| Idempotency without SKU | 🔴 Not guaranteed |
+| Permanent cross-store mapping | 🔴 Not implemented |
+| Full transaction rollback | 🔴 Not implemented |
+| Automatic future-format migration | 🔴 Not implemented |
 
-هسته فعلی این قابلیت در این فایل‌هاست:
+## 17. Agent Maintenance Rules
 
-- `RobustProductTransferService.kt` — orchestration Export/Import و Result aggregation
-- `ProductTransferFormat.kt` — Format/Layout registry و ZIP path contract
-- `ProductTransferArchive.kt` — ZIP read/write و image download
-- `ProductTransferValidation.kt` — validation package/product
-- `ProductTransferMedia.kt` — Media resolution/upload/dedup
-- `ProductTransferModels.kt` — package و Result models
-- `ProductTransferRepositoryReader.kt` — خواندن Product/Variation/Media/Category/Attribute از repository
-- `SettingsScreen.kt` — entry pointهای UI برای Import/Export
+هر Agentی که Import/Export را تغییر می‌دهد باید:
 
-این فایل باید هنگام تغییر implementation به‌روزرسانی شود تا با کد واقعی همگام بماند.
+1. ابتدا implementation واقعی را بررسی کند.
+2. Source/Destination ID را قاطی نکند.
+3. Product/Variation/Media partial failure را حفظ کند.
+4. SKU reservation را در success/failure/exception cleanup کند.
+5. Result counterها را فقط از operation واقعی تولید کند.
+6. validation و mutation errors را جدا نگه دارد.
+7. با تغییر Format/Layout/Transfer model این سند را همان تغییر sync کند.
+8. roadmap را implemented اعلام نکند.
+9. same-store و cross-store mapping را جدا بررسی کند.
+10. هر تغییر Media identity/reuse را با hash/URL/filename semantics تطبیق دهد.
 
-## 13. Versioning
-
-`version` و `layoutVersion` دو مفهوم مستقل هستند. در حال حاضر فقط v1 قابل خواندن است و v1 هنوز temporary است. وقتی v1 نهایی شد، تغییر فیزیکی ناسازگار باید layout version جدید داشته باشد و reader سازگار برای نسخه‌های قبلی حفظ شود. fileciteturn46file0L2-L6
-
-## 14. عدم وجود Credential در Package
-
-Package نباید API key، consumer secret، password یا credential فروشگاه را ذخیره کند. `manifest.source` صرفاً metadata مربوط به فروشگاه مبدأ است.
+این سند توضیح implementation است و جایگزین قراردادهای type-safe کد نیست.
