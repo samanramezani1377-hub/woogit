@@ -6,7 +6,8 @@ data class Product(val id: EntityId, val name: String, val sku: String?, val des
 data class ProductImage(val id: EntityId?, val src: String, val name: String?, val alt: String?)
 data class Pricing(val regular: String?, val sale: String?, val onSale: Boolean)
 data class Stock(val quantity: Double?, val status: StockStatus, val manageStock: Boolean)
-data class IdName(val id: EntityId, val name: String)
+/** A catalog name can optionally carry its parent relation; existing callers remain source-compatible. */
+data class IdName(val id: EntityId, val name: String, val parentId: EntityId? = null)
 enum class ProductStatus { DRAFT, PUBLISHED, PENDING, PRIVATE, OTHER }
 enum class ProductType { SIMPLE, GROUPED, EXTERNAL, VARIABLE, OTHER }
 enum class StockStatus { IN_STOCK, OUT_OF_STOCK, ON_BACKORDER }
