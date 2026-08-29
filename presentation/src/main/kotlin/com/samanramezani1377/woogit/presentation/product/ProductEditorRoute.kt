@@ -166,5 +166,9 @@ private fun ProductEditorUiState.Editing.toProduct(original: Product?, available
         }
     }
     val selectedImages = images.ifEmpty { imageUrl?.takeIf { it.isNotBlank() }?.let { listOf(ProductImage(imageId?.takeIf(String::isNotBlank)?.let(::EntityId), it, original?.images?.firstOrNull()?.name, name)) }.orEmpty() }
-    return Product(EntityId(productId ?: "new"), name.trim(), sku.trim().ifBlank { null }, description.ifBlank { null }, shortDescription.ifBlank { null }, status, type, Pricing(price.trim().ifBlank { null }, salePrice.trim().ifBlank { null }, salePrice.isNotBlank()), stock.toDoubleOrNull()?.let { Stock(it, if (it > 0) StockStatus.IN_STOCK else StockStatus.OUT_OF_STOCK, original?.stock?.manageStock ?: true) }, selectedImages, cats, attrs, original?.modifiedAt)
+    val stockValue = stock.trim().toDoubleOrNull()
+    val stockModel = stockValue?.let {
+        Stock(it, if (it > 0) StockStatus.IN_STOCK else StockStatus.OUT_OF_STOCK, manageStock = true)
+    }
+    return Product(EntityId(productId ?: "new"), name.trim(), sku.trim().ifBlank { null }, description.ifBlank { null }, shortDescription.ifBlank { null }, status, type, Pricing(price.trim().ifBlank { null }, salePrice.trim().ifBlank { null }, salePrice.isNotBlank()), stockModel, selectedImages, cats, attrs, original?.modifiedAt)
 }
