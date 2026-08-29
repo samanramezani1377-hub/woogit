@@ -16,18 +16,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,6 +29,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.samanramezani1377.woogit.core.domain.model.IdName
+import com.samanramezani1377.woogit.core.domain.model.ProductImage
+import com.samanramezani1377.woogit.core.domain.model.ProductStatus
+import com.samanramezani1377.woogit.core.domain.model.ProductType
 import com.samanramezani1377.woogit.presentation.GlassCard
 import com.samanramezani1377.woogit.presentation.GlassErrorState
 import com.samanramezani1377.woogit.presentation.GlassLoading
@@ -45,9 +41,6 @@ import com.samanramezani1377.woogit.presentation.GlassText
 import com.samanramezani1377.woogit.presentation.GlassTextField
 import com.samanramezani1377.woogit.presentation.GlassTopBar
 import com.samanramezani1377.woogit.presentation.toPersianPrice
-import com.samanramezani1377.woogit.core.domain.model.ProductImage
-import com.samanramezani1377.woogit.core.domain.model.ProductStatus
-import com.samanramezani1377.woogit.core.domain.model.ProductType
 
 private data class EditableAttribute(val name: String, val options: List<String>)
 
@@ -61,7 +54,6 @@ private fun serializeEditableAttributes(attributes: List<EditableAttribute>): St
     .filter { it.name.isNotBlank() }
     .joinToString(" | ") { attribute -> "${attribute.name}:${attribute.options.joinToString(",")}" }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ProductEditorScreen(
     state: ProductEditorUiState,
@@ -108,11 +100,9 @@ internal fun ProductEditorScreen(
                         state.salePrice.takeIf { it.isNotBlank() }?.let { GlassText("قیمت ویژه نمایش: ${it.toPersianPrice()} تومان", style = MaterialTheme.typography.bodySmall) }
                         GlassTextField(state.stock, onStockChanged, "موجودی")
                         GlassText("تصویر محصول", style = MaterialTheme.typography.titleMedium)
-                        state.imageUrl?.takeIf { it.isNotBlank() }?.let { url ->
-                            AsyncImage(model = url, contentDescription = state.name, modifier = Modifier.fillMaxWidth().height(180.dp).clip(RoundedCornerShape(14.dp)), contentScale = ContentScale.Crop)
-                        }
+                        state.imageUrl?.takeIf { it.isNotBlank() }?.let { url -> AsyncImage(model = url, contentDescription = state.name, modifier = Modifier.fillMaxWidth().height(180.dp).clip(RoundedCornerShape(14.dp)), contentScale = ContentScale.Crop) }
                         GlassTextField(state.imageUrl.orEmpty(), onImageUrlChanged, "آدرس تصویر")
-                        state.imageError?.takeIf { it.isNotBlank() }?.let { error -> GlassText(error, style = MaterialTheme.typography.bodySmall) }
+                        state.imageError?.takeIf { it.isNotBlank() }?.let { GlassText(it, style = MaterialTheme.typography.bodySmall) }
                         GlassPrimaryAction(if (imageUploading) "در حال آپلود…" else "انتخاب تصویر از گوشی", onUploadImage, enabled = !imageUploading)
                         GlassPrimaryAction("انتخاب از رسانه‌های سایت", onOpenMediaPicker, enabled = !imageUploading)
                     } }
@@ -165,7 +155,6 @@ internal fun ProductEditorScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AttributeSelectionCard(value: String, onChanged: (String) -> Unit) {
     val attributes = remember(value) { parseEditableAttributes(value) }
@@ -176,60 +165,22 @@ private fun AttributeSelectionCard(value: String, onChanged: (String) -> Unit) {
                 GlassText("این محصول هنوز ویژگی‌ای ندارد. ویژگی را ابتدا در WooCommerce به خود محصول اضافه کنید.", style = MaterialTheme.typography.bodySmall)
             } else {
                 attributes.forEachIndexed { index, attribute ->
-                    AttributeValueSelector(
-                        attribute = attribute,
-                        onOptionSelected = { option ->
-                            val next = attributes.toMutableList()
-                            val current = next[index]
-                            val options = (current.options + option).distinct()
-                            next[index] = current.copy(options = options)
-                            onChanged(serializeEditableAttributes(next))
-                        },
-                        onOptionRemoved = { option ->
-                            val next = attributes.toMutableList()
-                            val current = next[index]
-                            next[index] = current.copy(options = current.options.filterNot { it == option })
-                            onChanged(serializeEditableAttributes(next))
-                        },
-                    )
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun AttributeValueSelector(
-    attribute: EditableAttribute,
-    onOptionSelected: (String) -> Unit,
-    onOptionRemoved: (String) -> Unit,
-) {
-    var expanded by remember(attribute.name) { mutableStateOf(false) }
-    Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
-        GlassText(attribute.name, style = MaterialTheme.typography.titleSmall)
-        ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = !expanded }) {
-            GlassTextField(
-                value = attribute.options.joinToString("، "),
-                onValueChange = {},
-                label = "انتخاب مقدار",
-                modifier = Modifier.menuAnchor().fillMaxWidth(),
-                readOnly = true,
-            )
-            ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                attribute.options.distinct().forEach { option ->
-                    DropdownMenuItem(
-                        text = { GlassText(option) },
-                        onClick = { onOptionSelected(option); expanded = false },
-                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = false) },
-                    )
-                }
-            }
-        }
-        if (attribute.options.isNotEmpty()) {
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                attribute.options.forEach { option ->
-                    FilterChip(selected = true, onClick = { onOptionRemoved(option) }, label = { GlassText(option) })
+                    GlassText(attribute.name, style = MaterialTheme.typography.titleSmall)
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        attribute.options.distinct().forEach { option ->
+                            FilterChip(
+                                selected = true,
+                                onClick = {
+                                    val next = attributes.toMutableList()
+                                    val current = next[index]
+                                    next[index] = current.copy(options = current.options.filterNot { it == option })
+                                    onChanged(serializeEditableAttributes(next))
+                                },
+                                label = { GlassText(option) },
+                            )
+                        }
+                    }
+                    GlassText("برای انتخاب چند مقدار، چند گزینه را همزمان انتخاب کنید. مقدارهای فعلی با همان الگوی انتخاب دسته‌بندی نمایش داده می‌شوند.", style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
