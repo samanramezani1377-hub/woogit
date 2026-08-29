@@ -64,7 +64,7 @@ private const val CREATE_NEW_MAX_PACKAGE_BYTES = 1_073_741_824L
 private data class CreateReadPackage(val manifest: CreateManifest, val products: List<CreateProduct>, val media: Map<String, ByteArray>)
 
 class CreateNewProductTransferService(private val d: V1PresentationDependencies, private val resolver: ContentResolver) {
-    suspend fun import(storeId: StoreId, source: Uri, onProgress: (ProductTransferProgress) -> Unit = {}): RobustProductTransferResult = withContext(Dispatchers.IO) {
+    suspend fun import(storeId: StoreId, source: Uri, createAsDraft: Boolean = false, onProgress: (ProductTransferProgress) -> Unit = {}): RobustProductTransferResult = withContext(Dispatchers.IO) {
         try {
             val pack = readPackage(source, onProgress)
             require(pack.manifest.format == CREATE_NEW_FORMAT) { "فرمت فایل WooGit معتبر نیست." }
@@ -92,7 +92,9 @@ class CreateNewProductTransferService(private val d: V1PresentationDependencies,
                     val images = x.images.mapNotNull { uploaded[it.file] }
                     val resolvedCategories = x.categories.mapNotNull { categoryByName[normalize(it.name)] }
                     val attributes = x.attributes.map { Attribute(null, it.name, it.visible, it.variation, it.options) }
-                    val product = x.toDomain(images, resolvedCategories, attributes)
+                    val product = x.toDomain(images, resolvedCategories, attributes).let { productValue ->
+                        if (createAsDraft) productValue.copy(status = ProductStatus.DRAFT) else productValue
+                    }
                     val saved = when (val r = d.createProduct(storeId, product)) {
                         is CoreResult.Success -> { created++; r.value }
                         is CoreResult.Failure -> { failed++; errors += "${x.name}: ${r.error}"; return@forEachIndexed }
