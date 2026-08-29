@@ -42,6 +42,18 @@
 
 اگر کاربر URL تصویر را به‌صورت دستی تغییر دهد، نباید `imageId` قدیمی به‌اشتباه همراه URL جدید ارسال شود. ID و URL باید همیشه به یک تصویر اشاره کنند.
 
+### Product Import / Export
+
+- از داخل Settings دو عملیات **اکسپورت همه محصولات** و **ایمپورت محصولات** در دسترس هستند.
+- فرمت انتقال `.woogit` است؛ یک ZIP نسخه‌دار شامل `manifest.json`، `products.json` و فایل‌های واقعی داخل `media/` است.
+- Export شامل اطلاعات Product، دسته‌بندی، Attributes، تصاویر و Variationهای محصول variable است.
+- شناسه و URL تصاویر در package حفظ می‌شوند و فایل تصویر نیز در صورت امکان داخل package قرار می‌گیرد.
+- Import برای همان فروشگاه ابتدا ID و سپس SKU را برای تطبیق ترجیح می‌دهد؛ برای فروشگاه دیگر SKU معیار امن تطبیق است.
+- تصاویر Import از طریق `MediaRepository` آپلود می‌شوند و Media ID مقصد برای association استفاده می‌شود.
+- عملیات Create/Update محصول و Variation از Repositoryهای موجود عبور می‌کنند و مسیر Local-first/Pending Queue را دور نمی‌زنند.
+- package هیچ credential یا API key ذخیره نمی‌کند.
+- قرارداد کامل این قابلیت در `docs/PRODUCT_IMPORT_EXPORT.md` ثبت شده است.
+
 ## Orders
 
 صفحه سفارش برای عملیات پرتکرار سریع است و Edit Order برای جزئیات کامل استفاده می‌شود. عملیات mutation باید از مسیر Repository/Core عبور کند و مستقیماً از UI به API متصل نشود.
