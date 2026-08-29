@@ -29,8 +29,21 @@ fun GlassStatusBadge(label: String, modifier: Modifier = Modifier) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            val live = label.equals("Connected", true) || label.equals("connected", true) || label == "متصل"
-            Box(Modifier.size(7.dp).clip(RoundedCornerShape(50)).background(if (live) GlassTokens.live else GlassTokens.accent))
+            val normalized = label.trim().lowercase()
+            val dotColor = when (normalized) {
+                "connected", "متصل" -> GlassTokens.live
+                "pending", "on-hold", "on_hold", "در انتظار" -> Color(0xFFF59E0B)
+                "processing", "در حال پردازش" -> Color(0xFF3B82F6)
+                "completed", "تکمیل شده" -> GlassTokens.live
+                "cancelled", "لغو شده", "failed", "ناموفق" -> GlassTokens.urgent
+                "refunded", "مسترد شده" -> Color(0xFF8B5CF6)
+                "offline", "آفلاین" -> GlassTokens.faint
+                "conflict", "تعارض" -> GlassTokens.urgent
+                "syncing", "در حال همگام‌سازی" -> Color(0xFF3B82F6)
+                "succeeded", "موفق" -> GlassTokens.live
+                else -> GlassTokens.accent
+            }
+            Box(Modifier.size(7.dp).clip(RoundedCornerShape(50)).background(dotColor))
             Text(label.glassLabel(), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
         }
     }
