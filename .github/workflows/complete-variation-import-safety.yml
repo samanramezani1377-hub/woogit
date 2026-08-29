@@ -1,3 +1,4 @@
+# temporary one-shot repository patch
 name: complete-variation-import-safety
 on:
   push:
@@ -20,71 +21,27 @@ jobs:
           s=service.read_text(); start=s.index('    suspend fun import('); end=s.index('    private suspend fun resolveGlobalAttributes',start)
           new=r'''    suspend fun import(storeId:StoreId,source:Uri,mode:ProductImportMode=ProductImportMode.UPDATE_EXISTING,onProgress:(ProductTransferProgress)->Unit={}):RobustProductTransferResult=withContext(Dispatchers.IO){
         try{
-            val store=requireStore(storeId)
-            val validated=validateTransferPackage(resolver,source,transferJson)
-            if(validated.validationErrors.isNotEmpty()){
-                validated.validationErrors.forEach { message -> TechnicalErrorReporter.reportHandled("Product Transfer","RobustProductTransferService.validate","IMPORT_VALIDATE","فایل انتقال محصولات معتبر نیست.",message,"PRODUCT_TRANSFER_VALIDATION_ERROR","storeId=${storeId.value}; source=$source") }
-                return@withContext RobustProductTransferResult(failed=validated.invalidProductIds.size,errors=validated.validationErrors,validationErrors=validated.validationErrors)
-            }
-            val sameStore=validated.manifest.source.trimEnd('/').equals(store.baseUrl.trimEnd('/'),true)
-            val mediaOutcome=media.upload(storeId,source,validated.products,onProgress)
-            val existing=reader.products(storeId,onProgress)
-            val byId=existing.associateBy{it.id.value}
-            val bySku=existing.groupBy{cleanSku(it.sku)?.let(::normalize)}.mapNotNull{(k,v)->k?.let{it to v.singleOrNull()}}.toMap()
-            val byFingerprint=existing.groupBy{it.matchKey()}
-            val usedSku=existing.mapNotNullTo(mutableSetOf()){cleanSku(it.sku)?.let(::normalize)}
-            existing.filter{it.type==ProductType.VARIABLE}.forEach{product->reader.variations(storeId,product.id).forEach{variation->cleanSku(variation.sku)?.let{usedSku+=normalize(it)}}}
-            val destinationCategories=reader.categories(storeId)
-            val sourceCategories=validated.products.flatMap{it.categories}.distinctBy{it.id}
-            val categoryMap=resolveCategories(storeId,sourceCategories,destinationCategories,true)
-            val globalMap=resolveGlobalAttributes(storeId,validated.globalAttributes,mode==ProductImportMode.UPDATE_EXISTING&&sameStore)
+            val store=requireStore(storeId);val validated=validateTransferPackage(resolver,source,transferJson)
+            if(validated.validationErrors.isNotEmpty()){validated.validationErrors.forEach{message->TechnicalErrorReporter.reportHandled("Product Transfer","RobustProductTransferService.validate","IMPORT_VALIDATE","فایل انتقال محصولات معتبر نیست.",message,"PRODUCT_TRANSFER_VALIDATION_ERROR","storeId=${storeId.value}; source=$source")};return@withContext RobustProductTransferResult(failed=validated.invalidProductIds.size,errors=validated.validationErrors,validationErrors=validated.validationErrors)}
+            val sameStore=validated.manifest.source.trimEnd('/').equals(store.baseUrl.trimEnd('/'),true);val mediaOutcome=media.upload(storeId,source,validated.products,onProgress);val existing=reader.products(storeId,onProgress)
+            val byId=existing.associateBy{it.id.value};val bySku=existing.groupBy{cleanSku(it.sku)?.let(::normalize)}.mapNotNull{(k,v)->k?.let{it to v.singleOrNull()}}.toMap();val byFingerprint=existing.groupBy{it.matchKey()}
+            val usedSku=existing.mapNotNullTo(mutableSetOf()){cleanSku(it.sku)?.let(::normalize)};existing.filter{it.type==ProductType.VARIABLE}.forEach{product->reader.variations(storeId,product.id).forEach{variation->cleanSku(variation.sku)?.let{usedSku+=normalize(it)}}}
+            val destinationCategories=reader.categories(storeId);val sourceCategories=validated.products.flatMap{it.categories}.distinctBy{it.id};val categoryMap=resolveCategories(storeId,sourceCategories,destinationCategories,true);val globalMap=resolveGlobalAttributes(storeId,validated.globalAttributes,mode==ProductImportMode.UPDATE_EXISTING&&sameStore)
             var created=0;var updated=0;var drafted=0;var failed=0;var variationsCreated=0;var variationsUpdated=0;var variationsFailed=0;var skuChanged=0
-            val categoriesCreated=categoryMap.created;val categoriesResolved=categoryMap.resolved;val attributesCreated=globalMap.created;val attributesResolved=globalMap.resolved;val termsCreated=globalMap.termsCreated;val termsResolved=globalMap.termsResolved
             val usedMedia=mutableSetOf<String>();val errors=mutableListOf<String>();val mutationErrors=mutableListOf<String>();val importErrors=mutableListOf<String>()
             validated.products.forEachIndexed{index,x->
-                onProgress(ProductTransferProgress("در حال وارد کردن محصولات…",index+1,validated.products.size))
-                var reservedProductSku:String?=null;var productMutationSucceeded=false
+                onProgress(ProductTransferProgress("در حال وارد کردن محصولات…",index+1,validated.products.size));var reservedProductSku:String?=null;var productMutationSucceeded=false
                 try{
-                    val old=if(mode==ProductImportMode.UPDATE_EXISTING)findProductMatch(x,sameStore,byId,bySku,byFingerprint) else null
-                    val images=x.images.mapNotNull{image->mediaOutcome.images[image.file]?.also{usedMedia+=image.file}}
-                    val categories=x.categories.mapNotNull{categoryMap.items[it.id]}
-                    if(categories.size<x.categories.size)errors+="${x.name}: برخی دسته‌بندی‌ها در مقصد Resolve نشدند."
-                    val attributes=x.attributes.map{a->Attribute(a.id?.let{globalMap.items[it]?:if(mode==ProductImportMode.UPDATE_EXISTING&&sameStore)EntityId(it)else null},a.name,a.visible,a.variation,a.options)}
-                    if(old==null)reservedProductSku=reserveNewSku(x.sku,usedSku){skuChanged++}
-                    var product=x.toDomain(if(old==null)EntityId(NEW_ID_PLACEHOLDER)else old.id,images,categories,attributes).copy(sku=if(old==null)reservedProductSku else x.sku)
-                    if(mode==ProductImportMode.CREATE_NEW_DRAFT)product=product.copy(status=ProductStatus.DRAFT)
-                    val saved=if(old==null)d.createProduct(storeId,product)else d.updateProduct(storeId,old.id,product)
-                    val savedProduct=when(saved){
-                        is CoreResult.Success->{productMutationSucceeded=true;if(old==null){created++;if(mode==ProductImportMode.CREATE_NEW_DRAFT)drafted++}else updated++;saved.value}
-                        is CoreResult.Failure->{failed++;val message="${x.name}: ${saved.error}";importErrors+=message;mutationErrors+=message;releaseSku(reservedProductSku,usedSku);reservedProductSku=null;TechnicalErrorReporter.reportHandled("Product Transfer","RobustProductTransferService.import.product","CREATE_OR_UPDATE_PRODUCT","انتقال محصول ناموفق بود.",saved.error.toString(),"PRODUCT_TRANSFER_PRODUCT_ERROR","product=${x.name}; sourceId=${x.id}; mode=$mode");return@forEachIndexed}
-                    }
-                    val existingVariations=reader.variations(storeId,savedProduct.id)
-                    x.variations.forEach{sourceVariation->
-                        var reservedVariationSku:String?=null;var variationMutationSucceeded=false
-                        try{
-                            // Deterministic order: same-store mapping/source id, then SKU, then order-independent attribute combination.
-                            val oldVariation=findVariationMatch(sourceVariation,existingVariations,sameStore)
-                            val image=sourceVariation.image?.let{mediaOutcome.images[it.file]?.also{usedMedia+=sourceVariation.image.file}}
-                            if(oldVariation==null)reservedVariationSku=reserveNewSku(sourceVariation.sku,usedSku){skuChanged++}
-                            val variation=sourceVariation.toDomain(savedProduct.id,if(oldVariation==null)EntityId(NEW_ID_PLACEHOLDER)else oldVariation.id,image).copy(sku=if(oldVariation==null)reservedVariationSku else sourceVariation.sku)
-                            when(val result=if(oldVariation==null)d.createVariation(storeId,variation)else d.updateVariation(storeId,savedProduct.id,oldVariation.id,variation)){
-                                is CoreResult.Success->{variationMutationSucceeded=true;if(oldVariation==null)variationsCreated++else variationsUpdated++}
-                                is CoreResult.Failure->{variationsFailed++;val message="${x.name}: variation ${sourceVariation.sku?:sourceVariation.id} وارد نشد: ${result.error}";importErrors+=message;mutationErrors+=message;releaseSku(reservedVariationSku,usedSku);reservedVariationSku=null;TechnicalErrorReporter.reportHandled("Product Transfer","RobustProductTransferService.import.variation","CREATE_OR_UPDATE_VARIATION","انتقال Variation ناموفق بود.",result.error.toString(),"PRODUCT_TRANSFER_VARIATION_ERROR","product=${x.name}; variation=${sourceVariation.id}; sku=${sourceVariation.sku}")}
-                            }
-                        }catch(t:Throwable){variationsFailed++;val message="${x.name}: variation ${sourceVariation.sku?:sourceVariation.id} وارد نشد: ${t.message?:"خطای نامشخص"}";importErrors+=message;mutationErrors+=message;if(!variationMutationSucceeded)releaseSku(reservedVariationSku,usedSku);TechnicalErrorReporter.report("Product Transfer","RobustProductTransferService.import.variation","IMPORT_VARIATION","انتقال Variation ناموفق بود.",t,"PRODUCT_TRANSFER_VARIATION_EXCEPTION","product=${x.name}; variation=${sourceVariation.id}; sku=${sourceVariation.sku}")}
-                    }
+                    val old=if(mode==ProductImportMode.UPDATE_EXISTING)findProductMatch(x,sameStore,byId,bySku,byFingerprint)else null;val images=x.images.mapNotNull{image->mediaOutcome.images[image.file]?.also{usedMedia+=image.file}};val categories=x.categories.mapNotNull{categoryMap.items[it.id]};val attributes=x.attributes.map{a->Attribute(a.id?.let{globalMap.items[it]?:if(mode==ProductImportMode.UPDATE_EXISTING&&sameStore)EntityId(it)else null},a.name,a.visible,a.variation,a.options)}
+                    if(old==null)reservedProductSku=reserveNewSku(x.sku,usedSku){skuChanged++};var product=x.toDomain(if(old==null)EntityId(NEW_ID_PLACEHOLDER)else old.id,images,categories,attributes).copy(sku=if(old==null)reservedProductSku else x.sku);if(mode==ProductImportMode.CREATE_NEW_DRAFT)product=product.copy(status=ProductStatus.DRAFT)
+                    val saved=if(old==null)d.createProduct(storeId,product)else d.updateProduct(storeId,old.id,product);val savedProduct=when(saved){is CoreResult.Success->{productMutationSucceeded=true;if(old==null){created++;if(mode==ProductImportMode.CREATE_NEW_DRAFT)drafted++}else updated++;saved.value};is CoreResult.Failure->{failed++;val message="${x.name}: ${saved.error}";importErrors+=message;mutationErrors+=message;releaseSku(reservedProductSku,usedSku);reservedProductSku=null;TechnicalErrorReporter.reportHandled("Product Transfer","RobustProductTransferService.import.product","CREATE_OR_UPDATE_PRODUCT","انتقال محصول ناموفق بود.",saved.error.toString(),"PRODUCT_TRANSFER_PRODUCT_ERROR","product=${x.name}; sourceId=${x.id}; mode=$mode");return@forEachIndexed}}
+                    val existingVariations=reader.variations(storeId,savedProduct.id);x.variations.forEach{sourceVariation->var reservedVariationSku:String?=null;var variationMutationSucceeded=false;try{val oldVariation=findVariationMatch(sourceVariation,existingVariations,sameStore);val image=sourceVariation.image?.let{mediaOutcome.images[it.file]?.also{usedMedia+=sourceVariation.image.file}};if(oldVariation==null)reservedVariationSku=reserveNewSku(sourceVariation.sku,usedSku){skuChanged++};val variation=sourceVariation.toDomain(savedProduct.id,if(oldVariation==null)EntityId(NEW_ID_PLACEHOLDER)else oldVariation.id,image).copy(sku=if(oldVariation==null)reservedVariationSku else sourceVariation.sku);when(val result=if(oldVariation==null)d.createVariation(storeId,variation)else d.updateVariation(storeId,savedProduct.id,oldVariation.id,variation)){is CoreResult.Success->{variationMutationSucceeded=true;if(oldVariation==null)variationsCreated++else variationsUpdated++};is CoreResult.Failure->{variationsFailed++;val message="${x.name}: variation ${sourceVariation.sku?:sourceVariation.id} وارد نشد: ${result.error}";importErrors+=message;mutationErrors+=message;releaseSku(reservedVariationSku,usedSku);reservedVariationSku=null;TechnicalErrorReporter.reportHandled("Product Transfer","RobustProductTransferService.import.variation","CREATE_OR_UPDATE_VARIATION","انتقال Variation ناموفق بود.",result.error.toString(),"PRODUCT_TRANSFER_VARIATION_ERROR","product=${x.name}; variation=${sourceVariation.id}; sku=${sourceVariation.sku}")}}}catch(t:Throwable){variationsFailed++;val message="${x.name}: variation ${sourceVariation.sku?:sourceVariation.id} وارد نشد: ${t.message?:"خطای نامشخص"}";importErrors+=message;mutationErrors+=message;if(!variationMutationSucceeded)releaseSku(reservedVariationSku,usedSku);TechnicalErrorReporter.report("Product Transfer","RobustProductTransferService.import.variation","IMPORT_VARIATION","انتقال Variation ناموفق بود.",t,"PRODUCT_TRANSFER_VARIATION_EXCEPTION","product=${x.name}; variation=${sourceVariation.id}; sku=${sourceVariation.sku}")}}
                 }catch(t:Throwable){failed++;val message="${x.name}: ${t.message?:"خطای نامشخص"}";importErrors+=message;mutationErrors+=message;if(!productMutationSucceeded)releaseSku(reservedProductSku,usedSku);TechnicalErrorReporter.report("Product Transfer","RobustProductTransferService.import.product","IMPORT_PRODUCT","انتقال محصول ناموفق بود.",t,"PRODUCT_TRANSFER_PRODUCT_EXCEPTION","product=${x.name}; sourceId=${x.id}; mode=$mode")}
             }
-            RobustProductTransferResult(created=created,updated=updated,failed=failed,imagesUploaded=mediaOutcome.uploaded,variationsCreated=variationsCreated,variationsUpdated=variationsUpdated,errors=(mediaOutcome.errors+errors+importErrors).distinct().take(50),variationsFailed=variationsFailed,imagesFailed=mediaOutcome.failed,imagesUnused=(mediaOutcome.images.keys-usedMedia).size,skuChanged=skuChanged,validationErrors=emptyList(),importErrors=importErrors.distinct().take(50),mutationErrors=mutationErrors.distinct().take(50),drafted=drafted,categoriesCreated=categoriesCreated,categoriesResolved=categoriesResolved,attributesCreated=attributesCreated,attributesResolved=attributesResolved,termsCreated=termsCreated,termsResolved=termsResolved)
+            RobustProductTransferResult(created=created,updated=updated,failed=failed,imagesUploaded=mediaOutcome.uploaded,variationsCreated=variationsCreated,variationsUpdated=variationsUpdated,errors=(mediaOutcome.errors+errors+importErrors).distinct().take(50),variationsFailed=variationsFailed,imagesFailed=mediaOutcome.failed,imagesUnused=(mediaOutcome.images.keys-usedMedia).size,skuChanged=skuChanged,validationErrors=emptyList(),importErrors=importErrors.distinct().take(50),mutationErrors=mutationErrors.distinct().take(50),drafted=drafted,categoriesCreated=categoryMap.created,categoriesResolved=categoryMap.resolved,attributesCreated=globalMap.created,attributesResolved=globalMap.resolved,termsCreated=globalMap.termsCreated,termsResolved=globalMap.termsResolved)
         }catch(t:Throwable){TechnicalErrorReporter.report("Product Transfer","RobustProductTransferService.import","IMPORT","ایمپورت محصولات با خطای فنی متوقف شد.",t,"PRODUCT_TRANSFER_IMPORT_EXCEPTION","storeId=${storeId.value}; source=$source; mode=$mode");RobustProductTransferResult(failed=1,errors=listOf(t.message?:"خواندن فایل ناموفق بود."),importErrors=listOf(t.message?:"خواندن فایل ناموفق بود."),mutationErrors=listOf(t.message?:"خواندن فایل ناموفق بود."))}
     }
-
-    private fun findVariationMatch(source:TransferVariation,destination:List<Variation>,sameStore:Boolean):Variation?{
-        if(sameStore)destination.firstOrNull{it.id.value==source.id}?.let{return it}
-        cleanSku(source.sku)?.let{sku->destination.filter{cleanSku(it.sku)?.let(::normalize)==normalize(sku)}.singleOrNull()?.let{return it}}
-        val key=source.attributeKey();if(key.isBlank())return null
-        return destination.filter{it.attributeKey()==key}.singleOrNull()
-    }
+    private fun findVariationMatch(source:TransferVariation,destination:List<Variation>,sameStore:Boolean):Variation?{if(sameStore)destination.firstOrNull{it.id.value==source.id}?.let{return it};cleanSku(source.sku)?.let{sku->destination.filter{cleanSku(it.sku)?.let(::normalize)==normalize(sku)}.singleOrNull()?.let{return it}};val key=source.attributeKey();if(key.isBlank())return null;return destination.filter{it.attributeKey()==key}.singleOrNull()}
 
 '''
           service.write_text(s[:start]+new+s[end:])
