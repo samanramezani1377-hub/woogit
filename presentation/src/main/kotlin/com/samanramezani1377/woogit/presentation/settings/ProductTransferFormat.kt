@@ -6,9 +6,9 @@ import java.util.zip.ZipOutputStream
 /**
  * Versioned .woogit format registry.
  *
- * The version numbers here are identifiers, not secrets or encryption keys.
+ * Version identifiers are metadata, not secrets or encryption keys.
  * Export selects the active layout contract; Import selects the matching
- * reader/validation contract from the same registry using manifest metadata.
+ * contract from the same registry using manifest metadata.
  *
  * V1 is intentionally TEMPORARY for now. It becomes immutable only when the
  * product owner explicitly declares V1 FINAL. Until then its layout may change.
@@ -25,10 +25,10 @@ internal object ProductTransferFormat {
     private const val PRODUCT_MEDIA_PREFIX = "media/p-"
     private const val VARIATION_MEDIA_PREFIX = "media/v-"
 
-    /** The single layout selected by Export while V1 is the active temporary contract. */
+    /** The one layout currently used by Export. */
     val ACTIVE_LAYOUT: Layout = LayoutV1
 
-    /** Registry of every layout that this app can read. Add V2 here without changing V1. */
+    /** Every layout that Import can read. Keep old entries when adding V2+. */
     private val READABLE_LAYOUTS: Map<Int, Layout> = mapOf(
         LayoutV1.version to LayoutV1,
     )
@@ -49,9 +49,18 @@ internal object ProductTransferFormat {
         ACTIVE_LAYOUT.variationImagePath(variationId, extension)
 
     /**
-     * The only low-level ZIP entry writer used by product transfer.
-     * The active layout is the authority for which physical entries are legal.
+     * Converts legacy V1 media paths emitted by the transfer service into the
+     * physical path defined by the active layout. This keeps the service's
+     * logical media intent separate from the physical ZIP layout.
      */
+    fun canonicalizeExportPath(path: String): String = when {
+        path == MANIFEST_ENTRY || path == PRODUCTS_ENTRY -> path
+        path.startsWith(PRODUCT_MEDIA_PREFIX) -> path
+        path.startsWith(VARIATION_MEDIA_PREFIX) -> path
+        else -> path
+    }
+
+    /** The only low-level ZIP entry writer used by product transfer. */
     fun writeEntry(zip: ZipOutputStream, path: String, bytes: ByteArray) {
         require(ACTIVE_LAYOUT.acceptsEntryPath(path)) {
             "مسیر فایل خارج از هسته Layout v${ACTIVE_LAYOUT.version} است: $path"
@@ -70,20 +79,7 @@ internal object ProductTransferFormat {
         fun acceptsEntryPath(path: String): Boolean
     }
 
-    /**
-     * WooGit Layout V1 — TEMPORARY.
-     *
-     * ZIP root:
-     *   manifest.json
-     *   products.json
-     *   media/
-     *     p-<product-id>-<index>.<ext>
-     *     v-<variation-id>.<ext>
-     *
-     * This contract is not immutable yet. When explicitly finalized, this
-     * object and its physical layout must not be changed; a structural change
-     * must be introduced as a new Layout implementation/version.
-     */
+    /** WooGit Layout V1 — TEMPORARY until explicitly finalized. */
     private object LayoutV1 : Layout {
         override val version: Int = 1
 
