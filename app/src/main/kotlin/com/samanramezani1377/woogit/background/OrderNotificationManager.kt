@@ -7,13 +7,14 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import java.math.BigDecimal
 
 class OrderNotificationManager(private val context: Context) {
     companion object {
         const val CHANNEL_ID = "new_orders"
         const val EXTRA_STORE_ID = "store_id"
         const val EXTRA_ORDER_ID = "order_id"
-        private const val CHANNEL_NAME = "New orders"
+        private const val CHANNEL_NAME = "سفارش‌های جدید"
 
         fun deepLinkIntent(context: Context, storeId: String, orderId: Long): Intent? =
             context.packageManager.getLaunchIntentForPackage(context.packageName)?.apply {
@@ -39,10 +40,14 @@ class OrderNotificationManager(private val context: Context) {
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
+        val amount = formatPersianAmount(order.total)
+        val orderNumber = order.number.toPersianDigits()
+        val currency = order.currency.trim().let { if (it.equals("IRT", true) || it.equals("IRR", true) || it == "تومان") "تومان" else it }
+        val amountText = if (currency.isBlank()) amount else "$amount $currency"
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
-            .setContentTitle("New order #${order.number}")
-            .setContentText("${order.total} • ${order.itemSummary}")
+            .setContentTitle("سفارش جدید #$orderNumber")
+            .setContentText("مبلغ: $amountText • ${order.itemSummary.toPersianDigits().replace("items", "کالا").replace("item", "کالا")}")
             .setContentIntent(pending)
             .setAutoCancel(true)
             .build()
@@ -56,4 +61,19 @@ class OrderNotificationManager(private val context: Context) {
             false
         }
     }
+}
+
+private fun String.toPersianDigits(): String = map { ch ->
+    if (ch in '0'..'9') ('۰'.code + ch.code - '0'.code).toChar() else ch
+}.joinToString("")
+
+private fun formatPersianAmount(value: String): String {
+    val number = value.replace(",", "").replace("٬", "").toBigDecimalOrNull() ?: return value.toPersianDigits()
+    val plain = number.stripTrailingZeros().toPlainString()
+    val parts = plain.split('.', limit = 2)
+    val integer = parts[0].removePrefix("-")
+    val grouped = integer.reversed().chunked(3).joinToString("٬").reversed()
+    val sign = if (plain.startsWith("-")) "−" else ""
+    val fraction = parts.getOrNull(1).orEmpty()
+    return (sign + grouped + if (fraction.isNotEmpty()) "٫$fraction" else "").toPersianDigits()
 }
