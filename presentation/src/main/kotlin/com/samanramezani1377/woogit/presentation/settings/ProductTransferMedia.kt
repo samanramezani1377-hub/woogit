@@ -28,9 +28,12 @@ internal class ProductTransferMedia(
         products: List<TransferProduct>,
         onProgress: (ProductTransferProgress) -> Unit,
     ): TransferMediaOutcome = withContext(Dispatchers.IO) {
+        // Media is deliberately isolated from the product import. Any failure here is
+        // converted into a per-entry outcome; it must never abort the whole import.
         try {
             uploadInternal(storeId, source, products, onProgress)
         } catch (t: Throwable) {
+            val message = "خواندن رسانه‌های انتقالی ناموفق بود: ${t.message ?: "خطای نامشخص"}"
             TechnicalErrorReporter.report(
                 feature="Product Transfer",
                 location="ProductTransferMedia.upload",
@@ -40,7 +43,13 @@ internal class ProductTransferMedia(
                 type="PRODUCT_TRANSFER_MEDIA_EXCEPTION",
                 details="storeId=${storeId.value}; source=$source",
             )
-            throw t
+            TransferMediaOutcome(
+                images = emptyMap(),
+                failed = 1,
+                errors = listOf(message),
+                uploaded = 0,
+                reused = 0,
+            )
         }
     }
 
@@ -70,51 +79,46 @@ internal class ProductTransferMedia(
         val errors = mutableListOf<String>()
         var failed = 0
         var uploaded = 0
+        var reused = 0
+
         resolver.openInputStream(source)?.use { input ->
             ZipInputStream(input).use { zip ->
                 while (true) {
                     val entry = zip.nextEntry ?: break
                     if (entry.isDirectory || !entry.name.startsWith("media/")) continue
                     val file = entry.name
-                    val bytes = try {
-                        readLimited(zip)
-                    } catch (t: Throwable) {
-                        failed++
-                        val message = "خواندن رسانه $file ناموفق بود: ${t.message ?: "خطای نامشخص"}"
-                        errors += message
-                        TechnicalErrorReporter.report(
-                            feature="Product Transfer",
-                            location="ProductTransferMedia.readLimited",
-                            operation="READ_MEDIA_ENTRY",
-                            userMessage="خواندن تصویر انتقالی ناموفق بود.",
-                            throwable=t,
-                            type="PRODUCT_TRANSFER_MEDIA_READ_ERROR",
-                            details="file=$file; source=$source",
-                        )
-                        continue
-                    }
-                    val hash = sourceHashCache.getOrPut(file) { sha256(bytes) }
-                    val sourceImage = sourceByFile[file]
-                    val exact = sourceImage?.src?.let { candidateUrl ->
-                        byUrl[canonicalUrl(candidateUrl)]?.takeIf {
-                            remoteHash(it.src, remoteHashCache) == hash
-                        }
-                    }
-                    val cached = byContentHash[hash]
-                    val byFilename = if (exact == null && cached == null) {
-                        val wantedName = normalize(fileName(sourceImage?.name ?: file))
-                        byName[wantedName].orEmpty().asSequence()
-                            .distinctBy { canonicalUrl(it.src) }
-                            .mapNotNull { candidate ->
-                                remoteHash(candidate.src, remoteHashCache)?.takeIf { it == hash }?.let { candidate }
+
+                    // One malformed/unreadable media entry must not affect any other entry.
+                    try {
+                        val bytes = readLimited(zip)
+                        val hash = sourceHashCache.getOrPut(file) { sha256(bytes) }
+                        val sourceImage = sourceByFile[file]
+                        val exact = sourceImage?.src?.let { candidateUrl ->
+                            byUrl[canonicalUrl(candidateUrl)]?.takeIf {
+                                remoteHash(it.src, remoteHashCache) == hash
                             }
-                            .firstOrNull()
-                    } else null
-                    val reused = exact ?: cached ?: byFilename
-                    if (reused != null) {
-                        resolved[file] = reused
-                        byContentHash.putIfAbsent(hash, reused)
-                    } else {
+                        }
+                        val cached = byContentHash[hash]
+                        val byFilename = if (exact == null && cached == null) {
+                            val wantedName = normalize(fileName(sourceImage?.name ?: file))
+                            byName[wantedName].orEmpty().asSequence()
+                                .distinctBy { canonicalUrl(it.src) }
+                                .mapNotNull { candidate ->
+                                    remoteHash(candidate.src, remoteHashCache)
+                                        ?.takeIf { it == hash }
+                                        ?.let { candidate }
+                                }
+                                .firstOrNull()
+                        } else null
+                        val reusedImage = exact ?: cached ?: byFilename
+
+                        if (reusedImage != null) {
+                            resolved[file] = reusedImage
+                            byContentHash.putIfAbsent(hash, reusedImage)
+                            reused++
+                            continue
+                        }
+
                         when (val result = d.uploadMedia(storeId, fileName(file), bytes, mime(file))) {
                             is CoreResult.Success -> {
                                 resolved[file] = result.value
@@ -137,14 +141,36 @@ internal class ProductTransferMedia(
                                 )
                             }
                         }
+                    } catch (t: Throwable) {
+                        failed++
+                        val message = "پردازش رسانه $file ناموفق بود: ${t.message ?: "خطای نامشخص"}"
+                        errors += message
+                        TechnicalErrorReporter.report(
+                            feature="Product Transfer",
+                            location="ProductTransferMedia.entry",
+                            operation="PROCESS_MEDIA_ENTRY",
+                            userMessage="پردازش یک تصویر انتقالی ناموفق بود.",
+                            throwable=t,
+                            type="PRODUCT_TRANSFER_MEDIA_ENTRY_ERROR",
+                            details="file=$file; storeId=${storeId.value}; source=$source",
+                        )
                     }
                 }
             }
-        } ?: error("فایل قابل خواندن نیست.")
-        return TransferMediaOutcome(resolved, failed, errors, uploaded)
+        } ?: run {
+            return TransferMediaOutcome(
+                images = emptyMap(),
+                failed = 1,
+                errors = listOf("فایل رسانه قابل خواندن نیست."),
+                uploaded = 0,
+                reused = 0,
+            )
+        }
+        return TransferMediaOutcome(resolved, failed, errors, uploaded, reused)
     }
 
-    private suspend fun readDestinationMedia(storeId: StoreId): List<ProductImage> = ProductTransferRepositoryReader(d).media(storeId)
+    private suspend fun readDestinationMedia(storeId: StoreId): List<ProductImage> =
+        ProductTransferRepositoryReader(d).media(storeId)
 
     private fun readLimited(zip: ZipInputStream): ByteArray {
         val out = ByteArrayOutputStream()
