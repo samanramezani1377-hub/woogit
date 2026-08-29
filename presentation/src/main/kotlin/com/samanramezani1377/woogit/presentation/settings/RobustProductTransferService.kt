@@ -32,6 +32,7 @@ class RobustProductTransferService(private val d:V1PresentationDependencies,priv
 
     suspend fun export(storeId:StoreId,destination:Uri,onProgress:(ProductTransferProgress)->Unit={}):Result<Int>=withContext(Dispatchers.IO){runCatching{
         val store=requireStore(storeId);val products=reader.products(storeId,onProgress);require(products.size<=MAX_PRODUCTS){"تعداد محصولات از حد مجاز بیشتر است."}
+        val allCategories=reader.categories(storeId)
         val usedGlobalIds=products.flatMap{it.attributes}.mapNotNull{it.id?.value}.toSet()
         val globals=reader.attributes(storeId).filter{it.id.value in usedGlobalIds}.map{g->TransferGlobalAttribute(g.id.value,g.name,g.slug,reader.terms(storeId,g.id).map{TransferTerm(it.id.value,it.name,it.slug)})}
         var imageCount=0
@@ -49,7 +50,7 @@ class RobustProductTransferService(private val d:V1PresentationDependencies,priv
                     val bytes=downloadTransferImage(image.src)?:error("تصویر Variation قابل دریافت نیست؛ خروجی ناقص ساخته نشد.")
                     require(bytes.size.toLong()<=MAX_ENTRY_BYTES);writeTransferEntry(zip,file,bytes);imageCount++;file
                 }}}else emptyList()
-                product.toTransfer(images,variations)
+                product.copy(categories=expandCategoryChain(product.categories,allCategories)).toTransfer(images,variations)
             }
             val manifest=ProductTransferManifest(FORMAT,VERSION,store.baseUrl.trimEnd('/'),SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX",Locale.US).format(Date()),exported.size,imageCount)
             writeTransferEntry(zip,"manifest.json",transferJson.encodeToString(manifest).toByteArray())
@@ -72,7 +73,7 @@ class RobustProductTransferService(private val d:V1PresentationDependencies,priv
         existing.filter{it.type==ProductType.VARIABLE}.forEach{product->reader.variations(storeId,product.id).forEach{variation->cleanSku(variation.sku)?.let{usedSku+=normalize(it)}}}
         val destinationCategories=reader.categories(storeId)
         val sourceCategories=validated.products.flatMap{it.categories}.distinctBy{it.id}
-        val categoryMap=resolveCategories(storeId,sourceCategories,destinationCategories,mode==ProductImportMode.UPDATE_EXISTING&&sameStore)
+        val categoryMap=resolveCategories(storeId,sourceCategories,destinationCategories,true)
         val globalMap=resolveGlobalAttributes(storeId,validated.globalAttributes,mode==ProductImportMode.UPDATE_EXISTING&&sameStore)
         var created=0;var updated=0;var drafted=0;var failed=0;var variationsCreated=0;var variationsUpdated=0;var variationsFailed=0;var skuChanged=0
         val categoriesCreated=categoryMap.created;val categoriesResolved=categoryMap.resolved;val attributesCreated=globalMap.created;val attributesResolved=globalMap.resolved;val termsCreated=globalMap.termsCreated;val termsResolved=globalMap.termsResolved
@@ -112,6 +113,7 @@ class RobustProductTransferService(private val d:V1PresentationDependencies,priv
         suspend fun resolve(id:String):IdName?{resolved[id]?.let{return it};val c=sourceById[id]?:return null;val parent=c.parentId?.let{resolve(it)};val key=normalize(c.name)+"|"+normalize(parent?.id?.value);val found=destinationByKey[key].orEmpty().singleOrNull();if(found!=null){resolved[id]=found;reused++;return found};if(!createMissing)return null;return when(val r=d.getProductCategories.create(storeId,IdName(EntityId(NEW_ID_PLACEHOLDER),c.name,parent?.id))){is CoreResult.Success->{resolved[id]=r.value;destinationByKey[key]=destinationByKey[key].orEmpty()+r.value;created++;r.value};is CoreResult.Failure->null}}
         source.forEach{resolve(it.id)};return CategoryMapping(resolved,created,reused)}
 
+    private fun expandCategoryChain(categories:List<IdName>,all:List<IdName>):List<IdName>{val byId=all.associateBy{it.id.value};val out=linkedMapOf<String,IdName>();fun add(c:IdName){if(out.putIfAbsent(c.id.value,c)==null)c.parentId?.let{byId[it.value]?.let(::add)}};categories.forEach(::add);return out.values.toList()}
     private fun findProductMatch(x:TransferProduct,sameStore:Boolean,byId:Map<String,Product>,bySku:Map<String,Product>,byFingerprint:Map<String,List<Product>>):Product?{if(sameStore)byId[x.id]?.let{return it};cleanSku(x.sku)?.let{bySku[normalize(it)]?.let{return it}};return byFingerprint[x.matchKey()].orEmpty().singleOrNull()}
     private fun findVariationByContent(existing:List<Variation>,source:TransferVariation):Variation?{cleanSku(source.sku)?.let{s->existing.firstOrNull{cleanSku(it.sku)?.let(::normalize)==normalize(s)}}?.let{return it};val key=source.attributes.map{normalize(it.name)+"="+normalize(it.option)}.sorted().joinToString("|");return existing.singleOrNull{it.attributeKey()==key}}
     private fun requireStore(id:StoreId)=when(val result=d.getStore(id)){is CoreResult.Success->result.value;is CoreResult.Failure->error("فروشگاه در دسترس نیست.")}
