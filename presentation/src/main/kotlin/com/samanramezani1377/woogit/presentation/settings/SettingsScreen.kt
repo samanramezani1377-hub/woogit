@@ -1,20 +1,16 @@
 package com.samanramezani1377.woogit.presentation.settings
 
-import android.content.Context
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -25,7 +21,6 @@ import com.samanramezani1377.woogit.debug.DebugConfig
 import com.samanramezani1377.woogit.debug.DebugLogEntry
 import com.samanramezani1377.woogit.debug.DebugLogStore
 import com.samanramezani1377.woogit.presentation.GlassCard
-import com.samanramezani1377.woogit.presentation.GlassPrimaryAction
 import com.samanramezani1377.woogit.presentation.GlassScaffold
 import com.samanramezani1377.woogit.presentation.GlassText
 import com.samanramezani1377.woogit.presentation.GlassTopBar
@@ -37,8 +32,8 @@ internal data class SettingsUiModel(val storeName: String, val connected: Boolea
 fun SettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
-    var debugEnabled by remember { mutableStateOf(DebugConfig.isEnabled(context)) }
-    var logs by remember { mutableStateOf(DebugLogStore.readAll()) }
+    val debugEnabled = remember { DebugConfig.isEnabled(context) }
+    var logs by remember { mutableStateOf(DebugLogStore.read(context)) }
     GlassScaffold(topBar = { GlassTopBar(title = "تنظیمات", onBack = onBack) }) {
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             GlassText("تنظیمات")
@@ -47,7 +42,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         GlassText("دیباگ موقت")
                         GlassText("لاگ‌های فنی و اطلاعات تشخیصی")
-                        TextButton(onClick = { logs = DebugLogStore.readAll() }) { GlassText("به‌روزرسانی لاگ‌ها") }
+                        TextButton(onClick = { logs = DebugLogStore.read(context) }) { GlassText("به‌روزرسانی لاگ‌ها") }
                     }
                 }
                 DashboardSalesDebugPanel(clipboard)
@@ -58,7 +53,7 @@ fun SettingsScreen(onBack: () -> Unit) {
                             GlassText("${entry.time} · ${entry.feature} · ${entry.type}")
                             GlassText(entry.technicalMessage.ifBlank { entry.userMessage })
                             if (entry.userMessage.isNotBlank()) GlassText("پیام کاربر: ${entry.userMessage}")
-                            TextButton(onClick = { clipboard.setText(AnnotatedString(entry.copyText())) }) { GlassText("کپی خطا") }
+                            TextButton(onClick = { clipboard.setText(AnnotatedString(entry.asCopyText())) }) { GlassText("کپی خطا") }
                         }
                     }
                 }
@@ -89,17 +84,6 @@ private fun DashboardSalesDebugPanel(clipboard: androidx.compose.ui.platform.Cli
             TextButton(onClick = { clipboard.setText(AnnotatedString(copyText)) }) { GlassText("کپی همه متغیرهای فروش") }
         }
     }
-}
-
-private fun DebugLogEntry.copyText(): String = buildString {
-    appendLine("time=$time")
-    appendLine("feature=$feature")
-    appendLine("type=$type")
-    appendLine("userMessage=$userMessage")
-    appendLine("technicalMessage=$technicalMessage")
-    appendLine("location=$location")
-    appendLine("operation=$operation")
-    appendLine("details=$details")
 }
 
 private fun DashboardSalesDebugSnapshot.Snapshot.copyText(): String = buildString {
