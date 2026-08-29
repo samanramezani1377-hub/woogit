@@ -27,8 +27,6 @@ class OrderPollingWorker(appContext: Context, params: WorkerParameters) : Corout
         val source = RepositoryOrderBackgroundSource(app.composition.getOrders, notificationStore)
         val notifier = OrderNotificationManager(applicationContext)
         return try {
-            // The same worker drains pending mutations and then polls remote state.
-            // This keeps background sync serialized per store and avoids a second sync engine.
             when (val sync = app.composition.syncPending(store)) {
                 is CoreResult.Failure -> return if (sync.error.recoverable) Result.retry() else Result.failure()
                 is CoreResult.Success -> Unit
@@ -58,13 +56,19 @@ class OrderPollingWorker(appContext: Context, params: WorkerParameters) : Corout
         const val KEY_STORE_ID = "store_id"
         private const val WORK_PREFIX = "woogit-order-polling-"
         private const val IMMEDIATE_PREFIX = "woogit-sync-now-"
+        private const val POLL_INTERVAL_MINUTES = 15L
 
         private fun constraints() = Constraints.Builder()
             .setRequiredNetworkType(NetworkType.CONNECTED)
             .build()
 
-        fun schedule(context: Context, storeId: String, repeatHours: Long = 1L) {
-            val request = PeriodicWorkRequestBuilder<OrderPollingWorker>(repeatHours.coerceAtLeast(1L), TimeUnit.HOURS)
+        /**
+         * Schedules the persistent background order monitor at Android's minimum
+         * periodic WorkManager interval. The work survives Activity/process death
+         * and is resumed when network connectivity returns.
+         */
+        fun schedule(context: Context, storeId: String) {
+            val request = PeriodicWorkRequestBuilder<OrderPollingWorker>(POLL_INTERVAL_MINUTES, TimeUnit.MINUTES)
                 .setConstraints(constraints())
                 .setInputData(workDataOf(KEY_STORE_ID to storeId))
                 .build()
