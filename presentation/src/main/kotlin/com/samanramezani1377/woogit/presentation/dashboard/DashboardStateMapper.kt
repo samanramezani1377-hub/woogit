@@ -17,20 +17,18 @@ private fun sanitizeCurrencySymbol(value: String): String = value.replace(Regex(
 /** Keeps domain-to-dashboard presentation mapping outside the composable. */
 internal object DashboardStateMapper {
     fun ordersCount(orders: List<Order>): String = orders.size.toString()
-
     fun productsCount(products: List<Product>): String = products.size.toString()
-
     fun pendingCount(orders: List<Order>): String = orders.count { it.status.name == "PENDING" }.toString()
 
     /** Sums order totals for the dashboard revenue box, excluding cancelled and failed orders. */
     fun netSales(orders: List<Order>): BigDecimal =
-        orders
-            .filterNot { it.status in EXCLUDED_REVENUE_STATUSES }
+        orders.filterNot { it.status in EXCLUDED_REVENUE_STATUSES }
             .fold(BigDecimal.ZERO) { acc, order -> acc + (order.total?.toBigDecimalOrNull() ?: BigDecimal.ZERO) }
 
-    fun revenue(summary: SalesSummary?): String {
+    /** Formats the dashboard revenue using WooCommerce currency settings and the locally calculated order total. */
+    fun revenue(orders: List<Order>, summary: SalesSummary?): String {
         if (summary == null) return "—"
-        val amount = summary.netSales.toBigDecimalOrNull() ?: BigDecimal.ZERO
+        val amount = netSales(orders)
         val symbols = DecimalFormatSymbols().apply {
             groupingSeparator = summary.thousandSeparator.firstOrNull() ?: ','
             decimalSeparator = summary.decimalSeparator.firstOrNull() ?: '.'
