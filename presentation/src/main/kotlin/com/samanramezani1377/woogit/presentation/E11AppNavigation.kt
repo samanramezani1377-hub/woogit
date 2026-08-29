@@ -1,6 +1,9 @@
 package com.samanramezani1377.woogit.presentation
 
+import android.app.Activity
+import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.*
@@ -20,6 +23,20 @@ import com.samanramezani1377.woogit.presentation.sync.*
 internal fun E11AppNavigation(dependencies: V1PresentationDependencies, initialOrderId: String?) {
     val navController = rememberNavController()
     var activeStore by remember { mutableStateOf(dependencies.initialStoreId) }
+    val context = LocalContext.current
+    val currentRoute by navController.currentBackStackEntryAsState()
+    val route = currentRoute?.destination?.route
+
+    BackHandler(enabled = true) {
+        // System Back navigates inside the app when possible. At the authenticated
+        // root it backgrounds the task instead of destroying the Activity/session.
+        if (navController.previousBackStackEntry != null && route != E11Routes.CONNECTION) {
+            navController.popBackStack()
+        } else {
+            (context as? Activity)?.moveTaskToBack(true)
+        }
+    }
+
     val startDestination = when { activeStore == null -> E11Routes.CONNECTION; initialOrderId != null -> E11Routes.order(initialOrderId); else -> E11Routes.DASHBOARD }
     NavHost(navController, startDestination) {
         composable(E11Routes.CONNECTION) { ConnectionScreen(dependencies) { storeId -> activeStore = storeId; dependencies.onStoreConnected(storeId); navController.navigate(E11Routes.DASHBOARD) { popUpTo(E11Routes.CONNECTION) { inclusive = true } } } }
