@@ -10,6 +10,7 @@ import com.samanramezani1377.woogit.core.domain.model.Product
 import com.samanramezani1377.woogit.core.domain.model.SalesSummary
 import com.samanramezani1377.woogit.presentation.PresentationErrorMapper
 import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
+import com.samanramezani1377.woogit.presentation.debug.DashboardSalesDebugSnapshot
 import com.samanramezani1377.woogit.presentation.debug.PresentationTechnicalErrorReporter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -118,6 +119,8 @@ internal class DashboardViewModel(
                 _uiState.value = _uiState.value.copy(connectionState = connection, loading = false, error = message); return
             }
         }
-        _uiState.value = _uiState.value.copy(orders = orders, products = products, salesSummary = salesSummary, connectionState = connection, loading = false, error = null)
+        val newState = _uiState.value.copy(orders = orders, products = products, salesSummary = salesSummary, connectionState = connection, loading = false, error = null)
+        _uiState.value = newState
+        DashboardSalesDebugSnapshot.update(orders, salesSummary, newState.revenue)
     }
 }
