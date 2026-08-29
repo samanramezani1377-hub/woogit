@@ -51,46 +51,28 @@ internal fun ProductEditorRoute(dependencies: V1PresentationDependencies, storeI
     var selectedUploadUri by remember { mutableStateOf<Uri?>(null) }
     var mediaUploading by remember { mutableStateOf(false) }
     var uploadedImageUrl by remember(productId) { mutableStateOf<String?>(null) }
-
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri -> selectedUploadUri = uri }
-
     LaunchedEffect(storeId, productId) {
-        vm.loadCategories(storeId)
-        attributesVm.load(storeId)
-        if (productId == null) form = ProductEditorUiState.Editing(productId = null, name = "", sku = "", shortDescription = "", description = "", price = "", salePrice = "", stock = "", imageUrl = null, imageId = null, imageError = null, categories = "", attributes = "")
+        vm.loadCategories(storeId); attributesVm.load(storeId)
+        if (productId == null) form = ProductEditorUiState.Editing(null, "", "", "", "", "", "", "", null, null, null, "", "")
         else vm.load(storeId, EntityId(productId))
     }
     LaunchedEffect(mediaPickerOpen, storeId) { if (mediaPickerOpen) mediaVm.load(storeId, reset = true) }
     LaunchedEffect(selectedUploadUri) {
         val uri = selectedUploadUri ?: return@LaunchedEffect
-        selectedUploadUri = null
-        mediaUploading = true
+        selectedUploadUri = null; mediaUploading = true
         val bytes = runCatching { context.contentResolver.openInputStream(uri)?.use { it.readBytes() } }.getOrNull()
         val mime = context.contentResolver.getType(uri).orEmpty().ifBlank { "image/jpeg" }
         val extension = mime.substringAfter('/').takeIf { it.isNotBlank() } ?: "jpeg"
-        if (bytes == null || bytes.isEmpty()) {
-            form = form?.copy(imageError = "خواندن تصویر انتخاب‌شده ناموفق بود.")
-            mediaUploading = false
-        } else uploadVm.upload(storeId, "woogit-${System.currentTimeMillis()}.$extension", bytes, mime)
+        if (bytes == null || bytes.isEmpty()) { form = form?.copy(imageError = "خواندن تصویر انتخاب‌شده ناموفق بود."); mediaUploading = false }
+        else uploadVm.upload(storeId, "woogit-${System.currentTimeMillis()}.$extension", bytes, mime)
     }
     LaunchedEffect(uploadState) {
         when (val result = uploadState) {
             ProductImageUploadState.Idle -> Unit
             ProductImageUploadState.Loading -> mediaUploading = true
-            is ProductImageUploadState.Success -> {
-                val uploaded = result.image
-                val id = uploaded.id?.value?.takeIf { it.isNotBlank() }
-                val url = uploaded.src.trim().takeIf { it.isNotBlank() }
-                uploadedImageUrl = url
-                form = form?.copy(imageUrl = url, imageId = id, imageError = when { id == null -> "آپلود انجام شد اما شناسه رسانه از WordPress دریافت نشد."; url == null -> "تصویر آپلود شد، اما WordPress آدرس تصویر را برنگرداند."; else -> null })
-                mediaUploading = false
-                uploadVm.reset()
-            }
-            is ProductImageUploadState.Error -> {
-                form = form?.copy(imageError = result.message)
-                mediaUploading = false
-                uploadVm.reset()
-            }
+            is ProductImageUploadState.Success -> { val uploaded = result.image; val id = uploaded.id?.value?.takeIf { it.isNotBlank() }; val url = uploaded.src.trim().takeIf { it.isNotBlank() }; uploadedImageUrl = url; form = form?.copy(imageUrl = url, imageId = id, imageError = when { id == null -> "آپلود انجام شد اما شناسه رسانه از WordPress دریافت نشد."; url == null -> "تصویر آپلود شد، اما WordPress آدرس تصویر را برنگرداند."; else -> null }); mediaUploading = false; uploadVm.reset() }
+            is ProductImageUploadState.Error -> { form = form?.copy(imageError = result.message); mediaUploading = false; uploadVm.reset() }
         }
     }
     LaunchedEffect(state) {
@@ -98,26 +80,14 @@ internal fun ProductEditorRoute(dependencies: V1PresentationDependencies, storeI
         val product = (state as? FeatureUiState.Success)?.value ?: return@LaunchedEffect
         original = product
         val firstImage = product.images.firstOrNull()
-        form = ProductEditorUiState.Editing(productId = product.id.value, name = product.name, sku = product.sku.orEmpty(), shortDescription = product.shortDescription.orEmpty(), description = product.description.orEmpty(), price = product.pricing.regular.orEmpty(), salePrice = product.pricing.sale.orEmpty(), stock = product.stock?.quantity?.toString().orEmpty(), imageUrl = firstImage?.src, imageId = firstImage?.id?.value?.toString(), imageError = null, categories = product.categories.joinToString(", ") { it.name }, attributes = product.attributes.joinToString(" | ") { a -> "${a.name}:${a.options.joinToString(",")}" }, status = product.status, type = product.type)
+        form = ProductEditorUiState.Editing(product.id.value, product.name, product.sku.orEmpty(), product.shortDescription.orEmpty(), product.description.orEmpty(), product.pricing.regular.orEmpty(), product.pricing.sale.orEmpty(), product.stock?.quantity?.toString().orEmpty(), firstImage?.src, firstImage?.id?.value?.toString(), null, product.categories.joinToString(", ") { it.name }, product.attributes.joinToString(" | ") { a -> "${a.name}:${a.options.joinToString(",")}" }, product.status, product.type)
     }
-
     val editing = form
     when {
-        editing != null -> ProductEditorScreen(
-            state = editing, availableCategories = availableCategories, availableAttributes = availableAttributes, availableMedia = availableMedia, mediaPickerOpen = mediaPickerOpen,
-            mediaLoading = mediaState is FeatureUiState.Loading, imageUploading = mediaUploading,
-            onOpenMediaPicker = { mediaPickerOpen = true }, onCloseMediaPicker = { mediaPickerOpen = false },
-            onPickMedia = { media -> uploadedImageUrl = media.src; form = form?.copy(imageUrl = media.src, imageId = media.id?.value?.toString(), imageError = null); mediaPickerOpen = false },
-            onUploadImage = { imagePicker.launch("image/*") },
-            onNameChanged = { form = form?.copy(name = it) }, onSkuChanged = { form = form?.copy(sku = it) },
-            onShortDescriptionChanged = { form = form?.copy(shortDescription = it) }, onDescriptionChanged = { form = form?.copy(description = it) },
-            onPriceChanged = { form = form?.copy(price = it) }, onSalePriceChanged = { form = form?.copy(salePrice = it) },
-            onStockChanged = { form = form?.copy(stock = it) }, onImageUrlChanged = { uploadedImageUrl = it.takeIf { value -> value.isNotBlank() }; form = form?.copy(imageUrl = it.ifBlank { null }, imageId = null, imageError = null) },
-            onCategoriesChanged = { form = form?.copy(categories = it) }, onAttributesChanged = { form = form?.copy(attributes = it) },
-            onStatusChanged = { form = form?.copy(status = it) }, onTypeChanged = { form = form?.copy(type = it) },
-            onSave = { val current = form ?: return@ProductEditorScreen; vm.save(storeId, current.toProduct(original, availableCategories, availableAttributes), current.productId == null, onSaved); form = current.copy(saving = true) },
-            onRetry = { uploadedImageUrl = null; uploadVm.reset(); if (editing.productId != null) vm.load(storeId, EntityId(editing.productId)) else { vm.loadCategories(storeId); attributesVm.load(storeId) } }, onBack = onBack, modifier = modifier,
-        )
+        editing != null -> ProductEditorScreen(state = editing, availableCategories = availableCategories, availableAttributes = availableAttributes, availableMedia = availableMedia, mediaPickerOpen = mediaPickerOpen, mediaLoading = mediaState is FeatureUiState.Loading, imageUploading = mediaUploading,
+            onOpenMediaPicker = { mediaPickerOpen = true }, onCloseMediaPicker = { mediaPickerOpen = false }, onPickMedia = { media -> uploadedImageUrl = media.src; form = form?.copy(imageUrl = media.src, imageId = media.id?.value?.toString(), imageError = null); mediaPickerOpen = false }, onUploadImage = { imagePicker.launch("image/*") },
+            onNameChanged = { form = form?.copy(name = it) }, onSkuChanged = { form = form?.copy(sku = it) }, onShortDescriptionChanged = { form = form?.copy(shortDescription = it) }, onDescriptionChanged = { form = form?.copy(description = it) }, onPriceChanged = { form = form?.copy(price = it) }, onSalePriceChanged = { form = form?.copy(salePrice = it) }, onStockChanged = { form = form?.copy(stock = it) }, onImageUrlChanged = { uploadedImageUrl = it.takeIf { value -> value.isNotBlank() }; form = form?.copy(imageUrl = it.ifBlank { null }, imageId = null, imageError = null) }, onCategoriesChanged = { form = form?.copy(categories = it) }, onAttributesChanged = { form = form?.copy(attributes = it) }, onStatusChanged = { form = form?.copy(status = it) }, onTypeChanged = { form = form?.copy(type = it) },
+            onSave = { val current = form ?: return@ProductEditorScreen; vm.save(storeId, current.toProduct(original, availableCategories, availableAttributes), current.productId == null, onSaved); form = current.copy(saving = true) }, onRetry = { uploadedImageUrl = null; uploadVm.reset(); if (editing.productId != null) vm.load(storeId, EntityId(editing.productId)) else { vm.loadCategories(storeId); attributesVm.load(storeId) } }, onBack = onBack, modifier = modifier)
         state is FeatureUiState.Loading -> ProductEditorScreen(state = ProductEditorUiState.Loading, availableCategories = availableCategories, availableAttributes = availableAttributes, onNameChanged = {}, onSkuChanged = {}, onShortDescriptionChanged = {}, onDescriptionChanged = {}, onPriceChanged = {}, onSalePriceChanged = {}, onStockChanged = {}, onImageUrlChanged = {}, onCategoriesChanged = {}, onAttributesChanged = {}, onStatusChanged = {}, onTypeChanged = {}, onSave = {}, onRetry = {}, onBack = onBack, modifier = modifier)
         state is FeatureUiState.Error -> { val error = state as FeatureUiState.Error; ProductEditorScreen(state = ProductEditorUiState.Error(error.message, error.retryable), availableCategories = availableCategories, availableAttributes = availableAttributes, onNameChanged = {}, onSkuChanged = {}, onShortDescriptionChanged = {}, onDescriptionChanged = {}, onPriceChanged = {}, onSalePriceChanged = {}, onStockChanged = {}, onImageUrlChanged = {}, onCategoriesChanged = {}, onAttributesChanged = {}, onStatusChanged = {}, onTypeChanged = {}, onSave = {}, onRetry = { if (productId != null) vm.load(storeId, EntityId(productId)) else { vm.loadCategories(storeId); attributesVm.load(storeId) } }, onBack = onBack, modifier = modifier) }
     }
@@ -127,15 +97,19 @@ private fun ProductEditorUiState.Editing.toProduct(original: Product?, available
     val image = if (!imageId.isNullOrBlank() || !imageUrl.isNullOrBlank()) ProductImage(imageId?.takeIf { it.isNotBlank() }?.let(::EntityId), imageUrl.orEmpty(), original?.images?.firstOrNull()?.name, name) else null
     val categoryNames = categories.split(',').map { it.trim() }.filter { it.isNotBlank() }.distinct()
     val cats = categoryNames.mapNotNull { value -> availableCategories.firstOrNull { it.name == value } ?: original?.categories?.firstOrNull { it.name == value } }
-    val attrsByName = attributes.split('|').mapNotNull { raw ->
+    val edited = attributes.split('|').mapNotNull { raw ->
         val parts = raw.split(':', limit = 2)
-        if (parts.size != 2 || parts[0].isBlank()) null else parts[0].trim() to parts[1].split(',').map { it.trim() }.filter { it.isNotBlank() }.distinct()
+        if (parts.size != 2 || parts[0].trim().isBlank()) null else parts[0].trim() to parts[1].split(',').map { it.trim() }.filter { it.isNotBlank() }.distinct()
     }.toMap()
-    val attrs = attrsByName.mapNotNull { (name, options) ->
-        if (options.isEmpty()) return@mapNotNull null
-        val global = availableAttributes.firstOrNull { it.name == name }
-        val old = original?.attributes?.firstOrNull { it.name == name }
-        Attribute(global?.id ?: old?.id, name, old?.visible ?: true, old?.variation ?: true, options)
+    val editedNames = edited.keys
+    val attrs = buildList {
+        original?.attributes.orEmpty().filter { it.name !in editedNames }.forEach(::add)
+        edited.forEach { (name, options) ->
+            if (options.isEmpty()) return@forEach
+            val global = availableAttributes.firstOrNull { it.name == name }
+            val old = original?.attributes?.firstOrNull { it.name == name }
+            add(Attribute(global?.id ?: old?.id, name, old?.visible ?: true, old?.variation ?: true, options))
+        }
     }
     return Product(EntityId(productId ?: "new"), name.trim(), sku.trim().ifBlank { null }, description.ifBlank { null }, shortDescription.ifBlank { null }, status, type, Pricing(price.trim().ifBlank { null }, salePrice.trim().ifBlank { null }, salePrice.isNotBlank()), stock.toDoubleOrNull()?.let { Stock(it, if (it > 0) StockStatus.IN_STOCK else StockStatus.OUT_OF_STOCK, original?.stock?.manageStock ?: true) }, if (image != null) listOf(image) else original?.images.orEmpty(), cats, attrs, original?.modifiedAt)
 }
