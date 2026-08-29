@@ -67,7 +67,7 @@ class CreateNewProductTransferService(private val d: V1PresentationDependencies,
                     }
                     val attributes = x.attributes.map { Attribute(null, it.name, it.visible, it.variation, it.options) }
                     val uniqueSku = nextUniqueSku(x.sku, usedSkus)
-                    uniqueSku?.let { usedSkus += it }
+                    uniqueSku?.let { normalizeSku(it)?.let(usedSkus::add) }
                     val product = x.toDomain(images, resolvedCategories, attributes, uniqueSku).let { if (createAsDraft) it.copy(status = ProductStatus.DRAFT) else it }
                     val saved = when (val r = d.createProduct(storeId, product)) {
                         is CoreResult.Success -> { created++; r.value }
@@ -76,7 +76,7 @@ class CreateNewProductTransferService(private val d: V1PresentationDependencies,
                     x.variations.forEach { v ->
                         val image = v.image?.let { uploaded[it.file] }
                         val variationSku = nextUniqueSku(v.sku, usedSkus)
-                        variationSku?.let { usedSkus += it }
+                        variationSku?.let { normalizeSku(it)?.let(usedSkus::add) }
                         when (val r = d.createVariation(storeId, v.toDomain(saved.id, image, variationSku))) {
                             is CoreResult.Success -> variationsCreated++
                             is CoreResult.Failure -> errors += "${x.name}: variation ${v.sku ?: v.id} ایجاد نشد: ${r.error}"
@@ -88,11 +88,10 @@ class CreateNewProductTransferService(private val d: V1PresentationDependencies,
         } catch (t: Throwable) { RobustProductTransferResult(failed = 1, errors = listOf(t.message ?: "خواندن فایل ناموفق بود.")) }
     }
 
-    private fun nextUniqueSku(original: String?, used: MutableSet<String>): String? {
-        val base = normalizeSku(original) ?: return null
+    private fun nextUniqueSku(original: String?, used: Set<String>): String? {
+        val base = original?.trim()?.takeIf { it.isNotEmpty() } ?: return null
         var candidate = base
-        while (!used.add(candidate)) candidate = "0$candidate"
-        used.remove(candidate)
+        while (normalizeSku(candidate) in used) candidate = "0$candidate"
         return candidate
     }
 
