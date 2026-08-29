@@ -40,6 +40,8 @@ class CreateNewProductTransferService(private val d: V1PresentationDependencies,
             require(pack.manifest.format == CREATE_NEW_FORMAT) { "فرمت فایل WooGit معتبر نیست." }
             require(pack.manifest.version <= CREATE_NEW_VERSION) { "نسخه فایل پشتیبانی نمی‌شود." }
             require(pack.products.size <= CREATE_NEW_MAX_PRODUCTS) { "تعداد محصولات فایل بیش از حد مجاز است." }
+            val existingProducts = allProducts(storeId)
+            val usedSkus = existingProducts.mapNotNull { normalizeSku(it.sku) }.toMutableSet()
             val categories = allCategories(storeId).toMutableList()
             val categoryByName = categories.associateBy { normalize(it.name) }.toMutableMap()
             val uploaded = linkedMapOf<String, ProductImage>()
@@ -57,7 +59,6 @@ class CreateNewProductTransferService(private val d: V1PresentationDependencies,
                     val images = x.images.mapNotNull { uploaded[it.file] }
                     val resolvedCategories = x.categories.mapNotNull { cat ->
                         categoryByName[normalize(cat.name)] ?: run {
-                            // Create missing categories instead of silently dropping them.
                             when (val r = d.createProductCategory(storeId, cat.name)) {
                                 is CoreResult.Success -> { categories += r.value; categoryByName[normalize(cat.name)] = r.value; r.value }
                                 is CoreResult.Failure -> { errors += "${x.name}: دسته‌بندی «${cat.name}» ساخته نشد: ${r.error}"; null }
@@ -65,14 +66,18 @@ class CreateNewProductTransferService(private val d: V1PresentationDependencies,
                         }
                     }
                     val attributes = x.attributes.map { Attribute(null, it.name, it.visible, it.variation, it.options) }
-                    val product = x.toDomain(images, resolvedCategories, attributes).let { if (createAsDraft) it.copy(status = ProductStatus.DRAFT) else it }
+                    val uniqueSku = nextUniqueSku(x.sku, usedSkus)
+                    uniqueSku?.let { usedSkus += it }
+                    val product = x.toDomain(images, resolvedCategories, attributes, uniqueSku).let { if (createAsDraft) it.copy(status = ProductStatus.DRAFT) else it }
                     val saved = when (val r = d.createProduct(storeId, product)) {
                         is CoreResult.Success -> { created++; r.value }
                         is CoreResult.Failure -> { failed++; errors += "${x.name}: ${r.error}"; return@forEachIndexed }
                     }
                     x.variations.forEach { v ->
                         val image = v.image?.let { uploaded[it.file] }
-                        when (val r = d.createVariation(storeId, v.toDomain(saved.id, image))) {
+                        val variationSku = nextUniqueSku(v.sku, usedSkus)
+                        variationSku?.let { usedSkus += it }
+                        when (val r = d.createVariation(storeId, v.toDomain(saved.id, image, variationSku))) {
                             is CoreResult.Success -> variationsCreated++
                             is CoreResult.Failure -> errors += "${x.name}: variation ${v.sku ?: v.id} ایجاد نشد: ${r.error}"
                         }
@@ -83,6 +88,15 @@ class CreateNewProductTransferService(private val d: V1PresentationDependencies,
         } catch (t: Throwable) { RobustProductTransferResult(failed = 1, errors = listOf(t.message ?: "خواندن فایل ناموفق بود.")) }
     }
 
+    private fun nextUniqueSku(original: String?, used: MutableSet<String>): String? {
+        val base = normalizeSku(original) ?: return null
+        var candidate = base
+        while (!used.add(candidate)) candidate = "0$candidate"
+        used.remove(candidate)
+        return candidate
+    }
+
+    private fun normalizeSku(value: String?): String? = value?.trim()?.takeIf { it.isNotEmpty() }?.lowercase(Locale.ROOT)
     private suspend fun readPackage(uri: Uri, onProgress: (ProductTransferProgress) -> Unit): CreateReadPackage = withContext(Dispatchers.IO) {
         var manifest: CreateManifest? = null; var products: List<CreateProduct>? = null; val media = linkedMapOf<String, ByteArray>(); var totalBytes = 0L
         resolver.openInputStream(uri)?.use { input -> ZipInputStream(input).use { zip ->
@@ -100,11 +114,12 @@ class CreateNewProductTransferService(private val d: V1PresentationDependencies,
         CreateReadPackage(m, p, media)
     }
     private fun readLimited(input: ZipInputStream, maxBytes: Long, onBytes: (Long) -> Unit): ByteArray { val out = ByteArrayOutputStream(); val buffer = ByteArray(DEFAULT_BUFFER_SIZE); var total = 0L; while (true) { val read = input.read(buffer); if (read <= 0) break; total += read; require(total <= maxBytes) { "یکی از فایل‌های داخل بسته بیش از حد بزرگ است." }; onBytes(read.toLong()); out.write(buffer, 0, read) }; return out.toByteArray() }
+    private suspend fun allProducts(s: StoreId): List<Product> { val result = mutableListOf<Product>(); var page = 1; while (true) { val batch = when (val r = d.getProducts(s, page, 100, null)) { is CoreResult.Success -> r.value; is CoreResult.Failure -> error("دریافت محصولات ناموفق بود: ${r.error}") }; if (batch.isEmpty()) break; result += batch; if (batch.size < 100) break; page++ }; return result.distinctBy { it.id.value } }
     private suspend fun allCategories(storeId: StoreId): List<IdName> { val result = mutableListOf<IdName>(); var page = 1; while (true) { val batch = when (val r = d.getProductCategories(storeId, page, 100, null)) { is CoreResult.Success -> r.value; is CoreResult.Failure -> break }; if (batch.isEmpty()) break; result += batch; if (batch.size < 100) break; page++ }; return result.distinctBy { it.id.value } }
     private fun normalize(value: String?): String = value.orEmpty().trim().lowercase(Locale.ROOT)
     private fun ext(value: String): String = value.substringBefore('?').substringAfterLast('.', "jpg").lowercase(Locale.ROOT).let { if (it in setOf("jpg", "jpeg", "png", "webp", "gif")) it else "jpg" }
     private fun mime(value: String): String = when (ext(value)) { "png" -> "image/png"; "webp" -> "image/webp"; "gif" -> "image/gif"; else -> "image/jpeg" }
 }
 
-private fun CreateProduct.toDomain(images: List<ProductImage>, categories: List<IdName>, attributes: List<Attribute>) = Product(id = EntityId(id), name = name, sku = sku, description = description, shortDescription = shortDescription, status = runCatching { ProductStatus.valueOf(status) }.getOrDefault(ProductStatus.DRAFT), type = runCatching { ProductType.valueOf(type) }.getOrDefault(ProductType.SIMPLE), pricing = Pricing(regular, sale, onSale), stock = if (quantity != null || stockStatus != null || manageStock) Stock(quantity, runCatching { StockStatus.valueOf(stockStatus ?: StockStatus.IN_STOCK.name) }.getOrDefault(StockStatus.IN_STOCK), manageStock) else null, images = images, categories = categories, attributes = attributes, modifiedAt = null)
-private fun CreateVariation.toDomain(productId: EntityId, image: ProductImage?) = Variation(id = EntityId(id), productId = productId, attributes = attributes.map { VariationAttribute(it.name, it.option) }, pricing = Pricing(regular, sale, onSale), stock = if (quantity != null || stockStatus != null || manageStock) Stock(quantity, runCatching { StockStatus.valueOf(stockStatus ?: StockStatus.IN_STOCK.name) }.getOrDefault(StockStatus.IN_STOCK), manageStock) else null, sku = sku, image = image, modifiedAt = null)
+private fun CreateProduct.toDomain(images: List<ProductImage>, categories: List<IdName>, attributes: List<Attribute>, sku: String? = this.sku) = Product(id = EntityId(id), name = name, sku = sku, description = description, shortDescription = shortDescription, status = runCatching { ProductStatus.valueOf(status) }.getOrDefault(ProductStatus.DRAFT), type = runCatching { ProductType.valueOf(type) }.getOrDefault(ProductType.SIMPLE), pricing = Pricing(regular, sale, onSale), stock = if (quantity != null || stockStatus != null || manageStock) Stock(quantity, runCatching { StockStatus.valueOf(stockStatus ?: StockStatus.IN_STOCK.name) }.getOrDefault(StockStatus.IN_STOCK), manageStock) else null, images = images, categories = categories, attributes = attributes, modifiedAt = null)
+private fun CreateVariation.toDomain(productId: EntityId, image: ProductImage?, sku: String? = this.sku) = Variation(id = EntityId(id), productId = productId, attributes = attributes.map { VariationAttribute(it.name, it.option) }, pricing = Pricing(regular, sale, onSale), stock = if (quantity != null || stockStatus != null || manageStock) Stock(quantity, runCatching { StockStatus.valueOf(stockStatus ?: StockStatus.IN_STOCK.name) }.getOrDefault(StockStatus.IN_STOCK), manageStock) else null, sku = sku, image = image, modifiedAt = null)
