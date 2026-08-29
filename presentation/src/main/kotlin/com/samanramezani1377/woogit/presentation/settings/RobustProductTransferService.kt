@@ -27,7 +27,7 @@ import java.util.zip.ZipOutputStream
 
 private val transferJson = Json { prettyPrint = false; ignoreUnknownKeys = true; explicitNulls = false }
 private const val FORMAT = "woogit-products"
-private const val VERSION = 2
+private const val VERSION = 1
 private const val PAGE_SIZE = 100
 private const val MAX_PRODUCTS = 10_000
 private const val MAX_VARIATIONS_PER_PRODUCT = 10_000
@@ -36,73 +36,218 @@ private const val MAX_ENTRY_BYTES = 50L * 1024L * 1024L
 private const val MAX_PRODUCT_JSON_BYTES = 100L * 1024L * 1024L
 private const val NEW_ID_PLACEHOLDER = "new"
 
-@Serializable private data class Manifest(val format:String=FORMAT,val version:Int=1,val source:String,val exportedAt:String,val products:Int,val images:Int)
-@Serializable private data class Package(val manifest:Manifest,val products:List<P>,val globalAttributes:List<GlobalAttributeX> = emptyList())
-@Serializable private data class P(val id:String,val name:String,val sku:String?=null,val description:String?=null,val shortDescription:String?=null,val status:String,val type:String,val regular:String?=null,val sale:String?=null,val onSale:Boolean,val quantity:Double?=null,val stockStatus:String?=null,val manageStock:Boolean,val categories:List<IdNameX> = emptyList(),val attributes:List<AttrX> = emptyList(),val images:List<ImageX> = emptyList(),val variations:List<V> = emptyList(),val modifiedAt:String?=null)
-@Serializable private data class V(val id:String,val sku:String?=null,val regular:String?=null,val sale:String?=null,val onSale:Boolean,val quantity:Double?=null,val stockStatus:String?=null,val manageStock:Boolean,val attributes:List<VA> = emptyList(),val image:ImageX?=null,val modifiedAt:String?=null)
-@Serializable private data class VA(val name:String,val option:String)
-@Serializable private data class IdNameX(val id:String,val name:String,val parentId:String?=null)
-@Serializable private data class AttrX(val id:String?=null,val name:String,val visible:Boolean,val variation:Boolean,val options:List<String>)
-@Serializable private data class ImageX(val id:String?=null,val src:String,val name:String?=null,val alt:String?=null,val file:String)
-@Serializable private data class GlobalAttributeX(val id:String,val name:String,val slug:String,val terms:List<TermX> = emptyList())
-@Serializable private data class TermX(val id:String?=null,val name:String,val slug:String?=null)
+@Serializable private data class Manifest(
+    val format: String = FORMAT,
+    val version: Int = VERSION,
+    val source: String,
+    val exportedAt: String,
+    val products: Int,
+    val images: Int,
+)
 
-data class RobustProductTransferResult(val created:Int=0,val updated:Int=0,val failed:Int=0,val imagesUploaded:Int=0,val variationsCreated:Int=0,val variationsUpdated:Int=0,val errors:List<String> = emptyList(),val variationsFailed:Int=0,val imagesFailed:Int=0,val imagesUnused:Int=0,val skuChanged:Int=0,val validationErrors:List<String> = emptyList(),val importErrors:List<String> = emptyList(),val categoriesCreated:Int=0,val categoriesResolved:Int=0,val attributesCreated:Int=0,val attributesResolved:Int=0,val termsCreated:Int=0,val termsResolved:Int=0)
-private data class ReadPackage(val manifest:Manifest,val products:List<P>,val uploadedImages:Map<String,ProductImage>,val globalAttributes:List<GlobalAttributeX>)
-private data class ValidatedPackage(val manifest:Manifest,val products:List<P>,val mediaNames:Set<String>,val invalidProductIds:Set<String>,val validationErrors:List<String>,val globalAttributes:List<GlobalAttributeX>)
-private data class MediaUploadOutcome(val images:Map<String,ProductImage>,val failed:Int,val errors:List<String>)
+@Serializable private data class Package(val manifest: Manifest, val products: List<P>)
+@Serializable private data class P(
+    val id: String,
+    val name: String,
+    val sku: String? = null,
+    val description: String? = null,
+    val shortDescription: String? = null,
+    val status: String,
+    val type: String,
+    val regular: String? = null,
+    val sale: String? = null,
+    val onSale: Boolean,
+    val quantity: Double? = null,
+    val stockStatus: String? = null,
+    val manageStock: Boolean,
+    val categories: List<IdNameX> = emptyList(),
+    val attributes: List<AttrX> = emptyList(),
+    val images: List<ImageX> = emptyList(),
+    val variations: List<V> = emptyList(),
+    val modifiedAt: String? = null,
+)
 
-private fun normalize(value:String?):String=value.orEmpty().trim().lowercase(Locale.ROOT)
-private fun cleanSku(value:String?):String?=value?.trim()?.takeIf{it.isNotEmpty()}
-private fun sha256(value:String):String=MessageDigest.getInstance("SHA-256").digest(value.toByteArray()).joinToString(""){ "%02x".format(it) }
-private fun P.matchKey():String=sha256(listOf(normalize(name),normalize(type),normalize(regular),normalize(sale),normalize(description),normalize(shortDescription)).joinToString("|"))
-private fun Product.matchKey():String=sha256(listOf(normalize(name),type.name.lowercase(Locale.ROOT),normalize(pricing.regular),normalize(pricing.sale),normalize(description),normalize(shortDescription)).joinToString("|"))
-private fun variationKey(attributes:List<VariationAttribute>):String=attributes.map{normalize(it.name)+"="+normalize(it.option)}.sorted().joinToString("|")
-private fun packageVariationKey(attributes:List<VA>):String=attributes.map{normalize(it.name)+"="+normalize(it.option)}.sorted().joinToString("|")
-private fun nextUniqueSku(original:String?,used:Set<String>):String?{val base=cleanSku(original)?:return null;var candidate=base;while(normalize(candidate) in used)candidate="0$candidate";return candidate}
-private fun reserveNewSku(original:String?,used:MutableSet<String>,onChanged:()->Unit):String?{val unique=nextUniqueSku(original,used)?:return null;used+=normalize(unique);if(!unique.equals(original,false))onChanged();return unique}
-private fun releaseSku(sku:String?,used:MutableSet<String>){sku?.let{used-=normalize(it)}}
-private fun validateProduct(x:P):String?=when{ x.id.isBlank()->"محصول بدون شناسه است و وارد نشد.";x.name.isBlank()->"محصول با شناسه ${x.id} فاقد نام است و وارد نشد.";x.type.isBlank()->"محصول «${x.name}» فاقد نوع (type) است و وارد نشد.";x.status.isBlank()->"محصول «${x.name}» فاقد وضعیت (status) است و وارد نشد.";else->null }
-private class CountingOutputStream(delegate:OutputStream,private val maxBytes:Long):FilterOutputStream(delegate){var count:Long=0;private set;override fun write(b:Int){check(count+1<=maxBytes){"حجم فایل خروجی بیش از حد مجاز است."};out.write(b);count++};override fun write(b:ByteArray,off:Int,len:Int){check(count+len<=maxBytes){"حجم فایل خروجی بیش از حد مجاز است."};out.write(b,off,len);count+=len}}
+@Serializable private data class V(
+    val id: String,
+    val sku: String? = null,
+    val regular: String? = null,
+    val sale: String? = null,
+    val onSale: Boolean,
+    val quantity: Double? = null,
+    val stockStatus: String? = null,
+    val manageStock: Boolean,
+    val attributes: List<VA> = emptyList(),
+    val image: ImageX? = null,
+    val modifiedAt: String? = null,
+)
 
-class RobustProductTransferService(private val d:V1PresentationDependencies,private val resolver:ContentResolver){
- suspend fun export(storeId:StoreId,destination:Uri,onProgress:(ProductTransferProgress)->Unit={}):Result<Int>=withContext(Dispatchers.IO){runCatching{
-  val store=when(val r=d.getStore(storeId)){is CoreResult.Success->r.value;is CoreResult.Failure->error("دریافت اطلاعات فروشگاه ناموفق بود.")};val products=allProducts(storeId,onProgress);require(products.size<=MAX_PRODUCTS)
-  val globals=allGlobalAttributes(storeId);var exportedImages=0
-  resolver.openOutputStream(destination)?.use{raw->CountingOutputStream(raw,MAX_PACKAGE_BYTES).use{counted->ZipOutputStream(counted).use{zip->
-   val exported=products.mapIndexed{index,product->onProgress(ProductTransferProgress("در حال آماده‌سازی محصولات…",index+1,products.size));val images=product.images.mapIndexed{imageIndex,image->val file="media/p-${product.id.value}-$imageIndex.${ext(image.src)}";val bytes=downloadImage(image.src)?:error("تصویر «${image.name?:image.src}» قابل دریافت نیست؛ خروجی ناقص ساخته نشد.");require(bytes.size.toLong()<=MAX_ENTRY_BYTES);writeZipEntry(zip,file,bytes);exportedImages++;ImageX(image.id?.value,image.src,image.name,image.alt,file)};val vars=if(product.type==ProductType.VARIABLE)allVars(storeId,product.id).map{variation->variation.toX{image->val file="media/v-${variation.id.value}.${ext(image.src)}";val bytes=downloadImage(image.src)?:error("تصویر Variation قابل دریافت نیست؛ خروجی ناقص ساخته نشد.");require(bytes.size.toLong()<=MAX_ENTRY_BYTES);writeZipEntry(zip,file,bytes);exportedImages++;file}}else emptyList();product.toX(images,vars)}
-   require(exported.all{it.variations.size<=MAX_VARIATIONS_PER_PRODUCT});val manifest=Manifest(source=store.baseUrl.trimEnd('/'),exportedAt=SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX",Locale.US).format(Date()),products=exported.size,images=exportedImages);writeZipEntry(zip,"manifest.json",transferJson.encodeToString(manifest).toByteArray());writeZipEntry(zip,"products.json",transferJson.encodeToString(Package(manifest,exported,globals)).toByteArray())
-  }}}?:error("امکان ایجاد فایل خروجی وجود ندارد.");products.size
- }}
- suspend fun import(storeId:StoreId,source:Uri,onProgress:(ProductTransferProgress)->Unit={}):RobustProductTransferResult=withContext(Dispatchers.IO){try{
-  val store=when(val r=d.getStore(storeId)){is CoreResult.Success->r.value;is CoreResult.Failure->return@withContext RobustProductTransferResult(failed=1,errors=listOf("فروشگاه در دسترس نیست."))};val validated=validatePackage(source);val sameStore=validated.manifest.source.trimEnd('/').equals(store.baseUrl.trimEnd('/'),true);val media=uploadMediaPass(storeId,source,onProgress)
-  val existing=allProducts(storeId,onProgress);val byId=existing.associateBy{it.id.value};val bySku=existing.mapNotNull{p->cleanSku(p.sku)?.let{normalize(it) to p}}.toMap();val byFingerprint=existing.groupBy{it.matchKey()};val usedSku=existing.mapNotNullTo(mutableSetOf()){cleanSku(it.sku)?.let(::normalize)}
-  existing.filter{it.type==ProductType.VARIABLE}.forEach{allVars(storeId,it.id).forEach{v->cleanSku(v.sku)?.let{usedSku+=normalize(it)}}}
-  val categories=allCategories(storeId).toMutableList();val categoryById=categories.associateBy{it.id.value}.toMutableMap();val categoryByPath=categories.associateBy{categoryPath(it,categoryById)}.toMutableMap()
-  val destGlobals=allGlobalAttributes(storeId);val attrByKey=destGlobals.associateBy{normalize(it.slug).ifBlank{normalize(it.name)}}.toMutableMap();val sourceAttrMap=mutableMapOf<String,EntityId>();var categoriesCreated=0;var categoriesResolved=0;var attributesCreated=0;var attributesResolved=0;var termsCreated=0;var termsResolved=0
-  val errors=mutableListOf<String>();val importErrors=mutableListOf<String>();val validationErrors=validated.validationErrors.toMutableList();val usedMedia=mutableSetOf<String>();var created=0;var updated=0;var failed=0;var variationsCreated=0;var variationsUpdated=0;var variationsFailed=0;var skuChanged=0
-  for(global in validated.globalAttributes){val key=normalize(global.slug).ifBlank{normalize(global.name)};val dest=attrByKey[key]?:when(val r=d.createAttribute(storeId,GlobalAttribute(EntityId(NEW_ID_PLACEHOLDER),global.name,global.slug,emptyList()))){is CoreResult.Success->{attributesCreated++;attrByKey[key]=r.value;r.value};is CoreResult.Failure->{errors+="ویژگی سراسری «${global.name}» ساخته نشد: ${r.error}";continue}};if(dest.id.value!=NEW_ID_PLACEHOLDER)attributesResolved++;sourceAttrMap[global.id]=dest.id;val existingTerms=when(val r=d.getTerms(storeId,dest.id,1,PAGE_SIZE)){is CoreResult.Success->r.value;is CoreResult.Failure->emptyList()};for(term in global.terms){val existingTerm=existingTerms.firstOrNull{normalize(it.name)==normalize(term.name)||normalize(it.slug)==normalize(term.slug)};if(existingTerm!=null){termsResolved++}else when(val r=d.createTerm(storeId,dest.id,AttributeTerm(EntityId(NEW_ID_PLACEHOLDER),term.name,term.slug))){is CoreResult.Success->termsCreated++;is CoreResult.Failure->errors+="Term «${term.name}» ساخته نشد: ${r.error}"}}}
-  for(x in validated.products){onProgress(ProductTransferProgress("در حال وارد کردن محصولات…",created+updated+failed+1,validated.products.size));if(x.id in validated.invalidProductIds){failed++;continue};try{
-   val old=if(sameStore)byId[x.id] else cleanSku(x.sku)?.let{bySku[normalize(it)]}?:byFingerprint[x.matchKey()].orEmpty().singleOrNull();val images=x.images.mapNotNull{img->media.images[img.file]?.also{usedMedia+=img.file}};val resolvedCategories=resolveCategories(storeId,x.categories,categoryById,categoryByPath,errors){categoriesCreated++;categoriesResolved++};val attrs=x.attributes.map{Attribute(it.id?.let(sourceAttrMap::get),it.name,it.visible,it.variation,it.options)};val reserved=if(old==null)reserveNewSku(x.sku,usedSku){skuChanged++}else null;val product=if(old==null)x.toDomain(EntityId(NEW_ID_PLACEHOLDER),images,resolvedCategories,attrs).copy(sku=reserved)else x.toDomain(old.id,images,resolvedCategories,attrs);val saved=if(old==null)d.createProduct(storeId,product)else d.updateProduct(storeId,old.id,product.copy(id=old.id));val savedProduct=when(saved){is CoreResult.Success->{if(old==null)created++ else updated++;saved.value};is CoreResult.Failure->{failed++;releaseSku(reserved,usedSku);importErrors+="${x.name}: ${saved.error}";errors+=importErrors.last();continue}}
-   val existingVars=allVars(storeId,savedProduct.id);existingVars.forEach{cleanSku(it.sku)?.let{usedSku+=normalize(it)}};val byVarSku=existingVars.mapNotNull{v->cleanSku(v.sku)?.let{normalize(it) to v}}.toMap();val byVarAttrs=existingVars.associateBy{variationKey(it.attributes)}
-   for(vv in x.variations){val oldVar=if(sameStore)existingVars.firstOrNull{it.id.value==vv.id}else byVarSku[cleanSku(vv.sku)?.let(::normalize)]?:byVarAttrs[packageVariationKey(vv.attributes)];val image=vv.image?.let{media.images[it.file]?.also{usedMedia+=it}};val reservedVar=if(oldVar==null)reserveNewSku(vv.sku,usedSku){skuChanged++}else null;val variation=if(oldVar==null)vv.toDomain(savedProduct.id,EntityId(NEW_ID_PLACEHOLDER),image).copy(sku=reservedVar)else vv.toDomain(savedProduct.id,oldVar.id,image);when(val r=if(oldVar==null)d.createVariation(storeId,variation)else d.updateVariation(storeId,savedProduct.id,oldVar.id,variation.copy(id=oldVar.id))){is CoreResult.Success->if(oldVar==null)variationsCreated++ else variationsUpdated++;is CoreResult.Failure->{variationsFailed++;releaseSku(reservedVar,usedSku);importErrors+="${x.name}: variation ${vv.sku?:vv.id} وارد نشد: ${r.error}";errors+=importErrors.last()}}}
-  }catch(t:Throwable){failed++;importErrors+="${x.name}: ${t.message?:"خطای نامشخص"}";errors+=importErrors.last()}}
-  val unused=(media.images.keys-usedMedia).size;RobustProductTransferResult(created,updated,failed,media.images.size,variationsCreated,variationsUpdated,(validationErrors+media.errors+errors).distinct().take(50),variationsFailed,media.failed,unused,skuChanged,validationErrors.distinct().take(50),importErrors.distinct().take(50),categoriesCreated,categoriesResolved,attributesCreated,attributesResolved,termsCreated,termsResolved)
- }catch(t:Throwable){RobustProductTransferResult(failed=1,errors=listOf(t.message?:"خواندن فایل ناموفق بود."))}}
- private fun validatePackage(uri:Uri):ValidatedPackage=run{var manifest:Manifest?=null;var products:List<P>?=null;var globals=emptyList<GlobalAttributeX>();val mediaNames=linkedSetOf<String>();var total=0L;resolver.openInputStream(uri)?.use{input->ZipInputStream(input).use{zip->while(true){val e=zip.nextEntry?:break;if(e.isDirectory)continue;require(!e.name.contains("..")&&!e.name.startsWith('/')){"مسیر نامعتبر داخل فایل WooGit."};val bytes=readLimited(zip,if(e.name=="products.json")MAX_PRODUCT_JSON_BYTES else MAX_ENTRY_BYTES){total+=it;require(total<=MAX_PACKAGE_BYTES)};when(e.name){"manifest.json"->manifest=transferJson.decodeFromString(bytes.toString(Charsets.UTF_8));"products.json"->{val p=transferJson.decodeFromString<Package>(bytes.toString(Charsets.UTF_8));manifest=manifest?:p.manifest;products=p.products;globals=p.globalAttributes};else->if(e.name.startsWith("media/"))mediaNames+=e.name}}}}?:error("فایل قابل خواندن نیست.");val m=requireNotNull(manifest);val p=requireNotNull(products);require(m.format==FORMAT);require(m.version<=VERSION);require(m.products==p.size);require(p.size<=MAX_PRODUCTS);require(m.images==mediaNames.size);val errs=mutableListOf<String>();val invalid=mutableSetOf<String>();val seen=mutableSetOf<String>();p.forEach{x->validateProduct(x)?.let{errs+=it;invalid+=x.id};cleanSku(x.sku)?.let{if(!seen.add(normalize(it)))errs+="SKU تکراری داخل فایل: $it"};x.images.forEach{if(it.file !in mediaNames)errs+="تصویر ${it.file} در بسته موجود نیست."};x.variations.forEach{v->cleanSku(v.sku)?.let{if(!seen.add(normalize(it)))errs+="SKU تکراری داخل فایل: $it"};v.image?.let{if(it.file !in mediaNames)errs+="تصویر Variation ${it.file} در بسته موجود نیست."}}};ValidatedPackage(m,p,mediaNames,invalid,errs,globals)}
- private suspend fun uploadMediaPass(storeId:StoreId,uri:Uri,onProgress:(ProductTransferProgress)->Unit)=withContext(Dispatchers.IO){val uploaded=linkedMapOf<String,ProductImage>();val errs=mutableListOf<String>();var failed=0;resolver.openInputStream(uri)?.use{input->ZipInputStream(input).use{zip->while(true){val e=zip.nextEntry?:break;if(e.isDirectory||!e.name.startsWith("media/"))continue;val bytes=readLimited(zip,MAX_ENTRY_BYTES){};when(val r=d.uploadMedia(storeId,e.name.substringAfterLast('/'),bytes,mime(e.name))){is CoreResult.Success->{uploaded[e.name]=r.value;onProgress(ProductTransferProgress("در حال آپلود تصاویر…",uploaded.size,-1))};is CoreResult.Failure->{failed++;errs+="آپلود رسانه ${e.name} ناموفق بود: ${r.error}"}}}}}?:error("فایل قابل خواندن نیست.");MediaUploadOutcome(uploaded,failed,errs)}
- private fun readLimited(input:ZipInputStream,maxBytes:Long,onBytes:(Long)->Unit):ByteArray{val out=ByteArrayOutputStream();val buffer=ByteArray(DEFAULT_BUFFER_SIZE);var total=0L;while(true){val n=input.read(buffer);if(n<=0)break;total+=n;require(total<=maxBytes);onBytes(n.toLong());out.write(buffer,0,n)};return out.toByteArray()}
- private fun writeZipEntry(zip:ZipOutputStream,path:String,bytes:ByteArray){zip.putNextEntry(ZipEntry(path));zip.write(bytes);zip.closeEntry()}
- private suspend fun allProducts(s:StoreId,p:(ProductTransferProgress)->Unit):List<Product>{val out=mutableListOf<Product>();var page=1;while(true){val b=when(val r=d.getProducts(s,page,PAGE_SIZE,null)){is CoreResult.Success->r.value;is CoreResult.Failure->error("دریافت محصولات ناموفق بود: ${r.error}")};if(b.isEmpty())break;out+=b;p(ProductTransferProgress("در حال دریافت محصولات…",out.size,out.size));if(b.size<PAGE_SIZE)break;page++};return out.distinctBy{it.id.value}}
- private suspend fun allVars(s:StoreId,id:EntityId):List<Variation>{val out=mutableListOf<Variation>();var page=1;while(true){val b=when(val r=d.getVariations(s,id,page,PAGE_SIZE)){is CoreResult.Success->r.value;is CoreResult.Failure->error("دریافت Variationهای محصول ناموفق بود: ${r.error}")};if(b.isEmpty())break;out+=b;if(b.size<PAGE_SIZE)break;page++};return out.distinctBy{it.id.value}}
- private suspend fun allCategories(s:StoreId):List<IdName>{val out=mutableListOf<IdName>();var page=1;while(true){val b=when(val r=d.getProductCategories(s,page,PAGE_SIZE,null)){is CoreResult.Success->r.value;is CoreResult.Failure->break};if(b.isEmpty())break;out+=b;if(b.size<PAGE_SIZE)break;page++};return out.distinctBy{it.id.value}}
- private suspend fun allGlobalAttributes(s:StoreId):List<GlobalAttribute>{val out=mutableListOf<GlobalAttribute>();var page=1;while(true){val b=when(val r=d.getAttributes(s,page,PAGE_SIZE)){is CoreResult.Success->r.value;is CoreResult.Failure->break};if(b.isEmpty())break;out+=b;if(b.size<PAGE_SIZE)break;page++};return out.distinctBy{it.id.value}}
- private fun categoryPath(c:IdName,byId:Map<String,IdName>,seen:MutableSet<String>=mutableSetOf()):String{if(!seen.add(c.id.value))return normalize(c.name);val parent=c.parentId?.value?.let(byId::get)?:return normalize(c.name);return categoryPath(parent,byId,seen)+">"+normalize(c.name)}
- private suspend fun resolveCategories(storeId:StoreId,source:List<IdNameX>,byId:MutableMap<String,IdName>,byPath:MutableMap<String,IdName>,errors:MutableList<String>,onResolved:()->Unit):List<IdName>{val out=mutableListOf<IdName>();val sourceById=source.associateBy{it.id};suspend fun resolve(c:IdNameX):IdName?{val parentDest=c.parentId?.let(sourceById::get)?.let{resolve(it)};val path=(parentDest?.let{normalize(it.name)+">"}?:"")+normalize(c.name);byPath[path]?.let{onResolved();return it};val existing=when(val r=d.getProductCategories(storeId,1,PAGE_SIZE,c.name)){is CoreResult.Success->r.value.firstOrNull{normalize(it.name)==normalize(c.name)&&it.parentId?.value==parentDest?.id?.value};is CoreResult.Failure->null};if(existing!=null){onResolved();byId[existing.id.value]=existing;byPath[path]=existing;return existing};return when(val r=d.getProductCategories.create(storeId,IdName(NEW_ID_PLACEHOLDER.let(::EntityId),c.name,parentDest?.id))){is CoreResult.Success->{onResolved();byId[r.value.id.value]=r.value;byPath[path]=r.value;r.value};is CoreResult.Failure->{errors+="دسته‌بندی «${c.name}» ساخته نشد: ${r.error}";null}}};source.mapNotNull{resolve(it)}}
- private fun downloadImage(src:String):ByteArray?=try{val c=URL(src).openConnection() as HttpURLConnection;c.connectTimeout=15_000;c.readTimeout=30_000;c.instanceFollowRedirects=true;c.inputStream.use{stream->val out=ByteArrayOutputStream();val b=ByteArray(DEFAULT_BUFFER_SIZE);var total=0L;while(true){val n=stream.read(b);if(n<=0)break;total+=n;if(total>MAX_ENTRY_BYTES)return null;out.write(b,0,n)};out.toByteArray()}.also{c.disconnect()}}catch(_:Throwable){null}
- private fun ext(s:String)=s.substringBefore('?').substringAfterLast('.','jpg').lowercase(Locale.ROOT).let{if(it in setOf("jpg","jpeg","png","webp","gif"))it else "jpg"};private fun mime(s:String)=when(ext(s)){"png"->"image/png";"webp"->"image/webp";"gif"->"image/gif";else->"image/jpeg"}
+@Serializable private data class VA(val name: String, val option: String)
+@Serializable private data class IdNameX(val id: String, val name: String)
+@Serializable private data class AttrX(
+    val id: String? = null,
+    val name: String,
+    val visible: Boolean,
+    val variation: Boolean,
+    val options: List<String>,
+)
+@Serializable private data class ImageX(
+    val id: String? = null,
+    val src: String,
+    val name: String? = null,
+    val alt: String? = null,
+    val file: String,
+)
+
+data class RobustProductTransferResult(
+    val created: Int = 0,
+    val updated: Int = 0,
+    val failed: Int = 0,
+    val imagesUploaded: Int = 0,
+    val variationsCreated: Int = 0,
+    val variationsUpdated: Int = 0,
+    val errors: List<String> = emptyList(),
+    val variationsFailed: Int = 0,
+    val imagesFailed: Int = 0,
+    val imagesUnused: Int = 0,
+    val skuChanged: Int = 0,
+    val validationErrors: List<String> = emptyList(),
+    val importErrors: List<String> = emptyList(),
+)
+
+private data class ReadPackage(
+    val manifest: Manifest,
+    val products: List<P>,
+    val uploadedImages: Map<String, ProductImage>,
+)
+private data class ValidatedPackage(
+    val manifest: Manifest,
+    val products: List<P>,
+    val mediaNames: Set<String>,
+    val invalidProductIds: Set<String>,
+    val validationErrors: List<String>,
+)
+private data class MediaUploadOutcome(
+    val images: Map<String, ProductImage>,
+    val failed: Int,
+    val errors: List<String>,
+)
+
+private fun normalize(value: String?): String = value.orEmpty().trim().lowercase(Locale.ROOT)
+private fun cleanSku(value: String?): String? = value?.trim()?.takeIf { it.isNotEmpty() }
+private fun sha256(value: String): String = MessageDigest.getInstance("SHA-256")
+    .digest(value.toByteArray()).joinToString("") { "%02x".format(it) }
+private fun P.matchKey(): String = sha256(listOf(normalize(name), normalize(type), normalize(regular), normalize(sale), normalize(description), normalize(shortDescription)).joinToString("|"))
+private fun Product.matchKey(): String = sha256(listOf(normalize(name), type.name.lowercase(Locale.ROOT), normalize(pricing.regular), normalize(pricing.sale), normalize(description), normalize(shortDescription)).joinToString("|"))
+private fun nextUniqueSku(original: String?, used: Set<String>): String? { val base = cleanSku(original) ?: return null; var candidate = base; while (normalize(candidate) in used) candidate = "0$candidate"; return candidate }
+private fun reserveNewSku(original: String?, used: MutableSet<String>, onChanged: () -> Unit): String? { val unique = nextUniqueSku(original, used) ?: return null; used += normalize(unique); if (!unique.equals(original, ignoreCase = false)) onChanged(); return unique }
+private fun releaseSku(sku: String?, used: MutableSet<String>) { sku?.let { used -= normalize(it) } }
+private fun validateProduct(x: P): String? = when {
+    x.name.isBlank() -> "محصول با شناسه ${x.id} فاقد نام است و وارد نشد."
+    x.type.isBlank() -> "محصول «${x.name}» فاقد نوع (type) است و وارد نشد."
+    x.status.isBlank() -> "محصول «${x.name}» فاقد وضعیت (status) است و وارد نشد."
+    else -> null
 }
-private fun Product.toX(images:List<ImageX>,vars:List<V>)=P(id.value,name,sku,description,shortDescription,status.name,type.name,pricing.regular,pricing.sale,pricing.onSale,stock?.quantity,stock?.status?.name,stock?.manageStock,categories.map{IdNameX(it.id.value,it.name,it.parentId?.value)},attributes.map{AttrX(it.id?.value,it.name,it.visible,it.variation,it.options)},images,vars,modifiedAt)
-private fun P.toDomain(id:EntityId,images:List<ProductImage>,categories:List<IdName>,attrs:List<Attribute>)=Product(id,name,sku,description,shortDescription,runCatching{ProductStatus.valueOf(status)}.getOrDefault(ProductStatus.DRAFT),runCatching{ProductType.valueOf(type)}.getOrDefault(ProductType.SIMPLE),Pricing(regular,sale,onSale),if(quantity!=null||stockStatus!=null||manageStock)Stock(quantity,runCatching{StockStatus.valueOf(stockStatus?:StockStatus.IN_STOCK.name)}.getOrDefault(StockStatus.IN_STOCK),manageStock)else null,images,categories,attrs,modifiedAt)
-private fun Variation.toX(writer:(ProductImage)->String)=V(id.value,sku,pricing.regular,pricing.sale,pricing.onSale,stock?.quantity,stock?.status?.name,stock?.manageStock,attributes.map{VA(it.name,it.option)},image?.let{ImageX(it.id?.value,it.src,it.name,it.alt,writer(it))},modifiedAt?.toString())
-private fun V.toDomain(productId:EntityId,id:EntityId,image:ProductImage?)=Variation(id,productId,attributes.map{VariationAttribute(it.name,it.option)},Pricing(regular,sale,onSale),if(quantity!=null||stockStatus!=null||manageStock)Stock(quantity,runCatching{StockStatus.valueOf(stockStatus?:StockStatus.IN_STOCK.name)}.getOrDefault(StockStatus.IN_STOCK),manageStock)else null,sku,image,modifiedAt?.let{kotlinx.datetime.Instant.parse(it)})
+private class CountingOutputStream(delegate: OutputStream, private val maxBytes: Long) : FilterOutputStream(delegate) {
+    var count: Long = 0; private set
+    override fun write(b: Int) { check(count + 1 <= maxBytes) { "حجم فایل خروجی بیش از حد مجاز است." }; out.write(b); count++ }
+    override fun write(b: ByteArray, off: Int, len: Int) { check(count + len <= maxBytes) { "حجم فایل خروجی بیش از حد مجاز است." }; out.write(b, off, len); count += len }
+}
+
+class RobustProductTransferService(private val d: V1PresentationDependencies, private val resolver: ContentResolver) {
+    suspend fun export(storeId: StoreId, destination: Uri, onProgress: (ProductTransferProgress) -> Unit = {}): Result<Int> = withContext(Dispatchers.IO) {
+        runCatching {
+            val store = when (val r = d.getStore(storeId)) { is CoreResult.Success -> r.value; is CoreResult.Failure -> error("دریافت اطلاعات فروشگاه ناموفق بود.") }
+            val products = allProducts(storeId, onProgress); require(products.size <= MAX_PRODUCTS) { "تعداد محصولات از حد مجاز بیشتر است." }
+            var exportedImages = 0
+            resolver.openOutputStream(destination)?.use { raw -> CountingOutputStream(raw, MAX_PACKAGE_BYTES).use { counted -> ZipOutputStream(counted).use { zip ->
+                val exported = products.mapIndexed { index, product ->
+                    onProgress(ProductTransferProgress("در حال آماده‌سازی محصولات…", index + 1, products.size))
+                    val images = product.images.mapIndexed { imageIndex, image ->
+                        val file = "media/p-${product.id.value}-$imageIndex.${ext(image.src)}"
+                        val bytes = downloadImage(image.src) ?: error("تصویر «${image.name ?: image.src}» قابل دریافت نیست؛ خروجی ناقص ساخته نشد.")
+                        require(bytes.size.toLong() <= MAX_ENTRY_BYTES) { "تصویر بیش از حد بزرگ است." }; writeZipEntry(zip, file, bytes); exportedImages++
+                        ImageX(image.id?.value, image.src, image.name, image.alt, file)
+                    }
+                    val variations = if (product.type == ProductType.VARIABLE) {
+                        val vars = allVars(storeId, product.id); require(vars.size <= MAX_VARIATIONS_PER_PRODUCT)
+                        vars.map { variation -> variation.toX { image -> val file = "media/v-${variation.id.value}.${ext(image.src)}"; val bytes = downloadImage(image.src) ?: error("تصویر Variation قابل دریافت نیست؛ خروجی ناقص ساخته نشد."); require(bytes.size.toLong() <= MAX_ENTRY_BYTES); writeZipEntry(zip, file, bytes); exportedImages++; file } }
+                    } else emptyList()
+                    product.toX(images, variations)
+                }
+                val manifest = Manifest(source = store.baseUrl.trimEnd('/'), exportedAt = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US).format(Date()), products = exported.size, images = exportedImages)
+                writeZipEntry(zip, "manifest.json", transferJson.encodeToString(manifest).toByteArray()); writeZipEntry(zip, "products.json", transferJson.encodeToString(Package(manifest, exported)).toByteArray())
+            } } } ?: error("امکان ایجاد فایل خروجی وجود ندارد.")
+            products.size
+        }
+    }
+
+    suspend fun import(storeId: StoreId, source: Uri, onProgress: (ProductTransferProgress) -> Unit = {}): RobustProductTransferResult = withContext(Dispatchers.IO) {
+        try {
+            val store = when (val r = d.getStore(storeId)) { is CoreResult.Success -> r.value; is CoreResult.Failure -> return@withContext RobustProductTransferResult(failed = 1, errors = listOf("فروشگاه در دسترس نیست.")) }
+            val validated = validatePackage(source); val sameStore = validated.manifest.source.trimEnd('/').equals(store.baseUrl.trimEnd('/'), true); val media = uploadMediaPass(storeId, source, onProgress)
+            val pack = ReadPackage(validated.manifest, validated.products, media.images); val existing = allProducts(storeId, onProgress)
+            val byId = existing.associateBy { it.id.value }; val bySku = existing.mapNotNull { p -> cleanSku(p.sku)?.let { normalize(it) to p } }.toMap(); val byFingerprint = existing.groupBy { it.matchKey() }
+            val usedSkuKeys = existing.mapNotNullTo(mutableSetOf()) { cleanSku(it.sku)?.let(::normalize) }
+            existing.filter { it.type == ProductType.VARIABLE }.forEach { p -> allVars(storeId, p.id).forEach { v -> cleanSku(v.sku)?.let { usedSkuKeys += normalize(it) } } }
+            val categories = allCategories(storeId); val categoryByName = categories.associateBy { normalize(it.name) }
+            var created = 0; var updated = 0; var failed = 0; var variationsCreated = 0; var variationsUpdated = 0; var variationsFailed = 0; var skuChanged = 0
+            val usedMediaFiles = mutableSetOf<String>(); val errors = mutableListOf<String>(); val importErrors = mutableListOf<String>(); val validationErrors = validated.validationErrors.toMutableList()
+            pack.products.forEachIndexed { index, x ->
+                onProgress(ProductTransferProgress("در حال وارد کردن محصولات…", index + 1, pack.products.size)); if (x.id in validated.invalidProductIds) { failed++; return@forEachIndexed }
+                try {
+                    val old = findProductMatch(x, sameStore, byId, bySku, byFingerprint)
+                    val images = x.images.mapNotNull { img -> pack.uploadedImages[img.file]?.also { usedMediaFiles += img.file } }
+                    val resolvedCategories = x.categories.mapNotNull { cat -> categoryByName[normalize(cat.name)] ?: if (sameStore) IdName(EntityId(cat.id), cat.name) else null }
+                    if (!sameStore && resolvedCategories.size < x.categories.size) errors += "${x.name}: برخی دسته‌بندی‌ها در فروشگاه مقصد وجود نداشتند و حذف شدند."
+                    val attrs = x.attributes.map { attr -> Attribute(if (sameStore) attr.id?.let(::EntityId) else null, attr.name, attr.visible, attr.variation, attr.options) }
+                    val reservedSku = if (old == null) reserveNewSku(x.sku, usedSkuKeys) { skuChanged++ } else null
+                    val product = if (old == null) x.toDomain(EntityId(NEW_ID_PLACEHOLDER), images, resolvedCategories, attrs).copy(sku = reservedSku) else x.toDomain(old.id, images, resolvedCategories, attrs)
+                    val saved = if (old == null) d.createProduct(storeId, product) else d.updateProduct(storeId, old.id, product.copy(id = old.id))
+                    val savedProduct = when (saved) { is CoreResult.Success -> { if (old == null) created++ else updated++; saved.value }; is CoreResult.Failure -> { failed++; importErrors += "${x.name}: ${saved.error}"; errors += importErrors.last(); releaseSku(reservedSku, usedSkuKeys); return@forEachIndexed } }
+                    val existingVars = allVars(storeId, savedProduct.id); if (old != null) existingVars.forEach { cleanSku(it.sku)?.let { usedSkuKeys += normalize(it) } }
+                    x.variations.forEach { vv ->
+                        val oldVariation = if (sameStore) existingVars.firstOrNull { it.id.value == vv.id } else cleanSku(vv.sku)?.let { sku -> existingVars.firstOrNull { cleanSku(it.sku)?.let(::normalize) == normalize(sku) } }
+                        val image = vv.image?.let { img -> pack.uploadedImages[img.file]?.also { usedMediaFiles += img.file } }
+                        val reservedVariationSku = if (oldVariation == null) reserveNewSku(vv.sku, usedSkuKeys) { skuChanged++ } else null
+                        val variation = if (oldVariation == null) vv.toDomain(savedProduct.id, EntityId(NEW_ID_PLACEHOLDER), image).copy(sku = reservedVariationSku) else vv.toDomain(savedProduct.id, oldVariation.id, image)
+                        when (val r = if (oldVariation == null) d.createVariation(storeId, variation) else d.updateVariation(storeId, savedProduct.id, oldVariation.id, variation.copy(id = oldVariation.id))) {
+                            is CoreResult.Success -> if (oldVariation == null) variationsCreated++ else variationsUpdated++
+                            is CoreResult.Failure -> { variationsFailed++; importErrors += "${x.name}: variation ${vv.sku ?: vv.id} وارد نشد: ${r.error}"; errors += importErrors.last(); releaseSku(reservedVariationSku, usedSkuKeys) }
+                        }
+                    }
+                } catch (t: Throwable) { failed++; importErrors += "${x.name}: ${t.message ?: "خطای نامشخص"}"; errors += importErrors.last() }
+            }
+            val imagesUnused = (media.images.keys - usedMediaFiles).size
+            RobustProductTransferResult(created, updated, failed, media.images.size, variationsCreated, variationsUpdated, (validationErrors + media.errors + errors).distinct().take(50), variationsFailed, media.failed, imagesUnused, skuChanged, validationErrors.distinct().take(50), importErrors.distinct().take(50))
+        } catch (t: Throwable) { RobustProductTransferResult(failed = 1, errors = listOf(t.message ?: "خواندن فایل ناموفق بود.")) }
+    }
+
+    private fun findProductMatch(x: P, sameStore: Boolean, byId: Map<String, Product>, bySku: Map<String, Product>, byFingerprint: Map<String, List<Product>>): Product? { if (sameStore) byId[x.id]?.let { return it }; cleanSku(x.sku)?.let { bySku[normalize(it)]?.let { p -> return p } }; return byFingerprint[x.matchKey()].orEmpty().singleOrNull() }
+
+    private fun validatePackage(uri: Uri): ValidatedPackage = with(run {
+        var manifest: Manifest? = null; var products: List<P>? = null; val mediaNames = linkedSetOf<String>(); var totalRead = 0L
+        resolver.openInputStream(uri)?.use { input -> ZipInputStream(input).use { zip -> while (true) { val entry = zip.nextEntry ?: break; if (entry.isDirectory) continue; val name = entry.name; require(!name.contains("..") && !name.startsWith("/")) { "مسیر نامعتبر داخل فایل WooGit." }; when (name) {
+            "manifest.json" -> { val bytes = readLimited(zip, MAX_ENTRY_BYTES) { totalRead += it; require(totalRead <= MAX_PACKAGE_BYTES) }; manifest = transferJson.decodeFromString(bytes.toString(Charsets.UTF_8)) }
+            "products.json" -> { val bytes = readLimited(zip, MAX_PRODUCT_JSON_BYTES) { totalRead += it; require(totalRead <= MAX_PACKAGE_BYTES) }; val p = transferJson.decodeFromString<Package>(bytes.toString(Charsets.UTF_8)); manifest = manifest ?: p.manifest; products = p.products }
+            else -> if (name.startsWith("media/")) { readLimited(zip, MAX_ENTRY_BYTES) { totalRead += it; require(totalRead <= MAX_PACKAGE_BYTES) }; mediaNames += name }
+        } } } } ?: error("فایل قابل خواندن نیست.")
+        val m = requireNotNull(manifest) { "manifest.json در فایل وجود ندارد." }; val p = requireNotNull(products) { "products.json در فایل وجود ندارد." }; require(m.format == FORMAT) { "فرمت فایل WooGit معتبر نیست." }; require(m.version <= VERSION) { "نسخه فایل پشتیبانی نمی‌شود." }; require(m.products == p.size) { "تعداد محصولات فایل با manifest سازگار نیست." }; require(p.size <= MAX_PRODUCTS) { "تعداد محصولات فایل بیش از حد مجاز است." }; require(m.images == mediaNames.size) { "برخی تصاویر فایل قابل وارد کردن نیستند." }
+        val validationErrors = mutableListOf<String>(); val invalid = mutableSetOf<String>(); val skuSeen = mutableSetOf<String>(); p.forEach { x -> validateProduct(x)?.let { validationErrors += it; invalid += x.id }; cleanSku(x.sku)?.let { if (!skuSeen.add(normalize(it))) validationErrors += "SKU تکراری داخل فایل: $it" }; x.images.forEach { img -> if (img.file !in mediaNames) validationErrors += "«${x.name}»: تصویر ${img.file} در بسته موجود نیست." }; x.variations.forEach { v -> cleanSku(v.sku)?.let { if (!skuSeen.add(normalize(it))) validationErrors += "SKU تکراری داخل فایل: $it" }; v.image?.let { img -> if (img.file !in mediaNames) validationErrors += "«${x.name}»: تصویر Variation ${img.file} در بسته موجود نیست." } } }
+        ValidatedPackage(m, p, mediaNames, invalid, validationErrors)
+    })
+
+    private suspend fun uploadMediaPass(storeId: StoreId, uri: Uri, onProgress: (ProductTransferProgress) -> Unit): MediaUploadOutcome = withContext(Dispatchers.IO) { val uploaded = linkedMapOf<String, ProductImage>(); val errors = mutableListOf<String>(); var failedCount = 0; resolver.openInputStream(uri)?.use { input -> ZipInputStream(input).use { zip -> while (true) { val entry = zip.nextEntry ?: break; if (entry.isDirectory) continue; val name = entry.name; if (!name.startsWith("media/")) continue; val bytes = readLimited(zip, MAX_ENTRY_BYTES) {}; when (val r = d.uploadMedia(storeId, name.substringAfterLast('/'), bytes, mime(name))) { is CoreResult.Success -> { uploaded[name] = r.value; onProgress(ProductTransferProgress("در حال آپلود تصاویر…", uploaded.size, -1)) }; is CoreResult.Failure -> { failedCount++; errors += "آپلود رسانه $name ناموفق بود: ${r.error}" } } } } } ?: error("فایل قابل خواندن نیست."); MediaUploadOutcome(uploaded, failedCount, errors) }
+    private fun readLimited(input: ZipInputStream, maxBytes: Long, onBytes: (Long) -> Unit): ByteArray { val out = ByteArrayOutputStream(); val buffer = ByteArray(DEFAULT_BUFFER_SIZE); var total = 0L; while (true) { val read = input.read(buffer); if (read <= 0) break; total += read; require(total <= maxBytes) { "یکی از فایل‌های داخل بسته بیش از حد بزرگ است." }; onBytes(read.toLong()); out.write(buffer, 0, read) }; return out.toByteArray() }
+    private fun writeZipEntry(zip: ZipOutputStream, path: String, bytes: ByteArray) { zip.putNextEntry(ZipEntry(path)); zip.write(bytes); zip.closeEntry() }
+    private suspend fun allProducts(s: StoreId, progress: (ProductTransferProgress) -> Unit): List<Product> { val result = mutableListOf<Product>(); var page = 1; while (true) { val batch = when (val r = d.getProducts(s, page, PAGE_SIZE, null)) { is CoreResult.Success -> r.value; is CoreResult.Failure -> error("دریافت محصولات ناموفق بود: ${r.error}") }; if (batch.isEmpty()) break; result += batch; progress(ProductTransferProgress("در حال دریافت محصولات…", result.size, result.size)); if (batch.size < PAGE_SIZE) break; page++ }; return result.distinctBy { it.id.value } }
+    private suspend fun allVars(s: StoreId, id: EntityId): List<Variation> { val result = mutableListOf<Variation>(); var page = 1; while (true) { val batch = when (val r = d.getVariations(s, id, page, PAGE_SIZE)) { is CoreResult.Success -> r.value; is CoreResult.Failure -> error("دریافت Variationهای محصول ناموفق بود: ${r.error}") }; if (batch.isEmpty()) break; result += batch; if (batch.size < PAGE_SIZE) break; page++ }; return result.distinctBy { it.id.value } }
+    private suspend fun allCategories(s: StoreId): List<IdName> { val result = mutableListOf<IdName>(); var page = 1; while (true) { val batch = when (val r = d.getProductCategories(s, page, PAGE_SIZE, null)) { is CoreResult.Success -> r.value; is CoreResult.Failure -> break }; if (batch.isEmpty()) break; result += batch; if (batch.size < PAGE_SIZE) break; page++ }; return result.distinctBy { it.id.value } }
+    private fun downloadImage(src: String): ByteArray? = try { val connection = URL(src).openConnection() as HttpURLConnection; connection.connectTimeout = 15_000; connection.readTimeout = 30_000; connection.instanceFollowRedirects = true; connection.inputStream.use { stream -> val out = ByteArrayOutputStream(); val buffer = ByteArray(DEFAULT_BUFFER_SIZE); var total = 0L; while (true) { val read = stream.read(buffer); if (read <= 0) break; total += read; if (total > MAX_ENTRY_BYTES) return null; out.write(buffer, 0, read) }; out.toByteArray() }.also { connection.disconnect() } } catch (_: Throwable) { null }
+    private fun ext(s: String): String = s.substringBefore('?').substringAfterLast('.', "jpg").lowercase(Locale.ROOT).let { if (it in setOf("jpg", "jpeg", "png", "webp", "gif")) it else "jpg" }
+    private fun mime(s: String): String = when (ext(s)) { "png" -> "image/png"; "webp" -> "image/webp"; "gif" -> "image/gif"; else -> "image/jpeg" }
+}
+
+private fun Product.toX(images: List<ImageX>, variations: List<V>) = P(id = id.value, name = name, sku = sku, description = description, shortDescription = shortDescription, status = status.name, type = type.name, regular = pricing.regular, sale = pricing.sale, onSale = pricing.onSale, quantity = stock?.quantity, stockStatus = stock?.status?.name, manageStock = stock?.manageStock ?: false, categories = categories.map { IdNameX(it.id.value, it.name) }, attributes = attributes.map { AttrX(it.id?.value, it.name, it.visible, it.variation, it.options) }, images = images, variations = variations, modifiedAt = modifiedAt)
+private fun P.toDomain(id: EntityId, images: List<ProductImage>, categories: List<IdName>, attributes: List<Attribute>) = Product(id = id, name = name, sku = sku, description = description, shortDescription = shortDescription, status = runCatching { ProductStatus.valueOf(status) }.getOrDefault(ProductStatus.DRAFT), type = runCatching { ProductType.valueOf(type) }.getOrDefault(ProductType.SIMPLE), pricing = Pricing(regular, sale, onSale), stock = if (quantity != null || stockStatus != null || manageStock) Stock(quantity, runCatching { StockStatus.valueOf(stockStatus ?: StockStatus.IN_STOCK.name) }.getOrDefault(StockStatus.IN_STOCK), manageStock) else null, images = images, categories = categories, attributes = attributes, modifiedAt = modifiedAt)
+private fun Variation.toX(imageWriter: (ProductImage) -> String) = V(id = id.value, sku = sku, regular = pricing.regular, sale = pricing.sale, onSale = pricing.onSale, quantity = stock?.quantity, stockStatus = stock?.status?.name, manageStock = stock?.manageStock ?: false, attributes = attributes.map { VA(it.name, it.option) }, image = image?.let { ImageX(it.id?.value, it.src, it.name, it.alt, imageWriter(it)) }, modifiedAt = modifiedAt?.toString())
+private fun V.toDomain(productId: EntityId, id: EntityId, image: ProductImage?) = Variation(id = id, productId = productId, attributes = attributes.map { VariationAttribute(it.name, it.option) }, pricing = Pricing(regular, sale, onSale), stock = if (quantity != null || stockStatus != null || manageStock) Stock(quantity, runCatching { StockStatus.valueOf(stockStatus ?: StockStatus.IN_STOCK.name) }.getOrDefault(StockStatus.IN_STOCK), manageStock) else null, sku = sku, image = image, modifiedAt = modifiedAt?.let { kotlinx.datetime.Instant.parse(it) })
