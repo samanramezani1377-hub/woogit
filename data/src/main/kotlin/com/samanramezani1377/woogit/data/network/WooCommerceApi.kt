@@ -1,5 +1,8 @@
 package com.samanramezani1377.woogit.data.network
 
+import com.samanramezani1377.woogit.core.debug.NoOpTechnicalErrorReporter
+import com.samanramezani1377.woogit.core.debug.TechnicalErrorContext
+import com.samanramezani1377.woogit.core.debug.TechnicalErrorReporter
 import com.samanramezani1377.woogit.core.security.CredentialPair
 import io.ktor.client.HttpClient
 import io.ktor.client.request.*
@@ -8,7 +11,11 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.*
 import java.util.Base64
 
-class WooCommerceApi(private val client: HttpClient, private val credentials: CredentialPair) {
+class WooCommerceApi(
+    private val client: HttpClient,
+    private val credentials: CredentialPair,
+    private val technicalErrorReporter: TechnicalErrorReporter = NoOpTechnicalErrorReporter,
+) {
     suspend fun validateStore(baseUrl: String) = request(baseUrl, "/wp-json/wc/v3/system_status")
     suspend fun listOrders(baseUrl: String, page: Int = 1, perPage: Int = 20, search: String? = null, status: String? = null) = request(baseUrl, "/wp-json/wc/v3/orders", params(page, perPage, search, status))
     suspend fun getOrder(baseUrl: String, id: Long) = request(baseUrl, "/wp-json/wc/v3/orders/$id")
@@ -33,7 +40,7 @@ class WooCommerceApi(private val client: HttpClient, private val credentials: Cr
     suspend fun updateAttribute(baseUrl: String, id: Long, body: String) = request(baseUrl, "/wp-json/wc/v3/products/attributes/$id", method = "PUT", body = body)
     suspend fun deleteAttribute(baseUrl: String, id: Long, force: Boolean = false) = request(baseUrl, "/wp-json/wc/v3/products/attributes/$id", params = params(force), method = "DELETE")
     suspend fun listAttributeTerms(baseUrl: String, attributeId: Long, page: Int = 1, perPage: Int = 100) = request(baseUrl, "/wp-json/wc/v3/products/attributes/$attributeId/terms", params = params(page, perPage))
-    suspend fun getAttributeTerm(baseUrl: String, attributeId: Long, id: Long) = request(baseUrl, "/wp-json/wc/v3/products/attributes/$attributeId/terms/$id")
+    suspend fun getAttributeTerm(baseUrl: String, attributeId: Long, id: Long) = request(baseUrl, "/wp-json/wp/v2/products/attributes/$attributeId/terms/$id")
     suspend fun createAttributeTerm(baseUrl: String, attributeId: Long, body: String) = request(baseUrl, "/wp-json/wc/v3/products/attributes/$attributeId/terms", method = "POST", body = body)
     suspend fun deleteAttributeTerm(baseUrl: String, attributeId: Long, id: Long, force: Boolean = false) = request(baseUrl, "/wp-json/wc/v3/products/attributes/$attributeId/terms/$id", method = "DELETE")
 
@@ -44,14 +51,21 @@ class WooCommerceApi(private val client: HttpClient, private val credentials: Cr
         require(url.protocol.name == "https") { "WordPress Media API requires HTTPS" }
         val auth = wordpressAuth() ?: return ApiResponse(401, "{\"code\":\"woogit_missing_wordpress_credentials\",\"message\":\"WordPress username and Application Password are required for media operations.\"}", "POST", url.toString())
         val safeFileName = fileName.substringAfterLast('/').substringAfterLast('\\').ifBlank { "image-${System.currentTimeMillis()}.jpg" }
-        val response: HttpResponse = client.post(url) {
-            header(HttpHeaders.Authorization, auth)
-            header(HttpHeaders.Accept, ContentType.Application.Json.toString())
-            header(HttpHeaders.ContentDisposition, "attachment; filename=\"$safeFileName\"")
-            contentType(ContentType.parse(mediaType.ifBlank { "application/octet-stream" }))
-            setBody(bytes)
+        val response: HttpResponse = try {
+            client.post(url) {
+                header(HttpHeaders.Authorization, auth)
+                header(HttpHeaders.Accept, ContentType.Application.Json.toString())
+                header(HttpHeaders.ContentDisposition, "attachment; filename=\"$safeFileName\"")
+                contentType(ContentType.parse(mediaType.ifBlank { "application/octet-stream" }))
+                setBody(bytes)
+            }
+        } catch (throwable: Throwable) {
+            reportTechnical("Media", "WooCommerceApi.uploadMedia", "POST", url, "NetworkException", throwable = throwable)
+            throw throwable
         }
-        return ApiResponse(response.status.value, response.bodyAsText(), "POST", url.toString())
+        val body = response.bodyAsText()
+        reportHttpFailure("Media", "WooCommerceApi.uploadMedia", "POST", url, response.status.value, body)
+        return ApiResponse(response.status.value, body, "POST", url.toString())
     }
 
     suspend fun deleteMedia(baseUrl: String, mediaId: Long, force: Boolean = true): ApiResponse = wordpressRequest(baseUrl, "/wp-json/wp/v2/media/$mediaId", params(force), "DELETE")
@@ -59,8 +73,15 @@ class WooCommerceApi(private val client: HttpClient, private val credentials: Cr
     private suspend fun request(baseUrl: String, path: String, params: Map<String, Any> = emptyMap(), method: String = "GET", body: String? = null): ApiResponse {
         val url = Url("${baseUrl.trimEnd('/')}$path")
         require(url.protocol.name == "https") { "WooCommerce API requires HTTPS" }
-        val response = execute(url, method, body, params)
-        return ApiResponse(response.status.value, response.bodyAsText(), method, url.toString())
+        val response = try {
+            execute(url, method, body, params)
+        } catch (throwable: Throwable) {
+            reportTechnical("WooCommerce", "WooCommerceApi.request", method, url, "NetworkException", throwable = throwable)
+            throw throwable
+        }
+        val responseBody = response.bodyAsText()
+        reportHttpFailure("WooCommerce", "WooCommerceApi.request", method, url, response.status.value, responseBody)
+        return ApiResponse(response.status.value, responseBody, method, url.toString())
     }
 
     private suspend fun wordpressRequest(baseUrl: String, path: String, params: Map<String, Any> = emptyMap(), method: String = "GET"): ApiResponse {
@@ -68,11 +89,30 @@ class WooCommerceApi(private val client: HttpClient, private val credentials: Cr
         require(url.protocol.name == "https") { "WordPress API requires HTTPS" }
         val auth = wordpressAuth() ?: return ApiResponse(401, "{\"code\":\"woogit_missing_wordpress_credentials\",\"message\":\"WordPress username and Application Password are required for media operations.\"}", method, url.toString())
         val requestUrl = URLBuilder(url).apply { params.forEach { (key, value) -> parameters.append(key, value.toString()) } }.build()
-        val response: HttpResponse = when (method) {
-            "DELETE" -> client.delete(requestUrl) { header(HttpHeaders.Authorization, auth); header(HttpHeaders.Accept, ContentType.Application.Json.toString()) }
-            else -> client.get(requestUrl) { header(HttpHeaders.Authorization, auth); header(HttpHeaders.Accept, ContentType.Application.Json.toString()) }
+        val response: HttpResponse = try {
+            when (method) {
+                "DELETE" -> client.delete(requestUrl) { header(HttpHeaders.Authorization, auth); header(HttpHeaders.Accept, ContentType.Application.Json.toString()) }
+                else -> client.get(requestUrl) { header(HttpHeaders.Authorization, auth); header(HttpHeaders.Accept, ContentType.Application.Json.toString()) }
+            }
+        } catch (throwable: Throwable) {
+            reportTechnical("WordPress", "WooCommerceApi.wordpressRequest", method, url, "NetworkException", throwable = throwable)
+            throw throwable
         }
-        return ApiResponse(response.status.value, response.bodyAsText(), method, url.toString())
+        val body = response.bodyAsText()
+        reportHttpFailure("WordPress", "WooCommerceApi.wordpressRequest", method, url, response.status.value, body)
+        return ApiResponse(response.status.value, body, method, url.toString())
+    }
+
+    private fun reportHttpFailure(feature: String, operation: String, method: String, url: Url, status: Int, body: String) {
+        if (status in 200..299) return
+        reportTechnical(feature, operation, method, url, "HttpError", status.toString(), body)
+    }
+
+    private fun reportTechnical(feature: String, operation: String, method: String, url: Url, type: String, status: String = "", body: String = "", throwable: Throwable? = null) {
+        technicalErrorReporter.report(
+            TechnicalErrorContext(feature, operation, operation, type, method, url.toString().substringBefore('?'), status, body, "API request failure"),
+            throwable,
+        )
     }
 
     private fun wordpressAuth(): String? {
