@@ -26,26 +26,9 @@ internal fun E11AppNavigation(dependencies: V1PresentationDependencies, initialO
     val context = LocalContext.current
     val currentRoute by navController.currentBackStackEntryAsState()
     val route = currentRoute?.destination?.route
-
-    LaunchedEffect(dependencies.initialStoreId) {
-        dependencies.initialStoreId?.let { persistedStore ->
-            if (activeStore != persistedStore) activeStore = persistedStore
-        }
-    }
-
-    BackHandler(enabled = route != E11Routes.CONNECTION) {
-        if (navController.previousBackStackEntry != null) {
-            navController.popBackStack()
-        } else {
-            (context as? Activity)?.moveTaskToBack(true)
-        }
-    }
-
-    val startDestination = when {
-        activeStore == null -> E11Routes.CONNECTION
-        initialOrderId != null -> E11Routes.order(initialOrderId)
-        else -> E11Routes.DASHBOARD
-    }
+    LaunchedEffect(dependencies.initialStoreId) { dependencies.initialStoreId?.let { persistedStore -> if (activeStore != persistedStore) activeStore = persistedStore } }
+    BackHandler(enabled = route != E11Routes.CONNECTION) { if (navController.previousBackStackEntry != null) navController.popBackStack() else (context as? Activity)?.moveTaskToBack(true) }
+    val startDestination = when { activeStore == null -> E11Routes.CONNECTION; initialOrderId != null -> E11Routes.order(initialOrderId); else -> E11Routes.DASHBOARD }
     NavHost(navController, startDestination) {
         composable(E11Routes.CONNECTION) { ConnectionScreen(dependencies) { storeId -> activeStore = storeId; dependencies.onStoreConnected(storeId); navController.navigate(E11Routes.DASHBOARD) { popUpTo(E11Routes.CONNECTION) { inclusive = true } } } }
         composable(E11Routes.DASHBOARD) { val store = activeStore; if (store != null) { val storeId = StoreId(store); val vm = viewModel<DashboardViewModel>(key = "dashboard-${storeId.value}", factory = DashboardViewModelFactory(dependencies, storeId)); val state by vm.uiState.collectAsState(); LaunchedEffect(storeId) { vm.refresh() }; DisposableEffect(vm, storeId) { vm.startConnectionHealthMonitor(); onDispose { vm.stopConnectionHealthMonitor() } }; val recent = state.orders.firstOrNull(); DashboardScreen(storeId.value, state.connectionState == ConnectionState.CONNECTED, state.ordersCount, state.productsCount, state.revenue, state.processingCount, recent?.number, recent?.customer?.name.orEmpty(), formatMoney(recent?.total), recent?.status, { recent?.number?.let { navController.navigate(E11Routes.order(it)) } }, { navController.navigate(E11Routes.ORDERS) }, { navController.navigate(E11Routes.PRODUCTS) }, { navController.navigate(E11Routes.SETTINGS) }, { navController.navigate(E11Routes.SYNC) }, { navController.navigate(E11Routes.CONFLICTS) }, DashboardDestination.DASHBOARD, { destination -> when (destination) { DashboardDestination.DASHBOARD -> Unit; DashboardDestination.ORDERS -> navController.navigate(E11Routes.ORDERS); DashboardDestination.PRODUCTS -> navController.navigate(E11Routes.PRODUCTS); DashboardDestination.SETTINGS -> navController.navigate(E11Routes.SETTINGS) } }) } }
@@ -60,7 +43,7 @@ internal fun E11AppNavigation(dependencies: V1PresentationDependencies, initialO
         composable(E11Routes.VARIATION_EDIT, listOf(navArgument(E11Routes.PRODUCT_ID) { type = NavType.StringType }, navArgument(E11Routes.VARIATION_ID) { type = NavType.StringType })) { entry -> val store = activeStore; val productId = entry.arguments?.getString(E11Routes.PRODUCT_ID); val variationId = entry.arguments?.getString(E11Routes.VARIATION_ID); if (store != null && productId != null && variationId != null) VariationEditorRoute(dependencies, StoreId(store), productId, variationId, { navController.popBackStack() }, { navController.popBackStack() }) }
         composable(E11Routes.SYNC) { val store = activeStore; if (store != null) { val storeId = StoreId(store); val vm = viewModel<SyncViewModel>(key = "sync-${storeId.value}", factory = vmFactory { SyncViewModel(dependencies) }); val state by vm.state.collectAsState(); LaunchedEffect(storeId) { vm.load(storeId) }; SyncScreen(mapSyncState(state), { vm.sync(storeId) }, { vm.sync(storeId) }) } }
         composable(E11Routes.CONFLICTS) { val store = activeStore; if (store != null) { val storeId = StoreId(store); val vm = viewModel<ConflictsViewModel>(key = "conflicts-${storeId.value}", factory = vmFactory { ConflictsViewModel(dependencies) }); val state by vm.state.collectAsState(); LaunchedEffect(storeId) { vm.load(storeId) }; val list = (state as? FeatureUiState.Success)?.value.orEmpty().map { conflict -> ConflictUiModel(conflict.id.value, "${conflict.entityType} · ${conflict.reason}", conflict.localSnapshot ?: conflict.localVersion?.value ?: "—", conflict.serverSnapshot ?: conflict.remoteVersion?.value ?: "—") }; ConflictsScreen(list, { id -> vm.resolve(storeId, EntityId(id), ConflictResolution.KEEP_LOCAL) }, { id -> vm.resolve(storeId, EntityId(id), ConflictResolution.KEEP_SERVER) }) } }
-        composable(E11Routes.SETTINGS) { SettingsScreen(storeName = activeStore.orEmpty(), onBack = { navController.popBackStack() }, onDisconnect = { dependencies.onStoreDisconnected(); activeStore = null; navController.navigate(E11Routes.CONNECTION) { popUpTo(E11Routes.SETTINGS) { inclusive = true } } }) }
+        composable(E11Routes.SETTINGS) { val store = activeStore; if (store != null) SettingsScreen(storeName = store, storeId = StoreId(store), dependencies = dependencies, onBack = { navController.popBackStack() }, onDisconnect = { dependencies.onStoreDisconnected(); activeStore = null; navController.navigate(E11Routes.CONNECTION) { popUpTo(E11Routes.SETTINGS) { inclusive = true } } }) }
     }
 }
 
