@@ -41,7 +41,7 @@ class AppComposition(context: Context) {
     private val provider = WooCommerceClientProvider(db, secure, network.httpClient)
     private val mutationCoordinator = SqlMutationCoordinator(db)
 
-    /** Restores only a previously connected store; credentials remain in the secure credential store. */
+    /** Restores a previously connected store without requiring the network. */
     private val restoredStoreId: String? = run {
         val savedId = prefs.getString("active_store_id", null)
         val savedStore = savedId?.let { id ->
@@ -51,7 +51,7 @@ class AppComposition(context: Context) {
             }
         }
         when {
-            savedStore?.state?.name == "CONNECTED" && savedStore.credentialReference != null -> savedId
+            savedStore?.credentialReference != null -> savedId
             else -> storeLocal.findConnectedStoreId()?.also { id ->
                 prefs.edit().putString("active_store_id", id).apply()
             }
@@ -135,6 +135,12 @@ class AppComposition(context: Context) {
         getConnectionState, getSyncState, getPending, getConflictsFn, resolveConflictFn,
         syncPending, restoredStoreId, ::rememberStore, ::forgetStore,
     )
+
+    init {
+        // WorkManager persists independently of the Activity/process. Re-registering here
+        // also repairs the schedule when the app is launched again after a long period.
+        restoredStoreId?.let(::startBackgroundWork)
+    }
 
     fun startBackgroundWork(storeId: String) {
         OrderPollingWorker.schedule(appContext, storeId)
