@@ -6,6 +6,7 @@ import com.samanramezani1377.woogit.core.domain.entity.EntityId
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.core.domain.error.CoreResult
 import com.samanramezani1377.woogit.core.domain.model.*
+import com.samanramezani1377.woogit.debug.TechnicalErrorReporter
 import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -57,12 +58,27 @@ class RobustProductTransferService(private val d:V1PresentationDependencies,priv
             writeTransferEntry(zip,"products.json",transferJson.encodeToString(ProductTransferPackage(manifest,exported,globals)).toByteArray())
         }}}?:error("امکان ایجاد فایل خروجی وجود ندارد.")
         products.size
-    }}
+    }}.onFailure { t ->
+        TechnicalErrorReporter.report(
+            feature="Product Transfer",
+            location="RobustProductTransferService.export",
+            operation="EXPORT",
+            userMessage="ساخت فایل خروجی ناموفق بود.",
+            throwable=t,
+            type="PRODUCT_TRANSFER_EXPORT_ERROR",
+            details="storeId=${storeId.value}; destination=$destination",
+        )
+    }
 
     suspend fun import(storeId:StoreId,source:Uri,mode:ProductImportMode=ProductImportMode.UPDATE_EXISTING,onProgress:(ProductTransferProgress)->Unit={}):RobustProductTransferResult=withContext(Dispatchers.IO){try{
         val store=requireStore(storeId)
         val validated=validateTransferPackage(resolver,source,transferJson)
-        if(validated.validationErrors.isNotEmpty())return@withContext RobustProductTransferResult(failed=validated.invalidProductIds.size,errors=validated.validationErrors,validationErrors=validated.validationErrors)
+        if(validated.validationErrors.isNotEmpty()){
+            validated.validationErrors.forEach { message ->
+                TechnicalErrorReporter.reportHandled("Product Transfer","RobustProductTransferService.validate","IMPORT_VALIDATE","فایل انتقال محصولات معتبر نیست.",message,"PRODUCT_TRANSFER_VALIDATION_ERROR","storeId=${storeId.value}; source=$source")
+            }
+            return@withContext RobustProductTransferResult(failed=validated.invalidProductIds.size,errors=validated.validationErrors,validationErrors=validated.validationErrors)
+        }
         val sameStore=validated.manifest.source.trimEnd('/').equals(store.baseUrl.trimEnd('/'),true)
         val mediaOutcome=media.upload(storeId,source,validated.products,onProgress)
         val existing=reader.products(storeId,onProgress)
@@ -90,7 +106,7 @@ class RobustProductTransferService(private val d:V1PresentationDependencies,priv
                 var product=x.toDomain(if(old==null)EntityId(NEW_ID_PLACEHOLDER)else old.id,images,categories,attributes).copy(sku=if(old==null)reservedSku else x.sku)
                 if(mode==ProductImportMode.CREATE_NEW_DRAFT)product=product.copy(status=ProductStatus.DRAFT)
                 val saved=if(old==null)d.createProduct(storeId,product)else d.updateProduct(storeId,old.id,product)
-                val savedProduct=when(saved){is CoreResult.Success->{if(old==null){created++;if(mode==ProductImportMode.CREATE_NEW_DRAFT)drafted++}else updated++;saved.value};is CoreResult.Failure->{failed++;importErrors+="${x.name}: ${saved.error}";releaseSku(reservedSku,usedSku);return@forEachIndexed}}
+                val savedProduct=when(saved){is CoreResult.Success->{if(old==null){created++;if(mode==ProductImportMode.CREATE_NEW_DRAFT)drafted++}else updated++;saved.value};is CoreResult.Failure->{failed++;importErrors+="${x.name}: ${saved.error}";releaseSku(reservedSku,usedSku);TechnicalErrorReporter.reportHandled("Product Transfer","RobustProductTransferService.import.product","CREATE_OR_UPDATE_PRODUCT","انتقال محصول ناموفق بود.",saved.error.toString(),"PRODUCT_TRANSFER_PRODUCT_ERROR","product=${x.name}; sourceId=${x.id}; mode=$mode");return@forEachIndexed}}
                 val existingVariations=reader.variations(storeId,savedProduct.id)
                 x.variations.forEach{sourceVariation->
                     val oldVariation=if(old==null)null else if(sameStore)existingVariations.firstOrNull{it.id.value==sourceVariation.id}?:findVariationByContent(existingVariations,sourceVariation) else findVariationByContent(existingVariations,sourceVariation)
@@ -99,18 +115,21 @@ class RobustProductTransferService(private val d:V1PresentationDependencies,priv
                     val variation=sourceVariation.toDomain(savedProduct.id,if(oldVariation==null)EntityId(NEW_ID_PLACEHOLDER)else oldVariation.id,image).copy(sku=if(oldVariation==null)reservedVariationSku else sourceVariation.sku)
                     when(val result=if(oldVariation==null)d.createVariation(storeId,variation)else d.updateVariation(storeId,savedProduct.id,oldVariation.id,variation)){
                         is CoreResult.Success->{if(oldVariation==null)variationsCreated++else variationsUpdated++}
-                        is CoreResult.Failure->{variationsFailed++;importErrors+="${x.name}: variation ${sourceVariation.sku?:sourceVariation.id} وارد نشد: ${result.error}";releaseSku(reservedVariationSku,usedSku)}
+                        is CoreResult.Failure->{variationsFailed++;importErrors+="${x.name}: variation ${sourceVariation.sku?:sourceVariation.id} وارد نشد: ${result.error}";releaseSku(reservedVariationSku,usedSku);TechnicalErrorReporter.reportHandled("Product Transfer","RobustProductTransferService.import.variation","CREATE_OR_UPDATE_VARIATION","انتقال Variation ناموفق بود.",result.error.toString(),"PRODUCT_TRANSFER_VARIATION_ERROR","product=${x.name}; variation=${sourceVariation.id}; sku=${sourceVariation.sku}")}
                     }
                 }
-            }catch(t:Throwable){failed++;importErrors+="${x.name}: ${t.message?:"خطای نامشخص"}"}
+            }catch(t:Throwable){failed++;importErrors+="${x.name}: ${t.message?:"خطای نامشخص"}";TechnicalErrorReporter.report("Product Transfer","RobustProductTransferService.import.product","IMPORT_PRODUCT","انتقال محصول ناموفق بود.",t,"PRODUCT_TRANSFER_PRODUCT_EXCEPTION","product=${x.name}; sourceId=${x.id}; mode=$mode")}
         }
         RobustProductTransferResult(created,updated,failed,mediaOutcome.uploaded,variationsCreated,variationsUpdated,(mediaOutcome.errors+errors+importErrors).distinct().take(50),variationsFailed,mediaOutcome.failed,(mediaOutcome.images.keys-usedMedia).size,skuChanged,emptyList(),importErrors.distinct().take(50),drafted,categoriesCreated,categoriesResolved,attributesCreated,attributesResolved,termsCreated,termsResolved)
-    }catch(t:Throwable){RobustProductTransferResult(failed=1,errors=listOf(t.message?:"خواندن فایل ناموفق بود."))}}
+    }catch(t:Throwable){
+        TechnicalErrorReporter.report("Product Transfer","RobustProductTransferService.import","IMPORT","ایمپورت محصولات با خطای فنی متوقف شد.",t,"PRODUCT_TRANSFER_IMPORT_EXCEPTION","storeId=${storeId.value}; source=$source; mode=$mode")
+        RobustProductTransferResult(failed=1,errors=listOf(t.message?:"خواندن فایل ناموفق بود."),importErrors=listOf(t.message?:"خواندن فایل ناموفق بود."))
+    }}
 
-    private suspend fun resolveGlobalAttributes(storeId:StoreId,source:List<TransferGlobalAttribute>,preserveIds:Boolean):GlobalMapping{val destination=reader.attributes(storeId);val items=mutableMapOf<String,EntityId>();var created=0;var resolved=0;var termsCreated=0;var termsResolved=0;for(g in source){val existing=if(preserveIds)destination.firstOrNull{it.id.value==g.id} else destination.firstOrNull{normalize(it.slug)==normalize(g.slug)||normalize(it.name)==normalize(g.name)};val attr=existing?:when(val r=d.createAttribute(storeId,GlobalAttribute(EntityId(NEW_ID_PLACEHOLDER),g.name,g.slug,emptyList()))){is CoreResult.Success->{created++;r.value};is CoreResult.Failure->{continue}};if(existing!=null)resolved++;items[g.id]=attr.id;val destinationTerms=reader.terms(storeId,attr.id);for(term in g.terms){val found=destinationTerms.firstOrNull{normalize(it.name)==normalize(term.name)||normalize(it.slug)==normalize(term.slug)};if(found!=null)termsResolved++ else when(val r=d.createTerm(storeId,attr.id,AttributeTerm(EntityId(NEW_ID_PLACEHOLDER),term.name,term.slug))){is CoreResult.Success->termsCreated++;is CoreResult.Failure->Unit}}};return GlobalMapping(items,created,resolved,termsCreated,termsResolved)}
+    private suspend fun resolveGlobalAttributes(storeId:StoreId,source:List<TransferGlobalAttribute>,preserveIds:Boolean):GlobalMapping{val destination=reader.attributes(storeId);val items=mutableMapOf<String,EntityId>();var created=0;var resolved=0;var termsCreated=0;var termsResolved=0;for(g in source){val existing=if(preserveIds)destination.firstOrNull{it.id.value==g.id} else destination.firstOrNull{normalize(it.slug)==normalize(g.slug)||normalize(it.name)==normalize(g.name)};val attr=existing?:when(val r=d.createAttribute(storeId,GlobalAttribute(EntityId(NEW_ID_PLACEHOLDER),g.name,g.slug,emptyList()))){is CoreResult.Success->{created++;r.value};is CoreResult.Failure->{TechnicalErrorReporter.reportHandled("Product Transfer","RobustProductTransferService.attributes","CREATE_ATTRIBUTE","ساخت ویژگی سراسری ناموفق بود.",r.error.toString(),"PRODUCT_TRANSFER_ATTRIBUTE_ERROR","attribute=${g.name}; sourceId=${g.id}");continue}};if(existing!=null)resolved++;items[g.id]=attr.id;val destinationTerms=reader.terms(storeId,attr.id);for(term in g.terms){val found=destinationTerms.firstOrNull{normalize(it.name)==normalize(term.name)||normalize(it.slug)==normalize(term.slug)};if(found!=null)termsResolved++ else when(val r=d.createTerm(storeId,attr.id,AttributeTerm(EntityId(NEW_ID_PLACEHOLDER),term.name,term.slug))){is CoreResult.Success->termsCreated++;is CoreResult.Failure->TechnicalErrorReporter.reportHandled("Product Transfer","RobustProductTransferService.terms","CREATE_TERM","ساخت مقدار ویژگی ناموفق بود.",r.error.toString(),"PRODUCT_TRANSFER_TERM_ERROR","attribute=${g.name}; term=${term.name}")}}};return GlobalMapping(items,created,resolved,termsCreated,termsResolved)}
 
     private suspend fun resolveCategories(storeId:StoreId,source:List<TransferCategory>,destination:List<IdName>,createMissing:Boolean):CategoryMapping{val sourceById=source.associateBy{it.id};val resolved=mutableMapOf<String,IdName>();var created=0;var reused=0;val destinationByKey=destination.groupBy{normalize(it.name)+"|"+normalize(it.parentId?.value)}.toMutableMap()
-        suspend fun resolve(id:String):IdName?{resolved[id]?.let{return it};val c=sourceById[id]?:return null;val parent=c.parentId?.let{resolve(it)};val key=normalize(c.name)+"|"+normalize(parent?.id?.value);val found=destinationByKey[key].orEmpty().singleOrNull();if(found!=null){resolved[id]=found;reused++;return found};if(!createMissing)return null;return when(val r=d.getProductCategories.create(storeId,IdName(EntityId(NEW_ID_PLACEHOLDER),c.name,parent?.id))){is CoreResult.Success->{resolved[id]=r.value;destinationByKey[key]=destinationByKey[key].orEmpty()+r.value;created++;r.value};is CoreResult.Failure->null}}
+        suspend fun resolve(id:String):IdName?{resolved[id]?.let{return it};val c=sourceById[id]?:return null;val parent=c.parentId?.let{resolve(it)};val key=normalize(c.name)+"|"+normalize(parent?.id?.value);val found=destinationByKey[key].orEmpty().singleOrNull();if(found!=null){resolved[id]=found;reused++;return found};if(!createMissing)return null;return when(val r=d.getProductCategories.create(storeId,IdName(EntityId(NEW_ID_PLACEHOLDER),c.name,parent?.id))){is CoreResult.Success->{resolved[id]=r.value;destinationByKey[key]=destinationByKey[key].orEmpty()+r.value;created++;r.value};is CoreResult.Failure->{TechnicalErrorReporter.reportHandled("Product Transfer","RobustProductTransferService.categories","CREATE_CATEGORY","ساخت دسته‌بندی ناموفق بود.",r.error.toString(),"PRODUCT_TRANSFER_CATEGORY_ERROR","category=${c.name}; sourceId=${c.id}; parentId=${c.parentId}");null}}}
         source.forEach{resolve(it.id)};return CategoryMapping(resolved,created,reused)}
 
     private fun expandCategoryChain(categories:List<IdName>,all:List<IdName>):List<IdName>{val byId=all.associateBy{it.id.value};val out=linkedMapOf<String,IdName>();fun add(c:IdName){if(out.putIfAbsent(c.id.value,c)==null)c.parentId?.let{byId[it.value]?.let(::add)}};categories.forEach(::add);return out.values.toList()}
