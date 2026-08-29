@@ -42,17 +42,32 @@
 
 اگر کاربر URL تصویر را به‌صورت دستی تغییر دهد، نباید `imageId` قدیمی به‌اشتباه همراه URL جدید ارسال شود. ID و URL باید همیشه به یک تصویر اشاره کنند.
 
-### Product Import / Export
+### Product Import / Export — وضعیت واقعی
 
-- از داخل Settings دو عملیات **اکسپورت همه محصولات** و **ایمپورت محصولات** در دسترس هستند.
-- فرمت انتقال `.woogit` است؛ یک ZIP نسخه‌دار شامل `manifest.json`، `products.json` و فایل‌های واقعی داخل `media/` است.
-- Export شامل اطلاعات Product، دسته‌بندی، Attributes، تصاویر و Variationهای محصول variable است.
-- شناسه و URL تصاویر در package حفظ می‌شوند و فایل تصویر نیز در صورت امکان داخل package قرار می‌گیرد.
-- Import برای همان فروشگاه ابتدا ID و سپس SKU را برای تطبیق ترجیح می‌دهد؛ برای فروشگاه دیگر SKU معیار امن تطبیق است.
-- تصاویر Import از طریق `MediaRepository` آپلود می‌شوند و Media ID مقصد برای association استفاده می‌شود.
-- عملیات Create/Update محصول و Variation از Repositoryهای موجود عبور می‌کنند و مسیر Local-first/Pending Queue را دور نمی‌زنند.
-- package هیچ credential یا API key ذخیره نمی‌کند.
-- قرارداد کامل این قابلیت در `docs/PRODUCT_IMPORT_EXPORT.md` ثبت شده است.
+- Settings مسیر Export همه محصولات و Import محصولات را دارد.
+- Package فعلی `.woogit` یک ZIP با `manifest.json`، `products.json` و `media/` است.
+- Format فعلی `woogit-products`، logical version برابر `1` و layout version برابر `1` است؛ هر دو temporary هستند.
+- Export شامل Product، Category، Global Attribute/Term، Product Image و Variationهای Product Variable است.
+- Export تصویر را از URL می‌خواند و در layout فعلی برای هر occurrence یک media entry می‌سازد؛ Export Media Dedup فعلاً وجود ندارد.
+- Import قبل از mutation، format/version/layout، ZIP path، duplicate entry، size limit، تعداد Product/Image، Product ID/SKU و Media referenceها را validation می‌کند.
+- Validation در سطح package است؛ وجود validation error باعث شروع نشدن mutation می‌شود.
+- Media Import هر entry را مستقل پردازش می‌کند و failure یک Media نباید Import سایر Media/Productها را متوقف کند.
+- Product و Variation failure به‌صورت مستقل مدیریت می‌شوند و reservationهای SKU در failure آزاد می‌شوند.
+- Result آمار Product، Variation و Media را جدا نگه می‌دارد و `validationErrors` از `importErrors` جداست.
+- Source Product/Variation ID شناسه مبدأ است و نباید مستقیماً به‌عنوان Destination ID استفاده شود. Variation جدید با Product مقصد ساخته می‌شود و Variation اضافه مقصد حذف نمی‌شود.
+- Media reuse در Import با canonical URL، content hash و filename+content hash تلاش می‌شود؛ در صورت غیرقابل‌دسترسی بودن Media مقصد، Dedup قطعی نیست.
+- Package credential یا API key فروشگاه را ذخیره نمی‌کند.
+- جزئیات کامل و محدودیت‌های این قابلیت در `docs/PRODUCT_IMPORT_EXPORT.md` نگهداری می‌شود.
+
+### مواردی که فعلاً implemented نیستند
+
+- Export Media Dedup
+- Idempotency تضمینی برای Product بدون SKU
+- mapping table دائمی Source → Destination
+- checksum مستقل برای تمام entryها
+- migration واقعی schema/layout
+- حذف خودکار Variationهای اضافه مقصد
+- validation مستقل هر Product به‌جای رد package در validation failure
 
 ## Orders
 
