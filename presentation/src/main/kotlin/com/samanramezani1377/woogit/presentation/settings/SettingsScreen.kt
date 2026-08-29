@@ -3,12 +3,7 @@ package com.samanramezani1377.woogit.presentation.settings
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -29,11 +24,11 @@ import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen(storeName:String,storeId:StoreId,onBack:()->Unit,onDisconnect:()->Unit,dependencies:V1PresentationDependencies){
- val context=LocalContext.current;val clipboard=LocalClipboardManager.current;val scope=rememberCoroutineScope();val transfer=remember(dependencies){RobustProductTransferService(dependencies,context.contentResolver)};val createNewTransfer=remember(dependencies){CreateNewProductTransferService(dependencies,context.contentResolver)}
+ val context=LocalContext.current;val clipboard=LocalClipboardManager.current;val scope=rememberCoroutineScope();val transfer=remember(dependencies){RobustProductTransferService(dependencies,context.contentResolver)}
  var logs by remember{mutableStateOf(DebugLogStore.read(context))};var showSalesDebug by remember{mutableStateOf(true)};var busy by remember{mutableStateOf(false)};var progress by remember{mutableStateOf("")};var resultText by remember{mutableStateOf<String?>(null)};var pendingImportUri by remember{mutableStateOf<android.net.Uri?>(null)};var showImportMode by remember{mutableStateOf(false)}
  val exportLauncher=rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")){uri->if(uri!=null){busy=true;scope.launch{val r=transfer.export(storeId,uri){progress=it.phase};busy=false;resultText=r.fold({"خروجی با موفقیت ساخته شد. $it محصول در فایل WooGit ذخیره شد."},{"ساخت فایل خروجی ناموفق بود: ${it.message}"})}}}
  val importLauncher=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()){uri->if(uri!=null){runCatching{context.contentResolver.takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION)};pendingImportUri=uri;showImportMode=true}}
- fun startImport(mode:ProductImportMode,createAsDraft:Boolean=false){val uri=pendingImportUri?:return;showImportMode=false;pendingImportUri=null;busy=true;scope.launch{val r=if(mode==ProductImportMode.CREATE_NEW)createNewTransfer.import(storeId,uri,createAsDraft){progress=it.phase}else transfer.import(storeId,uri){progress=it.phase};busy=false;resultText="ایمپورت تمام شد. ایجاد: ${r.created} · بروزرسانی: ${r.updated} · ناموفق: ${r.failed} · تصاویر: ${r.imagesUploaded} · Variation ایجاد: ${r.variationsCreated} · Variation بروزرسانی: ${r.variationsUpdated}${if(r.errors.isNotEmpty())"\n\n${r.errors.take(5).joinToString("\n")}" else ""}"}}
+ fun startImport(mode:ProductImportMode){val uri=pendingImportUri?:return;showImportMode=false;pendingImportUri=null;busy=true;scope.launch{val r=transfer.import(storeId,uri,mode){progress=it.phase};busy=false;resultText="ایمپورت تمام شد. ایجاد: ${r.created} · پیش‌نویس: ${r.drafted} · بروزرسانی: ${r.updated} · ناموفق: ${r.failed} · تصاویر: ${r.imagesUploaded} · Variation ایجاد: ${r.variationsCreated} · Variation بروزرسانی: ${r.variationsUpdated}${if(r.errors.isNotEmpty())"\n\n${r.errors.take(5).joinToString("\n")}" else ""}"}}
  GlassScaffold{Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
   GlassTopBar(title="تنظیمات",subtitle="مدیریت اتصال و حساب فروشگاه",navigation={TextButton(onClick=onBack){GlassText("بازگشت")}})
   GlassCard{Column(verticalArrangement=Arrangement.spacedBy(8.dp)){GlassText("فروشگاه متصل");GlassText(storeName);GlassPrimaryAction("قطع اتصال",onDisconnect)}}
@@ -43,7 +38,7 @@ fun SettingsScreen(storeName:String,storeId:StoreId,onBack:()->Unit,onDisconnect
   }}
   if(DebugConfig.ENABLED){GlassCard{Column(verticalArrangement=Arrangement.spacedBy(8.dp)){Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween){GlassText("📌 متغیرهای فروش داشبورد (موقت)");TextButton(onClick={showSalesDebug=!showSalesDebug}){GlassText(if(showSalesDebug)"بستن" else "مشاهده")}};if(showSalesDebug)DashboardSalesDebugPanel(clipboard)} };GlassCard{Column(verticalArrangement=Arrangement.spacedBy(8.dp)){Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween){GlassText("لاگ‌های فنی (موقت)");Row{TextButton(onClick={logs=DebugLogStore.read(context)}){GlassText("به‌روزرسانی")};TextButton(onClick={DebugLogStore.clear(context);logs=emptyList()}){GlassText("پاک کردن")}}};if(logs.isEmpty())GlassText("هنوز خطای فنی ثبت نشده است.");logs.forEach{entry->DebugLogItem(entry,clipboard)}}}}
  }
- if(showImportMode)AlertDialog(onDismissRequest={showImportMode=false;pendingImportUri=null},title={GlassText("نوع ایمپورت محصولات")},text={GlassText("انتخاب کن محصولات فایل چگونه وارد شوند.\n\nایجاد محصولات جدید: همه محصولات بدون تطبیق با محصولات قبلی ساخته می‌شوند.\nایجاد محصولات جدید به صورت پیش‌نویس: همه محصولات جدید با وضعیت پیش‌نویس ساخته می‌شوند.\nاصلاح محصولات قبلی: محصولات موجود بر اساس شناسه/SKU و تطبیق امن بروزرسانی می‌شوند.")},confirmButton={TextButton(onClick={startImport(ProductImportMode.UPDATE_EXISTING)}){GlassText("اصلاح محصولات قبلی")}},dismissButton={Column{TextButton(onClick={startImport(ProductImportMode.CREATE_NEW)}){GlassText("ایجاد همه به‌صورت جدید")};TextButton(onClick={startImport(ProductImportMode.CREATE_NEW,true)}){GlassText("ایجاد جدید به صورت پیش‌نویس")}}})
+ if(showImportMode)AlertDialog(onDismissRequest={showImportMode=false;pendingImportUri=null},title={GlassText("نوع ایمپورت محصولات")},text={GlassText("انتخاب کن محصولات فایل چگونه وارد شوند.\n\nایجاد محصولات جدید: همه محصولات بدون تطبیق با محصولات قبلی ساخته می‌شوند.\nایجاد محصولات جدید به صورت پیش‌نویس: همه محصولات جدید با وضعیت پیش‌نویس ساخته می‌شوند.\nاصلاح محصولات قبلی: محصولات موجود بر اساس شناسه/SKU و تطبیق امن بروزرسانی می‌شوند.")},confirmButton={TextButton(onClick={startImport(ProductImportMode.UPDATE_EXISTING)}){GlassText("اصلاح محصولات قبلی")}},dismissButton={Column{TextButton(onClick={startImport(ProductImportMode.CREATE_NEW)}){GlassText("ایجاد همه به‌صورت جدید")};TextButton(onClick={startImport(ProductImportMode.CREATE_NEW_DRAFT)}){GlassText("ایجاد جدید به صورت پیش‌نویس")}}})
  if(resultText!=null)AlertDialog(onDismissRequest={resultText=null},confirmButton={TextButton(onClick={resultText=null}){GlassText("باشه")}},text={GlassText(resultText!!)},title={GlassText("انتقال محصولات")})
 }
 
