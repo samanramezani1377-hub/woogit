@@ -41,15 +41,13 @@ class RobustProductTransferService(private val d:V1PresentationDependencies,priv
                 val images=product.images.mapIndexed{imageIndex,image->
                     val file="media/p-${product.id.value}-$imageIndex.${transferExt(image.src)}"
                     val bytes=downloadTransferImage(image.src)?:error("تصویر «${image.name?:image.src}» قابل دریافت نیست؛ خروجی ناقص ساخته نشد.")
-                    require(bytes.size.toLong()<=MAX_ENTRY_BYTES)
-                    writeTransferEntry(zip,file,bytes);imageCount++
+                    require(bytes.size.toLong()<=MAX_ENTRY_BYTES);writeTransferEntry(zip,file,bytes);imageCount++
                     TransferImage(image.id?.value,image.src,image.name,image.alt,file)
                 }
                 val variations=if(product.type==ProductType.VARIABLE){val all=reader.variations(storeId,product.id);require(all.size<=MAX_VARIATIONS_PER_PRODUCT){"تعداد Variationهای محصول بیش از حد مجاز است."};all.map{variation->variation.toTransfer{image->
                     val file="media/v-${variation.id.value}.${transferExt(image.src)}"
                     val bytes=downloadTransferImage(image.src)?:error("تصویر Variation قابل دریافت نیست؛ خروجی ناقص ساخته نشد.")
-                    require(bytes.size.toLong()<=MAX_ENTRY_BYTES)
-                    writeTransferEntry(zip,file,bytes);imageCount++;file
+                    require(bytes.size.toLong()<=MAX_ENTRY_BYTES);writeTransferEntry(zip,file,bytes);imageCount++;file
                 }}}else emptyList()
                 product.toTransfer(images,variations)
             }
@@ -110,8 +108,8 @@ class RobustProductTransferService(private val d:V1PresentationDependencies,priv
 
     private suspend fun resolveGlobalAttributes(storeId:StoreId,source:List<TransferGlobalAttribute>,preserveIds:Boolean):GlobalMapping{val destination=reader.attributes(storeId);val items=mutableMapOf<String,EntityId>();var created=0;var resolved=0;var termsCreated=0;var termsResolved=0;for(g in source){val existing=if(preserveIds)destination.firstOrNull{it.id.value==g.id} else destination.firstOrNull{normalize(it.slug)==normalize(g.slug)||normalize(it.name)==normalize(g.name)};val attr=existing?:when(val r=d.createAttribute(storeId,GlobalAttribute(EntityId(NEW_ID_PLACEHOLDER),g.name,g.slug,emptyList()))){is CoreResult.Success->{created++;r.value};is CoreResult.Failure->{continue}};if(existing!=null)resolved++;items[g.id]=attr.id;val destinationTerms=reader.terms(storeId,attr.id);for(term in g.terms){val found=destinationTerms.firstOrNull{normalize(it.name)==normalize(term.name)||normalize(it.slug)==normalize(term.slug)};if(found!=null)termsResolved++ else when(val r=d.createTerm(storeId,attr.id,AttributeTerm(EntityId(NEW_ID_PLACEHOLDER),term.name,term.slug))){is CoreResult.Success->termsCreated++;is CoreResult.Failure->Unit}}};return GlobalMapping(items,created,resolved,termsCreated,termsResolved)}
 
-    private suspend fun resolveCategories(storeId:StoreId,source:List<TransferCategory>,destination:List<IdName>,createMissing:Boolean):CategoryMapping{val sourceById=source.associateBy{it.id};val resolved=mutableMapOf<String,IdName>();var created=0;var reused=0;fun key(name:String,parent:EntityId?)=normalize(name)+"|"+normalize(parent?.value);val destinationByKey=destination.groupBy{key(it.name,it.parentId)}
-        suspend fun resolve(id:String):IdName?{resolved[id]?.let{return it};val c=sourceById[id]?:return null;val parent=c.parentId?.let{resolve(it)};val found=destinationByKey[key(c.name,parent?.id)].orEmpty().singleOrNull();if(found!=null){resolved[id]=found;reused++;return found};if(!createMissing)return null;return when(val r=d.getProductCategories.create(storeId,IdName(EntityId(NEW_ID_PLACEHOLDER),c.name,parent?.id))){is CoreResult.Success->{resolved[id]=r.value;created++;r.value};is CoreResult.Failure->null}}
+    private suspend fun resolveCategories(storeId:StoreId,source:List<TransferCategory>,destination:List<IdName>,createMissing:Boolean):CategoryMapping{val sourceById=source.associateBy{it.id};val resolved=mutableMapOf<String,IdName>();var created=0;var reused=0;val destinationByKey=destination.groupBy{normalize(it.name)+"|"+normalize(it.parentId?.value)}.toMutableMap()
+        suspend fun resolve(id:String):IdName?{resolved[id]?.let{return it};val c=sourceById[id]?:return null;val parent=c.parentId?.let{resolve(it)};val key=normalize(c.name)+"|"+normalize(parent?.id?.value);val found=destinationByKey[key].orEmpty().singleOrNull();if(found!=null){resolved[id]=found;reused++;return found};if(!createMissing)return null;return when(val r=d.getProductCategories.create(storeId,IdName(EntityId(NEW_ID_PLACEHOLDER),c.name,parent?.id))){is CoreResult.Success->{resolved[id]=r.value;destinationByKey.getOrPut(key){mutableListOf()}.let{if(it.none{v->v.id==r.value.id})it.add(r.value)};created++;r.value};is CoreResult.Failure->null}}
         source.forEach{resolve(it.id)};return CategoryMapping(resolved,created,reused)}
 
     private fun findProductMatch(x:TransferProduct,sameStore:Boolean,byId:Map<String,Product>,bySku:Map<String,Product>,byFingerprint:Map<String,List<Product>>):Product?{if(sameStore)byId[x.id]?.let{return it};cleanSku(x.sku)?.let{bySku[normalize(it)]?.let{return it}};return byFingerprint[x.matchKey()].orEmpty().singleOrNull()}
