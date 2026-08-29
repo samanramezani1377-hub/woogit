@@ -40,6 +40,10 @@ class AppComposition(context: Context) {
     private val pending = PendingOperationRepositoryImpl(db)
     private val provider = WooCommerceClientProvider(db, secure, network.httpClient)
     private val mutationCoordinator = SqlMutationCoordinator(db)
+    private val restoredStoreId: String? = prefs.getString("active_store_id", null)
+        ?: storeLocal.all().firstOrNull { it.connection_state == "CONNECTED" && !it.credential_reference.isNullOrBlank() }?.id?.also {
+            prefs.edit().putString("active_store_id", it).apply()
+        }
 
     val storeRepository = StoreRepositoryImpl(storeLocal, secure, network.httpClient)
     val orderRepository = OrderRepositoryV1Impl(orderLocal, provider, mutationCoordinator, pending)
@@ -116,7 +120,7 @@ class AppComposition(context: Context) {
         getAttributes, getAttribute, createAttribute, updateAttribute, deleteAttribute,
         getTerms, getTerm, createTerm, updateTerm, deleteTerm, uploadMedia, deleteMedia,
         getConnectionState, getSyncState, getPending, getConflictsFn, resolveConflictFn,
-        syncPending, prefs.getString("active_store_id", null), ::rememberStore, ::forgetStore,
+        syncPending, restoredStoreId, ::rememberStore, ::forgetStore,
     )
 
     fun startBackgroundWork(storeId: String) {
