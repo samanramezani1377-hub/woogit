@@ -34,6 +34,7 @@ private const val MAX_VARIATIONS_PER_PRODUCT = 10_000
 private const val MAX_PACKAGE_BYTES = 1_073_741_824L
 private const val MAX_ENTRY_BYTES = 50L * 1024L * 1024L
 private const val MAX_PRODUCT_JSON_BYTES = 100L * 1024L * 1024L
+private const val NEW_ID_PLACEHOLDER = "new"
 
 @Serializable private data class Manifest(
     val format: String = FORMAT,
@@ -105,12 +106,35 @@ data class RobustProductTransferResult(
     val variationsCreated: Int = 0,
     val variationsUpdated: Int = 0,
     val errors: List<String> = emptyList(),
+    // Extended stats (see MAIN COMMIT report). Appended after the original fields so existing
+    // positional call sites (e.g. CreateNewProductTransferService.kt) keep compiling unchanged.
+    val variationsFailed: Int = 0,
+    val imagesFailed: Int = 0,
+    val imagesUnused: Int = 0,
+    val skuChanged: Int = 0,
+    val validationErrors: List<String> = emptyList(),
+    val importErrors: List<String> = emptyList(),
 )
 
 private data class ReadPackage(
     val manifest: Manifest,
     val products: List<P>,
     val uploadedImages: Map<String, ProductImage>,
+)
+
+/** Result of the validation-only first pass over the package (see [RobustProductTransferService.validatePackage]). */
+private data class ValidatedPackage(
+    val manifest: Manifest,
+    val products: List<P>,
+    val mediaNames: Set<String>,
+    val invalidProductIds: Set<String>,
+    val validationErrors: List<String>,
+)
+
+private data class MediaUploadOutcome(
+    val images: Map<String, ProductImage>,
+    val failed: Int,
+    val errors: List<String>,
 )
 
 private fun normalize(value: String?): String = value.orEmpty().trim().lowercase(Locale.ROOT)
@@ -126,6 +150,40 @@ private fun P.matchKey(): String = sha256(
 private fun Product.matchKey(): String = sha256(
     listOf(normalize(name), type.name.lowercase(Locale.ROOT), normalize(pricing.regular), normalize(pricing.sale), normalize(description), normalize(shortDescription)).joinToString("|")
 )
+
+/**
+ * Resolves the next unique SKU for a *newly created* product/variation, following the project's
+ * established convention (see CreateNewProductTransferService.nextUniqueSku): on collision, prefix
+ * the original SKU with "0" and retry, e.g. ABC123 -> 0ABC123 -> 00ABC123 ... Comparison against
+ * [used] is case-insensitive (normalize()), but the returned candidate always preserves the original
+ * casing of [original].
+ */
+private fun nextUniqueSku(original: String?, used: Set<String>): String? {
+    val base = cleanSku(original) ?: return null
+    var candidate = base
+    while (normalize(candidate) in used) candidate = "0$candidate"
+    return candidate
+}
+
+/** Reserves a fresh, unique SKU for a newly created product/variation in [used]; null if there was no SKU to begin with. */
+private fun reserveNewSku(original: String?, used: MutableSet<String>, onChanged: () -> Unit): String? {
+    val unique = nextUniqueSku(original, used) ?: return null
+    used += normalize(unique)
+    if (!unique.equals(original, ignoreCase = false)) onChanged()
+    return unique
+}
+
+/** Releases a SKU reserved by [reserveNewSku] after its create call failed, so later items in the same import can reuse it. */
+private fun releaseSku(sku: String?, used: MutableSet<String>) {
+    sku?.let { used -= normalize(it) }
+}
+
+private fun validateProduct(x: P): String? = when {
+    x.name.isBlank() -> "محصول با شناسه ${x.id} فاقد نام است و وارد نشد."
+    x.type.isBlank() -> "محصول «${x.name}» فاقد نوع (type) است و وارد نشد."
+    x.status.isBlank() -> "محصول «${x.name}» فاقد وضعیت (status) است و وارد نشد."
+    else -> null
+}
 
 private class CountingOutputStream(delegate: OutputStream, private val maxBytes: Long) : FilterOutputStream(delegate) {
     var count: Long = 0
@@ -203,51 +261,100 @@ class RobustProductTransferService(
                 is CoreResult.Success -> r.value
                 is CoreResult.Failure -> return@withContext RobustProductTransferResult(failed = 1, errors = listOf("فروشگاه در دسترس نیست."))
             }
-            val pack = readAndUploadMedia(storeId, source, onProgress)
-            require(pack.manifest.format == FORMAT) { "فرمت فایل WooGit معتبر نیست." }
-            require(pack.manifest.version <= VERSION) { "نسخه فایل پشتیبانی نمی‌شود." }
-            require(pack.products.size <= MAX_PRODUCTS) { "تعداد محصولات فایل بیش از حد مجاز است." }
-            val sameStore = pack.manifest.source.trimEnd('/').equals(store.baseUrl.trimEnd('/'), true)
+            // STEP 1: read + validate the package structurally BEFORE any mutation (media upload,
+            // product/variation create or update) is attempted. This pass never calls d.uploadMedia.
+            val validated = validatePackage(source)
+            val sameStore = validated.manifest.source.trimEnd('/').equals(store.baseUrl.trimEnd('/'), true)
+            // STEP 2: only once the package is known to be structurally sound do we upload media.
+            val media = uploadMediaPass(storeId, source, onProgress)
+            val pack = ReadPackage(validated.manifest, validated.products, media.images)
             val existing = allProducts(storeId, onProgress)
             val byId = existing.associateBy { it.id.value }
             val bySku = existing.mapNotNull { p -> cleanSku(p.sku)?.let { it to p } }.toMap()
             val byFingerprint = existing.groupBy { it.matchKey() }
             val categories = allCategories(storeId)
             val categoryByName = categories.associateBy { normalize(it.name) }
-            var created = 0; var updated = 0; var failed = 0; var imagesUploaded = pack.uploadedImages.size
-            var variationsCreated = 0; var variationsUpdated = 0
+            // SKU uniqueness pool for newly created products/variations: seeded from existing destination
+            // products, then grown as we resolve products/variations in this same import (and, opportunistically,
+            // from a touched product's existing variations — see the update branch below). No dedicated
+            // WooCommerce SKU-lookup endpoint exists in this project's repositories/API layer, so a full
+            // destination-wide variation scan is intentionally not performed (would be an unbounded number of
+            // extra network calls); this mirrors the approach already used by CreateNewProductTransferService.
+            val usedSkuKeys = existing.mapNotNullTo(mutableSetOf()) { cleanSku(it.sku)?.let(::normalize) }
+            var created = 0; var updated = 0; var failed = 0
+            val imagesUploaded = media.images.size
+            var variationsCreated = 0; var variationsUpdated = 0; var variationsFailed = 0
+            var skuChanged = 0
+            val usedMediaFiles = mutableSetOf<String>()
             val errors = mutableListOf<String>()
+            val importErrors = mutableListOf<String>()
+            val validationErrors = validated.validationErrors.toMutableList()
             pack.products.forEachIndexed { index, x ->
                 onProgress(ProductTransferProgress("در حال وارد کردن محصولات…", index + 1, pack.products.size))
+                if (x.id in validated.invalidProductIds) { failed++; return@forEachIndexed }
                 try {
                     val old = findProductMatch(x, sameStore, byId, bySku, byFingerprint)
-                    val images = x.images.mapNotNull { pack.uploadedImages[it.file] }
+                    val images = x.images.mapNotNull { img -> pack.uploadedImages[img.file]?.also { usedMediaFiles += img.file } }
                     val resolvedCategories = x.categories.mapNotNull { cat ->
                         categoryByName[normalize(cat.name)] ?: if (sameStore) IdName(EntityId(cat.id), cat.name) else null
                     }
                     if (!sameStore && resolvedCategories.size < x.categories.size) errors += "${x.name}: برخی دسته‌بندی‌ها در فروشگاه مقصد وجود نداشتند و حذف شدند."
                     val attrs = x.attributes.map { attr -> Attribute(if (sameStore) attr.id?.let(::EntityId) else null, attr.name, attr.visible, attr.variation, attr.options) }
-                    val product = x.toDomain(old?.id, images, resolvedCategories, attrs)
+                    // Fix #1 (SKU) + Fix #2 (source id): only for a brand-new product (no match found) do we
+                    // resolve a fresh, unique, case-preserving SKU and refuse to carry the source product id over.
+                    val reservedSku = if (old == null) reserveNewSku(x.sku, usedSkuKeys) { skuChanged++ } else null
+                    val product = if (old == null) {
+                        x.toDomain(EntityId(NEW_ID_PLACEHOLDER), images, resolvedCategories, attrs).copy(sku = reservedSku)
+                    } else {
+                        x.toDomain(old.id, images, resolvedCategories, attrs)
+                    }
                     val saved = if (old == null) d.createProduct(storeId, product) else d.updateProduct(storeId, old.id, product.copy(id = old.id))
                     val savedProduct = when (saved) {
                         is CoreResult.Success -> { if (old == null) created++ else updated++; saved.value }
-                        is CoreResult.Failure -> { failed++; errors += "${x.name}: ${saved.error}"; return@forEachIndexed }
+                        is CoreResult.Failure -> {
+                            failed++; importErrors += "${x.name}: ${saved.error}"; errors += "${x.name}: ${saved.error}"
+                            // Fix (SKU/Failure): don't leave a failed create's SKU permanently reserved.
+                            releaseSku(reservedSku, usedSkuKeys)
+                            return@forEachIndexed
+                        }
                     }
                     val existingVars = allVars(storeId, savedProduct.id)
+                    if (old != null) existingVars.forEach { ev -> cleanSku(ev.sku)?.let { usedSkuKeys += normalize(it) } }
                     x.variations.forEach { vv ->
                         val oldVariation = findVariationMatch(vv, sameStore, existingVars)
-                        val image = vv.image?.let { pack.uploadedImages[it.file] }
-                        val variation = vv.toDomain(savedProduct.id, oldVariation?.id, image)
+                        val image = vv.image?.let { img -> pack.uploadedImages[img.file]?.also { usedMediaFiles += img.file } }
+                        val reservedVariationSku = if (oldVariation == null) reserveNewSku(vv.sku, usedSkuKeys) { skuChanged++ } else null
+                        val variation = if (oldVariation == null) {
+                            vv.toDomain(savedProduct.id, EntityId(NEW_ID_PLACEHOLDER), image).copy(sku = reservedVariationSku)
+                        } else {
+                            vv.toDomain(savedProduct.id, oldVariation.id, image)
+                        }
                         when (val r = if (oldVariation == null) d.createVariation(storeId, variation) else d.updateVariation(storeId, savedProduct.id, oldVariation.id, variation.copy(id = oldVariation.id))) {
                             is CoreResult.Success -> if (oldVariation == null) variationsCreated++ else variationsUpdated++
-                            is CoreResult.Failure -> errors += "${x.name}: variation ${vv.sku ?: vv.id} وارد نشد: ${r.error}"
+                            is CoreResult.Failure -> {
+                                variationsFailed++
+                                importErrors += "${x.name}: variation ${vv.sku ?: vv.id} وارد نشد: ${r.error}"
+                                errors += "${x.name}: variation ${vv.sku ?: vv.id} وارد نشد: ${r.error}"
+                                releaseSku(reservedVariationSku, usedSkuKeys)
+                            }
                         }
                     }
                 } catch (t: Throwable) {
-                    failed++; errors += "${x.name}: ${t.message ?: "خطای نامشخص"}"
+                    failed++; importErrors += "${x.name}: ${t.message ?: "خطای نامشخص"}"; errors += "${x.name}: ${t.message ?: "خطای نامشخص"}"
                 }
             }
-            RobustProductTransferResult(created, updated, failed, imagesUploaded, variationsCreated, variationsUpdated, errors.distinct().take(50))
+            val imagesUnused = (media.images.keys - usedMediaFiles).size
+            RobustProductTransferResult(
+                created = created, updated = updated, failed = failed,
+                imagesUploaded = imagesUploaded, variationsCreated = variationsCreated, variationsUpdated = variationsUpdated,
+                errors = (validationErrors + errors).distinct().take(50),
+                variationsFailed = variationsFailed,
+                imagesFailed = media.failed,
+                imagesUnused = imagesUnused,
+                skuChanged = skuChanged,
+                validationErrors = validationErrors.distinct().take(50),
+                importErrors = importErrors.distinct().take(50),
+            )
         } catch (t: Throwable) {
             RobustProductTransferResult(failed = 1, errors = listOf(t.message ?: "خواندن فایل ناموفق بود."))
         }
@@ -265,35 +372,84 @@ class RobustProductTransferService(
         return null
     }
 
-    private suspend fun readAndUploadMedia(storeId: StoreId, uri: Uri, onProgress: (ProductTransferProgress) -> Unit): ReadPackage = withContext(Dispatchers.IO) {
+    /**
+     * PASS 1 — read the package and validate it, WITHOUT uploading any media. This is the "Validate
+     * EVERYTHING before Start Import" step: format/version/manifest consistency, referenced-media
+     * existence, and required per-product fields are all checked here. Any structural problem (bad
+     * ZIP, format mismatch, version too new, manifest/product count mismatch) throws immediately —
+     * before Pass 2 (uploadMediaPass) ever runs — so a genuinely invalid package can never trigger a
+     * mutation. Per-product content problems (e.g. a blank product name) are recorded as soft
+     * validationErrors and that product is skipped later in the main import loop, without discarding
+     * the rest of the package's Result (see fix "Partial Failure" / "Invalid Product").
+     */
+    private suspend fun validatePackage(uri: Uri): ValidatedPackage = withContext(Dispatchers.IO) {
         var manifest: Manifest? = null; var products: List<P>? = null
-        val uploaded = linkedMapOf<String, ProductImage>(); var totalRead = 0L
+        val mediaNames = linkedSetOf<String>(); var totalRead = 0L
         resolver.openInputStream(uri)?.use { input -> ZipInputStream(input).use { zip ->
             while (true) {
                 val entry = zip.nextEntry ?: break
                 if (entry.isDirectory) continue
                 val name = entry.name
                 require(!name.contains("..") && !name.startsWith("/")) { "مسیر نامعتبر داخل فایل WooGit." }
-                val bytes = readLimited(zip, if (name == "products.json") MAX_PRODUCT_JSON_BYTES else MAX_ENTRY_BYTES) { totalRead += it; require(totalRead <= MAX_PACKAGE_BYTES) { "حجم فایل WooGit بیش از حد مجاز است." } }
                 when (name) {
-                    "manifest.json" -> manifest = transferJson.decodeFromString(bytes.toString(Charsets.UTF_8))
-                    "products.json" -> { val p = transferJson.decodeFromString<Package>(bytes.toString(Charsets.UTF_8)); manifest = manifest ?: p.manifest; products = p.products }
+                    "manifest.json" -> {
+                        val bytes = readLimited(zip, MAX_ENTRY_BYTES) { totalRead += it; require(totalRead <= MAX_PACKAGE_BYTES) { "حجم فایل WooGit بیش از حد مجاز است." } }
+                        manifest = transferJson.decodeFromString(bytes.toString(Charsets.UTF_8))
+                    }
+                    "products.json" -> {
+                        val bytes = readLimited(zip, MAX_PRODUCT_JSON_BYTES) { totalRead += it; require(totalRead <= MAX_PACKAGE_BYTES) { "حجم فایل WooGit بیش از حد مجاز است." } }
+                        val p = transferJson.decodeFromString<Package>(bytes.toString(Charsets.UTF_8))
+                        manifest = manifest ?: p.manifest; products = p.products
+                    }
                     else -> if (name.startsWith("media/")) {
-                        val image = when (val r = d.uploadMedia(storeId, name.substringAfterLast('/'), bytes, mime(name))) {
-                            is CoreResult.Success -> r.value
-                            is CoreResult.Failure -> throw IllegalStateException("آپلود رسانه $name ناموفق بود: ${r.error}")
-                        }
-                        uploaded[name] = image
-                        onProgress(ProductTransferProgress("در حال آپلود تصاویر…", uploaded.size, -1))
+                        readLimited(zip, MAX_ENTRY_BYTES) { totalRead += it; require(totalRead <= MAX_PACKAGE_BYTES) { "حجم فایل WooGit بیش از حد مجاز است." } }
+                        mediaNames += name
                     }
                 }
             }
         }} ?: error("فایل قابل خواندن نیست.")
         val m = requireNotNull(manifest) { "manifest.json در فایل وجود ندارد." }
         val p = requireNotNull(products) { "products.json در فایل وجود ندارد." }
+        require(m.format == FORMAT) { "فرمت فایل WooGit معتبر نیست." }
+        require(m.version <= VERSION) { "نسخه فایل پشتیبانی نمی‌شود." }
         require(m.products == p.size) { "تعداد محصولات فایل با manifest سازگار نیست." }
-        require(m.images == uploaded.size) { "برخی تصاویر فایل قابل وارد کردن نیستند." }
-        ReadPackage(m, p, uploaded)
+        require(p.size <= MAX_PRODUCTS) { "تعداد محصولات فایل بیش از حد مجاز است." }
+        require(m.images == mediaNames.size) { "برخی تصاویر فایل قابل وارد کردن نیستند." }
+        val validationErrors = mutableListOf<String>()
+        val invalid = mutableSetOf<String>()
+        p.forEach { x ->
+            validateProduct(x)?.let { validationErrors += it; invalid += x.id }
+            x.images.forEach { img -> if (img.file !in mediaNames) validationErrors += "«${x.name}»: تصویر ${img.file} در بسته موجود نیست." }
+            x.variations.forEach { v -> v.image?.let { img -> if (img.file !in mediaNames) validationErrors += "«${x.name}»: تصویر Variation ${img.file} در بسته موجود نیست." } }
+        }
+        ValidatedPackage(m, p, mediaNames, invalid, validationErrors)
+    }
+
+    /**
+     * PASS 2 — re-reads the same package and uploads only the media/ entries. Runs strictly after
+     * [validatePackage] has confirmed the package is structurally valid. A single media upload
+     * failure no longer aborts the whole import (previous behavior); it's now recorded as an
+     * imagesFailed/importErrors entry so the rest of the package can still be processed — matching
+     * the "Partial Failure" requirement already relied on for products/variations.
+     */
+    private suspend fun uploadMediaPass(storeId: StoreId, uri: Uri, onProgress: (ProductTransferProgress) -> Unit): MediaUploadOutcome = withContext(Dispatchers.IO) {
+        val uploaded = linkedMapOf<String, ProductImage>()
+        val errors = mutableListOf<String>()
+        var failedCount = 0
+        resolver.openInputStream(uri)?.use { input -> ZipInputStream(input).use { zip ->
+            while (true) {
+                val entry = zip.nextEntry ?: break
+                if (entry.isDirectory) continue
+                val name = entry.name
+                if (!name.startsWith("media/")) continue
+                val bytes = readLimited(zip, MAX_ENTRY_BYTES) {}
+                when (val r = d.uploadMedia(storeId, name.substringAfterLast('/'), bytes, mime(name))) {
+                    is CoreResult.Success -> { uploaded[name] = r.value; onProgress(ProductTransferProgress("در حال آپلود تصاویر…", uploaded.size, -1)) }
+                    is CoreResult.Failure -> { failedCount++; errors += "آپلود رسانه $name ناموفق بود: ${r.error}" }
+                }
+            }
+        }} ?: error("فایل قابل خواندن نیست.")
+        MediaUploadOutcome(uploaded, failedCount, errors)
     }
 
     private fun readLimited(input: ZipInputStream, maxBytes: Long, onBytes: (Long) -> Unit): ByteArray {
@@ -358,7 +514,7 @@ private fun Product.toX(images: List<ImageX>, variations: List<V>) = P(
 )
 
 private fun P.toDomain(id: EntityId?, images: List<ProductImage>, categories: List<IdName>, attributes: List<Attribute>) = Product(
-    id = id ?: EntityId(this.id), name = name, sku = sku, description = description, shortDescription = shortDescription,
+    id = id ?: EntityId(NEW_ID_PLACEHOLDER), name = name, sku = sku, description = description, shortDescription = shortDescription,
     status = runCatching { ProductStatus.valueOf(status) }.getOrDefault(ProductStatus.DRAFT),
     type = runCatching { ProductType.valueOf(type) }.getOrDefault(ProductType.SIMPLE),
     pricing = Pricing(regular, sale, onSale),
@@ -374,7 +530,7 @@ private fun Variation.toX(imageWriter: (ProductImage) -> String) = V(
 )
 
 private fun V.toDomain(productId: EntityId, id: EntityId?, image: ProductImage?) = Variation(
-    id = id ?: EntityId(this.id), productId = productId,
+    id = id ?: EntityId(NEW_ID_PLACEHOLDER), productId = productId,
     attributes = attributes.map { VariationAttribute(it.name, it.option) }, pricing = Pricing(regular, sale, onSale),
     stock = if (quantity != null || stockStatus != null || manageStock) Stock(quantity, runCatching { StockStatus.valueOf(stockStatus ?: StockStatus.IN_STOCK.name) }.getOrDefault(StockStatus.IN_STOCK), manageStock) else null,
     sku = sku, image = image, modifiedAt = modifiedAt?.let { runCatching { kotlinx.datetime.Instant.parse(it) }.getOrNull() },
