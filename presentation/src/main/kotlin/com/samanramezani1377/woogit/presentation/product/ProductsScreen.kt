@@ -45,6 +45,7 @@ import com.samanramezani1377.woogit.presentation.GlassSearchField
 import com.samanramezani1377.woogit.presentation.GlassText
 import com.samanramezani1377.woogit.presentation.GlassTopBar
 import com.samanramezani1377.woogit.presentation.GlassTokens
+import com.samanramezani1377.woogit.presentation.toPersianDigits
 import com.samanramezani1377.woogit.presentation.toPersianPrice
 import com.samanramezani1377.woogit.presentation.toPersianQuantity
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -87,15 +88,8 @@ private fun ProductList(products: List<Product>, onProductClick: (String) -> Uni
             .filter { it >= (products.size - 4).coerceAtLeast(0) }
             .collect { onLoadMore() }
     }
-    LazyColumn(
-        state = listState,
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        contentPadding = PaddingValues(bottom = 104.dp),
-    ) {
-        items(products, key = { it.id.value }) { product ->
-            ProductRow(product) { onProductClick(product.id.value) }
-        }
+    LazyColumn(state = listState, modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 104.dp)) {
+        items(products, key = { it.id.value }) { product -> ProductRow(product) { onProductClick(product.id.value) } }
     }
 }
 
@@ -105,11 +99,8 @@ private fun ProductRow(product: Product, onClick: () -> Unit) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             val thumbnail = product.images.firstOrNull()
             Box(Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
-                if (thumbnail != null) {
-                    AsyncImage(model = thumbnail.src, contentDescription = thumbnail.alt ?: thumbnail.name ?: product.name, modifier = Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)), contentScale = ContentScale.Crop)
-                } else {
-                    Box(Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(Brush.linearGradient(listOf(Color(0xFFC6E6FF).copy(alpha = .72f), Color(0xFFD8CEFF).copy(alpha = .72f)))))
-                }
+                if (thumbnail != null) AsyncImage(model = thumbnail.src, contentDescription = thumbnail.alt ?: thumbnail.name ?: product.name, modifier = Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)), contentScale = ContentScale.Crop)
+                else Box(Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(Brush.linearGradient(listOf(Color(0xFFC6E6FF).copy(alpha = .72f), Color(0xFFD8CEFF).copy(alpha = .72f)))))
             }
             Row(Modifier.weight(1f), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
