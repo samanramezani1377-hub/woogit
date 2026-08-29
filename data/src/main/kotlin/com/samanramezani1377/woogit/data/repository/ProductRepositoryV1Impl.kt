@@ -24,20 +24,8 @@ private fun Throwable.isProductRetryableHttp() = this is HttpApiException && sta
 private fun WooProductTypedDto.toDomain() = Product(
     id = EntityId(id.toString()), name = name, sku = sku, description = description,
     shortDescription = short_description,
-    status = when (status.trim().lowercase()) {
-        "publish" -> ProductStatus.PUBLISHED
-        "pending" -> ProductStatus.PENDING
-        "private" -> ProductStatus.PRIVATE
-        "draft" -> ProductStatus.DRAFT
-        else -> ProductStatus.OTHER
-    },
-    type = when (type.trim().lowercase()) {
-        "grouped" -> ProductType.GROUPED
-        "external" -> ProductType.EXTERNAL
-        "variable" -> ProductType.VARIABLE
-        "simple" -> ProductType.SIMPLE
-        else -> ProductType.OTHER
-    },
+    status = when (status.trim().lowercase()) { "publish" -> ProductStatus.PUBLISHED; "pending" -> ProductStatus.PENDING; "private" -> ProductStatus.PRIVATE; "draft" -> ProductStatus.DRAFT; else -> ProductStatus.OTHER },
+    type = when (type.trim().lowercase()) { "grouped" -> ProductType.GROUPED; "external" -> ProductType.EXTERNAL; "variable" -> ProductType.VARIABLE; "simple" -> ProductType.SIMPLE; else -> ProductType.OTHER },
     pricing = Pricing(regular_price, sale_price, on_sale),
     stock = Stock(stock_quantity, when (stock_status.trim().lowercase()) { "outofstock" -> StockStatus.OUT_OF_STOCK; "onbackorder" -> StockStatus.ON_BACKORDER; "instock" -> StockStatus.IN_STOCK; else -> StockStatus.IN_STOCK }, manage_stock),
     images = images.map { image -> ProductImage(image.id?.toString()?.let(::EntityId), image.src.orEmpty(), image.name, image.alt) },
@@ -61,24 +49,28 @@ private fun Product.toDto(operationId: String? = null) = WooProductTypedDto(
     meta_data = operationId?.let { listOf(WooMetaDataDto(key = "_woogit_operation_id", value = JsonPrimitive(it))) } ?: emptyList(),
 )
 
-class ProductRepositoryV1Impl(
-    private val local: LocalProductDataSource<Product>, private val provider: WooCommerceClientProvider,
-    private val coordinator: MutationCoordinator, private val pending: PendingOperationRepository,
-) : ProductRepository {
+private fun verifyProductMutation(requested: Product, remote: WooProductTypedDto): CoreResult<Unit> {
+    val expectedStatus = when (requested.status) { ProductStatus.PUBLISHED -> "publish"; ProductStatus.PENDING -> "pending"; ProductStatus.PRIVATE -> "private"; ProductStatus.DRAFT -> "draft"; ProductStatus.OTHER -> null }
+    val expectedType = when (requested.type) { ProductType.SIMPLE -> "simple"; ProductType.GROUPED -> "grouped"; ProductType.EXTERNAL -> "external"; ProductType.VARIABLE -> "variable"; ProductType.OTHER -> null }
+    val statusOk = expectedStatus == null || remote.status.trim().equals(expectedStatus, true)
+    val typeOk = expectedType == null || remote.type.trim().equals(expectedType, true)
+    return if (statusOk && typeOk) CoreResult.Success(Unit)
+    else CoreResult.Failure(DomainError.Validation("WooCommerce did not apply the requested product status/type."))
+}
+
+class ProductRepositoryV1Impl(private val local: LocalProductDataSource<Product>, private val provider: WooCommerceClientProvider, private val coordinator: MutationCoordinator, private val pending: PendingOperationRepository) : ProductRepository {
     override suspend fun get(storeId: StoreId, id: EntityId): CoreResult<Product> = provider.client(storeId).fold(
         { (store, api) -> api.product(store.baseUrl, id.value.toLong()).fold({ remote -> val value = remote.toDomain(); local.upsert(storeId, value); CoreResult.Success(value) }, { local.get(storeId, id) }) },
         { local.get(storeId, id) },
     )
 
-    override suspend fun list(storeId: StoreId, page: Int, perPage: Int, search: String?): CoreResult<List<Product>> {
-        return provider.client(storeId).fold(
-            { (store, api) -> api.products(store.baseUrl, page, perPage, search?.trim()?.takeIf { it.isNotEmpty() }).fold(
-                onSuccess = { remote -> val values = remote.map(WooProductTypedDto::toDomain); values.forEach { local.upsert(storeId, it) }; CoreResult.Success(values) },
-                onFailure = { error -> if (page == 1 && search.isNullOrBlank()) local.list(storeId) else CoreResult.Failure(error.productDomainError()) },
-            ) },
-            { error -> if (page == 1 && search.isNullOrBlank()) local.list(storeId) else CoreResult.Failure(error) },
-        )
-    }
+    override suspend fun list(storeId: StoreId, page: Int, perPage: Int, search: String?): CoreResult<List<Product>> = provider.client(storeId).fold(
+        { (store, api) -> api.products(store.baseUrl, page, perPage, search?.trim()?.takeIf { it.isNotEmpty() }).fold(
+            onSuccess = { remote -> val values = remote.map(WooProductTypedDto::toDomain); values.forEach { local.upsert(storeId, it) }; CoreResult.Success(values) },
+            onFailure = { error -> if (page == 1 && search.isNullOrBlank()) local.list(storeId) else CoreResult.Failure(error.productDomainError()) },
+        ) },
+        { error -> if (page == 1 && search.isNullOrBlank()) local.list(storeId) else CoreResult.Failure(error) },
+    )
 
     override suspend fun refresh(storeId: StoreId, page: Int, perPage: Int, modifiedAfter: String?): CoreResult<List<Product>> = provider.client(storeId).fold(
         { (store, api) -> api.products(store.baseUrl, page, perPage, null, modifiedAfter).fold(onSuccess = { remote -> val values = remote.map(WooProductTypedDto::toDomain); values.forEach { local.upsert(storeId, it) }; CoreResult.Success(values) }, onFailure = { error -> if (page == 1 && modifiedAfter == null) local.list(storeId) else CoreResult.Failure(error.productDomainError()) }) },
@@ -96,7 +88,15 @@ class ProductRepositoryV1Impl(
         val payload = productJson.encodeToString(product.toDto()); val operationId = "product-update-${storeId.value}-${id.value}-${hash(payload).take(20)}"
         val operation = PendingOperation(EntityId(operationId), storeId, "product", id, OperationType.UPDATE, payload, hash(payload), 0, null, null)
         val localResult = coordinator.execute(operation) { local.upsert(storeId, product) }; if (localResult is CoreResult.Failure) return localResult
-        return provider.client(storeId).fold({ (store, api) -> api.updateProduct(store.baseUrl, id.value.toLong(), product.toDto(operationId)).fold(onSuccess = { remote -> val value = remote.toDomain(); local.upsert(storeId, value); pending.markSucceeded(operation.id); CoreResult.Success(value) }, onFailure = { error -> if (error.isProductRetryableHttp()) CoreResult.Success(product) else CoreResult.Failure(error.productDomainError()) }) }, { error -> if (error.recoverable) CoreResult.Success(product) else CoreResult.Failure(error) })
+        return provider.client(storeId).fold({ (store, api) -> api.updateProduct(store.baseUrl, id.value.toLong(), product.toDto(operationId)).fold(
+            onSuccess = { remote ->
+                when (val verified = verifyProductMutation(product, remote)) {
+                    is CoreResult.Failure -> verified
+                    is CoreResult.Success -> { val value = remote.toDomain(); local.upsert(storeId, value); pending.markSucceeded(operation.id); CoreResult.Success(value) }
+                }
+            },
+            onFailure = { error -> if (error.isProductRetryableHttp()) CoreResult.Success(product) else CoreResult.Failure(error.productDomainError()) },
+        ) }, { error -> if (error.recoverable) CoreResult.Success(product) else CoreResult.Failure(error) })
     }
 
     override suspend fun delete(storeId: StoreId, id: EntityId): CoreResult<Unit> {
