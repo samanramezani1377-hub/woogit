@@ -3,7 +3,16 @@ package com.samanramezani1377.woogit.presentation.settings
 import com.samanramezani1377.woogit.core.domain.model.ProductImage
 import kotlinx.serialization.Serializable
 
-@Serializable data class ProductTransferManifest(val format:String="woogit-products",val version:Int=1,val source:String,val exportedAt:String,val products:Int,val images:Int)
+@Serializable
+data class ProductTransferManifest(
+    val format:String=ProductTransferFormat.FORMAT,
+    val version:Int=ProductTransferFormat.FORMAT_VERSION,
+    val layoutVersion:Int=ProductTransferFormat.LAYOUT_VERSION,
+    val source:String,
+    val exportedAt:String,
+    val products:Int,
+    val images:Int
+)
 @Serializable data class ProductTransferPackage(val manifest:ProductTransferManifest,val products:List<TransferProduct>,val globalAttributes:List<TransferGlobalAttribute> = emptyList())
 @Serializable data class TransferGlobalAttribute(val id:String,val name:String,val slug:String,val terms:List<TransferTerm> = emptyList())
 @Serializable data class TransferTerm(val id:String?=null,val name:String,val slug:String?=null)
