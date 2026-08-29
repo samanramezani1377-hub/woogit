@@ -4,8 +4,14 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.contentOrNull
 
 private val typedJson = Json { ignoreUnknownKeys = true; explicitNulls = false }
+
 @Serializable data class WooAddressDto(val first_name:String?=null,val last_name:String?=null,val company:String?=null,val address_1:String?=null,val address_2:String?=null,val city:String?=null,val state:String?=null,val postcode:String?=null,val country:String?=null,val phone:String?=null)
 @Serializable data class WooLineItemDto(val id:Long,val name:String="",val product_id:Long=0,val variation_id:Long=0,val quantity:Double=0.0,val subtotal:String="0",val total:String="0")
 @Serializable data class WooShippingLineDto(val id:Long=0,val method_id:String?=null,val method_title:String?=null,val total:String?=null)
@@ -20,7 +26,21 @@ private val typedJson = Json { ignoreUnknownKeys = true; explicitNulls = false }
 @Serializable data class WooVariationTypedDto(val id:Long,val product_id:Long=0,val sku:String?=null,val price:String?=null,val regular_price:String?=null,val sale_price:String?=null,val stock_quantity:Double?=null,val stock_status:String="instock",val manage_stock:Boolean=false,val image:WooImageTypedDto?=null,val date_modified_gmt:String?=null,val attributes:List<WooProductAttributeDto> = emptyList())
 @Serializable data class WooGlobalAttributeDto(val id:Long,val name:String="",val slug:String="")
 @Serializable data class WooAttributeTermDto(val id:Long,val name:String="",val slug:String="")
-@Serializable data class WooSystemStatusDto(val environment:Map<String,String> = emptyMap(), val settings:WooSystemStatusSettingsDto = WooSystemStatusSettingsDto())
+
+/** WooCommerce system-status environment contains mixed JSON primitive types. Keep it raw so a new WC field cannot break store validation. */
+@Serializable data class WooSystemStatusDto(
+    val environment: Map<String, JsonElement> = emptyMap(),
+    val settings: WooSystemStatusSettingsDto = WooSystemStatusSettingsDto()
+) {
+    fun environmentString(key: String): String? = environment[key]?.asText()
+    fun environmentBoolean(key: String): Boolean? = environment[key]?.asBoolean()
+    fun environmentInt(key: String): Int? = environment[key]?.asInt()
+}
+
+private fun JsonElement.asText(): String? = (this as? JsonPrimitive)?.contentOrNull
+private fun JsonElement.asBoolean(): Boolean? = (this as? JsonPrimitive)?.booleanOrNull
+private fun JsonElement.asInt(): Int? = (this as? JsonPrimitive)?.intOrNull
+
 @Serializable data class WooMediaTitleDto(val rendered:String="")
 @Serializable data class WooMediaDto(val id:Long,val source_url:String="",val title:WooMediaTitleDto?=null,val alt_text:String="")
 
