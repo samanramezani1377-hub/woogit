@@ -29,14 +29,11 @@ internal class ProductTransferMedia(
     ): TransferMediaOutcome = withContext(Dispatchers.IO) {
         val destination = readDestinationMedia(storeId)
 
-        // Keep cheap indexes only. Destination bytes are fetched lazily and cached by URL,
-        // so a large destination library does not cause a full media download/index pass.
-        val byUrl = destination
-            .asSequence()
+        // Cheap metadata indexes only. Destination bytes are fetched lazily and cached.
+        val byUrl = destination.asSequence()
             .filter { it.src.isNotBlank() }
-            .associateBy { normalize(it.src) }
-        val byName = destination
-            .asSequence()
+            .associateBy { canonicalUrl(it.src) }
+        val byName = destination.asSequence()
             .filter { it.src.isNotBlank() }
             .groupBy { normalize(fileName(it.name ?: it.src)) }
 
@@ -50,12 +47,12 @@ internal class ProductTransferMedia(
         }
 
         val resolved = linkedMapOf<String, ProductImage>()
-        // One source-content hash -> one destination media. This is the main fast path
-        // for packages containing the same image under multiple filenames/references.
+        // Source content hash -> destination media. This also deduplicates repeated package files.
         val byContentHash = mutableMapOf<String, ProductImage>()
-        // One destination URL -> hash, including failed lookups. This guarantees that a
-        // destination image is never downloaded repeatedly during one import.
+        // Canonical destination URL -> hash. Both successful and failed lookups are cached.
         val remoteHashCache = mutableMapOf<String, String?>()
+        // Package file -> hash, so repeated references to the same file never hash the bytes twice.
+        val sourceHashCache = mutableMapOf<String, String>()
         val errors = mutableListOf<String>()
         var failed = 0
         var uploaded = 0
@@ -68,36 +65,31 @@ internal class ProductTransferMedia(
 
                     val file = entry.name
                     val bytes = readLimited(zip)
-                    val hash = sha256(bytes)
+                    val hash = sourceHashCache.getOrPut(file) { sha256(bytes) }
                     val sourceImage = sourceByFile[file]
 
-                    val exact = sourceImage?.src
-                        ?.let { candidateUrl ->
-                            byUrl[normalize(candidateUrl)]?.takeIf {
-                                remoteHash(it.src, remoteHashCache) == hash
-                            }
+                    val exact = sourceImage?.src?.let { candidateUrl ->
+                        byUrl[canonicalUrl(candidateUrl)]?.takeIf {
+                            remoteHash(it.src, remoteHashCache) == hash
                         }
+                    }
 
                     val cached = byContentHash[hash]
 
-                    // Only inspect same-name destination candidates after the cheap exact-URL
-                    // and content-cache paths have failed. Candidate URLs are de-duplicated so
-                    // the same destination media can never be fetched twice for one source file.
+                    // Filename matching is the expensive fallback. Each destination URL is
+                    // considered at most once per import because remoteHash has a canonical URL cache.
                     val byFilename = if (exact == null && cached == null) {
                         val wantedName = normalize(fileName(sourceImage?.name ?: file))
-                        byName[wantedName]
-                            .orEmpty()
+                        byName[wantedName].orEmpty()
                             .asSequence()
-                            .distinctBy { normalize(it.src) }
+                            .distinctBy { canonicalUrl(it.src) }
                             .mapNotNull { candidate ->
                                 remoteHash(candidate.src, remoteHashCache)
                                     ?.takeIf { it == hash }
                                     ?.let { candidate }
                             }
                             .firstOrNull()
-                    } else {
-                        null
-                    }
+                    } else null
 
                     val reused = exact ?: cached ?: byFilename
                     if (reused != null) {
@@ -114,15 +106,8 @@ internal class ProductTransferMedia(
                                 resolved[file] = result.value
                                 byContentHash[hash] = result.value
                                 uploaded++
-                                onProgress(
-                                    ProductTransferProgress(
-                                        "در حال آپلود تصاویر…",
-                                        uploaded,
-                                        -1,
-                                    )
-                                )
+                                onProgress(ProductTransferProgress("در حال آپلود تصاویر…", uploaded, -1))
                             }
-
                             is CoreResult.Failure -> {
                                 failed++
                                 errors += "آپلود رسانه $file ناموفق بود: ${result.error}"
@@ -154,27 +139,27 @@ internal class ProductTransferMedia(
     }
 
     private fun remoteHash(src: String, cache: MutableMap<String, String?>): String? {
-        if (src.isBlank()) return null
-        val key = normalize(src)
+        val key = canonicalUrl(src)
+        if (key.isBlank()) return null
         if (cache.containsKey(key)) return cache[key]
-        val value = remoteBytes(src)?.let(::sha256)
+        val value = remoteBytes(key)?.let(::sha256)
         cache[key] = value
         return value
     }
 
     private fun remoteBytes(src: String): ByteArray? {
-        val connection = try {
-            URL(src).openConnection() as HttpURLConnection
-        } catch (_: Throwable) {
-            return null
-        }
-
+        var connection: HttpURLConnection? = null
         return try {
+            connection = URL(src).openConnection() as HttpURLConnection
             connection.connectTimeout = 15_000
             connection.readTimeout = 30_000
             connection.instanceFollowRedirects = true
+            connection.setRequestProperty("User-Agent", "WooGit-Media-Dedup/1.0")
+            val length = connection.contentLengthLong
+            if (length > MEDIA_MAX_BYTES) return null
             connection.inputStream.use { input ->
-                val out = ByteArrayOutputStream()
+                val initialCapacity = if (length in 1..Int.MAX_VALUE.toLong()) length.toInt() else BUFFER
+                val out = ByteArrayOutputStream(initialCapacity)
                 val buffer = ByteArray(BUFFER)
                 var total = 0L
                 while (true) {
@@ -189,9 +174,11 @@ internal class ProductTransferMedia(
         } catch (_: Throwable) {
             null
         } finally {
-            connection.disconnect()
+            connection?.disconnect()
         }
     }
+
+    private fun canonicalUrl(value: String): String = value.trim().removeSuffix("/")
 
     private fun fileName(value: String): String =
         value.substringBefore('?').substringAfterLast('/').trim()
