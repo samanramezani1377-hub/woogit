@@ -59,17 +59,10 @@ internal class DashboardViewModel(
         }
     }
 
-    fun stopConnectionHealthMonitor() {
-        healthMonitorJob?.cancel()
-        healthMonitorJob = null
-    }
-
+    fun stopConnectionHealthMonitor() { healthMonitorJob?.cancel(); healthMonitorJob = null }
     fun onNetworkAvailable() { viewModelScope.launch { checkConnection() } }
 
-    override fun onCleared() {
-        healthMonitorJob?.cancel()
-        super.onCleared()
-    }
+    override fun onCleared() { healthMonitorJob?.cancel(); super.onCleared() }
 
     private suspend fun checkConnection(): ConnectionState {
         if (healthCheckInFlight) return _uiState.value.connectionState
@@ -88,9 +81,8 @@ internal class DashboardViewModel(
             }
             _uiState.value = _uiState.value.copy(connectionState = state, lastConnectionCheckAtMillis = System.currentTimeMillis())
             state
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Throwable) {
+        } catch (e: CancellationException) { throw e }
+        catch (e: Throwable) {
             PresentationTechnicalErrorReporter.report("Dashboard", "DashboardViewModel.checkConnection", "Connection check", "ارتباط با فروشگاه برقرار نشد.", throwable = e)
             _uiState.value = _uiState.value.copy(connectionState = ConnectionState.ERROR, lastConnectionCheckAtMillis = System.currentTimeMillis())
             ConnectionState.ERROR
@@ -129,7 +121,7 @@ internal class DashboardViewModel(
             }
         }
         val salesSummary = when (val result = dependencies.getSalesSummary(storeId)) {
-            is CoreResult.Success -> result.value
+            is CoreResult.Success -> result.value.copy(netSales = DashboardStateMapper.netSales(orders).toPlainString())
             is CoreResult.Failure -> {
                 PresentationTechnicalErrorReporter.report("Dashboard", "DashboardViewModel.refreshInternal", "Load sales summary", PresentationErrorMapper.message(result.error), result.error.toString())
                 _uiState.value.salesSummary
