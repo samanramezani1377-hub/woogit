@@ -15,9 +15,8 @@ import kotlinx.serialization.json.Json
 private val repoJson = Json { ignoreUnknownKeys = true; explicitNulls = false }
 private fun Throwable.toDomain(): DomainError = when (this) { is HttpApiException -> when (statusCode) { 401 -> DomainError.Authentication("Authentication failed"); 403 -> DomainError.Permission("Permission denied"); 404 -> DomainError.NotFound("remote", statusCode.toString()); 409 -> DomainError.Conflict("Remote conflict"); 422 -> DomainError.Validation("Validation failed"); 429 -> DomainError.RateLimited("Rate limited"); in 500..599 -> DomainError.Server("Server error"); else -> DomainError.Unknown("HTTP $statusCode") }; else -> DomainError.Network(message ?: "Network failure") }
 private fun Throwable?.isRetryableHttp() = this is HttpApiException && statusCode in 408..599
-@Serializable private data class VariationWrite(val sku:String?=null,val regular_price:String?=null,val sale_price:String?=null,val stock_quantity:Double?=null,val stock_status:String="instock",val manage_stock:Boolean=false,val image:WooImageTypedDto?=null,val attributes:List<WooProductAttributeDto> = emptyList())
 @Serializable private data class AttributeWrite(val name:String,val slug:String)
-@Serializable private data class TermWrite(val name:String,val slug:String?=null)
+@Serializable private data class TermWrite(val name:String,val slug:String)
 @Serializable private data class NoteWrite(val note:String,val customer_note:Boolean)
 
 class VariationRepositoryImpl(private val local:LocalVariationDataSource,private val provider:WooCommerceClientProvider,private val coordinator:MutationCoordinator,private val pending:PendingOperationRepository):VariationRepository {
@@ -28,29 +27,19 @@ class VariationRepositoryImpl(private val local:LocalVariationDataSource,private
  override suspend fun delete(storeId:StoreId,productId:EntityId,id:EntityId):CoreResult<Unit>{val op=PendingOperation(EntityId("variation-delete-${storeId.value}-${productId.value}-${id.value}"),storeId,"variation",id,OperationType.DELETE,"{}",id.value,0,null,null);val localResult=coordinator.execute(op){local.delete(storeId,productId,id)};if(localResult is CoreResult.Failure)return localResult;return provider.client(storeId).fold({(store,api)->api.deleteVariation(store.baseUrl,productId.value.toLong(),id.value.toLong()).fold({pending.markSucceeded(op.id);CoreResult.Success(Unit)},{e->if(e.isRetryableHttp())CoreResult.Success(Unit)else CoreResult.Failure(e.toDomain())})},{e->if(e.recoverable)CoreResult.Success(Unit)else CoreResult.Failure(e)})}
  private suspend fun mutate(storeId:StoreId,value:Variation,type:OperationType,remote:suspend(TypedWooCommerceApi,StoreConnection)->Result<WooVariationTypedDto>):CoreResult<Variation>{val payload=repoJson.encodeToString(value.toDto());val op=PendingOperation(EntityId("variation-${type.name.lowercase()}-${storeId.value}-${value.productId.value}-${value.id.value}"),storeId,"variation",value.id,type,payload,payload.hashCode().toString(),0,null,null);val localResult=coordinator.execute(op){local.upsert(storeId,value)};if(localResult is CoreResult.Failure)return localResult;return provider.client(storeId).fold({(store,api)->remote(api,store).fold({raw->val d=raw.toDomain(value.productId);local.upsert(storeId,d);pending.markSucceeded(op.id);CoreResult.Success(d)},{e->if(e.isRetryableHttp())CoreResult.Success(value)else CoreResult.Failure(e.toDomain())})},{e->if(e.recoverable)CoreResult.Success(value)else CoreResult.Failure(e)})}
 }
-private fun WooVariationTypedDto.toDomain(productId:EntityId)=Variation(EntityId(id.toString()),productId,attributes.map{VariationAttribute(it.name,it.options.firstOrNull().orEmpty())},Pricing(regular_price,sale_price,sale_price!=null),Stock(stock_quantity,when(stock_status){"outofstock"->StockStatus.OUT_OF_STOCK;"onbackorder"->StockStatus.ON_BACKORDER;else->StockStatus.IN_STOCK},manage_stock),sku,image?.let{ProductImage(it.id?.let{v->EntityId(v.toString())},it.src.orEmpty(),it.name,it.alt)},date_modified_gmt?.let{kotlinx.datetime.Instant.parse(it)})
+private fun WooVariationTypedDto.toDomain(productId:EntityId)=Variation(EntityId(id.toString()),productId,attributes.map{VariationAttribute(it.name,it.option)},Pricing(regular_price,sale_price,sale_price!=null),Stock(stock_quantity,when(stock_status){"outofstock"->StockStatus.OUT_OF_STOCK;"onbackorder"->StockStatus.ON_BACKORDER;else->StockStatus.IN_STOCK},manage_stock),sku,image?.let{ProductImage(it.id?.let{v->EntityId(v.toString())},it.src.orEmpty(),it.name,it.alt)},date_modified_gmt?.let{kotlinx.datetime.Instant.parse(it)})
 
 private fun Variation.toDto(): WooVariationTypedDto {
     val regular = pricing.regular?.trim()?.takeIf { it.isNotBlank() }
     val sale = pricing.sale?.trim()?.takeIf { it.isNotBlank() && it != regular }
-    val stockStatus = when (stock?.status) {
-        StockStatus.OUT_OF_STOCK -> "outofstock"
-        StockStatus.ON_BACKORDER -> "onbackorder"
-        StockStatus.IN_STOCK, null -> "instock"
-    }
+    val stockStatus = when (stock?.status) { StockStatus.OUT_OF_STOCK -> "outofstock"; StockStatus.ON_BACKORDER -> "onbackorder"; StockStatus.IN_STOCK, null -> "instock" }
     return WooVariationTypedDto(
-        id = id.value.toLongOrNull() ?: 0L,
-        product_id = productId.value.toLongOrNull() ?: 0L,
-        sku = sku?.trim()?.takeIf { it.isNotBlank() },
-        regular_price = regular,
-        sale_price = sale,
-        price = sale ?: regular,
-        stock_quantity = stock?.quantity,
-        stock_status = stockStatus,
-        manage_stock = stock?.manageStock ?: false,
+        id = id.value.toLongOrNull() ?: 0L, product_id = productId.value.toLongOrNull() ?: 0L,
+        sku = sku?.trim()?.takeIf { it.isNotBlank() }, regular_price = regular, sale_price = sale, price = sale ?: regular,
+        stock_quantity = stock?.quantity, stock_status = stockStatus, manage_stock = stock?.manageStock ?: false,
         image = image?.let { WooImageTypedDto(it.id?.value?.toLongOrNull(), it.src, it.name, it.alt) },
         date_modified_gmt = modifiedAt?.toString(),
-        attributes = attributes.filter { it.name.isNotBlank() && it.option.isNotBlank() }.map { WooProductAttributeDto(null, it.name.trim(), true, true, listOf(it.option.trim())) },
+        attributes = attributes.filter { it.name.isNotBlank() && it.option.isNotBlank() }.map { WooVariationAttributeDto(null, it.name.trim(), it.option.trim()) },
     )
 }
 
