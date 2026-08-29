@@ -32,6 +32,7 @@ private fun ProductStatus.toPersianLabel(): String = when (this) {
     ProductStatus.DRAFT -> "پیش‌نویس"
     ProductStatus.PENDING -> "در انتظار"
     ProductStatus.PRIVATE -> "خصوصی"
+    ProductStatus.OTHER -> "سایر"
 }
 
 private fun ProductType.toPersianLabel(): String = when (this) {
@@ -39,6 +40,7 @@ private fun ProductType.toPersianLabel(): String = when (this) {
     ProductType.VARIABLE -> "متغیر"
     ProductType.GROUPED -> "گروهی"
     ProductType.EXTERNAL -> "خارجی"
+    ProductType.OTHER -> "سایر"
 }
 
 private fun String?.toPersianPriceOrDash(): String = this?.trim()?.takeIf { it.isNotBlank() }?.toPersianPrice()?.let { "$it تومان" } ?: "—"
