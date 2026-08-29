@@ -1,13 +1,14 @@
 package com.samanramezani1377.woogit.presentation.settings
 
 import com.samanramezani1377.woogit.core.domain.model.ProductImage
+import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.Serializable
 
 @Serializable
 data class ProductTransferManifest(
-    val format:String=ProductTransferFormat.FORMAT,
-    val version:Int=ProductTransferFormat.FORMAT_VERSION,
-    val layoutVersion:Int=ProductTransferFormat.LAYOUT_VERSION,
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) val format:String=ProductTransferFormat.FORMAT,
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) val version:Int=ProductTransferFormat.FORMAT_VERSION,
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) val layoutVersion:Int=ProductTransferFormat.LAYOUT_VERSION,
     val source:String,
     val exportedAt:String,
     val products:Int,
