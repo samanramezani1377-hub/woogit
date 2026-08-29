@@ -159,11 +159,9 @@ internal fun ProductEditorScreen(
 private fun AttributeSelectionCard(value: String, onChanged: (String) -> Unit) {
     val attributes = remember(value) { parseEditableAttributes(value) }
     GlassCard {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             GlassText("ویژگی‌های محصول", style = MaterialTheme.typography.titleMedium)
-            if (attributes.isEmpty()) {
-                GlassText("این محصول هنوز ویژگی‌ای ندارد. ویژگی را ابتدا در WooCommerce به خود محصول اضافه کنید.", style = MaterialTheme.typography.bodySmall)
-            } else {
+            if (attributes.isNotEmpty()) {
                 attributes.forEachIndexed { index, attribute ->
                     GlassText(attribute.name, style = MaterialTheme.typography.titleSmall)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -180,8 +178,9 @@ private fun AttributeSelectionCard(value: String, onChanged: (String) -> Unit) {
                             )
                         }
                     }
-                    GlassText("برای انتخاب چند مقدار، چند گزینه را همزمان انتخاب کنید. مقدارهای فعلی با همان الگوی انتخاب دسته‌بندی نمایش داده می‌شوند.", style = MaterialTheme.typography.bodySmall)
                 }
+            } else {
+                GlassText("ویژگی‌ای از فروشگاه دریافت نشد.")
             }
         }
     }
