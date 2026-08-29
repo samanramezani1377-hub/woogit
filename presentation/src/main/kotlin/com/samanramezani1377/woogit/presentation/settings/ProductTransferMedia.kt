@@ -5,6 +5,7 @@ import android.net.Uri
 import com.samanramezani1377.woogit.core.domain.error.CoreResult
 import com.samanramezani1377.woogit.core.domain.model.ProductImage
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
+import com.samanramezani1377.woogit.debug.TechnicalErrorReporter
 import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -27,81 +28,94 @@ internal class ProductTransferMedia(
         products: List<TransferProduct>,
         onProgress: (ProductTransferProgress) -> Unit,
     ): TransferMediaOutcome = withContext(Dispatchers.IO) {
-        val destination = readDestinationMedia(storeId)
+        try {
+            uploadInternal(storeId, source, products, onProgress)
+        } catch (t: Throwable) {
+            TechnicalErrorReporter.report(
+                feature="Product Transfer",
+                location="ProductTransferMedia.upload",
+                operation="IMPORT_MEDIA",
+                userMessage="انتقال تصاویر با خطای فنی مواجه شد.",
+                throwable=t,
+                type="PRODUCT_TRANSFER_MEDIA_EXCEPTION",
+                details="storeId=${storeId.value}; source=$source",
+            )
+            throw t
+        }
+    }
 
-        // Cheap metadata indexes only. Destination bytes are fetched lazily and cached.
+    private suspend fun uploadInternal(
+        storeId: StoreId,
+        source: Uri,
+        products: List<TransferProduct>,
+        onProgress: (ProductTransferProgress) -> Unit,
+    ): TransferMediaOutcome {
+        val destination = readDestinationMedia(storeId)
         val byUrl = destination.asSequence()
             .filter { it.src.isNotBlank() }
             .associateBy { canonicalUrl(it.src) }
         val byName = destination.asSequence()
             .filter { it.src.isNotBlank() }
             .groupBy { normalize(fileName(it.name ?: it.src)) }
-
         val sourceByFile = buildMap<String, TransferImage> {
             products.forEach { product ->
                 product.images.forEach { put(it.file, it) }
-                product.variations.forEach { variation ->
-                    variation.image?.let { put(it.file, it) }
-                }
+                product.variations.forEach { variation -> variation.image?.let { put(it.file, it) } }
             }
         }
-
         val resolved = linkedMapOf<String, ProductImage>()
-        // Source content hash -> destination media. This also deduplicates repeated package files.
         val byContentHash = mutableMapOf<String, ProductImage>()
-        // Canonical destination URL -> hash. Both successful and failed lookups are cached.
         val remoteHashCache = mutableMapOf<String, String?>()
-        // Package file -> hash, so repeated references to the same file never hash the bytes twice.
         val sourceHashCache = mutableMapOf<String, String>()
         val errors = mutableListOf<String>()
         var failed = 0
         var uploaded = 0
-
         resolver.openInputStream(source)?.use { input ->
             ZipInputStream(input).use { zip ->
                 while (true) {
                     val entry = zip.nextEntry ?: break
                     if (entry.isDirectory || !entry.name.startsWith("media/")) continue
-
                     val file = entry.name
-                    val bytes = readLimited(zip)
+                    val bytes = try {
+                        readLimited(zip)
+                    } catch (t: Throwable) {
+                        failed++
+                        val message = "خواندن رسانه $file ناموفق بود: ${t.message ?: "خطای نامشخص"}"
+                        errors += message
+                        TechnicalErrorReporter.report(
+                            feature="Product Transfer",
+                            location="ProductTransferMedia.readLimited",
+                            operation="READ_MEDIA_ENTRY",
+                            userMessage="خواندن تصویر انتقالی ناموفق بود.",
+                            throwable=t,
+                            type="PRODUCT_TRANSFER_MEDIA_READ_ERROR",
+                            details="file=$file; source=$source",
+                        )
+                        continue
+                    }
                     val hash = sourceHashCache.getOrPut(file) { sha256(bytes) }
                     val sourceImage = sourceByFile[file]
-
                     val exact = sourceImage?.src?.let { candidateUrl ->
                         byUrl[canonicalUrl(candidateUrl)]?.takeIf {
                             remoteHash(it.src, remoteHashCache) == hash
                         }
                     }
-
                     val cached = byContentHash[hash]
-
-                    // Filename matching is the expensive fallback. Each destination URL is
-                    // considered at most once per import because remoteHash has a canonical URL cache.
                     val byFilename = if (exact == null && cached == null) {
                         val wantedName = normalize(fileName(sourceImage?.name ?: file))
-                        byName[wantedName].orEmpty()
-                            .asSequence()
+                        byName[wantedName].orEmpty().asSequence()
                             .distinctBy { canonicalUrl(it.src) }
                             .mapNotNull { candidate ->
-                                remoteHash(candidate.src, remoteHashCache)
-                                    ?.takeIf { it == hash }
-                                    ?.let { candidate }
+                                remoteHash(candidate.src, remoteHashCache)?.takeIf { it == hash }?.let { candidate }
                             }
                             .firstOrNull()
                     } else null
-
                     val reused = exact ?: cached ?: byFilename
                     if (reused != null) {
                         resolved[file] = reused
                         byContentHash.putIfAbsent(hash, reused)
                     } else {
-                        when (val result = d.uploadMedia(
-                            storeId,
-                            fileName(file),
-                            bytes,
-                            mime(file),
-                        )) {
+                        when (val result = d.uploadMedia(storeId, fileName(file), bytes, mime(file))) {
                             is CoreResult.Success -> {
                                 resolved[file] = result.value
                                 byContentHash[hash] = result.value
@@ -110,19 +124,27 @@ internal class ProductTransferMedia(
                             }
                             is CoreResult.Failure -> {
                                 failed++
-                                errors += "آپلود رسانه $file ناموفق بود: ${result.error}"
+                                val message = "آپلود رسانه $file ناموفق بود: ${result.error}"
+                                errors += message
+                                TechnicalErrorReporter.reportHandled(
+                                    feature="Product Transfer",
+                                    location="ProductTransferMedia.upload",
+                                    operation="UPLOAD_MEDIA",
+                                    userMessage="آپلود یک تصویر ناموفق بود.",
+                                    technicalMessage=result.error.toString(),
+                                    type="PRODUCT_TRANSFER_MEDIA_UPLOAD_ERROR",
+                                    details="file=$file; storeId=${storeId.value}",
+                                )
                             }
                         }
                     }
                 }
             }
         } ?: error("فایل قابل خواندن نیست.")
-
-        TransferMediaOutcome(resolved, failed, errors, uploaded)
+        return TransferMediaOutcome(resolved, failed, errors, uploaded)
     }
 
-    private suspend fun readDestinationMedia(storeId: StoreId): List<ProductImage> =
-        ProductTransferRepositoryReader(d).media(storeId)
+    private suspend fun readDestinationMedia(storeId: StoreId): List<ProductImage> = ProductTransferRepositoryReader(d).media(storeId)
 
     private fun readLimited(zip: ZipInputStream): ByteArray {
         val out = ByteArrayOutputStream()
@@ -179,16 +201,12 @@ internal class ProductTransferMedia(
     }
 
     private fun canonicalUrl(value: String): String = value.trim().removeSuffix("/")
-
-    private fun fileName(value: String): String =
-        value.substringBefore('?').substringAfterLast('/').trim()
-
-    private fun mime(value: String): String =
-        when (value.substringBefore('?').substringAfterLast('.').lowercase(Locale.ROOT)) {
-            "png" -> "image/png"
-            "webp" -> "image/webp"
-            "gif" -> "image/gif"
-            "svg" -> "image/svg+xml"
-            else -> "image/jpeg"
-        }
+    private fun fileName(value: String): String = value.substringBefore('?').substringAfterLast('/').trim()
+    private fun mime(value: String): String = when (value.substringBefore('?').substringAfterLast('.').lowercase(Locale.ROOT)) {
+        "png" -> "image/png"
+        "webp" -> "image/webp"
+        "gif" -> "image/gif"
+        "svg" -> "image/svg+xml"
+        else -> "image/jpeg"
+    }
 }
