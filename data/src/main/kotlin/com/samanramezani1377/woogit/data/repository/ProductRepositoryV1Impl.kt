@@ -10,7 +10,6 @@ import com.samanramezani1377.woogit.core.domain.repository.*
 import com.samanramezani1377.woogit.data.network.*
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.JsonPrimitive
@@ -75,6 +74,23 @@ private fun verifyProductMutation(requested: Product, remote: WooProductTypedDto
     else CoreResult.Failure(DomainError.Validation("WooCommerce did not apply the requested product status/type."))
 }
 
+private suspend fun applyMissingProductFields(
+    api: TypedWooCommerceApi,
+    baseUrl: String,
+    id: Long,
+    requested: Product,
+    initial: WooProductTypedDto,
+): Result<WooProductTypedDto> {
+    var remote = initial
+    expectedStatus(requested.status)?.takeIf { !it.equals(remote.status.trim(), true) }?.let { status ->
+        remote = api.updateProductFields(baseUrl, id, buildJsonObject { put("status", status) }).getOrElse { return Result.failure(it) }
+    }
+    expectedType(requested.type)?.takeIf { !it.equals(remote.type.trim(), true) }?.let { type ->
+        remote = api.updateProductFields(baseUrl, id, buildJsonObject { put("type", type) }).getOrElse { return Result.failure(it) }
+    }
+    return Result.success(remote)
+}
+
 class ProductRepositoryV1Impl(private val local: LocalProductDataSource<Product>, private val provider: WooCommerceClientProvider, private val coordinator: MutationCoordinator, private val pending: PendingOperationRepository) : ProductRepository {
     override suspend fun get(storeId: StoreId, id: EntityId): CoreResult<Product> = provider.client(storeId).fold(
         { (store, api) -> api.product(store.baseUrl, id.value.toLong()).fold({ remote -> val value = remote.toDomain(); local.upsert(storeId, value); CoreResult.Success(value) }, { local.get(storeId, id) }) },
@@ -105,31 +121,21 @@ class ProductRepositoryV1Impl(private val local: LocalProductDataSource<Product>
         val payload = productJson.encodeToString(product.toDto()); val operationId = "product-update-${storeId.value}-${id.value}-${hash(payload).take(20)}"
         val operation = PendingOperation(EntityId(operationId), storeId, "product", id, OperationType.UPDATE, payload, hash(payload), 0, null, null)
         val localResult = coordinator.execute(operation) { local.upsert(storeId, product) }; if (localResult is CoreResult.Failure) return localResult
-        return provider.client(storeId).fold({ (store, api) ->
-            api.updateProduct(store.baseUrl, id.value.toLong(), product.toDto(operationId)).fold(
-                onSuccess = { initial ->
-                    var remote = initial
-                    var mutationError: DomainError? = null
-                    expectedStatus(product.status)?.takeIf { !it.equals(remote.status.trim(), true) }?.let { requested ->
-                        api.updateProductFields(store.baseUrl, id.value.toLong(), buildJsonObject { put("status", requested) }).fold(
-                            onSuccess = { remote = it }, onFailure = { mutationError = it.productDomainError() }
-                        )
-                    }
-                    expectedType(product.type)?.takeIf { !it.equals(remote.type.trim(), true) && mutationError == null }?.let { requested ->
-                        api.updateProductFields(store.baseUrl, id.value.toLong(), buildJsonObject { put("type", requested) }).fold(
-                            onSuccess = { remote = it }, onFailure = { mutationError = it.productDomainError() }
-                        )
-                    }
-                    if (mutationError != null) return@fold Result.failure(HttpApiException(422, mutationError.toString()))
-                    val refreshed = api.product(store.baseUrl, id.value.toLong()).getOrElse { remote }
-                    when (val verified = verifyProductMutation(product, refreshed)) {
-                        is CoreResult.Failure -> verified
-                        is CoreResult.Success -> { val value = refreshed.toDomain(); local.upsert(storeId, value); pending.markSucceeded(operation.id); CoreResult.Success(value) }
-                    }
-                },
-                onFailure = { error -> if (error.isProductRetryableHttp()) CoreResult.Success(product) else CoreResult.Failure(error.productDomainError()) },
-            )
-        }, { error -> if (error.recoverable) CoreResult.Success(product) else CoreResult.Failure(error) })
+        return provider.client(storeId).fold({ (store, api) -> api.updateProduct(store.baseUrl, id.value.toLong(), product.toDto(operationId)).fold(
+            onSuccess = { initial ->
+                applyMissingProductFields(api, store.baseUrl, id.value.toLong(), product, initial).fold(
+                    onSuccess = { afterFields ->
+                        val refreshed = api.product(store.baseUrl, id.value.toLong()).getOrElse { afterFields }
+                        when (val verified = verifyProductMutation(product, refreshed)) {
+                            is CoreResult.Failure -> verified
+                            is CoreResult.Success -> { val value = refreshed.toDomain(); local.upsert(storeId, value); pending.markSucceeded(operation.id); CoreResult.Success(value) }
+                        }
+                    },
+                    onFailure = { error -> CoreResult.Failure(error.productDomainError()) },
+                )
+            },
+            onFailure = { error -> if (error.isProductRetryableHttp()) CoreResult.Success(product) else CoreResult.Failure(error.productDomainError()) },
+        ) }, { error -> if (error.recoverable) CoreResult.Success(product) else CoreResult.Failure(error) })
     }
 
     override suspend fun delete(storeId: StoreId, id: EntityId): CoreResult<Unit> {
