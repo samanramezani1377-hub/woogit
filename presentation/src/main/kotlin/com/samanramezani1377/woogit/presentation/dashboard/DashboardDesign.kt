@@ -28,6 +28,8 @@ import com.samanramezani1377.woogit.presentation.GlassCard
 import com.samanramezani1377.woogit.presentation.GlassStatusBadge
 import com.samanramezani1377.woogit.presentation.GlassText
 import com.samanramezani1377.woogit.presentation.GlassTokens
+import com.samanramezani1377.woogit.presentation.toPersianFormattedNumber
+import com.samanramezani1377.woogit.presentation.toPersianPrice
 
 @Composable
 internal fun DashboardHero(storeName: String, connected: Boolean, modifier: Modifier = Modifier) {
@@ -53,8 +55,8 @@ internal fun DashboardRecentOrder(orderId: String?, customer: String, total: Str
                 Text("آخرین سفارش", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 status?.let { GlassStatusBadge(it.dashboardLabel()) }
             }
-            GlassText("#$orderId · ${customer.ifBlank { "مشتری نامشخص" }}")
-            GlassText(total)
+            GlassText("#${orderId.toPersianDigits()} · ${customer.ifBlank { "مشتری نامشخص" }}")
+            GlassText(total.toPersianPrice())
             DashboardQuickAction("مشاهده سفارش", "مشاهده جزئیات و مدیریت", onClick = onClick)
         }
     }
@@ -64,12 +66,12 @@ internal fun DashboardRecentOrder(orderId: String?, customer: String, total: Str
 internal fun DashboardStatGrid(orders: String, products: String, revenue: String, pending: String, currency: String = "تومان") {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            DashboardStat("سفارش‌ها", orders, Modifier.weight(1f))
-            DashboardStat("محصولات", products, Modifier.weight(1f))
+            DashboardStat("سفارش‌ها", orders.toPersianFormattedNumber(), Modifier.weight(1f))
+            DashboardStat("محصولات", products.toPersianFormattedNumber(), Modifier.weight(1f))
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            DashboardStat("فروش ($currency)", revenue, Modifier.weight(1f))
-            DashboardStat("در انتظار", pending, Modifier.weight(1f))
+            DashboardStat("فروش ($currency)", revenue.toPersianPrice(), Modifier.weight(1f))
+            DashboardStat("در انتظار", pending.toPersianFormattedNumber(), Modifier.weight(1f))
         }
     }
 }
