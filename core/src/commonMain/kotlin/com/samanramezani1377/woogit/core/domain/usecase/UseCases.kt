@@ -14,7 +14,7 @@ interface GetProducts { suspend operator fun invoke(storeId: StoreId, page: Int 
 interface CreateProduct { suspend operator fun invoke(storeId: StoreId, value: Product): CoreResult<Product> }
 interface UpdateProduct { suspend operator fun invoke(storeId: StoreId, id: EntityId, value: Product): CoreResult<Product> }
 interface DeleteProduct { suspend operator fun invoke(storeId: StoreId, id: EntityId): CoreResult<Unit> }
-interface GetProductCategories { suspend operator fun invoke(storeId: StoreId, page: Int = 1, perPage: Int = 100, search: String? = null): CoreResult<List<IdName>> }
+interface GetProductCategories { suspend operator fun invoke(storeId: StoreId, page: Int = 1, perPage: Int = 100, search: String? = null): CoreResult<List<IdName>>; suspend fun create(storeId: StoreId, value: IdName): CoreResult<IdName> }
 interface GetMedia { suspend operator fun invoke(storeId: StoreId, page: Int = 1, perPage: Int = 30, search: String? = null): CoreResult<List<ProductImage>> }
 interface UploadMedia { suspend operator fun invoke(storeId: StoreId, fileName: String, bytes: ByteArray, mediaType: String): CoreResult<ProductImage> }
 interface DeleteMedia { suspend operator fun invoke(storeId: StoreId, mediaId: EntityId): CoreResult<Unit> }
