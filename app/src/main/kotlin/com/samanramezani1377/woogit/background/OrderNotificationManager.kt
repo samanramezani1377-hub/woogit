@@ -35,16 +35,29 @@ class OrderNotificationManager(private val context: Context) {
         val pending = PendingIntent.getActivity(context, "${order.storeId}:${order.orderId}".hashCode(), intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val amount = formatPersianAmount(order.total)
         val orderNumber = order.number.toPersianDigits()
-        val currency = when {
-            order.currency.equals("IRT", true) || order.currency.equals("IRR", true) || order.currency == "تومان" -> "تومان"
-            order.currency.isBlank() -> ""
-            else -> order.currency.toPersianDigits()
+        val currency = when (order.currency.trim().uppercase()) {
+            "IRT", "IRR", "تومان" -> "تومان"
+            "USD" -> "دلار"
+            "EUR" -> "یورو"
+            "GBP" -> "پوند"
+            "AED" -> "درهم"
+            "TRY" -> "لیر"
+            "SAR" -> "ریال سعودی"
+            "QAR" -> "ریال قطر"
+            "KWD" -> "دینار کویت"
+            "CAD" -> "دلار کانادا"
+            "AUD" -> "دلار استرالیا"
+            "CNY" -> "یوان"
+            "JPY" -> "ین"
+            "" -> ""
+            else -> "واحد پول"
         }
         val amountText = if (currency.isBlank()) amount else "$amount $currency"
+        val itemsText = order.itemSummary.toPersianDigits().replace("items", "کالا").replace("item", "کالا")
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle("سفارش جدید #$orderNumber")
-            .setContentText("مبلغ: $amountText • ${order.itemSummary.toPersianDigits().replace("items", "کالا").replace("item", "کالا")}")
+            .setContentText("مبلغ: $amountText • $itemsText")
             .setContentIntent(pending)
             .setAutoCancel(true)
             .build()
