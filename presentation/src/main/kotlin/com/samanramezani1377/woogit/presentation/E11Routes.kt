@@ -11,7 +11,11 @@ internal object E11Routes {
     const val PRODUCT_ID = "productId"
     const val PRODUCT_NEW = "products/new"
     const val PRODUCT_DETAIL = "products/{$PRODUCT_ID}"
+    const val PRODUCT_EDIT = "products/{$PRODUCT_ID}/edit"
     const val VARIATIONS = "products/{$PRODUCT_ID}/variations"
+    const val VARIATION_ID = "variationId"
+    const val VARIATION_NEW = "products/{$PRODUCT_ID}/variations/new"
+    const val VARIATION_EDIT = "products/{$PRODUCT_ID}/variations/{$VARIATION_ID}/edit"
     const val ATTRIBUTES = "attributes"
     const val ATTRIBUTE_ID = "attributeId"
     const val TERMS = "attributes/{$ATTRIBUTE_ID}/terms"
@@ -21,6 +25,9 @@ internal object E11Routes {
 
     fun order(orderId: String) = "orders/$orderId"
     fun product(productId: String) = "products/$productId"
+    fun productEdit(productId: String) = "products/$productId/edit"
     fun variations(productId: String) = "products/$productId/variations"
+    fun variationNew(productId: String) = "products/$productId/variations/new"
+    fun variationEdit(productId: String, variationId: String) = "products/$productId/variations/$variationId/edit"
     fun terms(attributeId: String) = "attributes/$attributeId/terms"
 }
