@@ -16,6 +16,7 @@ import com.samanramezani1377.woogit.presentation.dashboard.*
 import com.samanramezani1377.woogit.presentation.order.*
 import com.samanramezani1377.woogit.presentation.orders.*
 import com.samanramezani1377.woogit.presentation.product.*
+import com.samanramezani1377.woogit.presentation.settings.SettingsScreen
 import com.samanramezani1377.woogit.presentation.sync.*
 
 @Composable
@@ -51,11 +52,22 @@ internal fun E11AppNavigation(dependencies: V1PresentationDependencies, initialO
         composable(E11Routes.VARIATIONS, listOf(navArgument(E11Routes.PRODUCT_ID) { type = NavType.StringType })) { e -> val store = activeStore; val id = e.arguments?.getString(E11Routes.PRODUCT_ID); if (store != null && id != null) { val s = StoreId(store); val vm = viewModel<VariationsViewModel>(factory = vmFactory { VariationsViewModel(dependencies) }); val st by vm.state.collectAsState(); LaunchedEffect(s, id) { vm.load(s, EntityId(id)) }; val list = (st as? FeatureUiState.Success)?.value.orEmpty().map { v -> VariationUiModel(v.id.value, v.attributes.joinToString(" · ") { a -> "${a.name}: ${a.option}" }, v.pricing.sale ?: v.pricing.regular ?: "—", v.stock?.quantity?.toString()?.removeSuffix(".0") ?: "—") }; VariationsManagementScreen(list, { navController.navigate("products/$id/variations/new") }, { vid -> navController.navigate("products/$id/variations/$vid/edit") }) } }
         composable(E11Routes.SYNC) { val store = activeStore; if (store != null) { val s = StoreId(store); val vm = viewModel<SyncViewModel>(factory = vmFactory { SyncViewModel(dependencies) }); val st by vm.state.collectAsState(); LaunchedEffect(s) { vm.load(s) }; SyncScreen(SyncUiState.Idle, { vm.sync(s) }, { vm.sync(s) }) } }
         composable(E11Routes.CONFLICTS) { val store = activeStore; if (store != null) { val s = StoreId(store); val vm = viewModel<ConflictsViewModel>(factory = vmFactory { ConflictsViewModel(dependencies) }); val st by vm.state.collectAsState(); LaunchedEffect(s) { vm.load(s) }; val list = (st as? FeatureUiState.Success)?.value.orEmpty().map { c -> ConflictUiModel(c.id.value, "${c.entityType} · ${c.reason}", c.localSnapshot ?: c.localVersion?.value ?: "—", c.serverSnapshot ?: c.remoteVersion?.value ?: "—") }; ConflictsScreen(list, { id -> vm.resolve(s, EntityId(id), ConflictResolution.KEEP_LOCAL) }, { id -> vm.resolve(s, EntityId(id), ConflictResolution.KEEP_SERVER) }) } }
-        composable(E11Routes.SETTINGS) { SettingsScreen(activeStore.orEmpty()) { dependencies.onStoreDisconnected(); activeStore = null; navController.navigate(E11Routes.CONNECTION) { popUpTo(E11Routes.SETTINGS) { inclusive = true } } } }
+        composable(E11Routes.SETTINGS) {
+            SettingsScreen(
+                storeName = activeStore.orEmpty(),
+                onBack = { navController.popBackStack() },
+                onDisconnect = {
+                    dependencies.onStoreDisconnected()
+                    activeStore = null
+                    navController.navigate(E11Routes.CONNECTION) {
+                        popUpTo(E11Routes.SETTINGS) { inclusive = true }
+                    }
+                },
+            )
+        }
     }
 }
 
-@Composable private fun SettingsScreen(storeName: String, onDisconnect: () -> Unit) { GlassScaffold { padding -> Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) { GlassTopBar("تنظیمات", "مدیریت اتصال و حساب فروشگاه"); GlassCard { GlassText("فروشگاه متصل"); GlassText(storeName, style = androidx.compose.material3.MaterialTheme.typography.bodyMedium.copy(color = GlassTokens.muted)) }; GlassPrimaryAction("قطع اتصال", onDisconnect) } } }
 private fun mapOrdersState(state: FeatureUiState<List<Order>>): OrdersUiState = when (state) { FeatureUiState.Loading, FeatureUiState.Pending -> OrdersUiState.Loading; FeatureUiState.Empty -> OrdersUiState.Empty; is FeatureUiState.Error -> OrdersUiState.Error(state.message, state.retryable); FeatureUiState.Offline -> OrdersUiState.Offline(); is FeatureUiState.Conflict -> OrdersUiState.Error("تعارض در داده‌های سفارش وجود دارد.", false); is FeatureUiState.Success -> OrdersUiState.Content(state.value.map { order -> OrderRowUiModel(order.number, order.customer?.name.orEmpty(), order.customer?.email.orEmpty(), order.status.name, formatMoney(order.total), order.payment?.methodTitle.orEmpty(), order.modifiedAt?.toString().orEmpty()) }, state.value.size >= 30) }
 private fun mapOrderDetailState(state: FeatureUiState<Order>): OrderDetailUiState = when (state) { FeatureUiState.Loading, FeatureUiState.Pending -> OrderDetailUiState.Loading; FeatureUiState.Empty -> OrderDetailUiState.NotFound; is FeatureUiState.Error -> OrderDetailUiState.Error(state.message); FeatureUiState.Offline -> OrderDetailUiState.Error("سفارش در حالت آفلاین در دسترس نیست."); is FeatureUiState.Conflict -> OrderDetailUiState.Error("تعارض در داده‌های سفارش."); is FeatureUiState.Success -> OrderDetailUiState.Content(state.value) }
 private fun formatMoney(value: String?): String { val amount = value?.toDoubleOrNull() ?: return "—"; return "${java.text.NumberFormat.getNumberInstance(java.util.Locale.US).apply { maximumFractionDigits = 0; minimumFractionDigits = 0 }.format(amount)} تومان" }
