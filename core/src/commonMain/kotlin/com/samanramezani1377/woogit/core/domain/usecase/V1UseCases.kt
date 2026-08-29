@@ -3,7 +3,6 @@ package com.samanramezani1377.woogit.core.domain.usecase
 import com.samanramezani1377.woogit.core.domain.entity.EntityId
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.core.domain.error.CoreResult
-import com.samanramezani1377.woogit.core.domain.repository.*
 import com.samanramezani1377.woogit.core.domain.model.*
 
 class GetOrderUseCase(private val r: OrderRepository) : GetOrder { override suspend fun invoke(storeId: StoreId, id: EntityId) = r.get(storeId, id) }
@@ -15,7 +14,7 @@ class GetProductsUseCase(private val r: ProductRepository) : GetProducts { overr
 class CreateProductUseCase(private val r: ProductRepository) : CreateProduct { override suspend fun invoke(storeId: StoreId, value: Product) = r.create(storeId, value) }
 class UpdateProductUseCase(private val r: ProductRepository) : UpdateProduct { override suspend fun invoke(storeId: StoreId, id: EntityId, value: Product) = r.update(storeId, id, value) }
 class DeleteProductUseCase(private val r: ProductRepository) : DeleteProduct { override suspend fun invoke(storeId: StoreId, id: EntityId) = r.delete(storeId, id) }
-class GetProductCategoriesUseCase(private val r: ProductCategoryRepository) : GetProductCategories { override suspend fun invoke(storeId: StoreId, page: Int, perPage: Int, search: String?) = r.list(storeId, page, perPage, search) }
+class GetProductCategoriesUseCase(private val r: ProductCategoryRepository) : GetProductCategories { override suspend fun invoke(storeId: StoreId, page: Int, perPage: Int, search: String?) = r.list(storeId, page, perPage, search); override suspend fun create(storeId: StoreId, value: IdName) = r.create(storeId, value) }
 class GetMediaUseCase(private val r: MediaRepository) : GetMedia { override suspend fun invoke(storeId: StoreId, page: Int, perPage: Int, search: String?) = r.list(storeId, page, perPage, search) }
 class UploadMediaUseCase(private val r: MediaRepository) : UploadMedia { override suspend fun invoke(storeId: StoreId, fileName: String, bytes: ByteArray, mediaType: String) = r.upload(storeId, fileName, bytes, mediaType) }
 class DeleteMediaUseCase(private val r: MediaRepository) : DeleteMedia { override suspend fun invoke(storeId: StoreId, mediaId: EntityId) = r.delete(storeId, mediaId) }
