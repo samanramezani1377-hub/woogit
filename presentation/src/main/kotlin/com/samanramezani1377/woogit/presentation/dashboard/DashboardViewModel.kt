@@ -64,7 +64,7 @@ internal class DashboardViewModel(
                 when (val result = dependencies.getConnectionState(storeId)) {
                     is CoreResult.Success -> result.value
                     is CoreResult.Failure -> {
-                        PresentationTechnicalErrorReporter.report("Dashboard", "DashboardViewModel.checkConnection", "Connection check", PresentationErrorMapper.message(result.error), result.error.reason)
+                        PresentationTechnicalErrorReporter.report("Dashboard", "DashboardViewModel.checkConnection", "Connection check", PresentationErrorMapper.message(result.error), result.error.toString())
                         ConnectionState.ERROR
                     }
                 }
@@ -99,14 +99,14 @@ internal class DashboardViewModel(
             is CoreResult.Success -> ordersResult.value
             is CoreResult.Failure -> {
                 val message = PresentationErrorMapper.message(ordersResult.error)
-                PresentationTechnicalErrorReporter.report("Dashboard", "DashboardViewModel.refreshInternal", "Load orders", message, ordersResult.error.reason)
+                PresentationTechnicalErrorReporter.report("Dashboard", "DashboardViewModel.refreshInternal", "Load orders", message, ordersResult.error.toString())
                 _uiState.value = _uiState.value.copy(connectionState = connection, loading = false, error = message); return
             }
         }
         val salesSummary = when (val result = dependencies.getSalesSummary(storeId)) {
             is CoreResult.Success -> result.value
             is CoreResult.Failure -> {
-                PresentationTechnicalErrorReporter.report("Dashboard", "DashboardViewModel.refreshInternal", "Load sales summary", PresentationErrorMapper.message(result.error), result.error.reason)
+                PresentationTechnicalErrorReporter.report("Dashboard", "DashboardViewModel.refreshInternal", "Load sales summary", PresentationErrorMapper.message(result.error), result.error.toString())
                 _uiState.value.salesSummary
             }
         }
@@ -115,7 +115,7 @@ internal class DashboardViewModel(
             is CoreResult.Success -> productsResult.value
             is CoreResult.Failure -> {
                 val message = PresentationErrorMapper.message(productsResult.error)
-                PresentationTechnicalErrorReporter.report("Dashboard", "DashboardViewModel.refreshInternal", "Load products", message, productsResult.error.reason)
+                PresentationTechnicalErrorReporter.report("Dashboard", "DashboardViewModel.refreshInternal", "Load products", message, resultErrorText(productsResult.error))
                 _uiState.value = _uiState.value.copy(connectionState = connection, loading = false, error = message); return
             }
         }
@@ -123,4 +123,6 @@ internal class DashboardViewModel(
         _uiState.value = newState
         DashboardSalesDebugSnapshot.update(orders, salesSummary, newState.revenue)
     }
+
+    private fun resultErrorText(error: Any): String = error.toString()
 }
