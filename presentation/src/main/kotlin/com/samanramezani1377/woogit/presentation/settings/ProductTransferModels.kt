@@ -11,7 +11,6 @@ import kotlinx.serialization.Serializable
 @Serializable data class TransferCategory(val id:String,val name:String,val parentId:String?=null)
 @Serializable data class TransferAttribute(val id:String?=null,val name:String,val visible:Boolean,val variation:Boolean,val options:List<String>)
 @Serializable data class TransferImage(val id:String?=null,val src:String,val name:String?=null,val alt:String?=null,val file:String)
-data class TransferReadPackage(val manifest:ProductTransferManifest,val products:List<TransferProduct>,val uploadedImages:Map<String,ProductImage>)
 data class TransferValidatedPackage(val manifest:ProductTransferManifest,val products:List<TransferProduct>,val mediaNames:Set<String>,val invalidProductIds:Set<String>,val validationErrors:List<String>)
-data class TransferMediaOutcome(val images:Map<String,ProductImage>,val failed:Int,val errors:List<String>)
+data class TransferMediaOutcome(val images:Map<String,ProductImage>,val failed:Int,val errors:List<String>,val uploaded:Int)
 data class RobustProductTransferResult(val created:Int=0,val updated:Int=0,val failed:Int=0,val imagesUploaded:Int=0,val variationsCreated:Int=0,val variationsUpdated:Int=0,val errors:List<String> = emptyList(),val variationsFailed:Int=0,val imagesFailed:Int=0,val imagesUnused:Int=0,val skuChanged:Int=0,val validationErrors:List<String> = emptyList(),val importErrors:List<String> = emptyList())
