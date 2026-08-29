@@ -18,7 +18,7 @@ selectById:
 SELECT * FROM product_entity WHERE id = ? AND store_id = ?;
 
 selectByStore:
-SELECT * FROM product_entity WHERE store_id = ? ORDER BY updated_at DESC;
+SELECT * FROM product_entity WHERE store_id = ? ORDER BY modified_at DESC, id DESC;
 
 upsert:
 INSERT OR REPLACE INTO product_entity(id, store_id, name, status, price_minor_units, currency, stock_quantity, version, modified_at, payload_json, created_at, updated_at)
