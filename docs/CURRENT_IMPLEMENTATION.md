@@ -1,101 +1,189 @@
 # WooGit — Current Implementation Source of Truth
 
-> این سند وضعیت واقعی پیاده‌سازی را از قراردادهای تاریخی، roadmap و ایده‌های آینده جدا می‌کند.
+> این سند وضعیت **واقعی implementation فعلی** را از roadmap، design idea و قابلیت‌های آینده جدا می‌کند. در صورت تعارض با دستور صریح و جدید کاربر، دستور جدید مقدم است و بعد از اجرای آن این سند باید با کد sync شود.
 
-## اصل تقدم
+## 1. قواعد مرجع
 
-در صورت تعارض بین مستندات و دستور صریح و جدید کاربر، **دستور جدید کاربر بر مستندات مقدم است**. پس از اجرای تصمیم جدید، سند مربوط باید به‌روزرسانی شود.
+- شاخه مرجع: `main`.
+- فقط کد فعلی و نتیجه تست/CI می‌تواند implementation را تأیید کند.
+- وجود یک قابلیت در roadmap یا design spec به معنی implemented بودن آن نیست.
+- هیچ قابلیت موجودی صرفاً برای ساده‌سازی refactor یا سبز شدن CI نباید حذف شود.
+- مستندات باید محدودیت‌ها و موارد not implemented را صریحاً اعلام کنند.
 
-## وضعیت پایه فعلی
+## 2. معماری اجرایی
 
-- شاخه مرجع: `main`
-- این سند وضعیت implementation را توصیف می‌کند و نباید قابلیت‌هایی را که فقط در roadmap هستند به‌عنوان implemented معرفی کند.
-- هیچ قابلیت موجود نباید صرفاً برای ساده‌سازی refactor یا سبز شدن CI حذف شود.
-
-## معماری اجرایی
-
-- Android UI با Jetpack Compose/Material 3 در لایه Presentation قرار دارد.
+- Android UI با Jetpack Compose/Material 3 در Presentation است.
 - Core/Domain از UI مستقل است.
-- Data مسئول ارتباط با WooCommerce و mapping بین DTO و Domain است.
-- WooCommerce REST API مرز remote اصلی V1 است.
-- Local-first/Offline-first و Pending Queue بخشی از جهت معماری پروژه هستند.
-- Sync و mutationها باید قابل retry، reconciliation و conflict handling باشند.
+- Data مسئول ارتباط با WooCommerce و mapping DTO/Domain است.
+- WooCommerce REST API مرز اصلی remote در V1 است.
+- Local-first/Offline-first و Pending Queue بخشی از جهت معماری هستند.
+- mutation و sync باید تا حد ممکن قابل retry، reconciliation و conflict handling باشند.
 
-## Products
+## 3. Product Editor — تصویر محصول
 
-مسیر Product Editor باید بتواند محصول ساده و variable را مطابق قرارداد فعلی پروژه مدیریت کند.
+وقتی کاربر تصویر را از موبایل انتخاب می‌کند:
 
-### تصویر محصول — قرارداد اجرایی
-
-وقتی کاربر از **انتخاب عکس از موبایل** استفاده می‌کند:
-
-1. فایل انتخاب‌شده به Media Library فروشگاه WooCommerce/WordPress آپلود می‌شود.
+1. فایل به Media Library فروشگاه WooCommerce/WordPress upload می‌شود.
 2. پاسخ upload شامل `media.id` و `media.src` است.
 3. هر دو مقدار در state مدل محصول نگهداری می‌شوند.
-4. `media.id` باید به‌عنوان شناسه attachment تصویر محصول حفظ شود.
+4. `media.id` شناسه attachment تصویر محصول است.
 5. هنگام Create/Update Product، اگر ID موجود است، همان attachment باید در `product.images` ثبت شود.
-6. URL صرفاً fallback برای حالتی است که ID در دسترس نباشد.
-7. صرف آپلود موفق فایل به Media Library به معنی ثبت تصویر محصول نیست؛ association با Product باید در mutation محصول انجام شود.
-8. Preview UI فقط نمایش وضعیت است و جایگزین ثبت `images` در request نیست.
+6. URL فقط fallback است.
+7. upload موفق Media Library به‌تنهایی به معنی association موفق با Product نیست.
+8. Preview UI جایگزین ثبت `images` در mutation نیست.
 
-### تغییر URL دستی
+اگر URL دستی تغییر کند، `imageId` قدیمی نباید همراه URL جدید ارسال شود.
 
-اگر کاربر URL تصویر را به‌صورت دستی تغییر دهد، نباید `imageId` قدیمی به‌اشتباه همراه URL جدید ارسال شود. ID و URL باید همیشه به یک تصویر اشاره کنند.
+## 4. Product Import / Export — وضعیت واقعی
 
-### Product Import / Export — وضعیت واقعی
+جزئیات کامل این قابلیت در `docs/PRODUCT_IMPORT_EXPORT.md` نگهداری می‌شود. خلاصه implementation فعلی:
 
-- Settings مسیر Export همه محصولات و Import محصولات را دارد.
-- Package فعلی `.woogit` یک ZIP با `manifest.json`، `products.json` و `media/` است.
-- Format فعلی `woogit-products`، logical version برابر `1` و layout version برابر `1` است؛ هر دو temporary هستند.
-- Export شامل Product، Category، Global Attribute/Term، Product Image و Variationهای Product Variable است.
-- Export تصویر را از URL می‌خواند و در layout فعلی برای هر occurrence یک media entry می‌سازد؛ Export Media Dedup فعلاً وجود ندارد.
-- Import قبل از mutation، format/version/layout، ZIP path، duplicate entry، size limit، تعداد Product/Image، Product ID/SKU و Media referenceها را validation می‌کند.
-- Validation در سطح package است؛ وجود validation error باعث شروع نشدن mutation می‌شود.
-- Media Import هر entry را مستقل پردازش می‌کند و failure یک Media نباید Import سایر Media/Productها را متوقف کند.
-- Product و Variation failure به‌صورت مستقل مدیریت می‌شوند و reservationهای SKU در failure آزاد می‌شوند.
-- Result آمار Product، Variation و Media را جدا نگه می‌دارد و `validationErrors` از `importErrors` جداست.
-- Source Product/Variation ID شناسه مبدأ است و نباید مستقیماً به‌عنوان Destination ID استفاده شود. Variation جدید با Product مقصد ساخته می‌شود و Variation اضافه مقصد حذف نمی‌شود.
-- Media reuse در Import با canonical URL، content hash و filename+content hash تلاش می‌شود؛ در صورت غیرقابل‌دسترسی بودن Media مقصد، Dedup قطعی نیست.
-- Package credential یا API key فروشگاه را ذخیره نمی‌کند.
-- جزئیات کامل و محدودیت‌های این قابلیت در `docs/PRODUCT_IMPORT_EXPORT.md` نگهداری می‌شود.
+### Package
 
-### مواردی که فعلاً implemented نیستند
+- فرمت فایل: `.woogit`.
+- Container: ZIP.
+- Format: `woogit-products`.
+- Logical version: `1`.
+- Layout version: `1`.
+- هر دو version فعلاً `TEMPORARY` هستند.
+- اجزای اصلی: `manifest.json`، `products.json` و `media/`.
+- Layout مسیرها توسط `ProductTransferFormat` کنترل می‌شود.
 
-- Export Media Dedup
-- Idempotency تضمینی برای Product بدون SKU
-- mapping table دائمی Source → Destination
-- checksum مستقل برای تمام entryها
-- migration واقعی schema/layout
-- حذف خودکار Variationهای اضافه مقصد
-- validation مستقل هر Product به‌جای رد package در validation failure
+### Export
 
-## Orders
+- Productهای موجود repository را export می‌کند.
+- سقف Product فعلی `10,000` است.
+- Productهای Variable همراه Variationها export می‌شوند.
+- Category و Global Attribute/Termهای مورد استفاده در package قرار می‌گیرند.
+- تصاویر Product و Variation از URL مبدأ دریافت و در package embed می‌شوند.
+- سقف package `1 GiB` و سقف هر Entry `50 MiB` است.
+- Export Media Dedup فعلاً **وجود ندارد**.
+- Export failure نباید به‌عنوان package موفق/کامل گزارش شود.
 
-صفحه سفارش برای عملیات پرتکرار سریع است و Edit Order برای جزئیات کامل استفاده می‌شود. عملیات mutation باید از مسیر Repository/Core عبور کند و مستقیماً از UI به API متصل نشود.
+### Import validation
 
-## Dashboard
+قبل از mutation، package-level validation انجام می‌شود، از جمله:
 
-مقادیر داشبورد باید از داده‌های واقعی WooCommerce و قراردادهای Domain تغذیه شوند. وضعیت loading نباید باعث نمایش موقت مقدار نادرست یا stale به‌عنوان مقدار قطعی شود.
+- manifest/products وجود داشته باشند.
+- format/version/layout پشتیبانی شوند.
+- Entryهای ZIP مجاز باشند.
+- path traversal و duplicate entry رد شوند.
+- size/count limitها رعایت شوند.
+- تعداد Product/Image با manifest سازگار باشد.
+- Product ID و SKUهای متعارض داخل package بررسی شوند.
+- Product type/status و Variation attributes معتبر باشند.
+- Media referenceها وجود داشته باشند.
+- Global Attribute/Term و duplicate Termهای داخلی بررسی شوند.
 
-## Money & Currency
+وجود validation error باعث شروع mutation نمی‌شود و در `validationErrors` گزارش می‌شود.
 
-مبلغ‌ها و واحد پول در صورت نمایش اطلاعات فروشگاه باید از configuration/response واقعی WooCommerce استفاده کنند و hard-code کردن currency یا فرض واحد پول مجاز نیست.
+### Product / Variation matching
 
-## Connection Status
+- Source Product/Variation ID صرفاً identity مبدأ است.
+- Source ID نباید مستقیماً Destination ID شود.
+- Variation جدید با Product مقصد ساخته می‌شود.
+- Variation اضافه مقصد حذف نمی‌شود.
+- Mapping table دائمی Source → Destination فعلاً وجود ندارد.
+- Idempotency تضمینی برای Product بدون SKU فعلاً وجود ندارد.
+- Variation matching فعلی بر پایه lookupهای موجود same-store و content-based lookup در cross-store است؛ یک mapping engine مستقل با قرارداد عمومی `mapping → SKU → canonical attributes` فعلاً مستند/implemented نشده است.
 
-عبارت‌هایی مانند «فروشگاه متصل است» فقط زمانی مجازند که نتیجه واقعی validation/connection در state موجود باشد؛ loading یا وجود صرف credential نباید به‌عنوان اتصال موفق نمایش داده شود.
+### SKU reservation
 
-## CI و تغییرات کد
+- SKUهای مقصد برای جلوگیری از collision در Import در نظر گرفته می‌شوند.
+- Reservation برای entity جدید lifecycle موقت دارد.
+- بعد از mutation موفق reservation باقی می‌ماند.
+- بعد از failure یا exception reservation باید آزاد شود.
+- Reservation database lock دائمی نیست.
 
-هر تغییر کد باید:
+### Partial failure
 
-1. کوچک و محدود به علت تغییر باشد.
-2. از بازنویسی کامل فایل بدون ضرورت خودداری کند.
-3. بعد از تغییر با diff بررسی شود.
-4. حذف غیرمنتظره خطوط یا منطق موجود باعث توقف و اصلاح patch شود.
-5. CI بررسی شود.
-6. برای رفع compile error، قابلیت یا منطق موجود حذف نشود.
+بعد از عبور از package validation:
 
-## وضعیت قابلیت‌ها
+- failure یک Product نباید Productهای دیگر را متوقف کند.
+- failure یک Variation نباید Variationهای دیگر را متوقف کند.
+- failure یک Media نباید Media/Productهای دیگر را متوقف کند.
+- Product موفق نباید به‌خاطر failure بعدی Variation/Media به‌اشتباه `failed` شمرده شود.
 
-Roadmap و Design Spec می‌توانند قابلیت‌های آینده را تعریف کنند، اما وجود نام یک قابلیت در آن اسناد به معنی implemented بودن آن نیست. فقط کد فعلی و تست/CI موفق می‌تواند implementation را تأیید کند.
+### Result
+
+Result باید outcome واقعی mutation را نشان دهد و شامل آمار مستقل Product/Variation/Media و taxonomy باشد، از جمله:
+
+- Product: `created`, `updated`, `failed`, `drafted`, `skuChanged`.
+- Variation: `variationsCreated`, `variationsUpdated`, `variationsFailed`.
+- Media: `imagesUploaded`, `imagesReused`, `imagesFailed`, `imagesUnused`.
+- Taxonomy: Category / Attribute / Term statistics.
+- Errors: `validationErrors` و `importErrors` به‌صورت جدا.
+
+Counter نباید صرفاً به‌خاطر ورود به یک مرحله یا exception بالادستی افزایش پیدا کند.
+
+### Media
+
+- Media destination برای reuse بررسی می‌شود.
+- canonical URL و content hash در lookup فعلی استفاده می‌شوند.
+- Media resolve شده در همان Import می‌تواند reuse شود.
+- در صورت نبود match، Media upload می‌شود.
+- `uploaded` و `reused` فقط از outcome واقعی Media می‌آیند.
+- اگر Media مقصد قابل دریافت نباشد، content-hash dedup قطعی نیست.
+
+## 5. Product Import / Export — موارد صراحتاً NOT IMPLEMENTED
+
+موارد زیر نباید در مستندات یا UI به‌عنوان قابلیت کامل معرفی شوند:
+
+- Export Media Dedup.
+- Idempotency تضمینی Product بدون SKU.
+- Persistent Source → Destination mapping table.
+- checksum مستقل برای تمام Entryها.
+- schema/layout migration واقعی.
+- validation مستقل هر Product در برابر package-level rejection فعلی.
+- حذف خودکار Variationهای اضافه مقصد.
+- پوشش تضمینی تمام WooCommerce metadata/plugin-specific fields.
+
+## 6. Product Import / Export — audit coverage
+
+برای هر تغییر در Transfer Engine باید این زنجیره بررسی شود:
+
+`Settings UI → Transfer Service → Validation → Format/Layout → Archive → Models/Serialization → Media → Category/Attribute/Term → Product → Variation → Result`
+
+فایل‌های اصلی مرجع:
+
+- `RobustProductTransferService`
+- `ProductTransferFormat`
+- `ProductTransferValidation`
+- `ProductTransferMedia`
+- Transfer models/serializers
+- Product/Variation repositories
+- MediaRepository
+- Settings Import/Export UI
+- `docs/PRODUCT_IMPORT_EXPORT.md`
+
+## 7. Orders
+
+صفحه سفارش برای عملیات پرتکرار سریع است و Edit Order برای جزئیات کامل استفاده می‌شود. mutation سفارش باید از Repository/Core عبور کند و UI نباید مستقیماً API را صدا بزند.
+
+## 8. Dashboard
+
+Dashboard باید از داده واقعی WooCommerce و قرارداد Domain تغذیه شود. Loading نباید مقدار stale یا موقت را به‌عنوان مقدار قطعی نمایش دهد.
+
+## 9. Money & Currency
+
+مبلغ و currency باید از configuration/response واقعی WooCommerce گرفته شود. hard-code کردن واحد پول مجاز نیست.
+
+## 10. Connection Status
+
+«فروشگاه متصل است» فقط با نتیجه واقعی connection/validation مجاز است. وجود credential یا loading به‌تنهایی connection موفق محسوب نمی‌شود.
+
+## 11. Change discipline
+
+برای هر تغییر کد:
+
+1. تغییر باید کوچک و محدود به علت باشد.
+2. بازنویسی کامل فایل بدون ضرورت ممنوع است.
+3. diff باید بررسی شود.
+4. حذف غیرمنتظره منطق موجود باید متوقف و اصلاح شود.
+5. CI باید در چرخه توسعه بررسی شود.
+6. compile error نباید با حذف قابلیت موجود حل شود.
+7. بعد از تغییر behavior، documentation باید با implementation واقعی sync شود.
+
+## 12. Documentation rule
+
+این سند و `docs/PRODUCT_IMPORT_EXPORT.md` باید **وضعیت واقعی کد** را نشان دهند. هر موردی که هنوز implemented نیست باید صریحاً در بخش NOT IMPLEMENTED بماند و نباید به‌صورت guarantee نوشته شود.
