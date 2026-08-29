@@ -31,17 +31,26 @@ class RobustProductTransferService(private val d:V1PresentationDependencies,priv
     private val media=ProductTransferMedia(d,resolver)
 
     suspend fun export(storeId:StoreId,destination:Uri,onProgress:(ProductTransferProgress)->Unit={}):Result<Int>=withContext(Dispatchers.IO){runCatching{
-        val store=requireStore(storeId)
-        val products=reader.products(storeId,onProgress)
-        require(products.size<=MAX_PRODUCTS){"تعداد محصولات از حد مجاز بیشتر است."}
+        val store=requireStore(storeId);val products=reader.products(storeId,onProgress);require(products.size<=MAX_PRODUCTS){"تعداد محصولات از حد مجاز بیشتر است."}
         val usedGlobalIds=products.flatMap{it.attributes}.mapNotNull{it.id?.value}.toSet()
         val globals=reader.attributes(storeId).filter{it.id.value in usedGlobalIds}.map{g->TransferGlobalAttribute(g.id.value,g.name,g.slug,reader.terms(storeId,g.id).map{TransferTerm(it.id.value,it.name,it.slug)})}
         var imageCount=0
         resolver.openOutputStream(destination)?.use{raw->CountingOutputStream(raw,MAX_PACKAGE_BYTES).use{counted->ZipOutputStream(counted).use{zip->
             val exported=products.mapIndexed{index,product->
                 onProgress(ProductTransferProgress("در حال آماده‌سازی محصولات…",index+1,products.size))
-                val images=product.images.mapIndexed{imageIndex,image->{val file="media/p-${product.id.value}-$imageIndex.${transferExt(image.src)}";val bytes=downloadTransferImage(image.src)?:error("تصویر «${image.name?:image.src}» قابل دریافت نیست؛ خروجی ناقص ساخته نشد.");require(bytes.size.toLong()<=MAX_ENTRY_BYTES);writeTransferEntry(zip,file,bytes);imageCount++;TransferImage(image.id?.value,image.src,image.name,image.alt,file)}}
-                val variations=if(product.type==ProductType.VARIABLE){val all=reader.variations(storeId,product.id);require(all.size<=MAX_VARIATIONS_PER_PRODUCT){"تعداد Variationهای محصول بیش از حد مجاز است."};all.map{variation->variation.toTransfer{image->{val file="media/v-${variation.id.value}.${transferExt(image.src)}";val bytes=downloadTransferImage(image.src)?:error("تصویر Variation قابل دریافت نیست؛ خروجی ناقص ساخته نشد.");require(bytes.size.toLong()<=MAX_ENTRY_BYTES);writeTransferEntry(zip,file,bytes);imageCount++;file}}}}else emptyList()
+                val images=product.images.mapIndexed{imageIndex,image->
+                    val file="media/p-${product.id.value}-$imageIndex.${transferExt(image.src)}"
+                    val bytes=downloadTransferImage(image.src)?:error("تصویر «${image.name?:image.src}» قابل دریافت نیست؛ خروجی ناقص ساخته نشد.")
+                    require(bytes.size.toLong()<=MAX_ENTRY_BYTES)
+                    writeTransferEntry(zip,file,bytes);imageCount++
+                    TransferImage(image.id?.value,image.src,image.name,image.alt,file)
+                }
+                val variations=if(product.type==ProductType.VARIABLE){val all=reader.variations(storeId,product.id);require(all.size<=MAX_VARIATIONS_PER_PRODUCT){"تعداد Variationهای محصول بیش از حد مجاز است."};all.map{variation->variation.toTransfer{image->
+                    val file="media/v-${variation.id.value}.${transferExt(image.src)}"
+                    val bytes=downloadTransferImage(image.src)?:error("تصویر Variation قابل دریافت نیست؛ خروجی ناقص ساخته نشد.")
+                    require(bytes.size.toLong()<=MAX_ENTRY_BYTES)
+                    writeTransferEntry(zip,file,bytes);imageCount++;file
+                }}}else emptyList()
                 product.toTransfer(images,variations)
             }
             val manifest=ProductTransferManifest(FORMAT,VERSION,store.baseUrl.trimEnd('/'),SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX",Locale.US).format(Date()),exported.size,imageCount)
@@ -67,10 +76,9 @@ class RobustProductTransferService(private val d:V1PresentationDependencies,priv
         val sourceCategories=validated.products.flatMap{it.categories}.distinctBy{it.id}
         val categoryMap=resolveCategories(storeId,sourceCategories,destinationCategories,mode==ProductImportMode.UPDATE_EXISTING&&sameStore)
         val globalMap=resolveGlobalAttributes(storeId,validated.globalAttributes,mode==ProductImportMode.UPDATE_EXISTING&&sameStore)
-        var created=0;var updated=0;var drafted=0;var failed=0;var variationsCreated=0;var variationsUpdated=0;var variationsFailed=0;var skuChanged=0;var categoriesCreated=0;var categoriesResolved=0;var attributesCreated=0;var attributesResolved=0;var termsCreated=0;var termsResolved=0
+        var created=0;var updated=0;var drafted=0;var failed=0;var variationsCreated=0;var variationsUpdated=0;var variationsFailed=0;var skuChanged=0
+        var categoriesCreated=categoryMap.created;var categoriesResolved=categoryMap.resolved;var attributesCreated=globalMap.created;var attributesResolved=globalMap.resolved;var termsCreated=globalMap.termsCreated;var termsResolved=globalMap.termsResolved
         val usedMedia=mutableSetOf<String>();val errors=mutableListOf<String>();val importErrors=mutableListOf<String>()
-        categoriesCreated=categoryMap.created;categoriesResolved=categoryMap.resolved
-        attributesCreated=globalMap.created;attributesResolved=globalMap.resolved;termsCreated=globalMap.termsCreated;termsResolved=globalMap.termsResolved
         validated.products.forEachIndexed{index,x->
             onProgress(ProductTransferProgress("در حال وارد کردن محصولات…",index+1,validated.products.size))
             try{
