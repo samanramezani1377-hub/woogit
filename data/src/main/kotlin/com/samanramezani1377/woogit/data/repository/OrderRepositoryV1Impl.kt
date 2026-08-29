@@ -68,7 +68,16 @@ class OrderRepositoryV1Impl(
 ) : OrderRepository {
     private val refreshScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    override suspend fun get(storeId: StoreId, id: EntityId): CoreResult<Order> = provider.client(storeId).fold(
+    override suspend fun get(storeId: StoreId, id: EntityId): CoreResult<Order> {
+        val cached = local.get(storeId, id)
+        if (cached is CoreResult.Success) {
+            refreshScope.launch { refreshDetail(storeId, id) }
+            return cached
+        }
+        return refreshDetail(storeId, id)
+    }
+
+    private suspend fun refreshDetail(storeId: StoreId, id: EntityId): CoreResult<Order> = provider.client(storeId).fold(
         { (store, api) -> api.order(store.baseUrl, id.value.toLong()).fold({ remote -> runCatching { remote.toDomain() }.fold({ value -> local.upsert(storeId, value); CoreResult.Success(value) }, { CoreResult.Failure(DomainError.Network("سفارش دریافتی از فروشگاه قابل پردازش نیست.")) }) }, { local.get(storeId, id) }) },
         { local.get(storeId, id) },
     )
@@ -85,9 +94,7 @@ class OrderRepositoryV1Impl(
         return fetchPage(storeId, page, perPage, search, status)
     }
 
-    private suspend fun refreshFirstPage(storeId: StoreId, perPage: Int) {
-        fetchPage(storeId, 1, perPage, null, null)
-    }
+    private suspend fun refreshFirstPage(storeId: StoreId, perPage: Int) { fetchPage(storeId, 1, perPage, null, null) }
 
     private suspend fun fetchPage(storeId: StoreId, page: Int, perPage: Int, search: String?, status: String?): CoreResult<List<Order>> = provider.client(storeId).fold(
         { (store, api) -> api.orders(store.baseUrl, page, perPage, search, status).fold({ values ->
