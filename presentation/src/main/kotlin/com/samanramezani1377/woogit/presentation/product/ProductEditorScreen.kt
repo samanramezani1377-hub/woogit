@@ -28,6 +28,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.samanramezani1377.woogit.core.domain.model.GlobalAttribute
 import com.samanramezani1377.woogit.core.domain.model.IdName
 import com.samanramezani1377.woogit.core.domain.model.ProductImage
 import com.samanramezani1377.woogit.core.domain.model.ProductStatus
@@ -51,13 +52,14 @@ private fun parseEditableAttributes(value: String): List<EditableAttribute> = va
 }
 
 private fun serializeEditableAttributes(attributes: List<EditableAttribute>): String = attributes
-    .filter { it.name.isNotBlank() }
+    .filter { it.name.isNotBlank() && it.options.isNotEmpty() }
     .joinToString(" | ") { attribute -> "${attribute.name}:${attribute.options.joinToString(",")}" }
 
 @Composable
 internal fun ProductEditorScreen(
     state: ProductEditorUiState,
     availableCategories: List<IdName> = emptyList(),
+    availableAttributes: List<GlobalAttribute> = emptyList(),
     availableMedia: List<ProductImage> = emptyList(),
     mediaPickerOpen: Boolean = false,
     mediaLoading: Boolean = false,
@@ -125,7 +127,7 @@ internal fun ProductEditorScreen(
                             }
                         } else GlassText("دسته‌بندی‌ای از فروشگاه دریافت نشد.")
                     } }
-                    AttributeSelectionCard(state.attributes, onAttributesChanged)
+                    AttributeSelectionCard(state.attributes, availableAttributes, onAttributesChanged)
                     GlassPrimaryAction(if (state.saving) "در حال ذخیره…" else "ذخیره محصول", onSave, Modifier.padding(top = 4.dp), enabled = !state.saving && !imageUploading && state.name.isNotBlank())
                     GlassPrimaryAction("بازگشت", onBack, Modifier.padding(bottom = 20.dp))
                 }
@@ -156,26 +158,33 @@ internal fun ProductEditorScreen(
 }
 
 @Composable
-private fun AttributeSelectionCard(value: String, onChanged: (String) -> Unit) {
-    val attributes = remember(value) { parseEditableAttributes(value) }
+private fun AttributeSelectionCard(value: String, availableAttributes: List<GlobalAttribute>, onChanged: (String) -> Unit) {
+    val current = remember(value) { parseEditableAttributes(value) }
     GlassCard {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             GlassText("ویژگی‌های محصول", style = MaterialTheme.typography.titleMedium)
-            if (attributes.isNotEmpty()) {
-                attributes.forEachIndexed { index, attribute ->
+            if (availableAttributes.isNotEmpty()) {
+                availableAttributes.forEach { attribute ->
+                    val selected = current.firstOrNull { it.name == attribute.name }?.options.orEmpty().toSet()
                     GlassText(attribute.name, style = MaterialTheme.typography.titleSmall)
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        attribute.options.distinct().forEach { option ->
-                            FilterChip(
-                                selected = true,
-                                onClick = {
-                                    val next = attributes.toMutableList()
-                                    val current = next[index]
-                                    next[index] = current.copy(options = current.options.filterNot { it == option })
-                                    onChanged(serializeEditableAttributes(next))
-                                },
-                                label = { GlassText(option) },
-                            )
+                    if (attribute.terms.isEmpty()) {
+                        GlassText("مقداری برای این ویژگی در فروشگاه ثبت نشده است.", style = MaterialTheme.typography.bodySmall)
+                    } else {
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            attribute.terms.forEach { term ->
+                                FilterChip(
+                                    selected = term.name in selected,
+                                    onClick = {
+                                        val next = current.toMutableList()
+                                        val index = next.indexOfFirst { it.name == attribute.name }
+                                        val values = if (term.name in selected) selected - term.name else selected + term.name
+                                        if (index >= 0) next[index] = next[index].copy(options = values.toList())
+                                        else next.add(EditableAttribute(attribute.name, values.toList()))
+                                        onChanged(serializeEditableAttributes(next))
+                                    },
+                                    label = { GlassText(term.name) },
+                                )
+                            }
                         }
                     }
                 }
