@@ -40,9 +40,10 @@ class WooCommerceApi(
     suspend fun updateAttribute(baseUrl: String, id: Long, body: String) = request(baseUrl, "/wp-json/wc/v3/products/attributes/$id", method = "PUT", body = body)
     suspend fun deleteAttribute(baseUrl: String, id: Long, force: Boolean = false) = request(baseUrl, "/wp-json/wc/v3/products/attributes/$id", params = params(force), method = "DELETE")
     suspend fun listAttributeTerms(baseUrl: String, attributeId: Long, page: Int = 1, perPage: Int = 100) = request(baseUrl, "/wp-json/wc/v3/products/attributes/$attributeId/terms", params = params(page, perPage))
-    suspend fun getAttributeTerm(baseUrl: String, attributeId: Long, id: Long) = request(baseUrl, "/wp-json/wp/v2/products/attributes/$attributeId/terms/$id")
+    suspend fun getAttributeTerm(baseUrl: String, attributeId: Long, id: Long) = request(baseUrl, "/wp-json/wc/v3/products/attributes/$attributeId/terms/$id")
     suspend fun createAttributeTerm(baseUrl: String, attributeId: Long, body: String) = request(baseUrl, "/wp-json/wc/v3/products/attributes/$attributeId/terms", method = "POST", body = body)
-    suspend fun deleteAttributeTerm(baseUrl: String, attributeId: Long, id: Long, force: Boolean = false) = request(baseUrl, "/wp-json/wc/v3/products/attributes/$attributeId/terms/$id", method = "DELETE")
+    suspend fun updateAttributeTerm(baseUrl: String, attributeId: Long, id: Long, body: String) = request(baseUrl, "/wp-json/wc/v3/products/attributes/$attributeId/terms/$id", method = "PUT", body = body)
+    suspend fun deleteAttributeTerm(baseUrl: String, attributeId: Long, id: Long, force: Boolean = false) = request(baseUrl, "/wp-json/wc/v3/products/attributes/$attributeId/terms/$id", params = params(force), method = "DELETE")
 
     suspend fun listMedia(baseUrl: String, page: Int = 1, perPage: Int = 30, search: String? = null): ApiResponse = wordpressRequest(baseUrl, "/wp-json/wp/v2/media", params(page, perPage, search))
 
@@ -109,10 +110,7 @@ class WooCommerceApi(
     }
 
     private fun reportTechnical(feature: String, operation: String, method: String, url: Url, type: String, status: String = "", body: String = "", throwable: Throwable? = null) {
-        technicalErrorReporter.report(
-            TechnicalErrorContext(feature, operation, operation, type, method, url.toString().substringBefore('?'), status, body, "API request failure"),
-            throwable,
-        )
+        technicalErrorReporter.report(TechnicalErrorContext(feature, operation, operation, type, method, url.toString().substringBefore('?'), status, body, "API request failure"), throwable)
     }
 
     private fun wordpressAuth(): String? {
@@ -144,15 +142,9 @@ class WooCommerceApi(
         if (!status.isNullOrBlank()) put("status", status)
         if (!modifiedAfter.isNullOrBlank()) { put("modified_after", modifiedAfter); put("dates_are_gmt", true) }
     }
-
     private fun HttpRequestBuilder.common(params: Map<String, Any>) { params.forEach { (key, value) -> parameter(key, value) } }
     private fun params(page: Int, perPage: Int, search: String? = null, status: String? = null, modifiedAfter: String? = null) = requestParams(page, perPage, search, status, modifiedAfter)
     private fun params(value: Boolean) = mapOf<String, Any>("force" to value)
 }
 
-data class ApiResponse(
-    val statusCode: Int,
-    val body: String,
-    val method: String = "",
-    val endpoint: String = "",
-)
+data class ApiResponse(val statusCode: Int, val body: String, val method: String = "", val endpoint: String = "")
