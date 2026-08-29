@@ -1,5 +1,6 @@
 package com.samanramezani1377.woogit.presentation.product
 
+import com.samanramezani1377.woogit.core.domain.model.ProductImage
 import com.samanramezani1377.woogit.core.domain.model.ProductStatus
 import com.samanramezani1377.woogit.core.domain.model.ProductType
 
@@ -17,6 +18,7 @@ internal sealed interface ProductEditorUiState {
         val stock: String,
         val imageUrl: String?,
         val imageId: String? = null,
+        val images: List<ProductImage> = emptyList(),
         val imageError: String? = null,
         val categories: String,
         val attributes: String,
