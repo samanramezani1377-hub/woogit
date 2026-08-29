@@ -1,6 +1,6 @@
 package com.samanramezani1377.woogit.core.debug
 
-/** Transport/domain-safe technical context. No credentials should ever be supplied here. */
+/** Transport/domain-safe technical context. No credentials or Authorization headers are stored. */
 data class TechnicalErrorContext(
     val feature: String,
     val location: String,
@@ -20,7 +20,7 @@ fun TechnicalErrorContext.withHttp(
     body: String = "",
 ): TechnicalErrorContext = copy(
     httpMethod = method,
-    endpoint = url,
+    endpoint = url.substringBefore('?'),
     httpStatus = status,
     responseBody = body,
 )
