@@ -40,7 +40,7 @@ import com.samanramezani1377.woogit.presentation.GlassPrimaryAction
 import com.samanramezani1377.woogit.presentation.GlassScaffold
 import com.samanramezani1377.woogit.presentation.GlassText
 import com.samanramezani1377.woogit.presentation.GlassTextField
-import com.samanramezani1377-hub.woogit.presentation.GlassTopBar
+import com.samanramezani1377.woogit.presentation.GlassTopBar
 import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
 import com.samanramezani1377.woogit.presentation.VariationEditorViewModel
 import com.samanramezani1377.woogit.presentation.vmFactory
