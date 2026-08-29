@@ -38,17 +38,17 @@ class RobustProductTransferService(private val d:V1PresentationDependencies,priv
         resolver.openOutputStream(destination)?.use{raw->CountingOutputStream(raw,MAX_PACKAGE_BYTES).use{counted->ZipOutputStream(counted).use{zip->
             val exported=products.mapIndexed{index,product->
                 onProgress(ProductTransferProgress("در حال آماده‌سازی محصولات…",index+1,products.size))
-                val images=product.images.mapIndexed{imageIndex,image->{
+                val images=product.images.mapIndexed{imageIndex,image->
                     val file="media/p-${product.id.value}-$imageIndex.${transferExt(image.src)}"
                     val bytes=downloadTransferImage(image.src)?:error("تصویر «${image.name?:image.src}» قابل دریافت نیست؛ خروجی ناقص ساخته نشد.")
                     require(bytes.size.toLong()<=MAX_ENTRY_BYTES);writeTransferEntry(zip,file,bytes);imageCount++
                     TransferImage(image.id?.value,image.src,image.name,image.alt,file)
-                }}
-                val variations=if(product.type==ProductType.VARIABLE){val all=reader.variations(storeId,product.id);require(all.size<=MAX_VARIATIONS_PER_PRODUCT){"تعداد Variationهای محصول بیش از حد مجاز است."};all.map{variation->variation.toTransfer{image->{
+                }
+                val variations=if(product.type==ProductType.VARIABLE){val all=reader.variations(storeId,product.id);require(all.size<=MAX_VARIATIONS_PER_PRODUCT){"تعداد Variationهای محصول بیش از حد مجاز است."};all.map{variation->variation.toTransfer{image->
                     val file="media/v-${variation.id.value}.${transferExt(image.src)}"
                     val bytes=downloadTransferImage(image.src)?:error("تصویر Variation قابل دریافت نیست؛ خروجی ناقص ساخته نشد.")
                     require(bytes.size.toLong()<=MAX_ENTRY_BYTES);writeTransferEntry(zip,file,bytes);imageCount++;file
-                }}}}else emptyList()
+                }}}else emptyList()
                 product.toTransfer(images,variations)
             }
             val manifest=ProductTransferManifest(FORMAT,VERSION,store.baseUrl.trimEnd('/'),SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX",Locale.US).format(Date()),exported.size,imageCount)
