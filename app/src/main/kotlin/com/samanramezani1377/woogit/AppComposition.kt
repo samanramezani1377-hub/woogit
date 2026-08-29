@@ -41,14 +41,19 @@ class AppComposition(context: Context) {
     private val provider = WooCommerceClientProvider(db, secure, network.httpClient)
     private val mutationCoordinator = SqlMutationCoordinator(db)
 
-    /** Restores the selected store across Activity/process recreation without storing credentials in plain text. */
+    /** Restores only a previously connected store; credentials remain in the secure credential store. */
     private val restoredStoreId: String? = run {
         val savedId = prefs.getString("active_store_id", null)
-        val savedStore = savedId?.let { storeLocal.find(it) }
+        val savedStore = savedId?.let { id ->
+            when (val result = storeLocal.get(StoreId(id))) {
+                is CoreResult.Success -> result.value
+                is CoreResult.Failure -> null
+            }
+        }
         when {
-            savedStore?.connection_state == "CONNECTED" && !savedStore.credential_reference.isNullOrBlank() -> savedId
-            else -> storeLocal.all().firstOrNull { it.connection_state == "CONNECTED" && !it.credential_reference.isNullOrBlank() }?.id?.also {
-                prefs.edit().putString("active_store_id", it).apply()
+            savedStore?.state?.name == "CONNECTED" && savedStore.credentialReference != null -> savedId
+            else -> storeLocal.findConnectedStoreId()?.also { id ->
+                prefs.edit().putString("active_store_id", id).apply()
             }
         }
     }
