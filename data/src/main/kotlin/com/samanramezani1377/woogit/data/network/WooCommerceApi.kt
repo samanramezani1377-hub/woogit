@@ -29,6 +29,7 @@ class WooCommerceApi(
     suspend fun updateProduct(baseUrl: String, id: Long, body: String) = request(baseUrl, "/wp-json/wc/v3/products/$id", method = "PUT", body = body)
     suspend fun deleteProduct(baseUrl: String, id: Long, force: Boolean = false) = request(baseUrl, "/wp-json/wc/v3/products/$id", params = params(force), method = "DELETE")
     suspend fun listProductCategories(baseUrl: String, page: Int = 1, perPage: Int = 100, search: String? = null) = request(baseUrl, "/wp-json/wc/v3/products/categories", params = params(page, perPage, search))
+    suspend fun createProductCategory(baseUrl: String, body: String) = request(baseUrl, "/wp-json/wc/v3/products/categories", method = "POST", body = body)
     suspend fun listVariations(baseUrl: String, productId: Long, page: Int = 1, perPage: Int = 20) = request(baseUrl, "/wp-json/wc/v3/products/$productId/variations", params = params(page, perPage))
     suspend fun getVariation(baseUrl: String, productId: Long, id: Long) = request(baseUrl, "/wp-json/wc/v3/products/$productId/variations/$id")
     suspend fun createVariation(baseUrl: String, productId: Long, body: String) = request(baseUrl, "/wp-json/wc/v3/products/$productId/variations", method = "POST", body = body)
@@ -87,7 +88,7 @@ class WooCommerceApi(
 
     private suspend fun wordpressRequest(baseUrl: String, path: String, params: Map<String, Any> = emptyMap(), method: String = "GET"): ApiResponse {
         val url = Url("${baseUrl.trimEnd('/')}$path")
-        require(url.protocol.name == "https") { "WordPress API requires HTTPS" }
+        require(url.protocol.name == "https") { "WooCommerce API requires HTTPS" }
         val auth = wordpressAuth() ?: return ApiResponse(401, "{\"code\":\"woogit_missing_wordpress_credentials\",\"message\":\"WordPress username and Application Password are required for media operations.\"}", method, url.toString())
         val requestUrl = URLBuilder(url).apply { params.forEach { (key, value) -> parameters.append(key, value.toString()) } }.build()
         val response: HttpResponse = try {
