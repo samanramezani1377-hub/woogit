@@ -23,13 +23,18 @@ import com.samanramezani1377.woogit.debug.DebugConfig
 import com.samanramezani1377.woogit.debug.DebugLogEntry
 import com.samanramezani1377.woogit.debug.DebugLogStore
 import com.samanramezani1377.woogit.presentation.GlassCard
+import com.samanramezani1377.woogit.presentation.GlassPrimaryAction
 import com.samanramezani1377.woogit.presentation.GlassScaffold
 import com.samanramezani1377.woogit.presentation.GlassText
 import com.samanramezani1377.woogit.presentation.GlassTopBar
 import com.samanramezani1377.woogit.presentation.debug.DashboardSalesDebugSnapshot
 
 @Composable
-fun SettingsScreen(onBack: () -> Unit) {
+fun SettingsScreen(
+    storeName: String,
+    onBack: () -> Unit,
+    onDisconnect: () -> Unit,
+) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     var logs by remember { mutableStateOf(DebugLogStore.read(context)) }
@@ -42,9 +47,16 @@ fun SettingsScreen(onBack: () -> Unit) {
         ) {
             GlassTopBar(
                 title = "تنظیمات",
-                subtitle = "مدیریت فروشگاه و همگام‌سازی",
+                subtitle = "مدیریت اتصال و حساب فروشگاه",
                 navigation = { TextButton(onClick = onBack) { GlassText("بازگشت") } },
             )
+            GlassCard {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    GlassText("فروشگاه متصل")
+                    GlassText(storeName)
+                    GlassPrimaryAction("قطع اتصال", onDisconnect)
+                }
+            }
             if (DebugConfig.ENABLED) {
                 GlassCard {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
