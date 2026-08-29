@@ -28,11 +28,13 @@ internal fun E11AppNavigation(dependencies: V1PresentationDependencies, initialO
     val route = currentRoute?.destination?.route
 
     LaunchedEffect(dependencies.initialStoreId) {
-        if (activeStore == null) activeStore = dependencies.initialStoreId
+        dependencies.initialStoreId?.let { persistedStore ->
+            if (activeStore != persistedStore) activeStore = persistedStore
+        }
     }
 
-    BackHandler(enabled = true) {
-        if (navController.previousBackStackEntry != null && route != E11Routes.CONNECTION) {
+    BackHandler(enabled = route != E11Routes.CONNECTION) {
+        if (navController.previousBackStackEntry != null) {
             navController.popBackStack()
         } else {
             (context as? Activity)?.moveTaskToBack(true)
