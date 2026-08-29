@@ -245,7 +245,7 @@ private fun WooProductTypedDto.toProductDomain() = Product(
 
 private fun WooVariationTypedDto.toVariationDomain() = Variation(
     EntityId(id.toString()), EntityId(product_id.toString()),
-    attributes.map { VariationAttribute(it.name, it.options.firstOrNull().orEmpty()) },
+    attributes.map { VariationAttribute(it.name, it.option) },
     Pricing(regular_price, sale_price, sale_price != null),
     Stock(stock_quantity, when (stock_status) { "outofstock" -> StockStatus.OUT_OF_STOCK; "onbackorder" -> StockStatus.ON_BACKORDER; else -> StockStatus.IN_STOCK }, manage_stock),
     sku,
