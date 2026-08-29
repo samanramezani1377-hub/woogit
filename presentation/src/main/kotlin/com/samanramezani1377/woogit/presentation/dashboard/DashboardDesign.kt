@@ -30,6 +30,7 @@ import com.samanramezani1377.woogit.presentation.GlassText
 import com.samanramezani1377.woogit.presentation.GlassTokens
 import com.samanramezani1377.woogit.presentation.toPersianFormattedNumber
 import com.samanramezani1377.woogit.presentation.toPersianPrice
+import com.samanramezani1377.woogit.presentation.toPersianDigits
 
 @Composable
 internal fun DashboardHero(storeName: String, connected: Boolean, modifier: Modifier = Modifier) {
