@@ -22,14 +22,19 @@ import com.samanramezani1377.woogit.presentation.sync.*
 @Composable
 internal fun E11AppNavigation(dependencies: V1PresentationDependencies, initialOrderId: String?) {
     val navController = rememberNavController()
-    var activeStore by remember { mutableStateOf(dependencies.initialStoreId) }
+    // Keep the authenticated store in saved instance state as well as the
+    // persistent session. This prevents a same-process composition/navigation
+    // recreation from sending an already connected user back to ConnectionScreen.
+    var activeStore by rememberSaveable { mutableStateOf(dependencies.initialStoreId) }
     val context = LocalContext.current
     val currentRoute by navController.currentBackStackEntryAsState()
     val route = currentRoute?.destination?.route
 
+    LaunchedEffect(dependencies.initialStoreId) {
+        if (activeStore == null) activeStore = dependencies.initialStoreId
+    }
+
     BackHandler(enabled = true) {
-        // System Back navigates inside the app when possible. At the authenticated
-        // root it backgrounds the task instead of destroying the Activity/session.
         if (navController.previousBackStackEntry != null && route != E11Routes.CONNECTION) {
             navController.popBackStack()
         } else {
@@ -37,7 +42,11 @@ internal fun E11AppNavigation(dependencies: V1PresentationDependencies, initialO
         }
     }
 
-    val startDestination = when { activeStore == null -> E11Routes.CONNECTION; initialOrderId != null -> E11Routes.order(initialOrderId); else -> E11Routes.DASHBOARD }
+    val startDestination = when {
+        activeStore == null -> E11Routes.CONNECTION
+        initialOrderId != null -> E11Routes.order(initialOrderId)
+        else -> E11Routes.DASHBOARD
+    }
     NavHost(navController, startDestination) {
         composable(E11Routes.CONNECTION) { ConnectionScreen(dependencies) { storeId -> activeStore = storeId; dependencies.onStoreConnected(storeId); navController.navigate(E11Routes.DASHBOARD) { popUpTo(E11Routes.CONNECTION) { inclusive = true } } } }
         composable(E11Routes.DASHBOARD) {
