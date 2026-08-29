@@ -8,6 +8,10 @@ import com.samanramezani1377.woogit.core.domain.error.fold
 import com.samanramezani1377.woogit.core.domain.model.*
 import com.samanramezani1377.woogit.core.domain.repository.*
 import com.samanramezani1377.woogit.data.network.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.datetime.Instant
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
@@ -37,136 +41,87 @@ private fun WooOrderTypedDto.toDomain(): Order {
     val modified = date_modified_gmt?.let { runCatching { Instant.parse(it) }.getOrNull() }
     return Order(
         EntityId(id.toString()),
-        when (status) {
-            "pending" -> OrderStatus.PENDING
-            "processing" -> OrderStatus.PROCESSING
-            "on-hold" -> OrderStatus.ON_HOLD
-            "completed" -> OrderStatus.COMPLETED
-            "cancelled" -> OrderStatus.CANCELLED
-            "refunded" -> OrderStatus.REFUNDED
-            "failed" -> OrderStatus.FAILED
-            else -> OrderStatus.OTHER
-        },
+        when (status) { "pending" -> OrderStatus.PENDING; "processing" -> OrderStatus.PROCESSING; "on-hold" -> OrderStatus.ON_HOLD; "completed" -> OrderStatus.COMPLETED; "cancelled" -> OrderStatus.CANCELLED; "refunded" -> OrderStatus.REFUNDED; "failed" -> OrderStatus.FAILED; else -> OrderStatus.OTHER },
         customer_id.takeIf { it != 0L }?.let { Customer(EntityId(it.toString()), listOfNotNull(billing?.first_name, billing?.last_name).joinToString(" "), billing?.phone) },
         billing?.let { Address(it.first_name, it.last_name, it.company, it.address_1, it.address_2, it.city, it.state, it.postcode, it.country, it.phone) },
         shipping?.let { Address(it.first_name, it.last_name, it.company, it.address_1, it.address_2, it.city, it.state, it.postcode, it.country, it.phone) },
         Payment(payment_method, payment_method_title, transaction_id, date_paid_gmt?.isNotBlank() == true),
-        shipping_lines.map { ShippingLine(it.method_id, it.method_title, it.total) },
-        coupon_lines.map { Discount(it.code, it.discount) },
-        emptyList(),
+        shipping_lines.map { ShippingLine(it.method_id, it.method_title, it.total) }, coupon_lines.map { Discount(it.code, it.discount) }, emptyList(),
         line_items.map { OrderItem(EntityId(it.id.toString()), it.product_id.takeIf { v -> v != 0L }?.let { v -> EntityId(v.toString()) }, it.variation_id.takeIf { v -> v != 0L }?.let { v -> EntityId(v.toString()) }, it.name, it.quantity, it.subtotal, it.total) },
-        modified,
-        number.ifBlank { id.toString() },
-        total,
-        currency,
+        modified, number.ifBlank { id.toString() }, total, currency
     )
 }
 
 private fun formatWooMoney(value: String, settings: WooSystemStatusSettingsDto): String {
     val amount = value.toBigDecimalOrNull() ?: BigDecimal.ZERO
-    val symbols = DecimalFormatSymbols().apply {
-        groupingSeparator = settings.thousand_separator.firstOrNull() ?: ','
-        decimalSeparator = settings.decimal_separator.firstOrNull() ?: '.'
-    }
+    val symbols = DecimalFormatSymbols().apply { groupingSeparator = settings.thousand_separator.firstOrNull() ?: ','; decimalSeparator = settings.decimal_separator.firstOrNull() ?: '.' }
     val decimals = settings.number_of_decimals.coerceAtLeast(0)
     val pattern = if (decimals == 0) "#,##0" else "#,##0." + "0".repeat(decimals)
     val formatted = DecimalFormat(pattern, symbols).format(amount)
     val symbol = settings.currency_symbol.ifBlank { settings.currency }
-    return when (settings.currency_position) {
-        "right" -> "$formatted$symbol"
-        "left_space" -> "$symbol $formatted"
-        "right_space" -> "$formatted $symbol"
-        else -> "$symbol$formatted"
-    }
+    return when (settings.currency_position) { "right" -> "$formatted$symbol"; "left_space" -> "$symbol $formatted"; "right_space" -> "$formatted $symbol"; else -> "$symbol$formatted" }
 }
 
 class OrderRepositoryV1Impl(
-    private val local: LocalOrderDataSource<Order>,
-    private val provider: WooCommerceClientProvider,
-    private val coordinator: MutationCoordinator,
-    private val pending: PendingOperationRepository,
+    private val local: LocalOrderDataSource<Order>, private val provider: WooCommerceClientProvider,
+    private val coordinator: MutationCoordinator, private val pending: PendingOperationRepository,
 ) : OrderRepository {
+    private val refreshScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     override suspend fun get(storeId: StoreId, id: EntityId): CoreResult<Order> = provider.client(storeId).fold(
         { (store, api) -> api.order(store.baseUrl, id.value.toLong()).fold({ remote -> runCatching { remote.toDomain() }.fold({ value -> local.upsert(storeId, value); CoreResult.Success(value) }, { CoreResult.Failure(DomainError.Network("سفارش دریافتی از فروشگاه قابل پردازش نیست.")) }) }, { local.get(storeId, id) }) },
         { local.get(storeId, id) },
     )
 
     override suspend fun list(storeId: StoreId, page: Int, perPage: Int, search: String?, status: String?): CoreResult<List<Order>> {
-        val cached = if (page == 1) local.list(storeId) else null
-        return provider.client(storeId).fold(
-            { (store, api) -> api.orders(store.baseUrl, page, perPage, search, status).fold({ values ->
-                val mapped = values.mapNotNull { remote -> runCatching { remote.toDomain() }.getOrNull() }
-                mapped.forEach { local.upsert(storeId, it) }
-                if (values.isNotEmpty() && mapped.isEmpty()) CoreResult.Failure(DomainError.Network("سفارش‌های دریافتی از فروشگاه قابل پردازش نیستند.")) else CoreResult.Success(mapped)
-            }, { cached ?: CoreResult.Failure(it.toDomain()) }) },
-            { cached ?: CoreResult.Failure(it) },
-        )
+        val isDefaultList = page == 1 && search.isNullOrBlank() && status.isNullOrBlank()
+        if (isDefaultList) {
+            val cached = when (val result = local.list(storeId)) { is CoreResult.Success -> result.value; is CoreResult.Failure -> emptyList() }
+            if (cached.isNotEmpty()) {
+                refreshScope.launch { refreshFirstPage(storeId, perPage) }
+                return CoreResult.Success(cached.take(perPage))
+            }
+        }
+        return fetchPage(storeId, page, perPage, search, status)
     }
+
+    private suspend fun refreshFirstPage(storeId: StoreId, perPage: Int) {
+        fetchPage(storeId, 1, perPage, null, null)
+    }
+
+    private suspend fun fetchPage(storeId: StoreId, page: Int, perPage: Int, search: String?, status: String?): CoreResult<List<Order>> = provider.client(storeId).fold(
+        { (store, api) -> api.orders(store.baseUrl, page, perPage, search, status).fold({ values ->
+            val mapped = values.mapNotNull { remote -> runCatching { remote.toDomain() }.getOrNull() }
+            mapped.forEach { local.upsert(storeId, it) }
+            if (values.isNotEmpty() && mapped.isEmpty()) CoreResult.Failure(DomainError.Network("سفارش‌های دریافتی از فروشگاه قابل پردازش نیستند.")) else CoreResult.Success(mapped)
+        }, { error ->
+            val cached = if (page == 1 && search.isNullOrBlank() && status.isNullOrBlank()) local.list(storeId) else null
+            cached ?: CoreResult.Failure(error.toDomain())
+        }) },
+        { error ->
+            val cached = if (page == 1 && search.isNullOrBlank() && status.isNullOrBlank()) local.list(storeId) else null
+            cached ?: CoreResult.Failure(error)
+        },
+    )
 
     override suspend fun salesSummary(storeId: StoreId): CoreResult<SalesSummary> = provider.client(storeId).fold(
         { (store, api) ->
-            val settingsResult = api.validate(store.baseUrl)
-            val reportResult = api.salesReport(store.baseUrl, "2000-01-01", LocalDate.now().toString())
-            if (settingsResult.isFailure || reportResult.isFailure) {
-                val error = settingsResult.exceptionOrNull() ?: reportResult.exceptionOrNull() ?: Exception("WooCommerce sales report failed")
-                return@fold CoreResult.Failure(error.toDomain())
-            }
-            val settings = settingsResult.getOrThrow().settings
-            val report = reportResult.getOrThrow()
-            CoreResult.Success(
-                SalesSummary(
-                    netSales = report.net_sales,
-                    currency = settings.currency,
-                    currencySymbol = settings.currency_symbol,
-                    currencyPosition = settings.currency_position,
-                    thousandSeparator = settings.thousand_separator,
-                    decimalSeparator = settings.decimal_separator,
-                    numberOfDecimals = settings.number_of_decimals,
-                )
-            )
-        },
-        { CoreResult.Failure(it) },
+            val settingsResult = api.validate(store.baseUrl); val reportResult = api.salesReport(store.baseUrl, "2000-01-01", LocalDate.now().toString())
+            if (settingsResult.isFailure || reportResult.isFailure) { val error = settingsResult.exceptionOrNull() ?: reportResult.exceptionOrNull() ?: Exception("WooCommerce sales report failed"); return@fold CoreResult.Failure(error.toDomain()) }
+            val settings = settingsResult.getOrThrow().settings; val report = reportResult.getOrThrow()
+            CoreResult.Success(SalesSummary(report.net_sales, settings.currency, settings.currency_symbol, settings.currency_position, settings.thousand_separator, settings.decimal_separator, settings.number_of_decimals))
+        }, { CoreResult.Failure(it) }
     )
 
     override suspend fun update(storeId: StoreId, id: EntityId, order: Order): CoreResult<Order> {
-        val wooStatus = order.status.toWooValue()
-        val payload = mutationJson.encodeToString(OrderMutation(wooStatus))
+        val wooStatus = order.status.toWooValue(); val payload = mutationJson.encodeToString(OrderMutation(wooStatus))
         val operation = PendingOperation(EntityId("order-update-${storeId.value}-${id.value}-${payloadHash(payload).take(16)}"), storeId, "order", id, OperationType.UPDATE, payload, payloadHash(payload), 0, null, null)
-        val localResult = coordinator.execute(operation) { local.upsert(storeId, order) }
-        if (localResult is CoreResult.Failure) return localResult
-        return provider.client(storeId).fold(
-            { (store, api) ->
-                api.updateOrder(store.baseUrl, id.value.toLong(), WooOrderTypedDto(id.value.toLong(), number = order.number, status = wooStatus, total = order.total ?: "0", currency = order.currency ?: "", customer_id = order.customer?.id?.value?.toLongOrNull() ?: 0L)).fold(
-                    { remote ->
-                        val value = remote.toDomain()
-                        local.upsert(storeId, value)
-                        pending.markSucceeded(operation.id)
-                        CoreResult.Success(value)
-                    },
-                    { error ->
-                        if (error is HttpApiException && error.statusCode in 408..599) CoreResult.Success(order)
-                        else CoreResult.Failure(error.toDomain())
-                    },
-                )
-            },
-            { error -> if (error.recoverable) CoreResult.Success(order) else CoreResult.Failure(error) },
-        )
+        val localResult = coordinator.execute(operation) { local.upsert(storeId, order) }; if (localResult is CoreResult.Failure) return localResult
+        return provider.client(storeId).fold({ (store, api) -> api.updateOrder(store.baseUrl, id.value.toLong(), WooOrderTypedDto(id.value.toLong(), number = order.number, status = wooStatus, total = order.total ?: "0", currency = order.currency ?: "", customer_id = order.customer?.id?.value?.toLongOrNull() ?: 0L)).fold({ remote -> val value = remote.toDomain(); local.upsert(storeId, value); pending.markSucceeded(operation.id); CoreResult.Success(value) }, { error -> if (error is HttpApiException && error.statusCode in 408..599) CoreResult.Success(order) else CoreResult.Failure(error.toDomain()) }) }, { error -> if (error.recoverable) CoreResult.Success(order) else CoreResult.Failure(error) })
     }
 }
 
 private fun Throwable.toDomain(): DomainError = when (this) {
-    is HttpApiException -> {
-        val message = WordPressErrorMapper.message(statusCode, body)
-        when (statusCode) {
-            401 -> DomainError.Authentication(message)
-            403 -> DomainError.Permission(message)
-            404 -> DomainError.NotFound("remote", message)
-            409 -> DomainError.Conflict(message)
-            400, 405, 415, 422 -> DomainError.Validation(message)
-            429 -> DomainError.RateLimited(message)
-            in 500..599 -> DomainError.Server(message)
-            else -> DomainError.Unknown(message)
-        }
-    }
+    is HttpApiException -> { val message = WordPressErrorMapper.message(statusCode, body); when (statusCode) { 401 -> DomainError.Authentication(message); 403 -> DomainError.Permission(message); 404 -> DomainError.NotFound("remote", message); 409 -> DomainError.Conflict(message); 400, 405, 415, 422 -> DomainError.Validation(message); 429 -> DomainError.RateLimited(message); in 500..599 -> DomainError.Server(message); else -> DomainError.Unknown(message) } }
     else -> DomainError.Network(message ?: "ارتباط با فروشگاه برقرار نشد. اتصال اینترنت و آدرس فروشگاه را بررسی کنید.")
 }
