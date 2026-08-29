@@ -46,13 +46,11 @@ internal fun E11AppNavigation(dependencies: V1PresentationDependencies, initialO
                     factory = DashboardViewModelFactory(dependencies, storeId),
                 )
                 val state by vm.uiState.collectAsState()
-
                 LaunchedEffect(storeId) { vm.refresh() }
                 DisposableEffect(vm, storeId) {
                     vm.startConnectionHealthMonitor()
                     onDispose { vm.stopConnectionHealthMonitor() }
                 }
-
                 val recent = state.orders.firstOrNull()
                 DashboardScreen(
                     storeId.value,
@@ -95,7 +93,7 @@ internal fun E11AppNavigation(dependencies: V1PresentationDependencies, initialO
                 val state by vm.state.collectAsState()
                 LaunchedEffect(storeId) { vm.load(storeId) }
                 OrdersScreen(
-                    mapOrdersState(state),
+                    mapOrdersState(state, vm.hasMore()),
                     { id -> navController.navigate(E11Routes.order(id)) },
                     { vm.load(storeId) },
                     { vm.nextPage(storeId) },
@@ -104,10 +102,7 @@ internal fun E11AppNavigation(dependencies: V1PresentationDependencies, initialO
             }
         }
 
-        composable(
-            E11Routes.ORDER_DETAIL,
-            listOf(navArgument(E11Routes.ORDER_ID) { type = NavType.StringType }),
-        ) { entry ->
+        composable(E11Routes.ORDER_DETAIL, listOf(navArgument(E11Routes.ORDER_ID) { type = NavType.StringType })) { entry ->
             val store = activeStore
             val id = entry.arguments?.getString(E11Routes.ORDER_ID)
             if (store != null && id != null) {
@@ -122,10 +117,7 @@ internal fun E11AppNavigation(dependencies: V1PresentationDependencies, initialO
                     mapOrderDetailState(state),
                     { vm.load(storeId, EntityId(id)) },
                     { navController.popBackStack() },
-                    { status ->
-                        val order = (state as? FeatureUiState.Success)?.value
-                        if (order != null) vm.update(storeId, order.copy(status = status))
-                    },
+                    { status -> vm.updateStatus(storeId, status) },
                 )
             }
         }
@@ -140,21 +132,11 @@ internal fun E11AppNavigation(dependencies: V1PresentationDependencies, initialO
                 )
                 val state by vm.state.collectAsState()
                 LaunchedEffect(storeId) { vm.load(storeId) }
-                ProductsScreen(
-                    state,
-                    { id -> navController.navigate(E11Routes.product(id)) },
-                    { vm.load(storeId) },
-                    { vm.nextPage(storeId) },
-                    { vm.load(storeId, it, true) },
-                    { navController.navigate(E11Routes.PRODUCT_NEW) },
-                )
+                ProductsScreen(state, { id -> navController.navigate(E11Routes.product(id)) }, { vm.load(storeId) }, { vm.nextPage(storeId) }, { vm.load(storeId, it, true) }, { navController.navigate(E11Routes.PRODUCT_NEW) })
             }
         }
 
-        composable(
-            E11Routes.PRODUCT_DETAIL,
-            listOf(navArgument(E11Routes.PRODUCT_ID) { type = NavType.StringType }),
-        ) { entry ->
+        composable(E11Routes.PRODUCT_DETAIL, listOf(navArgument(E11Routes.PRODUCT_ID) { type = NavType.StringType })) { entry ->
             val store = activeStore
             val id = entry.arguments?.getString(E11Routes.PRODUCT_ID)
             if (store != null && id != null) {
@@ -166,12 +148,7 @@ internal fun E11AppNavigation(dependencies: V1PresentationDependencies, initialO
                 val state by vm.state.collectAsState()
                 LaunchedEffect(storeId, id) { vm.load(storeId, EntityId(id)) }
                 when (val current = state) {
-                    is FeatureUiState.Success -> ProductDetailScreen(
-                        current.value,
-                        { navController.popBackStack() },
-                        { navController.navigate(E11Routes.productEdit(id)) },
-                        { navController.navigate(E11Routes.variations(id)) },
-                    )
+                    is FeatureUiState.Success -> ProductDetailScreen(current.value, { navController.popBackStack() }, { navController.navigate(E11Routes.productEdit(id)) }, { navController.navigate(E11Routes.variations(id)) })
                     FeatureUiState.Loading, FeatureUiState.Pending -> GlassScaffold { GlassLoading("در حال بارگذاری محصول…") }
                     FeatureUiState.Empty -> GlassScaffold { GlassEmptyState("محصول پیدا نشد") }
                     is FeatureUiState.Error -> GlassScaffold { GlassErrorState(current.message) }
@@ -185,21 +162,13 @@ internal fun E11AppNavigation(dependencies: V1PresentationDependencies, initialO
             activeStore?.let { ProductEditorRoute(dependencies, StoreId(it), null, { navController.popBackStack() }, { navController.popBackStack() }) }
         }
 
-        composable(
-            E11Routes.PRODUCT_EDIT,
-            listOf(navArgument(E11Routes.PRODUCT_ID) { type = NavType.StringType }),
-        ) { entry ->
+        composable(E11Routes.PRODUCT_EDIT, listOf(navArgument(E11Routes.PRODUCT_ID) { type = NavType.StringType })) { entry ->
             val store = activeStore
             val id = entry.arguments?.getString(E11Routes.PRODUCT_ID)
-            if (store != null && id != null) {
-                ProductEditorRoute(dependencies, StoreId(store), id, { navController.popBackStack() }, { navController.popBackStack() })
-            }
+            if (store != null && id != null) ProductEditorRoute(dependencies, StoreId(store), id, { navController.popBackStack() }, { navController.popBackStack() })
         }
 
-        composable(
-            E11Routes.VARIATIONS,
-            listOf(navArgument(E11Routes.PRODUCT_ID) { type = NavType.StringType }),
-        ) { entry ->
+        composable(E11Routes.VARIATIONS, listOf(navArgument(E11Routes.PRODUCT_ID) { type = NavType.StringType })) { entry ->
             val store = activeStore
             val id = entry.arguments?.getString(E11Routes.PRODUCT_ID)
             if (store != null && id != null) {
@@ -211,55 +180,30 @@ internal fun E11AppNavigation(dependencies: V1PresentationDependencies, initialO
                 val state by vm.state.collectAsState()
                 LaunchedEffect(storeId, id) { vm.load(storeId, EntityId(id)) }
                 val list = (state as? FeatureUiState.Success)?.value.orEmpty().map { variation ->
-                    VariationUiModel(
-                        variation.id.value,
-                        variation.attributes.joinToString(" · ") { "${it.name}: ${it.option}" },
-                        variation.pricing.sale ?: variation.pricing.regular ?: "—",
-                        variation.stock?.quantity?.toString()?.removeSuffix(".0") ?: "—",
-                    )
+                    VariationUiModel(variation.id.value, variation.attributes.joinToString(" · ") { "${it.name}: ${it.option}" }, variation.pricing.sale ?: variation.pricing.regular ?: "—", variation.stock?.quantity?.toString()?.removeSuffix(".0") ?: "—")
                 }
-                VariationsManagementScreen(
-                    list,
-                    { navController.navigate(E11Routes.variationNew(id)) },
-                    { variationId -> navController.navigate(E11Routes.variationEdit(id, variationId)) },
-                )
+                VariationsManagementScreen(list, { navController.navigate(E11Routes.variationNew(id)) }, { variationId -> navController.navigate(E11Routes.variationEdit(id, variationId)) })
             }
         }
 
-        composable(
-            E11Routes.VARIATION_NEW,
-            listOf(navArgument(E11Routes.PRODUCT_ID) { type = NavType.StringType }),
-        ) { entry ->
+        composable(E11Routes.VARIATION_NEW, listOf(navArgument(E11Routes.PRODUCT_ID) { type = NavType.StringType })) { entry ->
             val store = activeStore
             val id = entry.arguments?.getString(E11Routes.PRODUCT_ID)
-            if (store != null && id != null) {
-                VariationEditorRoute(dependencies, StoreId(store), id, null, { navController.popBackStack() }, { navController.popBackStack() })
-            }
+            if (store != null && id != null) VariationEditorRoute(dependencies, StoreId(store), id, null, { navController.popBackStack() }, { navController.popBackStack() })
         }
 
-        composable(
-            E11Routes.VARIATION_EDIT,
-            listOf(
-                navArgument(E11Routes.PRODUCT_ID) { type = NavType.StringType },
-                navArgument(E11Routes.VARIATION_ID) { type = NavType.StringType },
-            ),
-        ) { entry ->
+        composable(E11Routes.VARIATION_EDIT, listOf(navArgument(E11Routes.PRODUCT_ID) { type = NavType.StringType }, navArgument(E11Routes.VARIATION_ID) { type = NavType.StringType })) { entry ->
             val store = activeStore
             val productId = entry.arguments?.getString(E11Routes.PRODUCT_ID)
             val variationId = entry.arguments?.getString(E11Routes.VARIATION_ID)
-            if (store != null && productId != null && variationId != null) {
-                VariationEditorRoute(dependencies, StoreId(store), productId, variationId, { navController.popBackStack() }, { navController.popBackStack() })
-            }
+            if (store != null && productId != null && variationId != null) VariationEditorRoute(dependencies, StoreId(store), productId, variationId, { navController.popBackStack() }, { navController.popBackStack() })
         }
 
         composable(E11Routes.SYNC) {
             val store = activeStore
             if (store != null) {
                 val storeId = StoreId(store)
-                val vm = viewModel<SyncViewModel>(
-                    key = "sync-${storeId.value}",
-                    factory = vmFactory { SyncViewModel(dependencies) },
-                )
+                val vm = viewModel<SyncViewModel>(key = "sync-${storeId.value}", factory = vmFactory { SyncViewModel(dependencies) })
                 val state by vm.state.collectAsState()
                 LaunchedEffect(storeId) { vm.load(storeId) }
                 SyncScreen(mapSyncState(state), { vm.sync(storeId) }, { vm.sync(storeId) })
@@ -270,25 +214,11 @@ internal fun E11AppNavigation(dependencies: V1PresentationDependencies, initialO
             val store = activeStore
             if (store != null) {
                 val storeId = StoreId(store)
-                val vm = viewModel<ConflictsViewModel>(
-                    key = "conflicts-${storeId.value}",
-                    factory = vmFactory { ConflictsViewModel(dependencies) },
-                )
+                val vm = viewModel<ConflictsViewModel>(key = "conflicts-${storeId.value}", factory = vmFactory { ConflictsViewModel(dependencies) })
                 val state by vm.state.collectAsState()
                 LaunchedEffect(storeId) { vm.load(storeId) }
-                val list = (state as? FeatureUiState.Success)?.value.orEmpty().map { conflict ->
-                    ConflictUiModel(
-                        conflict.id.value,
-                        "${conflict.entityType} · ${conflict.reason}",
-                        conflict.localSnapshot ?: conflict.localVersion?.value ?: "—",
-                        conflict.serverSnapshot ?: conflict.remoteVersion?.value ?: "—",
-                    )
-                }
-                ConflictsScreen(
-                    list,
-                    { id -> vm.resolve(storeId, EntityId(id), ConflictResolution.KEEP_LOCAL) },
-                    { id -> vm.resolve(storeId, EntityId(id), ConflictResolution.KEEP_SERVER) },
-                )
+                val list = (state as? FeatureUiState.Success)?.value.orEmpty().map { conflict -> ConflictUiModel(conflict.id.value, "${conflict.entityType} · ${conflict.reason}", conflict.localSnapshot ?: conflict.localVersion?.value ?: "—", conflict.serverSnapshot ?: conflict.remoteVersion?.value ?: "—") }
+                ConflictsScreen(list, { id -> vm.resolve(storeId, EntityId(id), ConflictResolution.KEEP_LOCAL) }, { id -> vm.resolve(storeId, EntityId(id), ConflictResolution.KEEP_SERVER) })
             }
         }
 
@@ -299,34 +229,22 @@ internal fun E11AppNavigation(dependencies: V1PresentationDependencies, initialO
                 onDisconnect = {
                     dependencies.onStoreDisconnected()
                     activeStore = null
-                    navController.navigate(E11Routes.CONNECTION) {
-                        popUpTo(E11Routes.SETTINGS) { inclusive = true }
-                    }
+                    navController.navigate(E11Routes.CONNECTION) { popUpTo(E11Routes.SETTINGS) { inclusive = true } }
                 },
             )
         }
     }
 }
 
-private fun mapOrdersState(state: FeatureUiState<List<Order>>): OrdersUiState = when (state) {
+private fun mapOrdersState(state: FeatureUiState<List<Order>>, hasMore: Boolean): OrdersUiState = when (state) {
     FeatureUiState.Loading, FeatureUiState.Pending -> OrdersUiState.Loading
     FeatureUiState.Empty -> OrdersUiState.Empty
     is FeatureUiState.Error -> OrdersUiState.Error(state.message, state.retryable)
     FeatureUiState.Offline -> OrdersUiState.Offline()
     is FeatureUiState.Conflict -> OrdersUiState.Error("تعارض در داده‌های سفارش وجود دارد.", false)
     is FeatureUiState.Success -> OrdersUiState.Content(
-        state.value.map { order ->
-            OrderRowUiModel(
-                order.number,
-                order.customer?.name.orEmpty(),
-                order.customer?.email.orEmpty(),
-                order.status.name,
-                formatMoney(order.total),
-                order.payment?.methodTitle.orEmpty(),
-                order.modifiedAt?.toString().orEmpty(),
-            )
-        },
-        false,
+        state.value.map { order -> OrderRowUiModel(order.number, order.customer?.name.orEmpty(), order.customer?.email.orEmpty(), order.status.name, formatMoney(order.total), order.payment?.methodTitle.orEmpty(), order.modifiedAt?.toString().orEmpty()) },
+        hasMore,
     )
 }
 
