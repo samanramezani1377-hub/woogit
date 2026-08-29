@@ -40,10 +40,18 @@ class AppComposition(context: Context) {
     private val pending = PendingOperationRepositoryImpl(db)
     private val provider = WooCommerceClientProvider(db, secure, network.httpClient)
     private val mutationCoordinator = SqlMutationCoordinator(db)
-    private val restoredStoreId: String? = prefs.getString("active_store_id", null)
-        ?: storeLocal.all().firstOrNull { it.connection_state == "CONNECTED" && !it.credential_reference.isNullOrBlank() }?.id?.also {
-            prefs.edit().putString("active_store_id", it).apply()
+
+    /** Restores the selected store across Activity/process recreation without storing credentials in plain text. */
+    private val restoredStoreId: String? = run {
+        val savedId = prefs.getString("active_store_id", null)
+        val savedStore = savedId?.let { storeLocal.find(it) }
+        when {
+            savedStore?.connection_state == "CONNECTED" && !savedStore.credential_reference.isNullOrBlank() -> savedId
+            else -> storeLocal.all().firstOrNull { it.connection_state == "CONNECTED" && !it.credential_reference.isNullOrBlank() }?.id?.also {
+                prefs.edit().putString("active_store_id", it).apply()
+            }
         }
+    }
 
     val storeRepository = StoreRepositoryImpl(storeLocal, secure, network.httpClient)
     val orderRepository = OrderRepositoryV1Impl(orderLocal, provider, mutationCoordinator, pending)
