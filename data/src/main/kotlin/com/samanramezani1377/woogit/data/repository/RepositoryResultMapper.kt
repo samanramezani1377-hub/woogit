@@ -12,8 +12,8 @@ fun <T> ApiResponse.mapResult(
     parse: (String) -> T,
     feature: String = "Repository",
     operation: String = "mapResult",
-    endpoint: String = "",
-    httpMethod: String = "",
+    endpoint: String = this.endpoint,
+    httpMethod: String = this.method,
     technicalErrorReporter: TechnicalErrorReporter = NoOpTechnicalErrorReporter,
 ): CoreResult<T> {
     if (statusCode !in 200..299) {
