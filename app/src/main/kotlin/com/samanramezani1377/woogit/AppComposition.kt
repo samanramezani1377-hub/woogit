@@ -3,6 +3,7 @@ package com.samanramezani1377.woogit
 import android.content.Context
 import com.samanramezani1377.woogit.background.OrderPollingWorker
 import com.samanramezani1377.woogit.background.ProductCatalogSyncWorker
+import com.samanramezani1377.woogit.debug.AppTechnicalErrorReporter
 import com.samanramezani1377.woogit.security.AndroidSecureCredentialStore
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.core.domain.usecase.*
@@ -28,7 +29,8 @@ class AppComposition(context: Context) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val db = WooGitDatabaseFactory.create(appContext)
     private val secure = AndroidSecureCredentialStore(appContext)
-    private val network = NetworkClient()
+    private val technicalErrorReporter = AppTechnicalErrorReporter(appContext)
+    private val network = NetworkClient(technicalErrorReporter = technicalErrorReporter)
     private val orderLocal = SqlOrderDataSource(db)
     private val productLocal = SqlProductDataSource(db)
     private val storeLocal = SqlStoreDataSource(db)
