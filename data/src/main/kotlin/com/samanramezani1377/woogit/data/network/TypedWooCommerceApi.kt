@@ -21,13 +21,13 @@ private val typedJson = Json { ignoreUnknownKeys = true; explicitNulls = false }
 @Serializable data class WooImageTypedDto(val id:Long?=null,val src:String?=null,val name:String?=null,val alt:String?=null)
 @Serializable data class WooCategoryDto(val id:Long=0,val name:String="")
 @Serializable data class WooProductAttributeDto(val id:Long?=null,val name:String="",val visible:Boolean=true,val variation:Boolean=false,val options:List<String> = emptyList())
+@Serializable data class WooVariationAttributeDto(val id:Long?=null,val name:String="",val option:String="")
 @Serializable data class WooMetaDataDto(val id:Long=0,val key:String="",val value:JsonElement?=null)
 @Serializable data class WooProductTypedDto(val id:Long,val name:String="",val slug:String?=null,val sku:String?=null,val status:String="draft",val type:String="simple",val price:String?=null,val regular_price:String?=null,val sale_price:String?=null,val on_sale:Boolean=false,val stock_quantity:Double?=null,val stock_status:String="instock",val manage_stock:Boolean=false,val images:List<WooImageTypedDto> = emptyList(),val categories:List<WooCategoryDto> = emptyList(),val attributes:List<WooProductAttributeDto> = emptyList(),val meta_data:List<WooMetaDataDto> = emptyList(),val date_modified_gmt:String?=null,val description:String?=null,val short_description:String?=null)
-@Serializable data class WooVariationTypedDto(val id:Long,val product_id:Long=0,val sku:String?=null,val price:String?=null,val regular_price:String?=null,val sale_price:String?=null,val stock_quantity:Double?=null,val stock_status:String="instock",val manage_stock:Boolean=false,val image:WooImageTypedDto?=null,val date_modified_gmt:String?=null,val attributes:List<WooProductAttributeDto> = emptyList())
+@Serializable data class WooVariationTypedDto(val id:Long,val product_id:Long=0,val sku:String?=null,val price:String?=null,val regular_price:String?=null,val sale_price:String?=null,val stock_quantity:Double?=null,val stock_status:String="instock",val manage_stock:Boolean=false,val image:WooImageTypedDto?=null,val date_modified_gmt:String?=null,val attributes:List<WooVariationAttributeDto> = emptyList())
 @Serializable data class WooGlobalAttributeDto(val id:Long,val name:String="",val slug:String="")
 @Serializable data class WooAttributeTermDto(val id:Long,val name:String="",val slug:String="")
 
-/** WooCommerce system-status environment contains mixed JSON primitive types. Keep it raw so a new WC field cannot break store validation. */
 @Serializable data class WooSystemStatusDto(
     val environment: Map<String, JsonElement> = emptyMap(),
     val settings: WooSystemStatusSettingsDto = WooSystemStatusSettingsDto()
@@ -56,6 +56,7 @@ class TypedWooCommerceApi(private val raw: WooCommerceApi) {
     suspend fun product(b:String,id:Long) = decode(raw.getProduct(b,id)) { typedJson.decodeFromString<WooProductTypedDto>(it) }
     suspend fun createProduct(b:String,p:WooProductTypedDto) = decode(raw.createProduct(b,typedJson.encodeToString(p))) { typedJson.decodeFromString<WooProductTypedDto>(it) }
     suspend fun updateProduct(b:String,id:Long,p:WooProductTypedDto) = decode(raw.updateProduct(b,id,typedJson.encodeToString(p))) { typedJson.decodeFromString<WooProductTypedDto>(it) }
+    suspend fun updateProductFields(b:String,id:Long,fields:JsonObject) = decode(raw.updateProduct(b,id,fields.toString())) { typedJson.decodeFromString<WooProductTypedDto>(it) }
     suspend fun deleteProduct(b:String,id:Long) = decode(raw.deleteProduct(b,id,true)) { Unit }
     suspend fun productCategories(b:String,p:Int,n:Int,s:String?) = decode(raw.listProductCategories(b,p,n,s)) { typedJson.decodeFromString<List<WooCategoryDto>>(it) }
     suspend fun variations(b:String,p:Long,n:Int,c:Int) = decode(raw.listVariations(b,p,n,c)) { typedJson.decodeFromString<List<WooVariationTypedDto>>(it) }
