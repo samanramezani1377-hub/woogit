@@ -16,12 +16,14 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.samanramezani1377.woogit.core.domain.entity.EntityId
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.core.domain.model.Attribute
+import com.samanramezani1377.woogit.core.domain.model.GlobalAttribute
 import com.samanramezani1377.woogit.core.domain.model.IdName
 import com.samanramezani1377.woogit.core.domain.model.Pricing
 import com.samanramezani1377.woogit.core.domain.model.Product
 import com.samanramezani1377.woogit.core.domain.model.ProductImage
 import com.samanramezani1377.woogit.core.domain.model.Stock
 import com.samanramezani1377.woogit.core.domain.model.StockStatus
+import com.samanramezani1377.woogit.presentation.AttributesViewModel
 import com.samanramezani1377.woogit.presentation.FeatureUiState
 import com.samanramezani1377.woogit.presentation.ProductDetailViewModel
 import com.samanramezani1377.woogit.presentation.SiteMediaViewModel
@@ -32,13 +34,16 @@ import com.samanramezani1377.woogit.presentation.vmFactory
 internal fun ProductEditorRoute(dependencies: V1PresentationDependencies, storeId: StoreId, productId: String?, onBack: () -> Unit, onSaved: () -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val vm = viewModel<ProductDetailViewModel>(factory = vmFactory { ProductDetailViewModel(dependencies) })
+    val attributesVm = viewModel<AttributesViewModel>(key = "product-editor-attributes-${storeId.value}", factory = vmFactory { AttributesViewModel(dependencies) })
     val mediaVm = viewModel<SiteMediaViewModel>(key = "site-media-${storeId.value}", factory = vmFactory { SiteMediaViewModel(dependencies) })
     val uploadVm = viewModel<ProductImageUploadViewModel>(key = "product-image-upload-${storeId.value}-${productId ?: "new"}", factory = vmFactory { ProductImageUploadViewModel(dependencies) })
     val state by vm.state.collectAsState()
     val categoryState by vm.categories.collectAsState()
+    val attributeState by attributesVm.state.collectAsState()
     val mediaState by mediaVm.state.collectAsState()
     val uploadState by uploadVm.state.collectAsState()
     val availableCategories = (categoryState as? FeatureUiState.Success)?.value.orEmpty()
+    val availableAttributes = (attributeState as? FeatureUiState.Success)?.value.orEmpty()
     val availableMedia = (mediaState as? FeatureUiState.Success)?.value.orEmpty()
     var form by remember(productId) { mutableStateOf<ProductEditorUiState.Editing?>(null) }
     var original by remember(productId) { mutableStateOf<Product?>(null) }
@@ -51,6 +56,7 @@ internal fun ProductEditorRoute(dependencies: V1PresentationDependencies, storeI
 
     LaunchedEffect(storeId, productId) {
         vm.loadCategories(storeId)
+        attributesVm.load(storeId)
         if (productId == null) form = ProductEditorUiState.Editing(productId = null, name = "", sku = "", shortDescription = "", description = "", price = "", salePrice = "", stock = "", imageUrl = null, imageId = null, imageError = null, categories = "", attributes = "")
         else vm.load(storeId, EntityId(productId))
     }
@@ -65,9 +71,7 @@ internal fun ProductEditorRoute(dependencies: V1PresentationDependencies, storeI
         if (bytes == null || bytes.isEmpty()) {
             form = form?.copy(imageError = "خواندن تصویر انتخاب‌شده ناموفق بود.")
             mediaUploading = false
-        } else {
-            uploadVm.upload(storeId, "woogit-${System.currentTimeMillis()}.$extension", bytes, mime)
-        }
+        } else uploadVm.upload(storeId, "woogit-${System.currentTimeMillis()}.$extension", bytes, mime)
     }
     LaunchedEffect(uploadState) {
         when (val result = uploadState) {
@@ -100,7 +104,7 @@ internal fun ProductEditorRoute(dependencies: V1PresentationDependencies, storeI
     val editing = form
     when {
         editing != null -> ProductEditorScreen(
-            state = editing, availableCategories = availableCategories, availableMedia = availableMedia, mediaPickerOpen = mediaPickerOpen,
+            state = editing, availableCategories = availableCategories, availableAttributes = availableAttributes, availableMedia = availableMedia, mediaPickerOpen = mediaPickerOpen,
             mediaLoading = mediaState is FeatureUiState.Loading, imageUploading = mediaUploading,
             onOpenMediaPicker = { mediaPickerOpen = true }, onCloseMediaPicker = { mediaPickerOpen = false },
             onPickMedia = { media -> uploadedImageUrl = media.src; form = form?.copy(imageUrl = media.src, imageId = media.id?.value?.toString(), imageError = null); mediaPickerOpen = false },
@@ -111,21 +115,27 @@ internal fun ProductEditorRoute(dependencies: V1PresentationDependencies, storeI
             onStockChanged = { form = form?.copy(stock = it) }, onImageUrlChanged = { uploadedImageUrl = it.takeIf { value -> value.isNotBlank() }; form = form?.copy(imageUrl = it.ifBlank { null }, imageId = null, imageError = null) },
             onCategoriesChanged = { form = form?.copy(categories = it) }, onAttributesChanged = { form = form?.copy(attributes = it) },
             onStatusChanged = { form = form?.copy(status = it) }, onTypeChanged = { form = form?.copy(type = it) },
-            onSave = { val current = form ?: return@ProductEditorScreen; vm.save(storeId, current.toProduct(original, availableCategories), current.productId == null, onSaved); form = current.copy(saving = true) },
-            onRetry = { uploadedImageUrl = null; uploadVm.reset(); if (editing.productId != null) vm.load(storeId, EntityId(editing.productId)) else vm.loadCategories(storeId) }, onBack = onBack, modifier = modifier,
+            onSave = { val current = form ?: return@ProductEditorScreen; vm.save(storeId, current.toProduct(original, availableCategories, availableAttributes), current.productId == null, onSaved); form = current.copy(saving = true) },
+            onRetry = { uploadedImageUrl = null; uploadVm.reset(); if (editing.productId != null) vm.load(storeId, EntityId(editing.productId)) else { vm.loadCategories(storeId); attributesVm.load(storeId) } }, onBack = onBack, modifier = modifier,
         )
-        state is FeatureUiState.Loading -> ProductEditorScreen(state = ProductEditorUiState.Loading, availableCategories = availableCategories, onNameChanged = {}, onSkuChanged = {}, onShortDescriptionChanged = {}, onDescriptionChanged = {}, onPriceChanged = {}, onSalePriceChanged = {}, onStockChanged = {}, onImageUrlChanged = {}, onCategoriesChanged = {}, onAttributesChanged = {}, onStatusChanged = {}, onTypeChanged = {}, onSave = {}, onRetry = {}, onBack = onBack, modifier = modifier)
-        state is FeatureUiState.Error -> { val error = state as FeatureUiState.Error; ProductEditorScreen(state = ProductEditorUiState.Error(error.message, error.retryable), availableCategories = availableCategories, onNameChanged = {}, onSkuChanged = {}, onShortDescriptionChanged = {}, onDescriptionChanged = {}, onPriceChanged = {}, onSalePriceChanged = {}, onStockChanged = {}, onImageUrlChanged = {}, onCategoriesChanged = {}, onAttributesChanged = {}, onStatusChanged = {}, onTypeChanged = {}, onSave = {}, onRetry = { if (productId != null) vm.load(storeId, EntityId(productId)) else vm.loadCategories(storeId) }, onBack = onBack, modifier = modifier) }
+        state is FeatureUiState.Loading -> ProductEditorScreen(state = ProductEditorUiState.Loading, availableCategories = availableCategories, availableAttributes = availableAttributes, onNameChanged = {}, onSkuChanged = {}, onShortDescriptionChanged = {}, onDescriptionChanged = {}, onPriceChanged = {}, onSalePriceChanged = {}, onStockChanged = {}, onImageUrlChanged = {}, onCategoriesChanged = {}, onAttributesChanged = {}, onStatusChanged = {}, onTypeChanged = {}, onSave = {}, onRetry = {}, onBack = onBack, modifier = modifier)
+        state is FeatureUiState.Error -> { val error = state as FeatureUiState.Error; ProductEditorScreen(state = ProductEditorUiState.Error(error.message, error.retryable), availableCategories = availableCategories, availableAttributes = availableAttributes, onNameChanged = {}, onSkuChanged = {}, onShortDescriptionChanged = {}, onDescriptionChanged = {}, onPriceChanged = {}, onSalePriceChanged = {}, onStockChanged = {}, onImageUrlChanged = {}, onCategoriesChanged = {}, onAttributesChanged = {}, onStatusChanged = {}, onTypeChanged = {}, onSave = {}, onRetry = { if (productId != null) vm.load(storeId, EntityId(productId)) else { vm.loadCategories(storeId); attributesVm.load(storeId) } }, onBack = onBack, modifier = modifier) }
     }
 }
 
-private fun ProductEditorUiState.Editing.toProduct(original: Product?, availableCategories: List<IdName>): Product {
+private fun ProductEditorUiState.Editing.toProduct(original: Product?, availableCategories: List<IdName>, availableAttributes: List<GlobalAttribute>): Product {
     val image = if (!imageId.isNullOrBlank() || !imageUrl.isNullOrBlank()) ProductImage(imageId?.takeIf { it.isNotBlank() }?.let(::EntityId), imageUrl.orEmpty(), original?.images?.firstOrNull()?.name, name) else null
     val categoryNames = categories.split(',').map { it.trim() }.filter { it.isNotBlank() }.distinct()
     val cats = categoryNames.mapNotNull { value -> availableCategories.firstOrNull { it.name == value } ?: original?.categories?.firstOrNull { it.name == value } }
-    val attrs = attributes.split('|').mapNotNull { raw ->
+    val attrsByName = attributes.split('|').mapNotNull { raw ->
         val parts = raw.split(':', limit = 2)
-        if (parts.size != 2 || parts[0].isBlank()) null else { val n = parts[0].trim(); val old = original?.attributes?.firstOrNull { it.name == n }; Attribute(old?.id, n, old?.visible ?: true, old?.variation ?: true, parts[1].split(',').map { it.trim() }.filter { it.isNotBlank() }) }
+        if (parts.size != 2 || parts[0].isBlank()) null else parts[0].trim() to parts[1].split(',').map { it.trim() }.filter { it.isNotBlank() }.distinct()
+    }.toMap()
+    val attrs = attrsByName.mapNotNull { (name, options) ->
+        if (options.isEmpty()) return@mapNotNull null
+        val global = availableAttributes.firstOrNull { it.name == name }
+        val old = original?.attributes?.firstOrNull { it.name == name }
+        Attribute(global?.id ?: old?.id, name, old?.visible ?: true, old?.variation ?: true, options)
     }
     return Product(EntityId(productId ?: "new"), name.trim(), sku.trim().ifBlank { null }, description.ifBlank { null }, shortDescription.ifBlank { null }, status, type, Pricing(price.trim().ifBlank { null }, salePrice.trim().ifBlank { null }, salePrice.isNotBlank()), stock.toDoubleOrNull()?.let { Stock(it, if (it > 0) StockStatus.IN_STOCK else StockStatus.OUT_OF_STOCK, original?.stock?.manageStock ?: true) }, if (image != null) listOf(image) else original?.images.orEmpty(), cats, attrs, original?.modifiedAt)
 }
