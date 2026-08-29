@@ -5,7 +5,7 @@ import android.net.Uri
 import com.samanramezani1377.woogit.core.domain.error.CoreResult
 import com.samanramezani1377.woogit.core.domain.model.ProductImage
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
-import com.samanramezani1377-hub.woogit.presentation.V1PresentationDependencies
+import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
