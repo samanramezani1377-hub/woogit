@@ -10,6 +10,9 @@ import com.samanramezani1377.woogit.core.domain.repository.*
 import com.samanramezani1377.woogit.data.network.*
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.serialization.json.JsonPrimitive
 import java.security.MessageDigest
 
@@ -49,11 +52,25 @@ private fun Product.toDto(operationId: String? = null) = WooProductTypedDto(
     meta_data = operationId?.let { listOf(WooMetaDataDto(key = "_woogit_operation_id", value = JsonPrimitive(it))) } ?: emptyList(),
 )
 
+private fun expectedStatus(status: ProductStatus): String? = when (status) {
+    ProductStatus.PUBLISHED -> "publish"
+    ProductStatus.PENDING -> "pending"
+    ProductStatus.PRIVATE -> "private"
+    ProductStatus.DRAFT -> "draft"
+    ProductStatus.OTHER -> null
+}
+
+private fun expectedType(type: ProductType): String? = when (type) {
+    ProductType.SIMPLE -> "simple"
+    ProductType.GROUPED -> "grouped"
+    ProductType.EXTERNAL -> "external"
+    ProductType.VARIABLE -> "variable"
+    ProductType.OTHER -> null
+}
+
 private fun verifyProductMutation(requested: Product, remote: WooProductTypedDto): CoreResult<Unit> {
-    val expectedStatus = when (requested.status) { ProductStatus.PUBLISHED -> "publish"; ProductStatus.PENDING -> "pending"; ProductStatus.PRIVATE -> "private"; ProductStatus.DRAFT -> "draft"; ProductStatus.OTHER -> null }
-    val expectedType = when (requested.type) { ProductType.SIMPLE -> "simple"; ProductType.GROUPED -> "grouped"; ProductType.EXTERNAL -> "external"; ProductType.VARIABLE -> "variable"; ProductType.OTHER -> null }
-    val statusOk = expectedStatus == null || remote.status.trim().equals(expectedStatus, true)
-    val typeOk = expectedType == null || remote.type.trim().equals(expectedType, true)
+    val statusOk = expectedStatus(requested.status)?.equals(remote.status.trim(), true) ?: true
+    val typeOk = expectedType(requested.type)?.equals(remote.type.trim(), true) ?: true
     return if (statusOk && typeOk) CoreResult.Success(Unit)
     else CoreResult.Failure(DomainError.Validation("WooCommerce did not apply the requested product status/type."))
 }
@@ -88,15 +105,31 @@ class ProductRepositoryV1Impl(private val local: LocalProductDataSource<Product>
         val payload = productJson.encodeToString(product.toDto()); val operationId = "product-update-${storeId.value}-${id.value}-${hash(payload).take(20)}"
         val operation = PendingOperation(EntityId(operationId), storeId, "product", id, OperationType.UPDATE, payload, hash(payload), 0, null, null)
         val localResult = coordinator.execute(operation) { local.upsert(storeId, product) }; if (localResult is CoreResult.Failure) return localResult
-        return provider.client(storeId).fold({ (store, api) -> api.updateProduct(store.baseUrl, id.value.toLong(), product.toDto(operationId)).fold(
-            onSuccess = { remote ->
-                when (val verified = verifyProductMutation(product, remote)) {
-                    is CoreResult.Failure -> verified
-                    is CoreResult.Success -> { val value = remote.toDomain(); local.upsert(storeId, value); pending.markSucceeded(operation.id); CoreResult.Success(value) }
-                }
-            },
-            onFailure = { error -> if (error.isProductRetryableHttp()) CoreResult.Success(product) else CoreResult.Failure(error.productDomainError()) },
-        ) }, { error -> if (error.recoverable) CoreResult.Success(product) else CoreResult.Failure(error) })
+        return provider.client(storeId).fold({ (store, api) ->
+            api.updateProduct(store.baseUrl, id.value.toLong(), product.toDto(operationId)).fold(
+                onSuccess = { initial ->
+                    var remote = initial
+                    var mutationError: DomainError? = null
+                    expectedStatus(product.status)?.takeIf { !it.equals(remote.status.trim(), true) }?.let { requested ->
+                        api.updateProductFields(store.baseUrl, id.value.toLong(), buildJsonObject { put("status", requested) }).fold(
+                            onSuccess = { remote = it }, onFailure = { mutationError = it.productDomainError() }
+                        )
+                    }
+                    expectedType(product.type)?.takeIf { !it.equals(remote.type.trim(), true) && mutationError == null }?.let { requested ->
+                        api.updateProductFields(store.baseUrl, id.value.toLong(), buildJsonObject { put("type", requested) }).fold(
+                            onSuccess = { remote = it }, onFailure = { mutationError = it.productDomainError() }
+                        )
+                    }
+                    if (mutationError != null) return@fold Result.failure(HttpApiException(422, mutationError.toString()))
+                    val refreshed = api.product(store.baseUrl, id.value.toLong()).getOrElse { remote }
+                    when (val verified = verifyProductMutation(product, refreshed)) {
+                        is CoreResult.Failure -> verified
+                        is CoreResult.Success -> { val value = refreshed.toDomain(); local.upsert(storeId, value); pending.markSucceeded(operation.id); CoreResult.Success(value) }
+                    }
+                },
+                onFailure = { error -> if (error.isProductRetryableHttp()) CoreResult.Success(product) else CoreResult.Failure(error.productDomainError()) },
+            )
+        }, { error -> if (error.recoverable) CoreResult.Success(product) else CoreResult.Failure(error) })
     }
 
     override suspend fun delete(storeId: StoreId, id: EntityId): CoreResult<Unit> {
