@@ -45,6 +45,8 @@ import com.samanramezani1377.woogit.presentation.GlassSearchField
 import com.samanramezani1377.woogit.presentation.GlassText
 import com.samanramezani1377.woogit.presentation.GlassTopBar
 import com.samanramezani1377.woogit.presentation.GlassTokens
+import com.samanramezani1377.woogit.presentation.toPersianPrice
+import com.samanramezani1377.woogit.presentation.toPersianQuantity
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 
@@ -106,21 +108,17 @@ private fun ProductRow(product: Product, onClick: () -> Unit) {
                 if (thumbnail != null) {
                     AsyncImage(model = thumbnail.src, contentDescription = thumbnail.alt ?: thumbnail.name ?: product.name, modifier = Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)), contentScale = ContentScale.Crop)
                 } else {
-                    Box(
-                        Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(
-                            Brush.linearGradient(listOf(Color(0xFFC6E6FF).copy(alpha = .72f), Color(0xFFD8CEFF).copy(alpha = .72f)))
-                        ),
-                    )
+                    Box(Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)).background(Brush.linearGradient(listOf(Color(0xFFC6E6FF).copy(alpha = .72f), Color(0xFFD8CEFF).copy(alpha = .72f)))))
                 }
             }
             Row(Modifier.weight(1f), horizontalArrangement = Arrangement.SpaceBetween) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     GlassText(product.name, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-                    GlassText("${product.status.toDisplayName()} · SKU: ${product.sku ?: "—"}", style = MaterialTheme.typography.bodySmall.copy(color = GlassTokens.muted))
+                    GlassText("${product.status.toDisplayName()} · SKU: ${product.sku?.toPersianDigits() ?: "—"}", style = MaterialTheme.typography.bodySmall.copy(color = GlassTokens.muted))
                 }
                 Column(horizontalAlignment = Alignment.End) {
-                    GlassText(product.pricing.sale ?: product.pricing.regular ?: "—", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-                    GlassText(product.stock?.quantity?.toString()?.removeSuffix(".0")?.let { "موجودی: $it" } ?: "موجودی نامشخص", style = MaterialTheme.typography.bodySmall.copy(color = GlassTokens.muted))
+                    GlassText(product.pricing.sale?.takeIf { product.pricing.onSale }?.toPersianPrice() ?: product.pricing.regular?.toPersianPrice() ?: "—", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                    GlassText(product.stock?.quantity?.let { "موجودی: ${it.toPersianQuantity()}" } ?: "موجودی نامشخص", style = MaterialTheme.typography.bodySmall.copy(color = GlassTokens.muted))
                 }
             }
         }
