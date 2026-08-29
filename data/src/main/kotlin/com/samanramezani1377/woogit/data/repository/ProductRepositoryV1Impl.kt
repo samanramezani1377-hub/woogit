@@ -24,10 +24,22 @@ private fun Throwable.isProductRetryableHttp() = this is HttpApiException && sta
 private fun WooProductTypedDto.toDomain() = Product(
     id = EntityId(id.toString()), name = name, sku = sku, description = description,
     shortDescription = short_description,
-    status = when (status) { "publish" -> ProductStatus.PUBLISHED; "pending" -> ProductStatus.PENDING; "private" -> ProductStatus.PRIVATE; else -> ProductStatus.DRAFT },
-    type = when (type) { "grouped" -> ProductType.GROUPED; "external" -> ProductType.EXTERNAL; "variable" -> ProductType.VARIABLE; else -> ProductType.SIMPLE },
+    status = when (status.trim().lowercase()) {
+        "publish" -> ProductStatus.PUBLISHED
+        "pending" -> ProductStatus.PENDING
+        "private" -> ProductStatus.PRIVATE
+        "draft" -> ProductStatus.DRAFT
+        else -> ProductStatus.OTHER
+    },
+    type = when (type.trim().lowercase()) {
+        "grouped" -> ProductType.GROUPED
+        "external" -> ProductType.EXTERNAL
+        "variable" -> ProductType.VARIABLE
+        "simple" -> ProductType.SIMPLE
+        else -> ProductType.OTHER
+    },
     pricing = Pricing(regular_price, sale_price, on_sale),
-    stock = Stock(stock_quantity, when (stock_status) { "outofstock" -> StockStatus.OUT_OF_STOCK; "onbackorder" -> StockStatus.ON_BACKORDER; else -> StockStatus.IN_STOCK }, manage_stock),
+    stock = Stock(stock_quantity, when (stock_status.trim().lowercase()) { "outofstock" -> StockStatus.OUT_OF_STOCK; "onbackorder" -> StockStatus.ON_BACKORDER; "instock" -> StockStatus.IN_STOCK; else -> StockStatus.IN_STOCK }, manage_stock),
     images = images.map { image -> ProductImage(image.id?.toString()?.let(::EntityId), image.src.orEmpty(), image.name, image.alt) },
     categories = categories.map { category -> IdName(EntityId(category.id.toString()), category.name) },
     attributes = attributes.map { attribute -> Attribute(attribute.id?.toString()?.let(::EntityId), attribute.name, attribute.visible, attribute.variation, attribute.options) },
@@ -43,18 +55,7 @@ private fun Product.toDto(operationId: String? = null) = WooProductTypedDto(
     stock_quantity = stock?.quantity,
     stock_status = when (stock?.status) { StockStatus.OUT_OF_STOCK -> "outofstock"; StockStatus.ON_BACKORDER -> "onbackorder"; StockStatus.IN_STOCK, null -> "instock" },
     manage_stock = stock?.manageStock ?: false,
-    // WooCommerce should associate an uploaded WordPress attachment by ID. Sending both
-    // id and src can make the API treat the image as a new/external image instead of the
-    // already-uploaded attachment. Use the attachment ID when available and fall back to
-    // the URL only for manually-entered image URLs.
-    images = images.map { image ->
-        WooImageTypedDto(
-            id = image.id?.value?.toLongOrNull(),
-            src = if (image.id == null) image.src else null,
-            name = image.name,
-            alt = image.alt,
-        )
-    },
+    images = images.map { image -> WooImageTypedDto(id = image.id?.value?.toLongOrNull(), src = if (image.id == null) image.src else null, name = image.name, alt = image.alt) },
     categories = categories.mapNotNull { category -> category.id.value.toLongOrNull()?.let { WooCategoryDto(it, category.name) } },
     attributes = attributes.map { attribute -> WooProductAttributeDto(attribute.id?.value?.toLongOrNull(), attribute.name, attribute.visible, attribute.variation, attribute.options) },
     meta_data = operationId?.let { listOf(WooMetaDataDto(key = "_woogit_operation_id", value = JsonPrimitive(it))) } ?: emptyList(),
@@ -70,10 +71,6 @@ class ProductRepositoryV1Impl(
     )
 
     override suspend fun list(storeId: StoreId, page: Int, perPage: Int, search: String?): CoreResult<List<Product>> {
-        if (page == 1 && search.isNullOrBlank()) {
-            val cached = local.list(storeId)
-            if (cached is CoreResult.Success && cached.value.isNotEmpty()) return cached
-        }
         return provider.client(storeId).fold(
             { (store, api) -> api.products(store.baseUrl, page, perPage, search?.trim()?.takeIf { it.isNotEmpty() }).fold(
                 onSuccess = { remote -> val values = remote.map(WooProductTypedDto::toDomain); values.forEach { local.upsert(storeId, it) }; CoreResult.Success(values) },
