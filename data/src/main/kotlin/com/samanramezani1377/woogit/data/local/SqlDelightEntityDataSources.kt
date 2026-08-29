@@ -39,6 +39,7 @@ class SqlProductDataSource(private val db:WooGitDatabase):LocalProductDataSource
 }
 class SqlStoreDataSource(private val db:WooGitDatabase):LocalStoreDataSource<StoreConnection>{
  override fun get(storeId:StoreId):CoreResult<StoreConnection> = db.storeQueries.selectById(storeId.value).executeAsOneOrNull()?.let{CoreResult.Success(StoreConnection(StoreId(it.id),it.base_url,ConnectionState.valueOf(it.connection_state),it.credential_reference?.let(::CredentialReference)))}?:CoreResult.Failure(DomainError.NotFound("store",storeId.value))
+ fun findConnectedStoreId(): String? = db.storeQueries.selectAll().executeAsList().firstOrNull { it.connection_state == ConnectionState.CONNECTED.name && !it.credential_reference.isNullOrBlank() }?.id
  override fun upsert(value:StoreConnection):CoreResult<Unit>{val now=System.currentTimeMillis();db.storeQueries.insert(value.storeId.value,value.baseUrl,value.credentialReference?.value,value.state.name,now,now);return CoreResult.Success(Unit)}
  override fun delete(storeId:StoreId):CoreResult<Unit>{db.storeQueries.deleteById(storeId.value);return CoreResult.Success(Unit)}
 }
