@@ -11,6 +11,9 @@ import java.text.DecimalFormatSymbols
 /** Order statuses that must never contribute to the dashboard revenue total. */
 private val EXCLUDED_REVENUE_STATUSES = setOf(OrderStatus.CANCELLED, OrderStatus.FAILED)
 
+/** Removes HTML markup that WooCommerce may include in its currency symbol. */
+private fun sanitizeCurrencySymbol(value: String): String = value.replace(Regex("<[^>]*>"), "").trim()
+
 /** Keeps domain-to-dashboard presentation mapping outside the composable. */
 internal object DashboardStateMapper {
     fun ordersCount(orders: List<Order>): String = orders.size.toString()
@@ -35,7 +38,7 @@ internal object DashboardStateMapper {
         val decimals = summary.numberOfDecimals.coerceAtLeast(0)
         val pattern = if (decimals == 0) "#,##0" else "#,##0." + "0".repeat(decimals)
         val formatted = DecimalFormat(pattern, symbols).format(amount)
-        val symbol = summary.currencySymbol.ifBlank { summary.currency }
+        val symbol = sanitizeCurrencySymbol(summary.currencySymbol).ifBlank { summary.currency }
         return when (summary.currencyPosition) {
             "right" -> "$formatted$symbol"
             "left_space" -> "$symbol $formatted"
