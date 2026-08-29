@@ -28,6 +28,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.samanramezani1377.woogit.core.domain.entity.EntityId
 import com.samanramezani1377.woogit.core.domain.model.GlobalAttribute
 import com.samanramezani1377.woogit.core.domain.model.IdName
 import com.samanramezani1377.woogit.core.domain.model.ProductImage
@@ -107,7 +108,7 @@ internal fun ProductEditorScreen(
 
                     GlassCard { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         GlassText("تصاویر محصول", style = MaterialTheme.typography.titleMedium)
-                        val images = state.images.ifEmpty { state.imageUrl?.takeIf { it.isNotBlank() }?.let { listOf(ProductImage(state.imageId?.let(::com.samanramezani1377.woogit.core.domain.entity.EntityId), it, null, state.name)) }.orEmpty() }
+                        val images = state.images.ifEmpty { state.imageUrl?.takeIf { it.isNotBlank() }?.let { listOf(ProductImage(state.imageId?.let(::EntityId), it, null, state.name)) }.orEmpty() }
                         if (images.isEmpty()) GlassText("هنوز تصویری برای محصول انتخاب نشده است.", style = MaterialTheme.typography.bodySmall)
                         images.forEachIndexed { index, image ->
                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
