@@ -29,7 +29,30 @@ class VariationRepositoryImpl(private val local:LocalVariationDataSource,private
  private suspend fun mutate(storeId:StoreId,value:Variation,type:OperationType,remote:suspend(TypedWooCommerceApi,StoreConnection)->Result<WooVariationTypedDto>):CoreResult<Variation>{val payload=repoJson.encodeToString(value.toDto());val op=PendingOperation(EntityId("variation-${type.name.lowercase()}-${storeId.value}-${value.productId.value}-${value.id.value}"),storeId,"variation",value.id,type,payload,payload.hashCode().toString(),0,null,null);val localResult=coordinator.execute(op){local.upsert(storeId,value)};if(localResult is CoreResult.Failure)return localResult;return provider.client(storeId).fold({(store,api)->remote(api,store).fold({raw->val d=raw.toDomain(value.productId);local.upsert(storeId,d);pending.markSucceeded(op.id);CoreResult.Success(d)},{e->if(e.isRetryableHttp())CoreResult.Success(value)else CoreResult.Failure(e.toDomain())})},{e->if(e.recoverable)CoreResult.Success(value)else CoreResult.Failure(e)})}
 }
 private fun WooVariationTypedDto.toDomain(productId:EntityId)=Variation(EntityId(id.toString()),productId,attributes.map{VariationAttribute(it.name,it.options.firstOrNull().orEmpty())},Pricing(regular_price,sale_price,sale_price!=null),Stock(stock_quantity,when(stock_status){"outofstock"->StockStatus.OUT_OF_STOCK;"onbackorder"->StockStatus.ON_BACKORDER;else->StockStatus.IN_STOCK},manage_stock),sku,image?.let{ProductImage(it.id?.let{v->EntityId(v.toString())},it.src.orEmpty(),it.name,it.alt)},date_modified_gmt?.let{kotlinx.datetime.Instant.parse(it)})
-private fun Variation.toDto()=WooVariationTypedDto(id.value.toLongOrNull()?:0L,productId.value.toLongOrNull()?:0L,sku,pricing.sale?:pricing.regular,pricing.regular,pricing.sale,stock?.quantity,stock?.status?.name?.lowercase()?:"instock",stock?.manageStock?:false,image?.let{WooImageTypedDto(it.id?.value?.toLongOrNull(),it.src,it.name,it.alt)},modifiedAt?.toString(),attributes.map{WooProductAttributeDto(null,it.name,true,true,listOf(it.option))})
+
+private fun Variation.toDto(): WooVariationTypedDto {
+    val regular = pricing.regular?.trim()?.takeIf { it.isNotBlank() }
+    val sale = pricing.sale?.trim()?.takeIf { it.isNotBlank() && it != regular }
+    val stockStatus = when (stock?.status) {
+        StockStatus.OUT_OF_STOCK -> "outofstock"
+        StockStatus.ON_BACKORDER -> "onbackorder"
+        StockStatus.IN_STOCK, null -> "instock"
+    }
+    return WooVariationTypedDto(
+        id = id.value.toLongOrNull() ?: 0L,
+        product_id = productId.value.toLongOrNull() ?: 0L,
+        sku = sku?.trim()?.takeIf { it.isNotBlank() },
+        regular_price = regular,
+        sale_price = sale,
+        price = sale ?: regular,
+        stock_quantity = stock?.quantity,
+        stock_status = stockStatus,
+        manage_stock = stock?.manageStock ?: false,
+        image = image?.let { WooImageTypedDto(it.id?.value?.toLongOrNull(), it.src, it.name, it.alt) },
+        date_modified_gmt = modifiedAt?.toString(),
+        attributes = attributes.filter { it.name.isNotBlank() && it.option.isNotBlank() }.map { WooProductAttributeDto(null, it.name.trim(), true, true, listOf(it.option.trim())) },
+    )
+}
 
 class AttributeRepositoryImpl(private val local:LocalAttributeDataSource,private val provider:WooCommerceClientProvider,private val coordinator:MutationCoordinator,private val pending:PendingOperationRepository):AttributeRepository{
  override suspend fun list(storeId:StoreId,page:Int,perPage:Int)=provider.client(storeId).fold({(store,api)->api.attributes(store.baseUrl,page,perPage).fold({items->val values=items.map{it.toDomain()};values.forEach{local.upsert(storeId,it)};CoreResult.Success(values)},{if(page==1)local.list(storeId)else CoreResult.Failure(it.toDomain())})},{if(page==1)local.list(storeId)else CoreResult.Failure(it)})
