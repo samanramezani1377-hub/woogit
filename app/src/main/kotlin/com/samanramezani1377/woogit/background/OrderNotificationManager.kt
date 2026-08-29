@@ -7,7 +7,6 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
-import java.math.BigDecimal
 
 class OrderNotificationManager(private val context: Context) {
     companion object {
@@ -30,19 +29,17 @@ class OrderNotificationManager(private val context: Context) {
         )
     }
 
-    /** Returns false when the notification cannot be delivered right now. */
     fun notify(order: BackgroundOrder): Boolean {
         ensureChannel()
         val intent = deepLinkIntent(context, order.storeId, order.orderId) ?: return false
-        val pending = PendingIntent.getActivity(
-            context,
-            "${order.storeId}:${order.orderId}".hashCode(),
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
+        val pending = PendingIntent.getActivity(context, "${order.storeId}:${order.orderId}".hashCode(), intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val amount = formatPersianAmount(order.total)
         val orderNumber = order.number.toPersianDigits()
-        val currency = order.currency.trim().let { if (it.equals("IRT", true) || it.equals("IRR", true) || it == "تومان") "تومان" else it }
+        val currency = when {
+            order.currency.equals("IRT", true) || order.currency.equals("IRR", true) || order.currency == "تومان" -> "تومان"
+            order.currency.isBlank() -> ""
+            else -> order.currency.toPersianDigits()
+        }
         val amountText = if (currency.isBlank()) amount else "$amount $currency"
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
@@ -52,10 +49,7 @@ class OrderNotificationManager(private val context: Context) {
             .setAutoCancel(true)
             .build()
         return try {
-            NotificationManagerCompat.from(context).notify(
-                "${order.storeId}:${order.orderId}".hashCode(),
-                notification,
-            )
+            NotificationManagerCompat.from(context).notify("${order.storeId}:${order.orderId}".hashCode(), notification)
             true
         } catch (_: SecurityException) {
             false
@@ -63,9 +57,7 @@ class OrderNotificationManager(private val context: Context) {
     }
 }
 
-private fun String.toPersianDigits(): String = map { ch ->
-    if (ch in '0'..'9') ('۰'.code + ch.code - '0'.code).toChar() else ch
-}.joinToString("")
+private fun String.toPersianDigits(): String = map { ch -> if (ch in '0'..'9') ('۰'.code + ch.code - '0'.code).toChar() else ch }.joinToString("")
 
 private fun formatPersianAmount(value: String): String {
     val number = value.replace(",", "").replace("٬", "").toBigDecimalOrNull() ?: return value.toPersianDigits()
