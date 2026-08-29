@@ -34,57 +34,32 @@ import com.samanramezani1377.woogit.presentation.debug.DashboardSalesDebugSnapsh
 internal data class SettingsUiModel(val storeName: String, val connected: Boolean, val autoSyncEnabled: Boolean)
 
 @Composable
-internal fun SettingsScreen(
-    settings: SettingsUiModel,
-    onConnectionClick: () -> Unit,
-    onAutoSyncChanged: (Boolean) -> Unit,
-    onSave: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    GlassScaffold(modifier) { paddingValues ->
-        Column(Modifier.fillMaxSize().padding(paddingValues).padding(horizontal = 16.dp, vertical = 12.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            GlassTopBar("تنظیمات", "مدیریت فروشگاه و همگام‌سازی")
-            GlassCard { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { GlassText("فروشگاه: ${settings.storeName}"); GlassText(if (settings.connected) "وضعیت اتصال: متصل" else "وضعیت اتصال: قطع") } }
-            GlassPrimaryAction("مدیریت اتصال", onConnectionClick)
-            GlassPrimaryAction(if (settings.autoSyncEnabled) "همگام‌سازی خودکار: فعال" else "همگام‌سازی خودکار: غیرفعال", { onAutoSyncChanged(!settings.autoSyncEnabled) })
-            if (DebugConfig.ENABLED) DebugLogsCard(LocalContext.current)
-            GlassPrimaryAction("ذخیره تنظیمات", onSave, Modifier.padding(bottom = 24.dp))
-        }
-    }
-}
-
-@Composable
-private fun DebugLogsCard(context: Context) {
-    var entries by remember { mutableStateOf(emptyList<DebugLogEntry>()) }
-    var showSalesDebug by remember { mutableStateOf(false) }
+fun SettingsScreen(onBack: () -> Unit) {
+    val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
-    LaunchedEffect(Unit) { entries = DebugLogStore.read(context) }
-    GlassCard {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            GlassCard {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        GlassText("📌 متغیرهای فروش داشبورد (موقت)")
-                        TextButton(onClick = { showSalesDebug = !showSalesDebug }) { GlassText(if (showSalesDebug) "بستن" else "مشاهده") }
-                    }
-                    if (showSalesDebug) DashboardSalesDebugPanel(clipboard)
-                }
-            }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                GlassText("لاگ‌های فنی (موقت)")
-                Row {
-                    TextButton(onClick = { clipboard.setText(AnnotatedString(entries.joinToString("\n\n") { it.asCopyText() })) }) { GlassText("کپی همه") }
-                    TextButton(onClick = { DebugLogStore.clear(context); entries = emptyList() }) { GlassText("پاک کردن") }
-                }
-            }
-            if (entries.isEmpty()) GlassText("هنوز خطای فنی ثبت نشده است.")
-            entries.forEach { entry ->
+    var debugEnabled by remember { mutableStateOf(DebugConfig.isEnabled(context)) }
+    var logs by remember { mutableStateOf(DebugLogStore.readAll()) }
+    GlassScaffold(topBar = { GlassTopBar(title = "تنظیمات", onBack = onBack) }) {
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            GlassText("تنظیمات")
+            if (debugEnabled) {
                 GlassCard {
-                    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                        GlassText("${entry.time} · ${entry.feature} · ${entry.type}")
-                        GlassText(entry.technicalMessage.ifBlank { entry.userMessage })
-                        if (entry.userMessage.isNotBlank()) GlassText("پیام کاربر: ${entry.userMessage}")
-                        TextButton(onClick = { clipboard.setText(AnnotatedString(entry.asCopyText())) }) { GlassText("کپی خطا") }
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        GlassText("دیباگ موقت")
+                        GlassText("لاگ‌های فنی و اطلاعات تشخیصی")
+                        TextButton(onClick = { logs = DebugLogStore.readAll() }) { GlassText("به‌روزرسانی لاگ‌ها") }
+                    }
+                }
+                DashboardSalesDebugPanel(clipboard)
+                if (logs.isEmpty()) GlassText("هنوز خطای فنی ثبت نشده است.")
+                logs.forEach { entry ->
+                    GlassCard {
+                        Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                            GlassText("${entry.time} · ${entry.feature} · ${entry.type}")
+                            GlassText(entry.technicalMessage.ifBlank { entry.userMessage })
+                            if (entry.userMessage.isNotBlank()) GlassText("پیام کاربر: ${entry.userMessage}")
+                            TextButton(onClick = { clipboard.setText(AnnotatedString(entry.copyText())) }) { GlassText("کپی خطا") }
+                        }
                     }
                 }
             }
@@ -95,21 +70,53 @@ private fun DebugLogsCard(context: Context) {
 @Composable
 private fun DashboardSalesDebugPanel(clipboard: androidx.compose.ui.platform.ClipboardManager) {
     val snapshot = DashboardSalesDebugSnapshot.read()
-    val copyText = snapshot.asCopyText()
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        GlassText("مقدار نهایی نمایش داده‌شده: ${snapshot.formattedRevenue}")
-        GlassText("جمع سفارش‌های واردشده: ${snapshot.ordersCount}")
-        GlassText("سفارش‌های داخل محاسبه: ${snapshot.includedOrdersCount}")
-        GlassText("سفارش‌های حذف‌شده: ${snapshot.excludedOrdersCount}")
-        GlassText("جمع محاسبه‌شده از order.total: ${snapshot.calculatedOrderSum}")
-        GlassText("SalesSummary.netSales: ${snapshot.summaryNetSales ?: "null"}")
-        GlassText("currency: ${snapshot.currency ?: "null"}")
-        GlassText("currencySymbol: ${snapshot.currencySymbol ?: "null"}")
-        GlassText("currencyPosition: ${snapshot.currencyPosition ?: "null"}")
-        GlassText("thousandSeparator: ${snapshot.thousandSeparator ?: "null"}")
-        GlassText("decimalSeparator: ${snapshot.decimalSeparator ?: "null"}")
-        GlassText("numberOfDecimals: ${snapshot.numberOfDecimals ?: "null"}")
-        GlassText("وضعیت‌های حذف‌شده: ${snapshot.excludedStatuses}")
-        TextButton(onClick = { clipboard.setText(AnnotatedString(copyText)) }) { GlassText("کپی همه متغیرهای فروش") }
+    val copyText = snapshot.copyText()
+    GlassCard {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            GlassText("متغیرهای فروش داشبورد")
+            GlassText("مقدار نهایی نمایش‌داده‌شده: ${snapshot.formattedRevenue}")
+            GlassText("جمع سفارش‌های واردشده: ${snapshot.ordersCount}")
+            GlassText("سفارش‌های داخل محاسبه: ${snapshot.includedOrdersCount}")
+            GlassText("سفارش‌های حذف‌شده: ${snapshot.excludedOrdersCount}")
+            GlassText("جمع محاسبه‌شده از order.total: ${snapshot.calculatedOrderSum}")
+            GlassText("SalesSummary.netSales: ${snapshot.summaryNetSales ?: "null"}")
+            GlassText("currency: ${snapshot.currency ?: "null"}")
+            GlassText("currencySymbol: ${snapshot.currencySymbol ?: "null"}")
+            GlassText("currencyPosition: ${snapshot.currencyPosition ?: "null"}")
+            GlassText("thousandSeparator: ${snapshot.thousandSeparator ?: "null"}")
+            GlassText("decimalSeparator: ${snapshot.decimalSeparator ?: "null"}")
+            GlassText("numberOfDecimals: ${snapshot.numberOfDecimals ?: "null"}")
+            TextButton(onClick = { clipboard.setText(AnnotatedString(copyText)) }) { GlassText("کپی همه متغیرهای فروش") }
+        }
     }
+}
+
+private fun DebugLogEntry.copyText(): String = buildString {
+    appendLine("time=$time")
+    appendLine("feature=$feature")
+    appendLine("type=$type")
+    appendLine("userMessage=$userMessage")
+    appendLine("technicalMessage=$technicalMessage")
+    appendLine("location=$location")
+    appendLine("operation=$operation")
+    appendLine("details=$details")
+}
+
+private fun DashboardSalesDebugSnapshot.Snapshot.copyText(): String = buildString {
+    appendLine("Dashboard Sales Debug Snapshot")
+    appendLine("ordersCount=$ordersCount")
+    appendLine("includedOrdersCount=$includedOrdersCount")
+    appendLine("excludedOrdersCount=$excludedOrdersCount")
+    appendLine("excludedStatuses=$excludedStatuses")
+    appendLine("calculatedOrderSum=$calculatedOrderSum")
+    appendLine("summaryNetSales=$summaryNetSales")
+    appendLine("currency=$currency")
+    appendLine("currencySymbol=$currencySymbol")
+    appendLine("currencyPosition=$currencyPosition")
+    appendLine("thousandSeparator=$thousandSeparator")
+    appendLine("decimalSeparator=$decimalSeparator")
+    appendLine("numberOfDecimals=$numberOfDecimals")
+    appendLine("formattedRevenue=$formattedRevenue")
+    appendLine("orderTotals:")
+    orderTotals.forEach { appendLine("  $it") }
 }
