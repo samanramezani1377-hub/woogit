@@ -152,7 +152,7 @@ class RobustProductTransferService(private val d: V1PresentationDependencies, pr
 
             coroutineScope {
                 validated.products.mapIndexed { index, x ->
-                    async(Dispatchers.IO) {
+                    async(Dispatchers.IO.limitedParallelism(IMPORT_CONCURRENCY)) {
                         try {
                 onProgress(ProductTransferProgress("در حال وارد کردن محصولات…", index + 1, validated.products.size))
                 var productCountedAsSuccess = false
@@ -181,7 +181,7 @@ class RobustProductTransferService(private val d: V1PresentationDependencies, pr
                             null
                         }
                     }
-                    if (savedProduct == null) return@mapIndexed
+                    if (savedProduct == null) return@async
                     var finalProduct = savedProduct
                     if (old == null && mode == ProductImportMode.CREATE_NEW_DRAFT && savedProduct.status != ProductStatus.DRAFT) {
                         val pendingProduct = product.copy(id = savedProduct.id, status = ProductStatus.PENDING)
