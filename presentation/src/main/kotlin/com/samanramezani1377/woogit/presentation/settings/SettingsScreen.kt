@@ -107,8 +107,8 @@ fun SettingsScreen(storeName: String, storeId: StoreId, onBack: () -> Unit, onDi
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         GlassText("انتقال محصولات")
                         GlassText("پشتیبان کامل محصولات با اطلاعات، دسته‌بندی، ویژگی، Variation و تصاویر داخل یک فایل .woogit")
-                        GlassPrimaryAction("📤 اکسپورت همه محصولات") { if (!busy) exportLauncher.launch("WooGit-Products-${System.currentTimeMillis()}.woogit") }
-                        GlassPrimaryAction("📥 ایمپورت محصولات") { if (!busy) showImportScreen = true }
+                        GlassPrimaryAction("📤 اکسپورت همه محصولات", onClick = { if (!busy) exportLauncher.launch("WooGit-Products-${System.currentTimeMillis()}.woogit") })
+                        GlassPrimaryAction("📥 ایمپورت محصولات", onClick = { if (!busy) showImportScreen = true })
                         if (busy) TransferProgressView(progress)
                     }
                 }
