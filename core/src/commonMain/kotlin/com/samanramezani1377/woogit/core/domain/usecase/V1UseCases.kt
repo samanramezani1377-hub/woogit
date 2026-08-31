@@ -44,4 +44,4 @@ class GetTermsUseCase(private val r: TermRepository) : GetTerms { override suspe
 class GetTermUseCase(private val r: TermRepository) : GetTerm { override suspend fun invoke(storeId: StoreId, attributeId: EntityId, id: EntityId) = r.get(storeId, attributeId, id) }
 class CreateTermUseCase(private val r: TermRepository) : CreateTerm { override suspend fun invoke(storeId: StoreId, attributeId: EntityId, value: AttributeTerm) = r.create(storeId, attributeId, value) }
 class UpdateTermUseCase(private val r: TermRepository) : UpdateTerm { override suspend fun invoke(storeId: StoreId, attributeId: EntityId, id: EntityId, value: AttributeTerm) = r.update(storeId, attributeId, id, value) }
-class DeleteTermUseCase(private val r: TermRepository) : DeleteTerm { override suspend fun invoke(storeId: StoreId, attributeId: EntityId, id: EntityId) = r.delete(storeId, attributeId, id, value) }
+class DeleteTermUseCase(private val r: TermRepository) : DeleteTerm { override suspend fun invoke(storeId: StoreId, attributeId: EntityId, id: EntityId) = r.delete(storeId, attributeId, id) }
