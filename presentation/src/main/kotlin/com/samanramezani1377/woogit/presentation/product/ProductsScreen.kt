@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -38,7 +39,6 @@ import com.samanramezani1377.woogit.presentation.FeatureUiState
 import com.samanramezani1377.woogit.presentation.GlassCard
 import com.samanramezani1377.woogit.presentation.GlassEmptyState
 import com.samanramezani1377.woogit.presentation.GlassErrorState
-import com.samanramezani1377.woogit.presentation.GlassLoading
 import com.samanramezani1377.woogit.presentation.GlassPrimaryAction
 import com.samanramezani1377.woogit.presentation.GlassScaffold
 import com.samanramezani1377.woogit.presentation.GlassSearchField
@@ -68,13 +68,25 @@ internal fun ProductsScreen(
             GlassSearchField(query, { query = it; onSearch(it) }, label = "جستجوی محصول")
             GlassPrimaryAction("افزودن محصول", onAddProduct)
             when (state) {
-                FeatureUiState.Loading, FeatureUiState.Pending -> GlassLoading("در حال بارگذاری محصولات…")
+                FeatureUiState.Loading -> ProductSyncLoading("در حال همگام‌سازی محصولات با سایت…")
+                FeatureUiState.Pending -> ProductSyncLoading("در حال به‌روزرسانی محصولات…")
                 FeatureUiState.Empty -> GlassEmptyState("محصولی برای نمایش وجود ندارد.")
                 is FeatureUiState.Error -> { GlassErrorState(state.message); if (state.retryable) GlassPrimaryAction("تلاش مجدد", onRetry) }
                 is FeatureUiState.Success -> ProductList(state.value, onProductClick, onLoadMore, Modifier.weight(1f))
                 FeatureUiState.Offline -> GlassErrorState("اتصال فروشگاه در دسترس نیست.")
                 is FeatureUiState.Conflict -> GlassErrorState("تعارضی در داده‌های محصولات وجود دارد.")
             }
+        }
+    }
+}
+
+@Composable
+private fun ProductSyncLoading(message: String) {
+    GlassCard {
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+            GlassText(message)
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            GlassText("ممکن است کمی زمان ببرد؛ از صفحه خارج نشوید.")
         }
     }
 }
