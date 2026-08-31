@@ -41,7 +41,7 @@ fun SettingsScreen(
     var progress by remember { mutableStateOf("") }
     var resultText by remember { mutableStateOf<String?>(null) }
     var pendingImportUri by remember { mutableStateOf<android.net.Uri?>(null) }
-    var showImportMode by remember { mutableStateOf(false) }
+    var showImportScreen by remember { mutableStateOf(false) }
     var selectedImportMode by remember { mutableStateOf(ProductImportMode.UPDATE_EXISTING) }
 
     fun refreshTechnicalLogs() {
@@ -71,14 +71,12 @@ fun SettingsScreen(
                 context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
             pendingImportUri = uri
-            selectedImportMode = ProductImportMode.UPDATE_EXISTING
-            showImportMode = true
         }
     }
 
     fun startImport(mode: ProductImportMode) {
         val uri = pendingImportUri ?: return
-        showImportMode = false
+        showImportScreen = false
         pendingImportUri = null
         busy = true
         scope.launch {
@@ -108,12 +106,24 @@ fun SettingsScreen(
     }
 
     GlassScaffold {
-        if (showImportMode && pendingImportUri != null) {
+        if (showImportScreen) {
             ImportModeSelectionScreen(
                 selectedMode = selectedImportMode,
+                selectedFile = pendingImportUri != null,
+                onSelectFile = {
+                    if (!busy) {
+                        importLauncher.launch(
+                            arrayOf(
+                                "application/octet-stream",
+                                "application/zip",
+                                "application/x-zip-compressed",
+                            )
+                        )
+                    }
+                },
                 onModeSelected = { selectedImportMode = it },
                 onBack = {
-                    showImportMode = false
+                    showImportScreen = false
                     pendingImportUri = null
                 },
                 onStart = { startImport(selectedImportMode) },
@@ -155,17 +165,7 @@ fun SettingsScreen(
                             )
                             GlassPrimaryAction(
                                 label = "📥 ایمپورت محصولات",
-                                onClick = {
-                                    if (!busy) {
-                                        importLauncher.launch(
-                                            arrayOf(
-                                                "application/octet-stream",
-                                                "application/zip",
-                                                "application/x-zip-compressed",
-                                            )
-                                        )
-                                    }
-                                },
+                                onClick = { if (!busy) showImportScreen = true },
                             )
                         }
                         if (busy) GlassText(progress.ifBlank { "در حال انجام…" })
@@ -216,6 +216,8 @@ fun SettingsScreen(
 @Composable
 private fun ImportModeSelectionScreen(
     selectedMode: ProductImportMode,
+    selectedFile: Boolean,
+    onSelectFile: () -> Unit,
     onModeSelected: (ProductImportMode) -> Unit,
     onBack: () -> Unit,
     onStart: () -> Unit,
@@ -230,14 +232,25 @@ private fun ImportModeSelectionScreen(
     ) {
         GlassTopBar(
             title = "ایمپورت محصولات",
-            subtitle = "نحوه ورود محصولات را انتخاب کنید",
+            subtitle = "فایل و نحوه ورود محصولات را انتخاب کنید",
             navigation = { TextButton(onClick = onBack) { GlassText("بازگشت") } },
         )
 
         GlassCard {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                GlassText("فایل انتخاب شد")
-                GlassText("حالا مشخص کنید محصولات این فایل چگونه در فروشگاه وارد شوند.")
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                GlassText("فایل ایمپورت")
+                GlassText(if (selectedFile) "فایل .woogit انتخاب شده است." else "هنوز فایلی برای ایمپورت انتخاب نشده است.")
+                GlassPrimaryAction(
+                    label = if (selectedFile) "📁 تغییر فایل" else "📁 انتخاب فایل",
+                    onClick = onSelectFile,
+                )
+            }
+        }
+
+        GlassCard {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                GlassText("نحوه ایمپورت")
+                GlassText("مشخص کنید محصولات فایل چگونه در فروشگاه وارد شوند.")
             }
         }
 
@@ -269,6 +282,7 @@ private fun ImportModeSelectionScreen(
             label = if (busy) "در حال ایمپورت…" else "شروع ایمپورت",
             onClick = onStart,
         )
+        if (!selectedFile && !busy) GlassText("برای شروع، ابتدا فایل .woogit را انتخاب کنید.")
         if (busy) GlassText(progress.ifBlank { "در حال انجام…" })
     }
 }
