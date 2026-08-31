@@ -5,3 +5,10 @@ enum class ProductImportMode {
     CREATE_NEW_DRAFT,
     UPDATE_EXISTING,
 }
+
+data class ProductImportOptions(
+    val allowUnexpectedPublish: Boolean = false,
+    val addMissingCategories: Boolean = false,
+    val addMissingAttributes: Boolean = false,
+    val uploadAllImagesWithoutLibraryCheck: Boolean = false,
+)
