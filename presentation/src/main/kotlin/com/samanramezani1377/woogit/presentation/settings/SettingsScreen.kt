@@ -39,7 +39,6 @@ fun SettingsScreen(storeName: String, storeId: StoreId, onBack: () -> Unit, onDi
     var uploadAllImagesWithoutLibraryCheck by remember { mutableStateOf(false) }
 
     fun refreshTechnicalLogs() { if (DebugConfig.ENABLED) logs = DebugLogStore.read(context) }
-
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")) { uri ->
         if (uri != null) {
             busy = true
