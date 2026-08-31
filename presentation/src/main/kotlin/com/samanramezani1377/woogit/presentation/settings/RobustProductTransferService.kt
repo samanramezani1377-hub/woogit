@@ -9,7 +9,15 @@ import com.samanramezani1377.woogit.core.domain.model.*
 import com.samanramezani1377.woogit.debug.TechnicalErrorReporter
 import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.text.SimpleDateFormat
@@ -20,6 +28,7 @@ import java.util.zip.ZipOutputStream
 private const val FORMAT = "woogit-products"
 private const val VERSION = 1
 private const val PAGE_SIZE = 100
+private const val IMPORT_CONCURRENCY = 5
 private const val MAX_PRODUCTS = 10_000
 private const val MAX_VARIATIONS_PER_PRODUCT = 10_000
 private const val MAX_PACKAGE_BYTES = 1_073_741_824L
@@ -121,25 +130,30 @@ class RobustProductTransferService(private val d: V1PresentationDependencies, pr
             val sourceCategories = validated.products.flatMap { it.categories }.distinctBy { it.id }
             val categoryMap = resolveCategories(storeId, sourceCategories, destinationCategories, true)
             val globalMap = resolveGlobalAttributes(storeId, validated.globalAttributes, mode == ProductImportMode.UPDATE_EXISTING && sameStore)
-            var created = 0
-            var updated = 0
-            var drafted = 0
-            var failed = 0
-            var variationsCreated = 0
-            var variationsUpdated = 0
-            var variationsFailed = 0
-            var skuChanged = 0
+            val created = AtomicInteger(0)
+            val updated = AtomicInteger(0)
+            val drafted = AtomicInteger(0)
+            val failed = AtomicInteger(0)
+            val variationsCreated = AtomicInteger(0)
+            val variationsUpdated = AtomicInteger(0)
+            val variationsFailed = AtomicInteger(0)
+            val skuChanged = AtomicInteger(0)
+            val publishedUnexpectedly = AtomicInteger(0)
             val categoriesCreated = categoryMap.created
             val categoriesResolved = categoryMap.resolved
             val attributesCreated = globalMap.created
             val attributesResolved = globalMap.resolved
             val termsCreated = globalMap.termsCreated
             val termsResolved = globalMap.termsResolved
-            val usedMedia = mutableSetOf<String>()
-            val errors = mutableListOf<String>()
-            val importErrors = mutableListOf<String>()
+            val usedMedia = ConcurrentHashMap.newKeySet<String>()
+            val errors = ConcurrentLinkedQueue<String>()
+            val importErrors = ConcurrentLinkedQueue<String>()
+            val skuMutex = Mutex()
 
-            validated.products.forEachIndexed { index, x ->
+            coroutineScope {
+                validated.products.mapIndexed { index, x ->
+                    async(Dispatchers.IO) {
+                        try {
                 onProgress(ProductTransferProgress("در حال وارد کردن محصولات…", index + 1, validated.products.size))
                 var productCountedAsSuccess = false
                 var reservedSku: String? = null
@@ -151,13 +165,13 @@ class RobustProductTransferService(private val d: V1PresentationDependencies, pr
                     val attributes = x.attributes.map { a ->
                         Attribute(a.id?.let { globalMap.items[it] ?: if (mode == ProductImportMode.UPDATE_EXISTING && sameStore) EntityId(it) else null }, a.name, a.visible, a.variation, a.options)
                     }
-                    reservedSku = if (old == null) reserveNewSku(x.sku, usedSku) { skuChanged++ } else null
+                    reservedSku = if (old == null) skuMutex.withLock { reserveNewSku(x.sku, usedSku) { skuChanged.incrementAndGet() } } else null
                     var product = x.toDomain(if (old == null) EntityId(NEW_ID_PLACEHOLDER) else old.id, images, categories, attributes).copy(sku = if (old == null) reservedSku else x.sku)
                     if (mode == ProductImportMode.CREATE_NEW_DRAFT) product = product.copy(status = ProductStatus.DRAFT)
                     val saved = if (old == null) d.createProduct(storeId, product) else d.updateProduct(storeId, old.id, product)
                     val savedProduct = when (saved) {
                         is CoreResult.Success -> {
-                            if (old == null) { created++; if (mode == ProductImportMode.CREATE_NEW_DRAFT) drafted++ } else updated++
+                            if (old == null) { created.incrementAndGet(); if (mode == ProductImportMode.CREATE_NEW_DRAFT) drafted.incrementAndGet() } else updated.incrementAndGet()
                             productCountedAsSuccess = true
                             saved.value
                         }
@@ -167,11 +181,36 @@ class RobustProductTransferService(private val d: V1PresentationDependencies, pr
                             null
                         }
                     }
-                    if (savedProduct == null) return@forEachIndexed
+                    if (savedProduct == null) return@mapIndexed
+                    var finalProduct = savedProduct
+                    if (old == null && mode == ProductImportMode.CREATE_NEW_DRAFT && savedProduct.status != ProductStatus.DRAFT) {
+                        val pendingProduct = product.copy(id = savedProduct.id, status = ProductStatus.PENDING)
+                        when (val pendingResult = d.updateProduct(storeId, savedProduct.id, pendingProduct)) {
+                            is CoreResult.Success -> {
+                                finalProduct = pendingResult.value
+                                if (finalProduct.status == ProductStatus.DRAFT) drafted.incrementAndGet()
+                                if (finalProduct.status == ProductStatus.PUBLISHED) {
+                                    publishedUnexpectedly.incrementAndGet()
+                                    importErrors.add("${x.name}: پیش‌نویس اعمال نشد و Pending نیز اعمال نشد؛ محصول منتشر شد.")
+                                }
+                            }
+                            is CoreResult.Failure -> {
+                                val observed = runCatching { d.getProduct(storeId, savedProduct.id) }.getOrNull()
+                                val observedProduct = (observed as? CoreResult.Success)?.value
+                                finalProduct = observedProduct ?: savedProduct
+                                if (observedProduct?.status == ProductStatus.PUBLISHED || finalProduct.status == ProductStatus.PUBLISHED) {
+                                    publishedUnexpectedly.incrementAndGet()
+                                    importErrors.add("${x.name}: پیش‌نویس و Pending اعمال نشد؛ محصول منتشر شد.")
+                                } else {
+                                    importErrors.add("${x.name}: پیش‌نویس اعمال نشد؛ تلاش برای Pending نیز ناموفق بود (${pendingResult.error}).")
+                                }
+                            }
+                        }
+                    }
                     val existingVariations = try {
-                        reader.variations(storeId, savedProduct.id)
+                        reader.variations(storeId, finalProduct.id)
                     } catch (t: Throwable) {
-                        variationsFailed += x.variations.size
+                        variationsFailed.addAndGet(x.variations.size)
                         importErrors += "${x.name}: خواندن Variationها ناموفق بود: ${t.message ?: "خطای نامشخص"}"
                         TechnicalErrorReporter.report("Product Transfer", "RobustProductTransferService.import.variations.read", "READ_VARIATIONS", "خواندن Variationهای محصول ناموفق بود.", t, "PRODUCT_TRANSFER_VARIATION_READ_ERROR", "product=${x.name}; destinationId=${savedProduct.id.value}")
                         emptyList()
@@ -182,19 +221,19 @@ class RobustProductTransferService(private val d: V1PresentationDependencies, pr
                         try {
                             val oldVariation = if (old == null) null else if (sameStore) existingVariations.firstOrNull { it.id.value == sourceVariation.id } ?: findVariationByContent(existingVariations, sourceVariation) else findVariationByContent(existingVariations, sourceVariation)
                             val image = sourceVariation.image?.let { mediaOutcome.images[it.file]?.also { usedMedia += sourceVariation.image.file } }
-                            reservedVariationSku = if (oldVariation == null) reserveNewSku(sourceVariation.sku, usedSku) { skuChanged++ } else null
+                            reservedVariationSku = if (oldVariation == null) skuMutex.withLock { reserveNewSku(sourceVariation.sku, usedSku) { skuChanged.incrementAndGet() } } else null
                             val variationId = oldVariation?.id ?: EntityId(NEW_ID_PLACEHOLDER)
-                            val variation = sourceVariation.toDomain(productId = savedProduct.id, id = variationId, image = image).copy(sku = if (oldVariation == null) reservedVariationSku else sourceVariation.sku)
-                            when (val result = if (oldVariation == null) d.createVariation(storeId, variation) else d.updateVariation(storeId, savedProduct.id, oldVariation.id, variation)) {
-                                is CoreResult.Success -> { if (oldVariation == null) variationsCreated++ else variationsUpdated++; variationCommitted = true }
+                            val variation = sourceVariation.toDomain(productId = finalProduct.id, id = variationId, image = image).copy(sku = if (oldVariation == null) reservedVariationSku else sourceVariation.sku)
+                            when (val result = if (oldVariation == null) d.createVariation(storeId, variation) else d.updateVariation(storeId, finalProduct.id, oldVariation.id, variation)) {
+                                is CoreResult.Success -> { if (oldVariation == null) variationsCreated.incrementAndGet() else variationsUpdated.incrementAndGet(); variationCommitted = true }
                                 is CoreResult.Failure -> {
-                                    variationsFailed++
+                                    variationsFailed.incrementAndGet()
                                     importErrors += "${x.name}: variation ${sourceVariation.sku ?: sourceVariation.id} وارد نشد: ${result.error}"
                                     TechnicalErrorReporter.reportHandled("Product Transfer", "RobustProductTransferService.import.variation", "CREATE_OR_UPDATE_VARIATION", "انتقال Variation ناموفق بود.", result.error.toString(), "PRODUCT_TRANSFER_VARIATION_ERROR", "product=${x.name}; variation=${sourceVariation.id}; sku=${sourceVariation.sku}")
                                 }
                             }
                         } catch (t: Throwable) {
-                            variationsFailed++
+                            variationsFailed.incrementAndGet()
                             importErrors += "${x.name}: variation ${sourceVariation.sku ?: sourceVariation.id} با خطای فنی مواجه شد: ${t.message ?: "خطای نامشخص"}"
                             TechnicalErrorReporter.report("Product Transfer", "RobustProductTransferService.import.variation", "IMPORT_VARIATION", "انتقال Variation ناموفق بود؛ Variationهای بعدی ادامه پیدا می‌کنند.", t, "PRODUCT_TRANSFER_VARIATION_EXCEPTION", "product=${x.name}; variation=${sourceVariation.id}; sku=${sourceVariation.sku}")
                         } finally {
@@ -202,14 +241,17 @@ class RobustProductTransferService(private val d: V1PresentationDependencies, pr
                         }
                     }
                 } catch (t: Throwable) {
-                    if (!productCountedAsSuccess) failed++
+                    if (!productCountedAsSuccess) failed.incrementAndGet()
                     importErrors += "${x.name}: ${t.message ?: "خطای نامشخص"}"
                     TechnicalErrorReporter.report("Product Transfer", "RobustProductTransferService.import.product", "IMPORT_PRODUCT", "انتقال محصول ناموفق بود؛ محصولات بعدی ادامه پیدا می‌کنند.", t, "PRODUCT_TRANSFER_PRODUCT_EXCEPTION", "product=${x.name}; sourceId=${x.id}; mode=$mode")
                 } finally {
-                    if (!productCountedAsSuccess) releaseSku(reservedSku, usedSku)
+                    if (!productCountedAsSuccess) skuMutex.withLock { releaseSku(reservedSku, usedSku) }
                 }
+                        }
+                    }
+                }.awaitAll()
             }
-            RobustProductTransferResult(created, updated, failed, mediaOutcome.uploaded, variationsCreated, variationsUpdated, (mediaOutcome.errors + errors + importErrors).distinct().take(50), variationsFailed, mediaOutcome.failed, (mediaOutcome.images.keys - usedMedia).size, skuChanged, emptyList(), importErrors.distinct().take(50), drafted, categoriesCreated, categoriesResolved, attributesCreated, attributesResolved, termsCreated, termsResolved, mediaOutcome.reused)
+            RobustProductTransferResult(created.get(), updated.get(), failed.get(), mediaOutcome.uploaded, variationsCreated.get(), variationsUpdated.get(), (mediaOutcome.errors + errors + importErrors).distinct().take(50), variationsFailed.get(), mediaOutcome.failed, (mediaOutcome.images.keys - usedMedia).size, skuChanged.get(), emptyList(), importErrors.distinct().take(50), drafted.get(), categoriesCreated, categoriesResolved, attributesCreated, attributesResolved, termsCreated, termsResolved, mediaOutcome.reused, publishedUnexpectedly.get())
         } catch (t: Throwable) {
             TechnicalErrorReporter.report("Product Transfer", "RobustProductTransferService.import", "IMPORT", "ایمپورت محصولات با خطای فنی متوقف شد.", t, "PRODUCT_TRANSFER_IMPORT_EXCEPTION", "storeId=${storeId.value}; source=$source; mode=$mode")
             RobustProductTransferResult(failed = 1, errors = listOf(t.message ?: "خواندن فایل ناموفق بود."), importErrors = listOf(t.message ?: "خواندن فایل ناموفق بود."))
