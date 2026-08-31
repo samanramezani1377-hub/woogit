@@ -4,7 +4,6 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
@@ -28,15 +27,11 @@ private val typedJson = Json { ignoreUnknownKeys = true; explicitNulls = false }
 @Serializable data class WooGlobalAttributeDto(val id:Long,val name:String="",val slug:String="")
 @Serializable data class WooAttributeTermDto(val id:Long,val name:String="",val slug:String="")
 
-@Serializable data class WooSystemStatusDto(
-    val environment: Map<String, JsonElement> = emptyMap(),
-    val settings: WooSystemStatusSettingsDto = WooSystemStatusSettingsDto()
-) {
+@Serializable data class WooSystemStatusDto(val environment: Map<String, JsonElement> = emptyMap(), val settings: WooSystemStatusSettingsDto = WooSystemStatusSettingsDto()) {
     fun environmentString(key: String): String? = environment[key]?.asText()
     fun environmentBoolean(key: String): Boolean? = environment[key]?.asBoolean()
     fun environmentInt(key: String): Int? = environment[key]?.asInt()
 }
-
 private fun JsonElement.asText(): String? = (this as? JsonPrimitive)?.contentOrNull
 private fun JsonElement.asBoolean(): Boolean? = (this as? JsonPrimitive)?.booleanOrNull
 private fun JsonElement.asInt(): Int? = (this as? JsonPrimitive)?.intOrNull
@@ -64,6 +59,7 @@ class TypedWooCommerceApi(private val raw: WooCommerceApi) {
     suspend fun variation(b:String,p:Long,id:Long) = decode(raw.getVariation(b,p,id)) { typedJson.decodeFromString<WooVariationTypedDto>(it) }
     suspend fun createVariation(b:String,p:Long,v:WooVariationTypedDto) = decode(raw.createVariation(b,p,typedJson.encodeToString(v))) { typedJson.decodeFromString<WooVariationTypedDto>(it) }
     suspend fun updateVariation(b:String,p:Long,id:Long,v:WooVariationTypedDto) = decode(raw.updateVariation(b,p,id,typedJson.encodeToString(v))) { typedJson.decodeFromString<WooVariationTypedDto>(it) }
+    suspend fun deleteVariation(b:String,p:Long,id:Long) = decode(raw.deleteVariation(b,p,id,true)) { Unit }
     suspend fun attributes(b:String,p:Int,n:Int) = decode(raw.listAttributes(b,p,n)) { typedJson.decodeFromString<List<WooGlobalAttributeDto>>(it) }
     suspend fun attribute(b:String,id:Long) = decode(raw.getAttribute(b,id)) { typedJson.decodeFromString<WooGlobalAttributeDto>(it) }
     suspend fun createAttribute(b:String,v:WooGlobalAttributeDto) = decode(raw.createAttribute(b,typedJson.encodeToString(v))) { typedJson.decodeFromString<WooGlobalAttributeDto>(it) }
