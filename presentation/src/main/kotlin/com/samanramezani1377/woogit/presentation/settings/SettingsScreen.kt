@@ -116,14 +116,28 @@ fun SettingsScreen(
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     GlassText("انتقال محصولات")
                     GlassText("پشتیبان کامل محصولات با اطلاعات، دسته‌بندی، ویژگی، Variation و تصاویر داخل یک فایل .woogit")
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
                         GlassPrimaryAction(
                             label = "📤 اکسپورت همه محصولات",
                             onClick = { if (!busy) exportLauncher.launch("WooGit-Products-${System.currentTimeMillis()}.woogit") },
                         )
-                        TextButton(onClick = { if (!busy) importLauncher.launch(arrayOf("application/octet-stream", "application/zip", "application/x-zip-compressed")) }) {
-                            GlassText("📥 ایمپورت محصولات")
-                        }
+                        GlassPrimaryAction(
+                            label = "📥 ایمپورت محصولات",
+                            onClick = {
+                                if (!busy) {
+                                    importLauncher.launch(
+                                        arrayOf(
+                                            "application/octet-stream",
+                                            "application/zip",
+                                            "application/x-zip-compressed",
+                                        )
+                                    )
+                                }
+                            },
+                        )
                     }
                     if (busy) GlassText(progress.ifBlank { "در حال انجام…" })
                 }
