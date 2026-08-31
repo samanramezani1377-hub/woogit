@@ -1,0 +1,41 @@
+name: One-time fix SettingsScreen
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.sha == 'f1731743d1bdb0e93b5f94748bf3c1934851ffc1'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fix malformed if expression
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/settings/SettingsScreen.kt')
+          s = p.read_text()
+          old = 'mapTo(mutableSetOf()){it.id.value}else emptySet()'
+          new = 'mapTo(mutableSetOf()){it.id.value}}else emptySet()'
+          if old not in s:
+              raise SystemExit('target expression not found')
+          p.write_text(s.replace(old, new, 1))
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/settings/SettingsScreen.kt
+          git commit -m 'fix: repair SettingsScreen import scope'
+          git push
+      - name: Remove one-time workflow
+        if: always()
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          rm -f .github/workflows/one-time-fix-settings-screen.yml
+          git add .github/workflows/one-time-fix-settings-screen.yml
+          git commit -m 'chore: remove one-time SettingsScreen fixer' || true
+          git push || true
