@@ -74,7 +74,10 @@ internal fun validateTransferPackage(resolver: ContentResolver, uri: Uri, json: 
     val globalIds = mutableSetOf<String>()
 
     globals.forEach { g ->
-        if (g.id.isBlank() || g.name.isBlank() || g.slug.isBlank()) errors += "ویژگی سراسری ناقص است: ${g.id}"
+        // Attribute name is the required identity. WooCommerce installations may
+        // legitimately omit a slug; the importer can derive one or fall back to
+        // the destination API's generated slug.
+        if (g.id.isBlank() || g.name.isBlank()) errors += "ویژگی سراسری ناقص است: ${g.id}"
         if (!globalIds.add(g.id)) errors += "ویژگی سراسری تکراری داخل فایل: ${g.id}"
         val termNames = mutableSetOf<String>()
         g.terms.forEach { t ->
