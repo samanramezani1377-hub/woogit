@@ -91,7 +91,7 @@ fun SettingsScreen(
         pendingImportUri = null
         busy = true
         scope.launch {
-            val existingIds: Set<Long> = if (
+            val existingIds: Set<String> = if (
                 mode == ProductImportMode.CREATE_NEW_DRAFT && !allowUnexpectedPublish
             ) {
                 ProductTransferRepositoryReader(dependencies, 100)
@@ -123,8 +123,7 @@ fun SettingsScreen(
                         "پیش‌نویس‌نشده/منتشرشده: ${result.publishedUnexpectedly} · " +
                         "حذف‌شده به‌دلیل انتشار ناخواسته: $removed · بروزرسانی: ${result.updated} · " +
                         "ناموفق: ${result.failed} · تصاویر: ${result.imagesUploaded} · " +
-                        "Variation ایجاد: ${result.variationsCreated} · " +
-                        "Variation بروزرسانی: ${result.variationsUpdated}"
+                        "Variation ایجاد: ${result.variationsCreated} · Variation بروزرسانی: ${result.variationsUpdated}"
                 )
                 if (result.errors.isNotEmpty()) {
                     append("\n\n")
