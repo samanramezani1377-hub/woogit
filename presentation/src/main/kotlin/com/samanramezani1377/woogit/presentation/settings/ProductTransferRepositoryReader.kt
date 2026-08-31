@@ -37,7 +37,7 @@ internal class ProductTransferRepositoryReader(private val d: V1PresentationDepe
             val b = when (val r = d.getMedia(s, page, pageSize, null)) { is CoreResult.Success -> r.value; is CoreResult.Failure -> error("دریافت رسانه‌ها ناموفق بود: ${r.error}") }
             if (b.isEmpty()) break; out += b; if (b.size < pageSize) break; page++
         }
-        return out.distinctBy { it.id?.value ?: "" }
+        return out.distinctBy { it.id?.value ?: it.src }
     }
     suspend fun attributes(s: StoreId): List<GlobalAttribute> {
         val out = mutableListOf<GlobalAttribute>(); var page = 1
@@ -53,6 +53,6 @@ internal class ProductTransferRepositoryReader(private val d: V1PresentationDepe
             val b = when (val r = d.getTerms(s, attributeId, page, pageSize)) { is CoreResult.Success -> r.value; is CoreResult.Failure -> error("دریافت Termهای ویژگی ناموفق بود: ${r.error}") }
             if (b.isEmpty()) break; out += b; if (b.size < pageSize) break; page++
         }
-        return out.distinctBy { it.id.value }
+        return out.distinctBy { it.id?.value ?: "${it.name}|${it.slug ?: ""}" }
     }
 }
