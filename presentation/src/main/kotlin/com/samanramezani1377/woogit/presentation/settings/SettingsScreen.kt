@@ -42,6 +42,7 @@ fun SettingsScreen(
     var resultText by remember { mutableStateOf<String?>(null) }
     var pendingImportUri by remember { mutableStateOf<android.net.Uri?>(null) }
     var showImportMode by remember { mutableStateOf(false) }
+    var selectedImportMode by remember { mutableStateOf(ProductImportMode.UPDATE_EXISTING) }
 
     fun refreshTechnicalLogs() {
         if (DebugConfig.ENABLED) logs = DebugLogStore.read(context)
@@ -70,6 +71,7 @@ fun SettingsScreen(
                 context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
             }
             pendingImportUri = uri
+            selectedImportMode = ProductImportMode.UPDATE_EXISTING
             showImportMode = true
         }
     }
@@ -93,103 +95,112 @@ fun SettingsScreen(
         }
     }
 
+    fun importModeTitle(mode: ProductImportMode): String = when (mode) {
+        ProductImportMode.UPDATE_EXISTING -> "اصلاح محصولات قبلی"
+        ProductImportMode.CREATE_NEW -> "ایجاد محصولات جدید"
+        ProductImportMode.CREATE_NEW_DRAFT -> "ایجاد جدید به صورت پیش‌نویس"
+    }
+
+    fun importModeDescription(mode: ProductImportMode): String = when (mode) {
+        ProductImportMode.UPDATE_EXISTING -> "محصولات موجود بر اساس شناسه و SKU و با تطبیق امن بروزرسانی می‌شوند. محصولات جدید نیز مطابق منطق انتقال ایجاد خواهند شد."
+        ProductImportMode.CREATE_NEW -> "همه محصولات فایل بدون تطبیق با محصولات قبلی به عنوان محصولات جدید ساخته می‌شوند."
+        ProductImportMode.CREATE_NEW_DRAFT -> "محصولات جدید ساخته می‌شوند، اما وضعیت آن‌ها به صورت پیش‌نویس خواهد بود."
+    }
+
     GlassScaffold {
-        Column(
-            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            GlassTopBar(
-                title = "تنظیمات",
-                subtitle = "مدیریت اتصال و حساب فروشگاه",
-                navigation = { TextButton(onClick = onBack) { GlassText("بازگشت") } },
+        if (showImportMode && pendingImportUri != null) {
+            ImportModeSelectionScreen(
+                selectedMode = selectedImportMode,
+                onModeSelected = { selectedImportMode = it },
+                onBack = {
+                    showImportMode = false
+                    pendingImportUri = null
+                },
+                onStart = { startImport(selectedImportMode) },
+                busy = busy,
+                progress = progress,
+                titleFor = ::importModeTitle,
+                descriptionFor = ::importModeDescription,
             )
+        } else {
+            Column(
+                modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                GlassTopBar(
+                    title = "تنظیمات",
+                    subtitle = "مدیریت اتصال و حساب فروشگاه",
+                    navigation = { TextButton(onClick = onBack) { GlassText("بازگشت") } },
+                )
 
-            GlassCard {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    GlassText("فروشگاه متصل")
-                    GlassText(storeName)
-                    GlassPrimaryAction(label = "قطع اتصال", onClick = onDisconnect)
+                GlassCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        GlassText("فروشگاه متصل")
+                        GlassText(storeName)
+                        GlassPrimaryAction(label = "قطع اتصال", onClick = onDisconnect)
+                    }
                 }
-            }
 
-            GlassCard {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    GlassText("انتقال محصولات")
-                    GlassText("پشتیبان کامل محصولات با اطلاعات، دسته‌بندی، ویژگی، Variation و تصاویر داخل یک فایل .woogit")
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        GlassPrimaryAction(
-                            label = "📤 اکسپورت همه محصولات",
-                            onClick = { if (!busy) exportLauncher.launch("WooGit-Products-${System.currentTimeMillis()}.woogit") },
-                        )
-                        GlassPrimaryAction(
-                            label = "📥 ایمپورت محصولات",
-                            onClick = {
-                                if (!busy) {
-                                    importLauncher.launch(
-                                        arrayOf(
-                                            "application/octet-stream",
-                                            "application/zip",
-                                            "application/x-zip-compressed",
+                GlassCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        GlassText("انتقال محصولات")
+                        GlassText("پشتیبان کامل محصولات با اطلاعات، دسته‌بندی، ویژگی، Variation و تصاویر داخل یک فایل .woogit")
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            GlassPrimaryAction(
+                                label = "📤 اکسپورت همه محصولات",
+                                onClick = { if (!busy) exportLauncher.launch("WooGit-Products-${System.currentTimeMillis()}.woogit") },
+                            )
+                            GlassPrimaryAction(
+                                label = "📥 ایمپورت محصولات",
+                                onClick = {
+                                    if (!busy) {
+                                        importLauncher.launch(
+                                            arrayOf(
+                                                "application/octet-stream",
+                                                "application/zip",
+                                                "application/x-zip-compressed",
+                                            )
                                         )
-                                    )
+                                    }
+                                },
+                            )
+                        }
+                        if (busy) GlassText(progress.ifBlank { "در حال انجام…" })
+                    }
+                }
+
+                if (DebugConfig.ENABLED) {
+                    GlassCard {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                GlassText("📌 متغیرهای فروش داشبورد (موقت)")
+                                TextButton(onClick = { showSalesDebug = !showSalesDebug }) {
+                                    GlassText(if (showSalesDebug) "بستن" else "مشاهده")
                                 }
-                            },
-                        )
-                    }
-                    if (busy) GlassText(progress.ifBlank { "در حال انجام…" })
-                }
-            }
-
-            if (DebugConfig.ENABLED) {
-                GlassCard {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            GlassText("📌 متغیرهای فروش داشبورد (موقت)")
-                            TextButton(onClick = { showSalesDebug = !showSalesDebug }) {
-                                GlassText(if (showSalesDebug) "بستن" else "مشاهده")
                             }
+                            if (showSalesDebug) DashboardSalesDebugPanel(clipboard)
                         }
-                        if (showSalesDebug) DashboardSalesDebugPanel(clipboard)
                     }
-                }
 
-                GlassCard {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            GlassText("لاگ‌های فنی (موقت)")
-                            Row {
-                                TextButton(onClick = { logs = DebugLogStore.read(context) }) { GlassText("به‌روزرسانی") }
-                                TextButton(onClick = { DebugLogStore.clear(context); logs = emptyList() }) { GlassText("پاک کردن") }
+                    GlassCard {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                GlassText("لاگ‌های فنی (موقت)")
+                                Row {
+                                    TextButton(onClick = { logs = DebugLogStore.read(context) }) { GlassText("به‌روزرسانی") }
+                                    TextButton(onClick = { DebugLogStore.clear(context); logs = emptyList() }) { GlassText("پاک کردن") }
+                                }
                             }
+                            if (logs.isEmpty()) GlassText("هنوز خطای فنی ثبت نشده است.")
+                            logs.forEach { entry -> DebugLogItem(entry, clipboard) }
                         }
-                        if (logs.isEmpty()) GlassText("هنوز خطای فنی ثبت نشده است.")
-                        logs.forEach { entry -> DebugLogItem(entry, clipboard) }
                     }
                 }
             }
         }
-    }
-
-    if (showImportMode) {
-        AlertDialog(
-            onDismissRequest = { showImportMode = false; pendingImportUri = null },
-            title = { GlassText("نوع ایمپورت محصولات") },
-            text = {
-                GlassText("انتخاب کن محصولات فایل چگونه وارد شوند.\n\nایجاد محصولات جدید: همه محصولات بدون تطبیق با محصولات قبلی ساخته می‌شوند.\nایجاد محصولات جدید به صورت پیش‌نویس: همه محصولات جدید با وضعیت پیش‌نویس ساخته می‌شوند.\nاصلاح محصولات قبلی: محصولات موجود بر اساس شناسه/SKU و تطبیق امن بروزرسانی می‌شوند.")
-            },
-            confirmButton = {
-                TextButton(onClick = { startImport(ProductImportMode.UPDATE_EXISTING) }) { GlassText("اصلاح محصولات قبلی") }
-            },
-            dismissButton = {
-                Row {
-                    TextButton(onClick = { startImport(ProductImportMode.CREATE_NEW) }) { GlassText("ایجاد همه به‌صورت جدید") }
-                    TextButton(onClick = { startImport(ProductImportMode.CREATE_NEW_DRAFT) }) { GlassText("ایجاد جدید به صورت پیش‌نویس") }
-                }
-            },
-        )
     }
 
     resultText?.let { message ->
@@ -199,6 +210,66 @@ fun SettingsScreen(
             text = { GlassText(message) },
             title = { GlassText("انتقال محصولات") },
         )
+    }
+}
+
+@Composable
+private fun ImportModeSelectionScreen(
+    selectedMode: ProductImportMode,
+    onModeSelected: (ProductImportMode) -> Unit,
+    onBack: () -> Unit,
+    onStart: () -> Unit,
+    busy: Boolean,
+    progress: String,
+    titleFor: (ProductImportMode) -> String,
+    descriptionFor: (ProductImportMode) -> String,
+) {
+    Column(
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        GlassTopBar(
+            title = "ایمپورت محصولات",
+            subtitle = "نحوه ورود محصولات را انتخاب کنید",
+            navigation = { TextButton(onClick = onBack) { GlassText("بازگشت") } },
+        )
+
+        GlassCard {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                GlassText("فایل انتخاب شد")
+                GlassText("حالا مشخص کنید محصولات این فایل چگونه در فروشگاه وارد شوند.")
+            }
+        }
+
+        listOf(
+            ProductImportMode.UPDATE_EXISTING,
+            ProductImportMode.CREATE_NEW,
+            ProductImportMode.CREATE_NEW_DRAFT,
+        ).forEach { mode ->
+            val selected = selectedMode == mode
+            GlassCard {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            GlassText(if (selected) "✓ ${titleFor(mode)}" else titleFor(mode))
+                            GlassText(descriptionFor(mode))
+                        }
+                        TextButton(
+                            onClick = { onModeSelected(mode) },
+                            enabled = !busy,
+                        ) {
+                            GlassText(if (selected) "انتخاب شد" else "انتخاب")
+                        }
+                    }
+                }
+            }
+        }
+
+        GlassPrimaryAction(
+            label = if (busy) "در حال ایمپورت…" else "شروع ایمپورت",
+            onClick = onStart,
+        )
+        if (busy) GlassText(progress.ifBlank { "در حال انجام…" })
     }
 }
 
