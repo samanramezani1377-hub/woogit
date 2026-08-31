@@ -40,7 +40,7 @@ class RobustProductTransferService(private val d: V1PresentationDependencies, pr
             val usedGlobalIds = products.flatMap { it.attributes }.mapNotNull { it.id?.value }.toSet()
             val globals = reader.attributes(storeId)
                 .filter { it.id.value in usedGlobalIds }
-                .map { g -> TransferGlobalAttribute(g.id.value, g.name, g.slug, reader.terms(storeId, g.id).map { TransferTerm(it.id.value, it.name, it.slug) }) }
+                .map { g -> TransferGlobalAttribute(g.id.value, g.name, g.slug, reader.terms(storeId, g.id).map { TransferTerm(it.id?.value, it.name, it.slug) }) }
             var imageCount = 0
             resolver.openOutputStream(destination)?.use { raw ->
                 CountingOutputStream(raw, MAX_PACKAGE_BYTES).use { counted ->
@@ -72,7 +72,7 @@ class RobustProductTransferService(private val d: V1PresentationDependencies, pr
                             product.copy(categories = expandCategoryChain(product.categories, allCategories)).toTransfer(images, variations)
                         }
                         val manifest = ProductTransferManifest(
-                            FORMAT, VERSION, store.baseUrl.trimEnd('/'),
+                            FORMAT, VERSION, ProductTransferFormat.LAYOUT_VERSION, store.baseUrl.trimEnd('/'),
                             SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssXXX", Locale.US).format(Date()),
                             exported.size, imageCount
                         )
@@ -183,7 +183,8 @@ class RobustProductTransferService(private val d: V1PresentationDependencies, pr
                             val oldVariation = if (old == null) null else if (sameStore) existingVariations.firstOrNull { it.id.value == sourceVariation.id } ?: findVariationByContent(existingVariations, sourceVariation) else findVariationByContent(existingVariations, sourceVariation)
                             val image = sourceVariation.image?.let { mediaOutcome.images[it.file]?.also { usedMedia += sourceVariation.image.file } }
                             reservedVariationSku = if (oldVariation == null) reserveNewSku(sourceVariation.sku, usedSku) { skuChanged++ } else null
-                            val variation = sourceVariation.toDomain(savedProduct.id, if (oldVariation == null) EntityId(NEW_ID_PLACEHOLDER) else oldVariation.id, image).copy(sku = if (oldVariation == null) reservedVariationSku else sourceVariation.sku)
+                            val variationId = oldVariation?.id ?: EntityId(NEW_ID_PLACEHOLDER)
+                            val variation = sourceVariation.toDomain(productId = savedProduct.id, id = variationId, image = image).copy(sku = if (oldVariation == null) reservedVariationSku else sourceVariation.sku)
                             when (val result = if (oldVariation == null) d.createVariation(storeId, variation) else d.updateVariation(storeId, savedProduct.id, oldVariation.id, variation)) {
                                 is CoreResult.Success -> { if (oldVariation == null) variationsCreated++ else variationsUpdated++; variationCommitted = true }
                                 is CoreResult.Failure -> {
