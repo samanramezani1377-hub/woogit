@@ -1,0 +1,38 @@
+name: Fix import concurrency
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fix importer
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/settings/RobustProductTransferService.kt')
+          s=p.read_text()
+          s=s.replace('async(Dispatchers.IO) {', 'async(Dispatchers.IO.limitedParallelism(IMPORT_CONCURRENCY)) {')
+          s=s.replace('return@mapIndexed', 'return@async')
+          p.write_text(s)
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/settings/RobustProductTransferService.kt
+          git diff --cached --quiet || git commit -m 'Limit product import concurrency to five'
+          git push
+      - name: Remove temporary workflow
+        run: |
+          git rm .github/workflows/fix-import-concurrency.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Remove temporary concurrency patch workflow'
+          git push
+# trigger
