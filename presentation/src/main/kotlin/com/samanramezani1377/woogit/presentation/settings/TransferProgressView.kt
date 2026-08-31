@@ -1,6 +1,7 @@
 package com.samanramezani1377.woogit.presentation.settings
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.samanramezani1377.woogit.presentation.GlassCard
@@ -14,10 +15,7 @@ internal fun TransferProgressView(progress: ProductTransferProgress) {
             GlassText(progress.phase.ifBlank { "در حال انجام…" })
             if (progress.total > 0) {
                 GlassText("${progress.current} از ${progress.total} · ${(fraction * 100).toInt()}%")
-                androidx.compose.material3.LinearProgressIndicator(
-                    progress = { fraction },
-                    modifier = Modifier.fillMaxWidth()
-                )
+                androidx.compose.material3.LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth())
             } else {
                 androidx.compose.material3.LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
             }
