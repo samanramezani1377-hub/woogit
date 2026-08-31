@@ -97,8 +97,8 @@ internal fun ProductEditorScreen(
                     GlassCard { Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         GlassTextField(state.name, onNameChanged, "نام محصول")
                         GlassTextField(state.sku, onSkuChanged, "SKU")
-                        GlassTextField(state.shortDescription, onShortDescriptionChanged, "توضیح کوتاه")
-                        GlassTextField(state.description, onDescriptionChanged, "توضیحات")
+                        GlassTextField(state.shortDescription, onShortDescriptionChanged, "توضیح کوتاه", singleLine = false, modifier = Modifier.heightIn(min = 96.dp))
+                        GlassTextField(state.description, onDescriptionChanged, "توضیحات", singleLine = false, modifier = Modifier.heightIn(min = 220.dp))
                         GlassTextField(state.price, onPriceChanged, "قیمت اصلی")
                         state.price.takeIf { it.isNotBlank() }?.let { GlassText("قیمت نمایش: ${it.toPersianPrice()} تومان", style = MaterialTheme.typography.bodySmall) }
                         GlassTextField(state.salePrice, onSalePriceChanged, "قیمت فروش ویژه")
