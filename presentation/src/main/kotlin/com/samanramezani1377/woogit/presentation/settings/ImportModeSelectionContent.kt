@@ -11,7 +11,7 @@ import androidx.compose.ui.unit.dp
 import com.samanramezani1377.woogit.presentation.*
 
 @Composable
-internal fun ImportModeSelectionScreen(
+internal fun ImportModeSelectionContent(
     selectedMode: ProductImportMode,
     selectedFile: Boolean,
     onSelectFile: () -> Unit,
@@ -33,48 +33,32 @@ internal fun ImportModeSelectionScreen(
 ) {
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         GlassTopBar("ایمپورت محصولات", "فایل و نحوه ورود محصولات را انتخاب کنید") { TextButton(onClick = onBack) { GlassText("بازگشت") } }
-        GlassCard {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                GlassText("فایل ایمپورت")
-                GlassText(if (selectedFile) "فایل .woogit انتخاب شده است." else "هنوز فایلی برای ایمپورت انتخاب نشده است.")
-                GlassPrimaryAction(if (selectedFile) "📁 تغییر فایل" else "📁 انتخاب فایل", onSelectFile)
-            }
-        }
-        GlassCard {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                GlassText("نحوه ایمپورت")
-                GlassText("مشخص کنید محصولات فایل چگونه در فروشگاه وارد شوند.")
-            }
-        }
+        GlassCard { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            GlassText("فایل ایمپورت")
+            GlassText(if (selectedFile) "فایل .woogit انتخاب شده است." else "هنوز فایلی برای ایمپورت انتخاب نشده است.")
+            GlassPrimaryAction(if (selectedFile) "📁 تغییر فایل" else "📁 انتخاب فایل", onSelectFile)
+        } }
+        GlassCard { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { GlassText("نحوه ایمپورت"); GlassText("مشخص کنید محصولات فایل چگونه در فروشگاه وارد شوند.") } }
         listOf(ProductImportMode.UPDATE_EXISTING, ProductImportMode.CREATE_NEW, ProductImportMode.CREATE_NEW_DRAFT).forEach { mode ->
             val selected = selectedMode == mode
-            GlassCard {
-                Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        GlassText(if (selected) "✓ ${titleFor(mode)}" else titleFor(mode))
-                        GlassText(descriptionFor(mode))
-                    }
-                    TextButton(onClick = { onModeSelected(mode) }, enabled = !busy) { GlassText(if (selected) "انتخاب شد" else "انتخاب") }
-                }
-            }
+            GlassCard { Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) { GlassText(if (selected) "✓ ${titleFor(mode)}" else titleFor(mode)); GlassText(descriptionFor(mode)) }
+                TextButton(onClick = { onModeSelected(mode) }, enabled = !busy) { GlassText(if (selected) "انتخاب شد" else "انتخاب") }
+            } }
         }
-        GlassCard {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                GlassText("تنظیمات پیشرفته ایمپورت")
-                GlassText("هر سه گزینه به‌صورت پیش‌فرض خاموش هستند.")
-            }
+        GlassCard { Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            GlassText("تنظیمات پیشرفته ایمپورت")
+            GlassText("هر سه گزینه به‌صورت پیش‌فرض خاموش هستند.")
             ImportOption("افزودن دسته‌بندی در صورت یافت نشدن", "اگر دسته‌بندی مقصد پیدا نشد، آن را از فایل ایجاد می‌کند.", addMissingCategories, !busy, onAddMissingCategoriesChanged)
             ImportOption("افزودن ویژگی در صورت یافت نشدن", "اگر ویژگی یا مقدار ویژگی مقصد پیدا نشد، آن را ایجاد می‌کند.", addMissingAttributes, !busy, onAddMissingAttributesChanged)
             ImportOption("آپلود تمام تصاویر فایل بدون بررسی کتابخانه", "تمام تصاویر فایل را بدون بررسی Media Library دوباره آپلود می‌کند.", uploadAllImagesWithoutLibraryCheck, !busy, onUploadAllImagesWithoutLibraryCheckChanged)
-        }
-        if (selectedMode == ProductImportMode.CREATE_NEW_DRAFT) {
-            GlassCard {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-                    Checkbox(checked = allowUnexpectedPublish, onCheckedChange = onAllowUnexpectedPublishChanged, enabled = !busy)
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        GlassText("اجازه انتشار در صورت شکست Draft و Pending")
-                        GlassText(if (allowUnexpectedPublish) "اگر Draft و Pending هر دو اعمال نشوند، محصول منتشرشده باقی می‌ماند." else "اگر Draft و Pending هر دو اعمال نشوند، محصول منتشرشده حذف می‌شود و ایمپورت ادامه پیدا می‌کند.")
-                    }
+        } }
+        if (selectedMode == ProductImportMode.CREATE_NEW_DRAFT) GlassCard {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Checkbox(checked = allowUnexpectedPublish, onCheckedChange = onAllowUnexpectedPublishChanged, enabled = !busy)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    GlassText("اجازه انتشار در صورت شکست Draft و Pending")
+                    GlassText(if (allowUnexpectedPublish) "اگر Draft و Pending هر دو اعمال نشوند، محصول منتشرشده باقی می‌ماند." else "اگر Draft و Pending هر دو اعمال نشوند، محصول منتشرشده حذف می‌شود و ایمپورت ادامه پیدا می‌کند.")
                 }
             }
         }
@@ -88,9 +72,6 @@ internal fun ImportModeSelectionScreen(
 private fun ImportOption(title: String, description: String, checked: Boolean, enabled: Boolean, onCheckedChange: (Boolean) -> Unit) {
     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
         Checkbox(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            GlassText(title)
-            GlassText(description)
-        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) { GlassText(title); GlassText(description) }
     }
 }
