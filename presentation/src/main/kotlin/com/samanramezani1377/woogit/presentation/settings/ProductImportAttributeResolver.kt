@@ -2,7 +2,7 @@ package com.samanramezani1377.woogit.presentation.settings
 
 import com.samanramezani1377.woogit.core.domain.entity.EntityId
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
-import com.samanramezani1377-hub.woogit.core.domain.error.CoreResult
+import com.samanramezani1377.woogit.core.domain.error.CoreResult
 import com.samanramezani1377.woogit.core.domain.model.AttributeTerm
 import com.samanramezani1377.woogit.core.domain.model.GlobalAttribute
 import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
