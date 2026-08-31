@@ -16,7 +16,17 @@ internal class UnexpectedPublishedProductCleanup(private val d: V1PresentationDe
         current.asSequence()
             .filter { it.id.value !in existingIds && it.status == ProductStatus.PUBLISHED }
             .forEach { product ->
-                if (d.deleteProduct(storeId, EntityId(product.id.value)) is CoreResult.Success) removed++
+                val deleted = d.deleteProduct(storeId, EntityId(product.id.value)) is CoreResult.Success
+                if (deleted) {
+                    removed++
+                } else {
+                    // If WooCommerce refuses deletion, immediately force the product back
+                    // to a non-public state. This is the final safety net for strict draft import.
+                    when (d.updateProduct(storeId, product.id, product.copy(status = ProductStatus.DRAFT))) {
+                        is CoreResult.Success -> removed++
+                        is CoreResult.Failure -> Unit
+                    }
+                }
             }
         return removed
     }
