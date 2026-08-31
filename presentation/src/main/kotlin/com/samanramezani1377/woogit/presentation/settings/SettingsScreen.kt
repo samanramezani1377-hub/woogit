@@ -26,30 +26,382 @@ import com.samanramezani1377.woogit.presentation.*
 import kotlinx.coroutines.launch
 
 @Composable
-fun SettingsScreen(storeName:String,storeId:StoreId,onBack:()->Unit,onDisconnect:()->Unit,dependencies:V1PresentationDependencies){
-    val context=LocalContext.current; val clipboard=LocalClipboardManager.current; val scope=rememberCoroutineScope()
-    val transfer=remember(dependencies){RobustProductTransferService(dependencies,context.contentResolver)}
-    var logs by remember{mutableStateOf(DebugLogStore.read(context))}; var showSalesDebug by remember{mutableStateOf(true)}; var busy by remember{mutableStateOf(false)}
-    var progress by remember{mutableStateOf(ProductTransferProgress("",0,0))}; var resultText by remember{mutableStateOf<String?>(null)}; var pendingImportUri by remember{mutableStateOf<android.net.Uri?>(null)}
-    var showImportScreen by remember{mutableStateOf(false)}; var selectedImportMode by remember{mutableStateOf(ProductImportMode.UPDATE_EXISTING)}
-    var allowUnexpectedPublish by remember{mutableStateOf(false)}
-    var addMissingCategories by remember{mutableStateOf(false)}
-    var addMissingAttributes by remember{mutableStateOf(false)}
-    var uploadAllImagesWithoutLibraryCheck by remember{mutableStateOf(false)}
-    fun refreshTechnicalLogs(){if(DebugConfig.ENABLED)logs=DebugLogStore.read(context)}
-    val exportLauncher=rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/octet-stream")){uri->if(uri!=null){busy=true;scope.launch{val result=transfer.export(storeId,uri){progress=it};busy=false;refreshTechnicalLogs();resultText=result.fold({"خروجی با موفقیت ساخته شد. $it محصول در فایل WooGit ذخیره شد."},{"ساخت فایل خروجی ناموفق بود: ${it.message}"})}}}
-    val importLauncher=rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()){uri->if(uri!=null){runCatching{context.contentResolver.takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION)};pendingImportUri=uri}}
-    fun startImport(mode:ProductImportMode){val uri=pendingImportUri?:return;showImportScreen=false;pendingImportUri=null;busy=true;scope.launch{val existingIds=if(mode==ProductImportMode.CREATE_NEW_DRAFT&&!allowUnexpectedPublish){ProductTransferRepositoryReader(dependencies,100).products(storeId){ }.mapTo(mutableSetOf()){it.id.value}else emptySet();val options=ProductImportOptions(allowUnexpectedPublish=allowUnexpectedPublish,addMissingCategories=addMissingCategories,addMissingAttributes=addMissingAttributes,uploadAllImagesWithoutLibraryCheck=uploadAllImagesWithoutLibraryCheck);val result=transfer.import(storeId,uri,mode,options){progress=it};val removed=if(mode==ProductImportMode.CREATE_NEW_DRAFT&&!allowUnexpectedPublish){UnexpectedPublishedProductCleanup(dependencies).cleanup(storeId,existingIds)}else 0;busy=false;refreshTechnicalLogs();resultText=buildString{append("ایمپورت تمام شد. ایجاد: ${result.created} · پیش‌نویس: ${result.drafted} · پیش‌نویس‌نشده/منتشرشده: ${result.publishedUnexpectedly} · حذف‌شده به‌دلیل انتشار ناخواسته: $removed · بروزرسانی: ${result.updated} · ناموفق: ${result.failed} · تصاویر: ${result.imagesUploaded} · Variation ایجاد: ${result.variationsCreated} · Variation بروزرسانی: ${result.variationsUpdated}");if(result.errors.isNotEmpty()){append("\n\n");append(result.errors.take(8).joinToString("\n"))}}}}}
-    fun importModeTitle(mode:ProductImportMode)=when(mode){ProductImportMode.UPDATE_EXISTING->"اصلاح محصولات قبلی";ProductImportMode.CREATE_NEW->"ایجاد محصولات جدید";ProductImportMode.CREATE_NEW_DRAFT->"ایجاد جدید به صورت پیش‌نویس"}
-    fun importModeDescription(mode:ProductImportMode)=when(mode){ProductImportMode.UPDATE_EXISTING->"محصولات موجود بر اساس شناسه و SKU و با تطبیق امن بروزرسانی می‌شوند. محصولات جدید نیز مطابق منطق انتقال ایجاد خواهند شد.";ProductImportMode.CREATE_NEW->"همه محصولات فایل بدون تطبیق با محصولات قبلی به عنوان محصولات جدید ساخته می‌شوند.";ProductImportMode.CREATE_NEW_DRAFT->"محصولات جدید با درخواست پیش‌نویس ساخته می‌شوند؛ اگر Draft اعمال نشود، یک بار Pending امتحان می‌شود."}
-    GlassScaffold{if(showImportScreen){ImportModeSelectionScreen(selectedImportMode,pendingImportUri!=null,{if(!busy)importLauncher.launch(arrayOf("application/octet-stream","application/zip","application/x-zip-compressed"))},{selectedImportMode=it;if(it!=ProductImportMode.CREATE_NEW_DRAFT)allowUnexpectedPublish=false},{showImportScreen=false;pendingImportUri=null},{startImport(selectedImportMode)},busy,progress,::importModeTitle,::importModeDescription,allowUnexpectedPublish,{allowUnexpectedPublish=it},addMissingCategories,{addMissingCategories=it},addMissingAttributes,{addMissingAttributes=it},uploadAllImagesWithoutLibraryCheck,{uploadAllImagesWithoutLibraryCheck=it})}else{Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){GlassTopBar("تنظیمات","مدیریت اتصال و حساب فروشگاه"){TextButton(onClick=onBack){GlassText("بازگشت")}};GlassCard{Column(verticalArrangement=Arrangement.spacedBy(8.dp)){GlassText("فروشگاه متصل");GlassText(storeName);GlassPrimaryAction("قطع اتصال",onDisconnect)}};GlassCard{Column(verticalArrangement=Arrangement.spacedBy(10.dp)){GlassText("انتقال محصولات");GlassText("پشتیبان کامل محصولات با اطلاعات، دسته‌بندی، ویژگی، Variation و تصاویر داخل یک فایل .woogit");GlassPrimaryAction("📤 اکسپورت همه محصولات"){if(!busy)exportLauncher.launch("WooGit-Products-${System.currentTimeMillis()}.woogit")};GlassPrimaryAction("📥 ایمپورت محصولات"){if(!busy)showImportScreen=true};if(busy)TransferProgressView(progress)}};if(DebugConfig.ENABLED){GlassCard{Column(verticalArrangement=Arrangement.spacedBy(8.dp)){Row(Modifier.fillMaxWidth(),Arrangement.SpaceBetween){GlassText("📌 متغیرهای فروش داشبورد (موقت)");TextButton(onClick={showSalesDebug=!showSalesDebug}){GlassText(if(showSalesDebug)"بستن" else "مشاهده")}};if(showSalesDebug)DashboardSalesDebugPanel(clipboard)}};GlassCard{Column(verticalArrangement=Arrangement.spacedBy(8.dp)){Row(Modifier.fillMaxWidth(),Arrangement.SpaceBetween){GlassText("لاگ‌های فنی (موقت)");Row{TextButton(onClick={logs=DebugLogStore.read(context)}){GlassText("به‌روزرسانی")};TextButton(onClick={DebugLogStore.clear(context);logs=emptyList()}){GlassText("پاک کردن")}}};if(logs.isEmpty())GlassText("هنوز خطای فنی ثبت نشده است.");logs.forEach{DebugLogItem(it,clipboard)}}}}}};resultText?.let{message->AlertDialog(onDismissRequest={resultText=null},confirmButton={TextButton(onClick={resultText=null}){GlassText("باشه")}},text={GlassText(message)},title={GlassText("انتقال محصولات")})}}
+fun SettingsScreen(
+    storeName: String,
+    storeId: StoreId,
+    onBack: () -> Unit,
+    onDisconnect: () -> Unit,
+    dependencies: V1PresentationDependencies
+) {
+    val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
+    val scope = rememberCoroutineScope()
+    val transfer = remember(dependencies) { RobustProductTransferService(dependencies, context.contentResolver) }
+    var logs by remember { mutableStateOf(DebugLogStore.read(context)) }
+    var showSalesDebug by remember { mutableStateOf(true) }
+    var busy by remember { mutableStateOf(false) }
+    var progress by remember { mutableStateOf(ProductTransferProgress("", 0, 0)) }
+    var resultText by remember { mutableStateOf<String?>(null) }
+    var pendingImportUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    var showImportScreen by remember { mutableStateOf(false) }
+    var selectedImportMode by remember { mutableStateOf(ProductImportMode.UPDATE_EXISTING) }
+    var allowUnexpectedPublish by remember { mutableStateOf(false) }
+    var addMissingCategories by remember { mutableStateOf(false) }
+    var addMissingAttributes by remember { mutableStateOf(false) }
+    var uploadAllImagesWithoutLibraryCheck by remember { mutableStateOf(false) }
+
+    fun refreshTechnicalLogs() {
+        if (DebugConfig.ENABLED) logs = DebugLogStore.read(context)
+    }
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/octet-stream")
+    ) { uri ->
+        if (uri != null) {
+            busy = true
+            scope.launch {
+                val result = transfer.export(storeId, uri) { progress = it }
+                busy = false
+                refreshTechnicalLogs()
+                resultText = result.fold(
+                    { "خروجی با موفقیت ساخته شد. $it محصول در فایل WooGit ذخیره شد." },
+                    { "ساخت فایل خروجی ناموفق بود: ${it.message}" }
+                )
+            }
+        }
+    }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
+            pendingImportUri = uri
+        }
+    }
+
+    fun startImport(mode: ProductImportMode) {
+        val uri = pendingImportUri ?: return
+        showImportScreen = false
+        pendingImportUri = null
+        busy = true
+        scope.launch {
+            val existingIds: Set<Long> = if (
+                mode == ProductImportMode.CREATE_NEW_DRAFT && !allowUnexpectedPublish
+            ) {
+                ProductTransferRepositoryReader(dependencies, 100)
+                    .products(storeId) { }
+                    .mapTo(mutableSetOf()) { it.id.value }
+            } else {
+                emptySet()
+            }
+
+            val options = ProductImportOptions(
+                allowUnexpectedPublish = allowUnexpectedPublish,
+                addMissingCategories = addMissingCategories,
+                addMissingAttributes = addMissingAttributes,
+                uploadAllImagesWithoutLibraryCheck = uploadAllImagesWithoutLibraryCheck
+            )
+            val result = transfer.import(storeId, uri, mode, options) { progress = it }
+            val removed = if (
+                mode == ProductImportMode.CREATE_NEW_DRAFT && !allowUnexpectedPublish
+            ) {
+                UnexpectedPublishedProductCleanup(dependencies).cleanup(storeId, existingIds)
+            } else {
+                0
+            }
+            busy = false
+            refreshTechnicalLogs()
+            resultText = buildString {
+                append(
+                    "ایمپورت تمام شد. ایجاد: ${result.created} · پیش‌نویس: ${result.drafted} · " +
+                        "پیش‌نویس‌نشده/منتشرشده: ${result.publishedUnexpectedly} · " +
+                        "حذف‌شده به‌دلیل انتشار ناخواسته: $removed · بروزرسانی: ${result.updated} · " +
+                        "ناموفق: ${result.failed} · تصاویر: ${result.imagesUploaded} · " +
+                        "Variation ایجاد: ${result.variationsCreated} · " +
+                        "Variation بروزرسانی: ${result.variationsUpdated}"
+                )
+                if (result.errors.isNotEmpty()) {
+                    append("\n\n")
+                    append(result.errors.take(8).joinToString("\n"))
+                }
+            }
+        }
+    }
+
+    fun importModeTitle(mode: ProductImportMode) = when (mode) {
+        ProductImportMode.UPDATE_EXISTING -> "اصلاح محصولات قبلی"
+        ProductImportMode.CREATE_NEW -> "ایجاد محصولات جدید"
+        ProductImportMode.CREATE_NEW_DRAFT -> "ایجاد جدید به صورت پیش‌نویس"
+    }
+
+    fun importModeDescription(mode: ProductImportMode) = when (mode) {
+        ProductImportMode.UPDATE_EXISTING -> "محصولات موجود بر اساس شناسه و SKU و با تطبیق امن بروزرسانی می‌شوند. محصولات جدید نیز مطابق منطق انتقال ایجاد خواهند شد."
+        ProductImportMode.CREATE_NEW -> "همه محصولات فایل بدون تطبیق با محصولات قبلی به عنوان محصولات جدید ساخته می‌شوند."
+        ProductImportMode.CREATE_NEW_DRAFT -> "محصولات جدید با درخواست پیش‌نویس ساخته می‌شوند؛ اگر Draft اعمال نشود، یک بار Pending امتحان می‌شود."
+    }
+
+    GlassScaffold {
+        if (showImportScreen) {
+            ImportModeSelectionScreen(
+                selectedMode = selectedImportMode,
+                selectedFile = pendingImportUri != null,
+                onSelectFile = {
+                    if (!busy) {
+                        importLauncher.launch(arrayOf("application/octet-stream", "application/zip", "application/x-zip-compressed"))
+                    }
+                },
+                onModeSelected = {
+                    selectedImportMode = it
+                    if (it != ProductImportMode.CREATE_NEW_DRAFT) allowUnexpectedPublish = false
+                },
+                onBack = {
+                    showImportScreen = false
+                    pendingImportUri = null
+                },
+                onStart = { startImport(selectedImportMode) },
+                busy = busy,
+                progress = progress,
+                titleFor = ::importModeTitle,
+                descriptionFor = ::importModeDescription,
+                allowUnexpectedPublish = allowUnexpectedPublish,
+                onAllowUnexpectedPublishChanged = { allowUnexpectedPublish = it },
+                addMissingCategories = addMissingCategories,
+                onAddMissingCategoriesChanged = { addMissingCategories = it },
+                addMissingAttributes = addMissingAttributes,
+                onAddMissingAttributesChanged = { addMissingAttributes = it },
+                uploadAllImagesWithoutLibraryCheck = uploadAllImagesWithoutLibraryCheck,
+                onUploadAllImagesWithoutLibraryCheckChanged = { uploadAllImagesWithoutLibraryCheck = it }
+            )
+        } else {
+            Column(
+                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                GlassTopBar("تنظیمات", "مدیریت اتصال و حساب فروشگاه") {
+                    TextButton(onClick = onBack) { GlassText("بازگشت") }
+                }
+                GlassCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        GlassText("فروشگاه متصل")
+                        GlassText(storeName)
+                        GlassPrimaryAction("قطع اتصال", onDisconnect)
+                    }
+                }
+                GlassCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        GlassText("انتقال محصولات")
+                        GlassText("پشتیبان کامل محصولات با اطلاعات، دسته‌بندی، ویژگی، Variation و تصاویر داخل یک فایل .woogit")
+                        GlassPrimaryAction("📤 اکسپورت همه محصولات") {
+                            if (!busy) exportLauncher.launch("WooGit-Products-${System.currentTimeMillis()}.woogit")
+                        }
+                        GlassPrimaryAction("📥 ایمپورت محصولات") {
+                            if (!busy) showImportScreen = true
+                        }
+                        if (busy) TransferProgressView(progress)
+                    }
+                }
+                if (DebugConfig.ENABLED) {
+                    GlassCard {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
+                                GlassText("📌 متغیرهای فروش داشبورد (موقت)")
+                                TextButton(onClick = { showSalesDebug = !showSalesDebug }) {
+                                    GlassText(if (showSalesDebug) "بستن" else "مشاهده")
+                                }
+                            }
+                            if (showSalesDebug) DashboardSalesDebugPanel(clipboard)
+                        }
+                    }
+                    GlassCard {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
+                                GlassText("لاگ‌های فنی (موقت)")
+                                Row {
+                                    TextButton(onClick = { logs = DebugLogStore.read(context) }) { GlassText("به‌روزرسانی") }
+                                    TextButton(onClick = { DebugLogStore.clear(context); logs = emptyList() }) { GlassText("پاک کردن") }
+                                }
+                            }
+                            if (logs.isEmpty()) GlassText("هنوز خطای فنی ثبت نشده است.")
+                            logs.forEach { DebugLogItem(it, clipboard) }
+                        }
+                    }
+                }
+            }
+        }
+        resultText?.let { message ->
+            AlertDialog(
+                onDismissRequest = { resultText = null },
+                confirmButton = { TextButton(onClick = { resultText = null }) { GlassText("باشه") } },
+                text = { GlassText(message) },
+                title = { GlassText("انتقال محصولات") }
+            )
+        }
+    }
 }
 
-@Composable private fun TransferProgressView(progress:ProductTransferProgress){val fraction=if(progress.total>0)(progress.current.toFloat()/progress.total).coerceIn(0f,1f) else 0f;Column(verticalArrangement=Arrangement.spacedBy(5.dp)){GlassText(progress.phase.ifBlank{"در حال انجام…"});if(progress.total>0){GlassText("${progress.current} از ${progress.total} · ${(fraction*100).toInt()}%");LinearProgressIndicator(progress={fraction},modifier=Modifier.fillMaxWidth())}else{LinearProgressIndicator(modifier=Modifier.fillMaxWidth())}}}
+@Composable
+private fun TransferProgressView(progress: ProductTransferProgress) {
+    val fraction = if (progress.total > 0) {
+        (progress.current.toFloat() / progress.total).coerceIn(0f, 1f)
+    } else 0f
+    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        GlassText(progress.phase.ifBlank { "در حال انجام…" })
+        if (progress.total > 0) {
+            GlassText("${progress.current} از ${progress.total} · ${(fraction * 100).toInt()}%")
+            LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth())
+        } else {
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+        }
+    }
+}
 
-@Composable private fun ImportModeSelectionScreen(selectedMode:ProductImportMode,selectedFile:Boolean,onSelectFile:()->Unit,onModeSelected:(ProductImportMode)->Unit,onBack:()->Unit,onStart:()->Unit,busy:Boolean,progress:ProductTransferProgress,titleFor:(ProductImportMode)->String,descriptionFor:(ProductImportMode)->String,allowUnexpectedPublish:Boolean,onAllowUnexpectedPublishChanged:(Boolean)->Unit,addMissingCategories:Boolean,onAddMissingCategoriesChanged:(Boolean)->Unit,addMissingAttributes:Boolean,onAddMissingAttributesChanged:(Boolean)->Unit,uploadAllImagesWithoutLibraryCheck:Boolean,onUploadAllImagesWithoutLibraryCheckChanged:(Boolean)->Unit){Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){GlassTopBar("ایمپورت محصولات","فایل و نحوه ورود محصولات را انتخاب کنید"){TextButton(onClick=onBack){GlassText("بازگشت")}};GlassCard{Column(verticalArrangement=Arrangement.spacedBy(8.dp)){GlassText("فایل ایمپورت");GlassText(if(selectedFile)"فایل .woogit انتخاب شده است." else "هنوز فایلی برای ایمپورت انتخاب نشده است.");GlassPrimaryAction(if(selectedFile)"📁 تغییر فایل" else "📁 انتخاب فایل",onSelectFile)}};GlassCard{Column(verticalArrangement=Arrangement.spacedBy(8.dp)){GlassText("نحوه ایمپورت");GlassText("مشخص کنید محصولات فایل چگونه در فروشگاه وارد شوند.")}};listOf(ProductImportMode.UPDATE_EXISTING,ProductImportMode.CREATE_NEW,ProductImportMode.CREATE_NEW_DRAFT).forEach{mode->val selected=selectedMode==mode;GlassCard{Row(Modifier.fillMaxWidth(),Arrangement.SpaceBetween){Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(4.dp)){GlassText(if(selected)"✓ ${titleFor(mode)}" else titleFor(mode));GlassText(descriptionFor(mode))};TextButton(onClick={onModeSelected(mode)},enabled=!busy){GlassText(if(selected)"انتخاب شد" else "انتخاب")}}}};GlassCard{Column(verticalArrangement=Arrangement.spacedBy(4.dp)){GlassText("تنظیمات پیشرفته ایمپورت");GlassText("هر سه گزینه به‌صورت پیش‌فرض خاموش هستند.")};ImportOption("افزودن دسته‌بندی در صورت یافت نشدن","اگر دسته‌بندی مقصد پیدا نشد، آن را از فایل ایجاد می‌کند.",addMissingCategories,!busy,onAddMissingCategoriesChanged);ImportOption("افزودن ویژگی در صورت یافت نشدن","اگر ویژگی یا مقدار ویژگی مقصد پیدا نشد، آن را ایجاد می‌کند.",addMissingAttributes,!busy,onAddMissingAttributesChanged);ImportOption("آپلود تمام تصاویر فایل بدون بررسی کتابخانه","تمام تصاویر فایل را بدون بررسی Media Library دوباره آپلود می‌کند.",uploadAllImagesWithoutLibraryCheck,!busy,onUploadAllImagesWithoutLibraryCheckChanged)};if(selectedMode==ProductImportMode.CREATE_NEW_DRAFT){GlassCard{Row(Modifier.fillMaxWidth(),verticalAlignment=androidx.compose.ui.Alignment.CenterVertically){Checkbox(checked=allowUnexpectedPublish,onCheckedChange=onAllowUnexpectedPublishChanged,enabled=!busy);Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(3.dp)){GlassText("اجازه انتشار در صورت شکست Draft و Pending");GlassText(if(allowUnexpectedPublish)"اگر Draft و Pending هر دو اعمال نشوند، محصول منتشرشده باقی می‌ماند." else "اگر Draft و Pending هر دو اعمال نشوند، محصول منتشرشده حذف می‌شود و ایمپورت ادامه پیدا می‌کند.")}}}};GlassPrimaryAction(if(busy)"در حال ایمپورت…" else "شروع ایمپورت",onStart);if(!selectedFile&&!busy)GlassText("برای شروع، ابتدا فایل .woogit را انتخاب کنید.");if(busy)TransferProgressView(progress)}}}
+@Composable
+private fun ImportModeSelectionScreen(
+    selectedMode: ProductImportMode,
+    selectedFile: Boolean,
+    onSelectFile: () -> Unit,
+    onModeSelected: (ProductImportMode) -> Unit,
+    onBack: () -> Unit,
+    onStart: () -> Unit,
+    busy: Boolean,
+    progress: ProductTransferProgress,
+    titleFor: (ProductImportMode) -> String,
+    descriptionFor: (ProductImportMode) -> String,
+    allowUnexpectedPublish: Boolean,
+    onAllowUnexpectedPublishChanged: (Boolean) -> Unit,
+    addMissingCategories: Boolean,
+    onAddMissingCategoriesChanged: (Boolean) -> Unit,
+    addMissingAttributes: Boolean,
+    onAddMissingAttributesChanged: (Boolean) -> Unit,
+    uploadAllImagesWithoutLibraryCheck: Boolean,
+    onUploadAllImagesWithoutLibraryCheckChanged: (Boolean) -> Unit
+) {
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        GlassTopBar("ایمپورت محصولات", "فایل و نحوه ورود محصولات را انتخاب کنید") {
+            TextButton(onClick = onBack) { GlassText("بازگشت") }
+        }
+        GlassCard {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                GlassText("فایل ایمپورت")
+                GlassText(if (selectedFile) "فایل .woogit انتخاب شده است." else "هنوز فایلی برای ایمپورت انتخاب نشده است.")
+                GlassPrimaryAction(
+                    if (selectedFile) "📁 تغییر فایل" else "📁 انتخاب فایل",
+                    onSelectFile
+                )
+            }
+        }
+        GlassCard {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                GlassText("نحوه ایمپورت")
+                GlassText("مشخص کنید محصولات فایل چگونه در فروشگاه وارد شوند.")
+            }
+        }
+        listOf(
+            ProductImportMode.UPDATE_EXISTING,
+            ProductImportMode.CREATE_NEW,
+            ProductImportMode.CREATE_NEW_DRAFT
+        ).forEach { mode ->
+            val selected = selectedMode == mode
+            GlassCard {
+                Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        GlassText(if (selected) "✓ ${titleFor(mode)}" else titleFor(mode))
+                        GlassText(descriptionFor(mode))
+                    }
+                    TextButton(onClick = { onModeSelected(mode) }, enabled = !busy) {
+                        GlassText(if (selected) "انتخاب شد" else "انتخاب")
+                    }
+                }
+            }
+        }
+        GlassCard {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                GlassText("تنظیمات پیشرفته ایمپورت")
+                GlassText("هر سه گزینه به‌صورت پیش‌فرض خاموش هستند.")
+            }
+            ImportOption("افزودن دسته‌بندی در صورت یافت نشدن", "اگر دسته‌بندی مقصد پیدا نشد، آن را از فایل ایجاد می‌کند.", addMissingCategories, !busy, onAddMissingCategoriesChanged)
+            ImportOption("افزودن ویژگی در صورت یافت نشدن", "اگر ویژگی یا مقدار ویژگی مقصد پیدا نشد، آن را ایجاد می‌کند.", addMissingAttributes, !busy, onAddMissingAttributesChanged)
+            ImportOption("آپلود تمام تصاویر فایل بدون بررسی کتابخانه", "تمام تصاویر فایل را بدون بررسی Media Library دوباره آپلود می‌کند.", uploadAllImagesWithoutLibraryCheck, !busy, onUploadAllImagesWithoutLibraryCheckChanged)
+        }
+        if (selectedMode == ProductImportMode.CREATE_NEW_DRAFT) {
+            GlassCard {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                    Checkbox(checked = allowUnexpectedPublish, onCheckedChange = onAllowUnexpectedPublishChanged, enabled = !busy)
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        GlassText("اجازه انتشار در صورت شکست Draft و Pending")
+                        GlassText(
+                            if (allowUnexpectedPublish) "اگر Draft و Pending هر دو اعمال نشوند، محصول منتشرشده باقی می‌ماند."
+                            else "اگر Draft و Pending هر دو اعمال نشوند، محصول منتشرشده حذف می‌شود و ایمپورت ادامه پیدا می‌کند."
+                        )
+                    }
+                }
+            }
+        }
+        GlassPrimaryAction(if (busy) "در حال ایمپورت…" else "شروع ایمپورت", onStart)
+        if (!selectedFile && !busy) GlassText("برای شروع، ابتدا فایل .woogit را انتخاب کنید.")
+        if (busy) TransferProgressView(progress)
+    }
+}
 
-@Composable private fun ImportOption(title:String,description:String,checked:Boolean,enabled:Boolean,onCheckedChange:(Boolean)->Unit){Row(Modifier.fillMaxWidth().padding(vertical=4.dp),verticalAlignment=androidx.compose.ui.Alignment.CenterVertically){Checkbox(checked=checked,onCheckedChange=onCheckedChange,enabled=enabled);Column(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(2.dp)){GlassText(title);GlassText(description)}}}
+@Composable
+private fun ImportOption(
+    title: String,
+    description: String,
+    checked: Boolean,
+    enabled: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+    ) {
+        Checkbox(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            GlassText(title)
+            GlassText(description)
+        }
+    }
+}
 
-@Composable private fun DebugLogItem(entry:DebugLogEntry,clipboard:androidx.compose.ui.platform.ClipboardManager){GlassCard{Column(verticalArrangement=Arrangement.spacedBy(5.dp)){GlassText("${entry.time} · ${entry.feature} · ${entry.type}");GlassText(entry.technicalMessage.ifBlank{entry.userMessage});if(entry.userMessage.isNotBlank())GlassText("پیام کاربر: ${entry.userMessage}");TextButton(onClick={clipboard.setText(AnnotatedString(entry.asCopyText()))}){GlassText("کپی خطا")}}}}
-@Composable private fun DashboardSalesDebugPanel(clipboard:androidx.compose.ui.platform.ClipboardManager){val snapshot=DashboardSalesDebugSnapshot.read();val copyText=DashboardSalesDebugSnapshot.run{snapshot.asCopyText()};Column(verticalArrangement=Arrangement.spacedBy(4.dp)){GlassText("مقدار نهایی نمایش‌داده‌شده: ${snapshot.formattedRevenue}");GlassText("جمع سفارش‌های واردشده: ${snapshot.ordersCount}");GlassText("سفارش‌های داخل محاسبه: ${snapshot.includedOrdersCount}");GlassText("سفارش‌های حذف‌شده: ${snapshot.excludedOrdersCount}");GlassText("جمع محاسبه‌شده از order.total: ${snapshot.calculatedOrderSum}");GlassText("SalesSummary.netSales: ${snapshot.summaryNetSales?:"null"}");GlassText("currency: ${snapshot.currency?:"null"}");GlassText("currencySymbol: ${snapshot.currencySymbol?:"null"}");GlassText("currencyPosition: ${snapshot.currencyPosition?:"null"}");GlassText("thousandSeparator: ${snapshot.thousandSeparator?:"null"}");GlassText("decimalSeparator: ${snapshot.decimalSeparator?:"null"}");GlassText("numberOfDecimals: ${snapshot.numberOfDecimals?:"null"}");GlassText("وضعیت‌های حذف‌شده: ${snapshot.excludedStatuses}");TextButton(onClick={clipboard.setText(AnnotatedString(copyText))}){GlassText("کپی همه متغیرهای فروش")}}}
+@Composable
+private fun DebugLogItem(entry: DebugLogEntry, clipboard: androidx.compose.ui.platform.ClipboardManager) {
+    GlassCard {
+        Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            GlassText("${entry.time} · ${entry.feature} · ${entry.type}")
+            GlassText(entry.technicalMessage.ifBlank { entry.userMessage })
+            if (entry.userMessage.isNotBlank()) GlassText("پیام کاربر: ${entry.userMessage}")
+            TextButton(onClick = { clipboard.setText(AnnotatedString(entry.asCopyText())) }) { GlassText("کپی خطا") }
+        }
+    }
+}
+
+@Composable
+private fun DashboardSalesDebugPanel(clipboard: androidx.compose.ui.platform.ClipboardManager) {
+    val snapshot = DashboardSalesDebugSnapshot.read()
+    val copyText = DashboardSalesDebugSnapshot.run { snapshot.asCopyText() }
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        GlassText("مقدار نهایی نمایش‌داده‌شده: ${snapshot.formattedRevenue}")
+        GlassText("جمع سفارش‌های واردشده: ${snapshot.ordersCount}")
+        GlassText("سفارش‌های داخل محاسبه: ${snapshot.includedOrdersCount}")
+        GlassText("سفارش‌های حذف‌شده: ${snapshot.excludedOrdersCount}")
+        GlassText("جمع محاسبه‌شده از order.total: ${snapshot.calculatedOrderSum}")
+        GlassText("SalesSummary.netSales: ${snapshot.summaryNetSales ?: "null"}")
+        GlassText("currency: ${snapshot.currency ?: "null"}")
+        GlassText("currencySymbol: ${snapshot.currencySymbol ?: "null"}")
+        GlassText("currencyPosition: ${snapshot.currencyPosition ?: "null"}")
+        GlassText("thousandSeparator: ${snapshot.thousandSeparator ?: "null"}")
+        GlassText("decimalSeparator: ${snapshot.decimalSeparator ?: "null"}")
+        GlassText("numberOfDecimals: ${snapshot.numberOfDecimals ?: "null"}")
+        GlassText("وضعیت‌های حذف‌شده: ${snapshot.excludedStatuses}")
+        TextButton(onClick = { clipboard.setText(AnnotatedString(copyText)) }) { GlassText("کپی همه متغیرهای فروش") }
+    }
+}
