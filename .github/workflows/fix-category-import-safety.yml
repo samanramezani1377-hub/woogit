@@ -1,0 +1,43 @@
+name: Fix category import safety
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch category resolver
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/settings/RobustProductTransferService.kt')
+          s = p.read_text()
+          old_call = 'val categoryMap = resolveCategories(storeId, sourceCategories, destinationCategories, true)'
+          new_call = 'val categoryMap = resolveCategories(storeId, sourceCategories, destinationCategories, createMissing = !sameStore, preserveSourceIds = sameStore)'
+          if old_call not in s:
+              raise SystemExit('category resolver call not found')
+          s = s.replace(old_call, new_call, 1)
+          old_sig = 'private suspend fun resolveCategories(storeId: StoreId, source: List<TransferCategory>, destination: List<IdName>, createMissing: Boolean): CategoryMapping {'
+          new_sig = 'private suspend fun resolveCategories(storeId: StoreId, source: List<TransferCategory>, destination: List<IdName>, createMissing: Boolean, preserveSourceIds: Boolean = false): CategoryMapping {'
+          if old_sig not in s:
+              raise SystemExit('category resolver signature not found')
+          s = s.replace(old_sig, new_sig, 1)
+          old_body = '''            val c = sourceById[id]\n            if (c == null) return null\n            val parent = c.parentId?.let { resolve(it) }\n            val key = normalize(c.name) + "|" + normalize(parent?.id?.value)\n            val found = destinationByKey[key].orEmpty().singleOrNull()\n            if (found != null) { resolved[id] = found; reused++; return found }\n            if (!createMissing) return null'''
+          new_body = '''            val c = sourceById[id]\n            if (c == null) return null\n            if (preserveSourceIds) {\n                val bySourceId = destination.firstOrNull { it.id.value == c.id }\n                if (bySourceId != null) {\n                    resolved[id] = bySourceId\n                    reused++\n                    return bySourceId\n                }\n                val byName = destination.firstOrNull { normalize(it.name) == normalize(c.name) }\n                if (byName != null) {\n                    resolved[id] = byName\n                    reused++\n                    return byName\n                }\n                return null\n            }\n            val parent = c.parentId?.let { resolve(it) }\n            val key = normalize(c.name) + "|" + normalize(parent?.id?.value)\n            val found = destinationByKey[key].orEmpty().singleOrNull()\n            if (found != null) { resolved[id] = found; reused++; return found }\n            if (!createMissing) return null'''
+          if old_body not in s:
+              raise SystemExit('category resolver body not found')
+          s = s.replace(old_body, new_body, 1)
+          p.write_text(s)
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/settings/RobustProductTransferService.kt
+          git diff --cached --quiet || git commit -m 'Preserve existing categories during import'
+          git push
