@@ -4,6 +4,7 @@ import com.samanramezani1377.woogit.core.domain.entity.EntityId
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.core.domain.error.CoreResult
 import com.samanramezani1377.woogit.core.domain.model.*
+import com.samanramezani1377.woogit.core.domain.repository.*
 
 class GetOrderUseCase(private val r: OrderRepository) : GetOrder { override suspend fun invoke(storeId: StoreId, id: EntityId) = r.get(storeId, id) }
 class GetOrdersUseCase(private val r: OrderRepository) : GetOrders { override suspend fun invoke(storeId: StoreId, page: Int, perPage: Int, search: String?, status: String?) = r.list(storeId, page, perPage, search, status) }
@@ -43,4 +44,4 @@ class GetTermsUseCase(private val r: TermRepository) : GetTerms { override suspe
 class GetTermUseCase(private val r: TermRepository) : GetTerm { override suspend fun invoke(storeId: StoreId, attributeId: EntityId, id: EntityId) = r.get(storeId, attributeId, id) }
 class CreateTermUseCase(private val r: TermRepository) : CreateTerm { override suspend fun invoke(storeId: StoreId, attributeId: EntityId, value: AttributeTerm) = r.create(storeId, attributeId, value) }
 class UpdateTermUseCase(private val r: TermRepository) : UpdateTerm { override suspend fun invoke(storeId: StoreId, attributeId: EntityId, id: EntityId, value: AttributeTerm) = r.update(storeId, attributeId, id, value) }
-class DeleteTermUseCase(private val r: TermRepository) : DeleteTerm { override suspend fun invoke(storeId: StoreId, attributeId: EntityId, id: EntityId) = r.delete(storeId, attributeId, id) }
+class DeleteTermUseCase(private val r: TermRepository) : DeleteTerm { override suspend fun invoke(storeId: StoreId, attributeId: EntityId, id: EntityId) = r.delete(storeId, attributeId, id, value) }
