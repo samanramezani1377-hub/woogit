@@ -15,7 +15,7 @@ class ProductCategoryRepositoryImpl(private val provider: WooCommerceClientProvi
     override suspend fun list(storeId: StoreId, page: Int, perPage: Int, search: String?): CoreResult<List<IdName>> =
         provider.client(storeId).fold(
             { (store, api) -> api.productCategories(store.baseUrl, page, perPage, search).fold(
-                onSuccess = { categories -> CoreResult.Success(categories.map { IdName(EntityId(it.id.toString()), it.name, it.parent.takeIf { parent -> parent != 0L }?.let(::EntityId)) }) },
+                onSuccess = { categories -> CoreResult.Success(categories.map { IdName(EntityId(it.id.toString()), it.name, it.parent.takeIf { parent -> parent != 0L }?.let { parent -> EntityId(parent.toString()) }) }) },
                 onFailure = { CoreResult.Failure(it.toDomain()) },
             ) },
             { CoreResult.Failure(it) },
@@ -25,7 +25,7 @@ class ProductCategoryRepositoryImpl(private val provider: WooCommerceClientProvi
         provider.client(storeId).fold(
             { (store, api) ->
                 api.createProductCategory(store.baseUrl, WooCategoryDto(id = 0, name = value.name, parent = value.parentId?.value?.toLongOrNull() ?: 0L)).fold(
-                    onSuccess = { category -> CoreResult.Success(IdName(EntityId(category.id.toString()), category.name, category.parent.takeIf { it != 0L }?.let(::EntityId))) },
+                    onSuccess = { category -> CoreResult.Success(IdName(EntityId(category.id.toString()), category.name, category.parent.takeIf { it != 0L }?.let { parent -> EntityId(parent.toString()) })) },
                     onFailure = { CoreResult.Failure(it.toDomain()) },
                 )
             },
