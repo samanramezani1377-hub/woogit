@@ -11,7 +11,7 @@ internal class OpenRouterProvider(context: Context) : AiProvider {
     override val id: String = "openrouter"
     private val prefs = context.applicationContext.getSharedPreferences("woogit_ai", Context.MODE_PRIVATE)
 
-    var apiKey: String
+    override var apiKey: String
         get() = prefs.getString("openrouter_api_key", "") ?: ""
         set(value) { prefs.edit().putString("openrouter_api_key", value.trim()).apply() }
 
