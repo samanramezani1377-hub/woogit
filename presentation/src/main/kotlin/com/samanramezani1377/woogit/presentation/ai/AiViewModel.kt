@@ -32,10 +32,12 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
     private val deepSeek = DeepSeekProvider(appContext)
     private val openRouter = OpenRouterProvider(appContext)
     private val gemini = GeminiProvider(appContext)
+    private val groq = GroqProvider(appContext)
     private val agents = mapOf(
         "deepseek" to AiAgent(deepSeek, WooGitToolExecutor(dependencies, storeId)),
         "openrouter" to AiAgent(openRouter, WooGitToolExecutor(dependencies, storeId)),
         "gemini" to AiAgent(gemini, WooGitToolExecutor(dependencies, storeId)),
+        "groq" to AiAgent(groq, WooGitToolExecutor(dependencies, storeId)),
     )
     private val _providerId = MutableStateFlow(prefs.getString("provider", "openrouter") ?: "openrouter")
     val providerId: StateFlow<String> = _providerId.asStateFlow()
@@ -100,6 +102,7 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
     private fun currentProvider(): AiProvider = when (_providerId.value) {
         "deepseek" -> deepSeek
         "gemini" -> gemini
+        "groq" -> groq
         else -> openRouter
     }
 
