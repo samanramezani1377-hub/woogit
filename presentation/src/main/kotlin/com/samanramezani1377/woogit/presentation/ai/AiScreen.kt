@@ -31,90 +31,71 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.presentation.GlassButton
 import com.samanramezani1377.woogit.presentation.GlassCard
 import com.samanramezani1377.woogit.presentation.GlassOutlinedButton
 import com.samanramezani1377.woogit.presentation.GlassScaffold
 import com.samanramezani1377.woogit.presentation.GlassTokens
+import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
 
 @Composable
-internal fun AiScreen() {
-    val vm = viewModel<AiViewModel>(factory = AiViewModel.Factory(LocalContext.current.applicationContext))
+internal fun AiScreen(dependencies: V1PresentationDependencies, storeId: StoreId) {
+    val context = androidx.compose.ui.platform.LocalContext.current.applicationContext
+    val vm = viewModel<AiViewModel>(key = "ai-${storeId.value}", factory = AiViewModel.Factory(context, dependencies, storeId))
     val state by vm.state.collectAsState()
-    var backendUrl by remember { mutableStateOf("") }
-    var apiKey by remember { mutableStateOf("") }
+    var apiKey by remember { mutableStateOf(vm.apiKey) }
     var input by remember { mutableStateOf("") }
-    var showConnection by remember { mutableStateOf(false) }
+    var showSettings by remember { mutableStateOf(vm.apiKey.isBlank()) }
 
     GlassScaffold { padding ->
-        Column(
-            Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
+        Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Spacer(Modifier.height(6.dp))
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("WooGit AI", fontWeight = FontWeight.Bold)
-                    Text("دستیار هوشمند فروشگاه", color = GlassTokens.muted)
+                    Text("Agent داخلی WooGit · DeepSeek", color = GlassTokens.muted)
                 }
-                Box(
-                    Modifier.size(42.dp).clip(CircleShape).background(GlassTokens.accent.copy(alpha = .14f)),
-                    contentAlignment = Alignment.Center,
-                ) { Text("AI", color = GlassTokens.accent, fontWeight = FontWeight.Bold) }
+                Box(Modifier.size(42.dp).clip(CircleShape).background(GlassTokens.accent.copy(alpha = .14f)), contentAlignment = Alignment.Center) {
+                    Text("AI", color = GlassTokens.accent, fontWeight = FontWeight.Bold)
+                }
             }
 
             GlassCard {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("اتصال به Agent", fontWeight = FontWeight.SemiBold)
-                        Text(
-                            if (backendUrl.isBlank()) "Backend تنظیم نشده" else "Backend آماده اتصال",
-                            color = if (backendUrl.isBlank()) GlassTokens.faint else GlassTokens.live,
-                        )
+                        Text("DeepSeek API", fontWeight = FontWeight.SemiBold)
+                        Text(if (apiKey.isBlank()) "کلید تنظیم نشده" else "کلید روی دستگاه ذخیره شده است", color = if (apiKey.isBlank()) GlassTokens.faint else GlassTokens.live)
                     }
-                    GlassOutlinedButton(
-                        label = if (showConnection) "بستن" else "تنظیمات",
-                        onClick = { showConnection = !showConnection },
-                        modifier = Modifier.widthIn(max = 120.dp),
-                    )
+                    GlassOutlinedButton(label = if (showSettings) "بستن" else "تنظیمات", onClick = { showSettings = !showSettings }, modifier = Modifier.widthIn(max = 120.dp))
                 }
-                if (showConnection) {
+                if (showSettings) {
                     Spacer(Modifier.height(4.dp))
-                    AiField(backendUrl, { backendUrl = it }, "آدرس Backend")
-                    AiField(apiKey, { apiKey = it }, "کلید API", secret = true)
-                    GlassButton("ذخیره اتصال", { vm.saveConnection(backendUrl, apiKey) })
+                    AiField(apiKey, { apiKey = it }, "کلید API دیپ‌سیک", secret = true)
+                    Text("اتصال مستقیم به api.deepseek.com؛ هیچ Backend جداگانه‌ای لازم نیست.", color = GlassTokens.muted)
+                    GlassButton("ذخیره کلید", { vm.saveApiKey(apiKey); showSettings = false })
                 }
             }
 
             val messages = when (state) {
                 AiUiState.Idle, AiUiState.Sending -> emptyList()
-                is AiUiState.Ready -> (state as AiUiState.Ready).messages
-                is AiUiState.Error -> (state as AiUiState.Error).messages
+                is AiUiState.Ready -> state.messages
+                is AiUiState.Error -> state.messages
             }
-
             if (messages.isEmpty() && state !is AiUiState.Error) {
                 GlassCard(Modifier.fillMaxWidth()) {
-                    Text("از AI بخواهید چه کاری برای فروشگاه انجام دهد", fontWeight = FontWeight.SemiBold)
-                    Text("مثلاً: محصولات ناموجود را پیدا کن یا محصول شماره ۱۲ را بررسی کن.", color = GlassTokens.muted)
+                    Text("از Agent بخواهید روی فروشگاه کاری انجام دهد", fontWeight = FontWeight.SemiBold)
+                    Text("مثلاً: محصول شماره ۱۲ را پیدا کن، یا محصولات ناموجود را فهرست کن.", color = GlassTokens.muted)
                 }
             }
-
-            LazyColumn(
-                Modifier.weight(1f).fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
+            LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(messages) { message ->
                     val user = message.role == "user"
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = if (user) Arrangement.End else Arrangement.Start) {
-                        Box(
-                            Modifier.fillMaxWidth(.88f).clip(RoundedCornerShape(20.dp)).background(
-                                if (user) GlassTokens.accent.copy(alpha = .12f) else Color.White.copy(alpha = .54f)
-                            ).padding(14.dp)
-                        ) {
+                        Box(Modifier.fillMaxWidth(.88f).clip(RoundedCornerShape(20.dp)).background(if (user) GlassTokens.accent.copy(alpha = .12f) else Color.White.copy(alpha = .54f)).padding(14.dp)) {
                             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text(if (user) "شما" else "WooGit AI", color = if (user) GlassTokens.accent else GlassTokens.ink, fontWeight = FontWeight.SemiBold)
                                 Text(message.content, color = GlassTokens.ink)
@@ -123,39 +104,22 @@ internal fun AiScreen() {
                     }
                 }
                 val pending = (state as? AiUiState.Ready)?.pending
-                if (pending != null) {
-                    item {
-                        GlassCard {
-                            Text("تأیید عملیات", fontWeight = FontWeight.Bold)
-                            Text("AI می‌خواهد این عملیات را اجرا کند:", color = GlassTokens.muted)
-                            Text(pending.toolName.orEmpty(), color = GlassTokens.accent, fontWeight = FontWeight.SemiBold)
-                            Text(pending.toolArguments.orEmpty(), color = GlassTokens.muted)
-                            GlassButton("تأیید و اجرا", { vm.confirm(pending) })
-                        }
+                if (pending != null) item {
+                    GlassCard {
+                        Text("تأیید عملیات", fontWeight = FontWeight.Bold)
+                        Text("AI درخواست اجرای این تغییر را داده است:", color = GlassTokens.muted)
+                        Text(pending.toolName.orEmpty(), color = GlassTokens.accent, fontWeight = FontWeight.SemiBold)
+                        Text(pending.toolArguments.orEmpty(), color = GlassTokens.muted)
+                        GlassButton("تأیید و اجرا", { vm.confirm(pending) })
                     }
                 }
-                if (state is AiUiState.Error) {
-                    item {
-                        GlassCard { Text("خطا: ${(state as AiUiState.Error).message}", color = GlassTokens.urgent) }
-                    }
-                }
+                if (state is AiUiState.Error) item { GlassCard { Text("خطا: ${(state as AiUiState.Error).message}", color = GlassTokens.urgent) } }
             }
-
-            if (state is AiUiState.Sending) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                    CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp, color = GlassTokens.accent)
-                }
-            }
-
-            Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Color.White.copy(alpha = .60f)).padding(5.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
+            if (state is AiUiState.Sending) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) { CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp, color = GlassTokens.accent) }
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Color.White.copy(alpha = .60f)).padding(5.dp), verticalAlignment = Alignment.CenterVertically) {
                 AiField(input, { input = it }, "دستور به AI", Modifier.weight(1f), singleLine = false)
-                IconButton(onClick = { vm.send(input); input = "" }, enabled = input.isNotBlank() && state !is AiUiState.Sending) {
-                    Box(Modifier.size(44.dp).clip(CircleShape).background(GlassTokens.accent), contentAlignment = Alignment.Center) {
-                        Text("↑", color = Color.White, fontWeight = FontWeight.Bold)
-                    }
+                IconButton(onClick = { vm.send(input); input = "" }, enabled = input.isNotBlank() && state !is AiUiState.Sending && apiKey.isNotBlank()) {
+                    Box(Modifier.size(44.dp).clip(CircleShape).background(GlassTokens.accent), contentAlignment = Alignment.Center) { Text("↑", color = Color.White, fontWeight = FontWeight.Bold) }
                 }
             }
             Spacer(Modifier.height(6.dp))
@@ -164,27 +128,8 @@ internal fun AiScreen() {
 }
 
 @Composable
-private fun AiField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    label: String,
-    modifier: Modifier = Modifier,
-    secret: Boolean = false,
-    singleLine: Boolean = true,
-) {
-    TextField(
-        value = value,
-        onValueChange = onValueChange,
-        modifier = modifier.fillMaxWidth(),
-        label = { Text(label) },
-        singleLine = singleLine,
+private fun AiField(value: String, onValueChange: (String) -> Unit, label: String, modifier: Modifier = Modifier, secret: Boolean = false, singleLine: Boolean = true) {
+    TextField(value = value, onValueChange = onValueChange, modifier = modifier.fillMaxWidth(), label = { Text(label) }, singleLine = singleLine,
         visualTransformation = if (secret) androidx.compose.ui.text.input.PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
-        colors = TextFieldDefaults.colors(
-            focusedContainerColor = Color.Transparent,
-            unfocusedContainerColor = Color.Transparent,
-            disabledContainerColor = Color.Transparent,
-            focusedIndicatorColor = GlassTokens.accent,
-            unfocusedIndicatorColor = GlassTokens.glassBorder,
-        ),
-    )
+        colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent, disabledContainerColor = Color.Transparent, focusedIndicatorColor = GlassTokens.accent, unfocusedIndicatorColor = GlassTokens.glassBorder))
 }
