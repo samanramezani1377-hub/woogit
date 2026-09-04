@@ -17,6 +17,7 @@ import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.debug.DebugConfig
 import com.samanramezani1377.woogit.debug.DebugLogStore
 import com.samanramezani1377.woogit.presentation.*
+import com.samanramezani1377.woogit.presentation.ai.AiBackendClient
 import kotlinx.coroutines.launch
 
 @Composable
@@ -24,9 +25,14 @@ fun SettingsScreen(storeName: String, storeId: StoreId, onBack: () -> Unit, onDi
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
+    val aiClient = remember { AiBackendClient(context.applicationContext) }
     val transfer = remember(dependencies) { RobustProductTransferService(dependencies, context.contentResolver) }
     var logs by remember { mutableStateOf(DebugLogStore.read(context)) }
     var showSalesDebug by remember { mutableStateOf(true) }
+    var showAiSettings by remember { mutableStateOf(false) }
+    var aiBackendUrl by remember { mutableStateOf(aiClient.baseUrl) }
+    var aiApiKey by remember { mutableStateOf(aiClient.apiKey) }
+    var aiSaved by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var progress by remember { mutableStateOf(ProductTransferProgress("", 0, 0)) }
     var resultText by remember { mutableStateOf<String?>(null) }
@@ -103,6 +109,29 @@ fun SettingsScreen(storeName: String, storeId: StoreId, onBack: () -> Unit, onDi
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 GlassTopBar("تنظیمات", "مدیریت اتصال و حساب فروشگاه") { TextButton(onClick = onBack) { GlassText("بازگشت") } }
                 GlassCard { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { GlassText("فروشگاه متصل"); GlassText(storeName); GlassPrimaryAction("قطع اتصال", onDisconnect) } }
+                GlassCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
+                            Column(Modifier.weight(1f)) {
+                                GlassText("WooGit AI")
+                                GlassText(if (aiBackendUrl.isBlank()) "اتصال Agent تنظیم نشده" else "Agent آماده اتصال")
+                            }
+                            TextButton(onClick = { showAiSettings = !showAiSettings }) { GlassText(if (showAiSettings) "بستن" else "تنظیمات") }
+                        }
+                        if (showAiSettings) {
+                            GlassText("اتصال به AI Backend")
+                            GlassText("کلید DeepSeek روی Backend نگهداری می‌شود و داخل برنامه ذخیره نمی‌شود.")
+                            GlassTextField(value = aiBackendUrl, onValueChange = { aiBackendUrl = it }, label = "آدرس Backend")
+                            GlassTextField(value = aiApiKey, onValueChange = { aiApiKey = it }, label = "کلید API Backend")
+                            GlassPrimaryAction("ذخیره اتصال AI", onClick = {
+                                aiClient.baseUrl = aiBackendUrl
+                                aiClient.apiKey = aiApiKey
+                                aiSaved = true
+                            })
+                            if (aiSaved) GlassText("تنظیمات AI ذخیره شد.")
+                        }
+                    }
+                }
                 GlassCard {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         GlassText("انتقال محصولات")
