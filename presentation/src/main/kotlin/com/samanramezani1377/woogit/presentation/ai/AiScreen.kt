@@ -31,21 +31,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.presentation.GlassButton
 import com.samanramezani1377.woogit.presentation.GlassCard
 import com.samanramezani1377.woogit.presentation.GlassOutlinedButton
 import com.samanramezani1377.woogit.presentation.GlassScaffold
 import com.samanramezani1377.woogit.presentation.GlassTokens
-import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
 
 @Composable
-internal fun AiScreen(dependencies: V1PresentationDependencies, storeId: StoreId) {
-    val context = androidx.compose.ui.platform.LocalContext.current.applicationContext
-    val vm = viewModel<AiViewModel>(key = "ai-${storeId.value}", factory = AiViewModel.Factory(context, dependencies, storeId))
+internal fun AiScreen() {
+    val context = LocalContext.current.applicationContext
+    val vm = viewModel<AiViewModel>(factory = AiViewModel.Factory(context))
     val state by vm.state.collectAsState()
     var apiKey by remember { mutableStateOf(vm.apiKey) }
     var input by remember { mutableStateOf("") }
@@ -59,11 +58,8 @@ internal fun AiScreen(dependencies: V1PresentationDependencies, storeId: StoreId
                     Text("WooGit AI", fontWeight = FontWeight.Bold)
                     Text("Agent داخلی WooGit · DeepSeek", color = GlassTokens.muted)
                 }
-                Box(Modifier.size(42.dp).clip(CircleShape).background(GlassTokens.accent.copy(alpha = .14f)), contentAlignment = Alignment.Center) {
-                    Text("AI", color = GlassTokens.accent, fontWeight = FontWeight.Bold)
-                }
+                Box(Modifier.size(42.dp).clip(CircleShape).background(GlassTokens.accent.copy(alpha = .14f)), contentAlignment = Alignment.Center) { Text("AI", color = GlassTokens.accent, fontWeight = FontWeight.Bold) }
             }
-
             GlassCard {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
@@ -75,21 +71,18 @@ internal fun AiScreen(dependencies: V1PresentationDependencies, storeId: StoreId
                 if (showSettings) {
                     Spacer(Modifier.height(4.dp))
                     AiField(apiKey, { apiKey = it }, "کلید API دیپ‌سیک", secret = true)
-                    Text("اتصال مستقیم به api.deepseek.com؛ هیچ Backend جداگانه‌ای لازم نیست.", color = GlassTokens.muted)
+                    Text("اتصال مستقیم به api.deepseek.com؛ Backend جداگانه لازم نیست.", color = GlassTokens.muted)
                     GlassButton("ذخیره کلید", { vm.saveApiKey(apiKey); showSettings = false })
                 }
             }
-
             val messages = when (state) {
                 AiUiState.Idle, AiUiState.Sending -> emptyList()
                 is AiUiState.Ready -> state.messages
                 is AiUiState.Error -> state.messages
             }
-            if (messages.isEmpty() && state !is AiUiState.Error) {
-                GlassCard(Modifier.fillMaxWidth()) {
-                    Text("از Agent بخواهید روی فروشگاه کاری انجام دهد", fontWeight = FontWeight.SemiBold)
-                    Text("مثلاً: محصول شماره ۱۲ را پیدا کن، یا محصولات ناموجود را فهرست کن.", color = GlassTokens.muted)
-                }
+            if (messages.isEmpty() && state !is AiUiState.Error) GlassCard(Modifier.fillMaxWidth()) {
+                Text("از Agent بخواهید روی فروشگاه کاری انجام دهد", fontWeight = FontWeight.SemiBold)
+                Text("مثلاً: محصول شماره ۱۲ را پیدا کن، یا محصولات ناموجود را فهرست کن.", color = GlassTokens.muted)
             }
             LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 items(messages) { message ->
@@ -107,7 +100,7 @@ internal fun AiScreen(dependencies: V1PresentationDependencies, storeId: StoreId
                 if (pending != null) item {
                     GlassCard {
                         Text("تأیید عملیات", fontWeight = FontWeight.Bold)
-                        Text("AI درخواست اجرای این تغییر را داده است:", color = GlassTokens.muted)
+                        Text("AI می‌خواهد این تغییر را از طریق WooGit اجرا کند:", color = GlassTokens.muted)
                         Text(pending.toolName.orEmpty(), color = GlassTokens.accent, fontWeight = FontWeight.SemiBold)
                         Text(pending.toolArguments.orEmpty(), color = GlassTokens.muted)
                         GlassButton("تأیید و اجرا", { vm.confirm(pending) })
