@@ -31,6 +31,7 @@ internal fun DashboardScreen(
     onConflictsClick: () -> Unit,
     selectedDestination: DashboardDestination = DashboardDestination.DASHBOARD,
     onDestinationSelected: (DashboardDestination) -> Unit,
+    onAiClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxSize(), verticalArrangement = Arrangement.Bottom) {
@@ -38,6 +39,10 @@ internal fun DashboardScreen(
             DashboardContent(storeName, connected, orders, products, revenue, pending, recentOrderId, recentCustomer, recentTotal, recentStatus, onRecentOrderClick)
             DashboardActions(onOrdersClick, onProductsClick, onSettingsClick, onSyncClick, onConflictsClick, Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
         }
-        DashboardFloatingNavigation(selected = selectedDestination, onDestinationSelected = onDestinationSelected)
+        DashboardFloatingNavigation(
+            selected = selectedDestination,
+            onDestinationSelected = onDestinationSelected,
+            onAiClick = onAiClick,
+        )
     }
 }
