@@ -39,8 +39,7 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
     val apiKey: String get() = currentProvider().apiKey
 
     fun selectProvider(id: String) {
-        if (id !in agents) return
-        if (_providerId.value == id) return
+        if (id !in agents || _providerId.value == id) return
         prefs.edit().putString("provider", id).apply()
         _providerId.value = id
     }
@@ -60,7 +59,7 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
         request(messages, token)
     }
 
-    private fun currentProvider(): AiProviderWithKey = when (_providerId.value) {
+    private fun currentProvider(): AiProvider = when (_providerId.value) {
         "deepseek" -> deepSeek
         else -> openRouter
     }
@@ -76,10 +75,6 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
                 _state.value = AiUiState.Error(messages, error.message ?: "ارتباط با سرویس AI ناموفق بود.")
             }
         }
-    }
-
-    private interface AiProviderWithKey : AiProvider {
-        var apiKey: String
     }
 
     class Factory(private val context: Context) : ViewModelProvider.Factory {
