@@ -16,7 +16,7 @@ internal class AiAgent(
     private val provider: AiProvider,
     private val executor: WooGitToolExecutor,
 ) {
-    private data class PendingAction(val name: String, val arguments: String, val callId: String)
+    private data class PendingAction(val name: String, val arguments: String, val callId: String, val thoughtSignature: String?)
     private val pending = mutableMapOf<String, PendingAction>()
 
     fun cancel(confirmationToken: String): Boolean = pending.remove(confirmationToken) != null
@@ -35,7 +35,7 @@ internal class AiAgent(
             val action = pending.remove(confirmationToken)
                 ?: throw IllegalStateException("عملیات در انتظار تأیید پیدا نشد. دوباره درخواست را ارسال کنید.")
             onEvent(AiStreamEvent.Status("در حال اجرای عملیات تأییدشده..."))
-            working.put(assistantToolCall(action.callId, action.name, action.arguments))
+            working.put(assistantToolCall(action.callId, action.name, action.arguments, action.thoughtSignature))
             val result = executor.execute(action.name, action.arguments)
             working.put(JSONObject().put("role", "tool").put("tool_call_id", action.callId).put("content", result))
             onEvent(AiStreamEvent.ToolResult(action.name, summarize(result)))
@@ -62,12 +62,13 @@ internal class AiAgent(
                 val name = fn.optString("name")
                 val arguments = fn.optString("arguments", "{}")
                 val callId = call.optString("id")
+                val thoughtSignature = fn.optString("thought_signature").takeIf { it.isNotBlank() }
                 if (name.isBlank() || callId.isBlank()) throw IllegalStateException("${provider.id} ابزار نامعتبر ارسال کرد.")
 
                 onEvent(AiStreamEvent.ToolCall(toolLabel(name)))
                 if (isWriteTool(name)) {
                     val token = tokenFor(name, arguments)
-                    pending[token] = PendingAction(name, arguments, callId)
+                    pending[token] = PendingAction(name, arguments, callId, thoughtSignature)
                     onEvent(AiStreamEvent.Status("این عملیات برای اجرا نیاز به تأیید شما دارد."))
                     return AgentReply(confirmationToken = token, toolName = name, toolArguments = arguments)
                 }
@@ -165,13 +166,15 @@ internal class AiAgent(
     private fun tokenFor(name: String, args: String) = sha256("$name:$args").take(32)
     private fun sha256(value: String) = MessageDigest.getInstance("SHA-256").digest(value.toByteArray()).joinToString("") { "%02x".format(it) }
     private fun isWriteTool(name: String) = name.endsWith("_create") || name.endsWith("_update") || name.endsWith("_delete") || name == "orders_update_status"
-    private fun assistantToolCall(id: String, name: String, args: String) = JSONObject()
+    private fun assistantToolCall(id: String, name: String, args: String, thoughtSignature: String?) = JSONObject()
         .put("role", "assistant")
         .put("content", JSONObject.NULL)
         .put("tool_calls", JSONArray().put(JSONObject()
             .put("id", id)
             .put("type", "function")
-            .put("function", JSONObject().put("name", name).put("arguments", args))))
+            .put("function", JSONObject().put("name", name).put("arguments", args).apply {
+                thoughtSignature?.takeIf { it.isNotBlank() }?.let { put("thought_signature", it) }
+            })))
 
     private fun tool(name: String, description: String, schema: JSONObject) = JSONObject()
         .put("type", "function")
