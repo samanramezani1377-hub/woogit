@@ -15,24 +15,20 @@ export class WooGitAgent {
     const approved = new Set(confirmations);
     const toolDefinitions = this.tools.list().map((tool) => ({
       type: "function",
-      function: { name: tool.name, description: tool.description, parameters: { type: "object", additionalProperties: true } },
+      function: { name: tool.name, description: tool.description, parameters: tool.inputSchema },
     }));
 
     for (let step = 1; step <= 8; step++) {
       const result = await this.router.chat({ ...request, messages, stream: false, tools: toolDefinitions });
       if (!result.toolCalls?.length) return { status: "completed", result, steps: step };
-
       messages.push({ role: "assistant", content: result.content || "tool call", tool_calls: result.toolCalls.map((call) => ({ id: call.id, type: "function", function: { name: call.name, arguments: call.arguments } })) });
-
       for (const call of result.toolCalls) {
         const tool = this.tools.get(call.name);
         if (!tool) throw new Error(`Unknown agent tool: ${call.name}`);
         let args: unknown;
         try { args = JSON.parse(call.arguments); } catch { throw new Error(`Invalid arguments for ${call.name}`); }
         const confirmationToken = tokenFor(call.name, args);
-        if (!tool.readOnly && !approved.has(confirmationToken)) {
-          return { status: "confirmation_required", confirmationToken, toolCallId: call.id, toolName: call.name, arguments: args, steps: step };
-        }
+        if (!tool.readOnly && !approved.has(confirmationToken)) return { status: "confirmation_required", confirmationToken, toolCallId: call.id, toolName: call.name, arguments: args, steps: step };
         const output = await tool.execute(args);
         messages.push({ role: "tool", tool_call_id: call.id, content: JSON.stringify(output) });
       }
