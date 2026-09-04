@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.samanramezani1377.woogit.core.domain.entity.StoreId
+import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,22 +21,27 @@ internal sealed interface AiUiState {
     data class Error(val messages: List<AiMessage>, val message: String) : AiUiState
 }
 
-internal class AiViewModel(context: Context) : ViewModel() {
-    private val client = AiBackendClient(context)
+internal class AiViewModel(
+    context: Context,
+    dependencies: V1PresentationDependencies,
+    storeId: StoreId,
+) : ViewModel() {
+    private val client = AiBackendClient(context, dependencies, storeId)
     private val _state = MutableStateFlow<AiUiState>(AiUiState.Idle)
     val state: StateFlow<AiUiState> = _state.asStateFlow()
 
-    fun saveConnection(url: String, key: String) {
-        client.baseUrl = url
+    val apiKey: String
+        get() = client.apiKey
+
+    fun saveApiKey(key: String) {
         client.apiKey = key
     }
 
     fun send(text: String) {
         val value = text.trim()
-        if (value.isBlank() || client.baseUrl.isBlank()) return
+        if (value.isBlank() || client.apiKey.isBlank()) return
         val current = (_state.value as? AiUiState.Ready)?.messages.orEmpty()
-        val messages = current + AiMessage("user", value)
-        request(messages)
+        request(current + AiMessage("user", value))
     }
 
     fun confirm(pending: AgentReply) {
@@ -48,19 +55,24 @@ internal class AiViewModel(context: Context) : ViewModel() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val reply = client.agent(messages.map { it.role to it.content }, confirmationToken)
-                if (reply.confirmationToken != null) {
-                    _state.value = AiUiState.Ready(messages, reply)
+                _state.value = if (reply.confirmationToken != null) {
+                    AiUiState.Ready(messages, reply)
                 } else {
-                    _state.value = AiUiState.Ready(messages + AiMessage("assistant", reply.text), null)
+                    AiUiState.Ready(messages + AiMessage("assistant", reply.text), null)
                 }
             } catch (error: Throwable) {
-                _state.value = AiUiState.Error(messages, error.message ?: "اتصال به سرویس AI ناموفق بود.")
+                _state.value = AiUiState.Error(messages, error.message ?: "ارتباط با DeepSeek ناموفق بود.")
             }
         }
     }
 
-    class Factory(private val context: Context) : ViewModelProvider.Factory {
+    class Factory(
+        private val context: Context,
+        private val dependencies: V1PresentationDependencies,
+        private val storeId: StoreId,
+    ) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T = AiViewModel(context) as T
+        override fun <T : ViewModel> create(modelClass: Class<T>): T =
+            AiViewModel(context, dependencies, storeId) as T
     }
 }
