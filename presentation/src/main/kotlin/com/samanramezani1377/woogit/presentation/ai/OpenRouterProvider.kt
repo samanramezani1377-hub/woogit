@@ -57,6 +57,8 @@ internal class OpenRouterProvider(context: Context) : AiProvider {
         return IllegalStateException(if (message.isNotBlank()) "OpenRouter HTTP $status: $message" else "OpenRouter HTTP $status: ${text.take(400)}")
     }
 
+    private fun JSONObject.nonNullString(key: String): String? = if (!has(key) || isNull(key)) null else optString(key).takeIf { it.isNotBlank() && it != "null" }
+
     private suspend fun readSse(connection: HttpURLConnection, onEvent: suspend (AiStreamEvent) -> Unit): JSONObject {
         val content = StringBuilder()
         val calls = mutableMapOf<Int, JSONObject>()
@@ -68,20 +70,20 @@ internal class OpenRouterProvider(context: Context) : AiProvider {
                 if (raw == "[DONE]") break
                 if (raw.isBlank()) continue
                 val delta = runCatching { JSONObject(raw).optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("delta") }.getOrNull() ?: continue
-                val reasoning = delta.optString("reasoning_content").ifBlank { delta.optString("reasoning") }
-                if (reasoning.isNotEmpty()) onEvent(AiStreamEvent.Thinking(reasoning))
-                val text = delta.optString("content")
-                if (text.isNotEmpty()) { content.append(text); onEvent(AiStreamEvent.TextDelta(text)) }
+                val reasoning = delta.nonNullString("reasoning_content") ?: delta.nonNullString("reasoning")
+                if (!reasoning.isNullOrBlank()) onEvent(AiStreamEvent.Thinking(reasoning))
+                val text = delta.nonNullString("content")
+                if (!text.isNullOrEmpty()) { content.append(text); onEvent(AiStreamEvent.TextDelta(text)) }
                 val streamedCalls = delta.optJSONArray("tool_calls") ?: continue
                 for (i in 0 until streamedCalls.length()) {
                     val part = streamedCalls.optJSONObject(i) ?: continue
                     val index = part.optInt("index", i)
                     val call = calls.getOrPut(index) { JSONObject().put("id", "").put("type", "function").put("function", JSONObject().put("name", "").put("arguments", "")) }
-                    if (part.has("id")) call.put("id", call.optString("id") + part.optString("id"))
+                    part.nonNullString("id")?.let { call.put("id", call.optString("id") + it) }
                     val fn = part.optJSONObject("function") ?: continue
                     val current = call.optJSONObject("function")!!
-                    if (fn.has("name")) current.put("name", current.optString("name") + fn.optString("name"))
-                    if (fn.has("arguments")) current.put("arguments", current.optString("arguments") + fn.optString("arguments"))
+                    fn.nonNullString("name")?.let { current.put("name", current.optString("name") + it) }
+                    fn.nonNullString("arguments")?.let { current.put("arguments", current.optString("arguments") + it) }
                 }
             }
         }
