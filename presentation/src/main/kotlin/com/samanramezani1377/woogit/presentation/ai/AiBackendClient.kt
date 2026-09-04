@@ -94,7 +94,7 @@ internal class AiBackendClient(
             put("type", "object"); put("properties", JSONObject().put("name", JSONObject().put("type", "string")).put("sku", JSONObject().put("type", "string")).put("description", JSONObject().put("type", "string")).put("regularPrice", JSONObject().put("type", "string")))
             put("required", JSONArray().put("name")); put("additionalProperties", false)
         }))
-        put(tool("products_update", "به‌روزرسانی محصول فقط از طریق ProductRepository ووگیت؛ نیازمند تأیید کاربر.", productPatchSchema()))
+        put(tool("products_update", "به‌روزرسانی محصول فقط از مسیر رسمی WooGit؛ نیازمند تأیید کاربر.", productPatchSchema()))
         put(tool("products_delete", "حذف محصول از طریق WooGit؛ نیازمند تأیید کاربر.", idSchema()))
         put(tool("orders_list", "فهرست سفارش‌ها از طریق WooGit.", listSchema()))
         put(tool("orders_get", "دریافت سفارش از طریق WooGit.", idSchema()))
@@ -170,7 +170,7 @@ internal class AiBackendClient(
 
     private fun tokenFor(name: String, args: String) = sha256("$name:$args").take(32)
     private fun sha256(value: String) = MessageDigest.getInstance("SHA-256").digest(value.toByteArray()).joinToString("") { "%02x".format(it) }
-    private fun isWriteTool(name: String) = name.endsWith("_create") || name.endsWith("_update") || name.endsWith("_delete")
+    private fun isWriteTool(name: String) = name.endsWith("_create") || name.endsWith("_update") || name.endsWith("_delete") || name == "orders_update_status"
     private fun assistantToolCall(id: String, name: String, args: String) = JSONObject().put("role", "assistant").put("content", JSONObject.NULL).put("tool_calls", JSONArray().put(JSONObject().put("id", id).put("type", "function").put("function", JSONObject().put("name", name).put("arguments", args))))
     private fun tool(name: String, description: String, schema: JSONObject) = JSONObject().put("type", "function").put("function", JSONObject().put("name", name).put("description", description).put("parameters", schema))
     private fun idSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("id", JSONObject().put("type", "integer").put("minimum", 1))).put("required", JSONArray().put("id")).put("additionalProperties", false)
