@@ -17,11 +17,7 @@ internal data class AiActivity(val text: String, val completed: Boolean = false)
 
 internal sealed interface AiUiState {
     data object Idle : AiUiState
-    data class Working(
-        val messages: List<AiMessage>,
-        val activities: List<AiActivity> = emptyList(),
-        val streamingText: String = "",
-    ) : AiUiState
+    data class Working(val messages: List<AiMessage>, val activities: List<AiActivity> = emptyList(), val streamingText: String = "") : AiUiState
     data class Ready(val messages: List<AiMessage>, val pending: AgentReply? = null) : AiUiState
     data class Error(val messages: List<AiMessage>, val message: String) : AiUiState
 }
@@ -30,32 +26,30 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
     private val appContext = context.applicationContext
     private val prefs = appContext.getSharedPreferences("woogit_ai", Context.MODE_PRIVATE)
     private val activeStoreId = appContext.getSharedPreferences("woogit_session", Context.MODE_PRIVATE)
-        .getString("active_store_id", null)
-        ?: throw IllegalStateException("فروشگاه فعالی برای Agent وجود ندارد.")
+        .getString("active_store_id", null) ?: throw IllegalStateException("فروشگاه فعالی برای Agent وجود ندارد.")
     private val storeId = StoreId(activeStoreId)
     private val historyStore = AiChatHistoryStore(appContext, activeStoreId)
     private val deepSeek = DeepSeekProvider(appContext)
     private val openRouter = OpenRouterProvider(appContext)
+    private val gemini = GeminiProvider(appContext)
     private val agents = mapOf(
         "deepseek" to AiAgent(deepSeek, WooGitToolExecutor(dependencies, storeId)),
         "openrouter" to AiAgent(openRouter, WooGitToolExecutor(dependencies, storeId)),
+        "gemini" to AiAgent(gemini, WooGitToolExecutor(dependencies, storeId)),
     )
     private val _providerId = MutableStateFlow(prefs.getString("provider", "openrouter") ?: "openrouter")
     val providerId: StateFlow<String> = _providerId.asStateFlow()
     private val _history = MutableStateFlow(historyStore.loadSessions())
     val history: StateFlow<List<AiChatSession>> = _history.asStateFlow()
     private val initialSession = historyStore.activeSessionId()?.let { id -> _history.value.firstOrNull { it.id == id } }
-    private val _state = MutableStateFlow<AiUiState>(
-        if (initialSession != null) AiUiState.Ready(initialSession.messages) else AiUiState.Idle,
-    )
+    private val _state = MutableStateFlow<AiUiState>(if (initialSession != null) AiUiState.Ready(initialSession.messages) else AiUiState.Idle)
     val state: StateFlow<AiUiState> = _state.asStateFlow()
     private var currentSessionId: String = initialSession?.id ?: historyStore.newSessionId()
     val apiKey: String get() = currentProvider().apiKey
 
     fun selectProvider(id: String) {
         if (id !in agents || _providerId.value == id) return
-        prefs.edit().putString("provider", id).apply()
-        _providerId.value = id
+        prefs.edit().putString("provider", id).apply(); _providerId.value = id
     }
 
     fun saveApiKey(key: String) { currentProvider().apiKey = key }
@@ -80,18 +74,14 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
 
     fun newChat() {
         if (_state.value is AiUiState.Working) return
-        currentSessionId = historyStore.newSessionId()
-        historyStore.setActiveSession(currentSessionId)
-        _state.value = AiUiState.Idle
-        refreshHistory()
+        currentSessionId = historyStore.newSessionId(); historyStore.setActiveSession(currentSessionId)
+        _state.value = AiUiState.Idle; refreshHistory()
     }
 
     fun openChat(sessionId: String) {
         if (_state.value is AiUiState.Working) return
         val session = _history.value.firstOrNull { it.id == sessionId } ?: return
-        currentSessionId = session.id
-        historyStore.setActiveSession(session.id)
-        _state.value = AiUiState.Ready(session.messages)
+        currentSessionId = session.id; historyStore.setActiveSession(session.id); _state.value = AiUiState.Ready(session.messages)
     }
 
     private fun currentMessages() = when (val value = _state.value) {
@@ -101,17 +91,19 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
         is AiUiState.Error -> value.messages
     }
 
-    private fun currentProvider(): AiProvider = if (_providerId.value == "deepseek") deepSeek else openRouter
+    private fun currentProvider(): AiProvider = when (_providerId.value) {
+        "deepseek" -> deepSeek
+        "gemini" -> gemini
+        else -> openRouter
+    }
 
     private fun request(messages: List<AiMessage>, confirmationToken: String? = null) {
         _state.value = AiUiState.Working(messages)
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                historyStore.saveSession(currentSessionId, messages)
-                refreshHistory()
+                historyStore.saveSession(currentSessionId, messages); refreshHistory()
                 val agent = agents[_providerId.value] ?: throw IllegalStateException("سرویس AI انتخاب‌شده پشتیبانی نمی‌شود.")
-                var activities = emptyList<AiActivity>()
-                var streaming = ""
+                var activities = emptyList<AiActivity>(); var streaming = ""
                 fun publish() { _state.value = AiUiState.Working(messages, activities, streaming) }
                 val reply = agent.run(messages.map { it.role to it.content }, confirmationToken) { event ->
                     when (event) {
@@ -120,21 +112,15 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
                         is AiStreamEvent.TextDelta -> streaming += event.text
                         is AiStreamEvent.ToolCall -> activities = (activities.map { it.copy(completed = true) } + AiActivity(event.name)).takeLast(5)
                         is AiStreamEvent.ToolResult -> activities = (activities.map { it.copy(completed = true) } + AiActivity("${event.name} · انجام شد", true)).takeLast(5)
-                    }
-                    publish()
+                    }; publish()
                 }
                 val baseMessages = messages
-                _state.value = if (reply.confirmationToken != null) {
-                    AiUiState.Ready(baseMessages, reply)
-                } else {
+                _state.value = if (reply.confirmationToken != null) AiUiState.Ready(baseMessages, reply) else {
                     val completedMessages = baseMessages + AiMessage("assistant", reply.text.ifBlank { streaming })
-                    historyStore.saveSession(currentSessionId, completedMessages)
-                    refreshHistory()
-                    AiUiState.Ready(completedMessages, null)
+                    historyStore.saveSession(currentSessionId, completedMessages); refreshHistory(); AiUiState.Ready(completedMessages, null)
                 }
             } catch (error: Throwable) {
-                historyStore.saveSession(currentSessionId, messages)
-                refreshHistory()
+                historyStore.saveSession(currentSessionId, messages); refreshHistory()
                 _state.value = AiUiState.Error(messages, error.message ?: "ارتباط با سرویس AI ناموفق بود.")
             }
         }
