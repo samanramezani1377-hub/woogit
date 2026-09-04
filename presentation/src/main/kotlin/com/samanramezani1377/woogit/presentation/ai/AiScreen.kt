@@ -52,6 +52,7 @@ internal fun AiScreen() {
     var apiKey by remember(providerId) { mutableStateOf(vm.apiKey) }
     var input by remember { mutableStateOf("") }
     var showSettings by remember { mutableStateOf(false) }
+    var hasSentMessage by remember { mutableStateOf(false) }
 
     GlassScaffold { padding ->
         Column(
@@ -78,7 +79,7 @@ internal fun AiScreen() {
                 is AiUiState.Error -> uiState.messages
             }
 
-            if (messages.isEmpty() && uiState !is AiUiState.Error) {
+            if (!hasSentMessage && messages.isEmpty() && uiState !is AiUiState.Error) {
                 GlassCard(Modifier.fillMaxWidth()) {
                     Text("از Agent بخواهید روی فروشگاه کاری انجام دهد", fontWeight = FontWeight.SemiBold)
                     Text("مثلاً: محصول شماره ۱۲ را پیدا کن، یا محصولات ناموجود را فهرست کن.", color = GlassTokens.muted)
@@ -133,7 +134,11 @@ internal fun AiScreen() {
             ) {
                 AiField(input, { input = it }, "دستور به AI", Modifier.weight(1f), singleLine = false)
                 IconButton(
-                    onClick = { vm.send(input); input = "" },
+                    onClick = {
+                        hasSentMessage = true
+                        vm.send(input)
+                        input = ""
+                    },
                     enabled = input.isNotBlank() && uiState !is AiUiState.Sending && apiKey.isNotBlank(),
                 ) {
                     Box(Modifier.size(44.dp).clip(CircleShape).background(GlassTokens.accent), contentAlignment = Alignment.Center) {
