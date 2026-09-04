@@ -3,6 +3,13 @@ import { z } from "zod";
 export const ChatMessageSchema = z.object({
   role: z.enum(["system", "user", "assistant", "tool"]),
   content: z.string().min(1),
+  tool_call_id: z.string().optional(),
+});
+
+export const ToolCallSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  arguments: z.string(),
 });
 
 export const ChatRequestSchema = z.object({
@@ -13,9 +20,11 @@ export const ChatRequestSchema = z.object({
   thinking: z.enum(["enabled", "disabled"]).optional(),
   reasoningEffort: z.enum(["low", "high", "max"]).optional(),
   maxTokens: z.number().int().positive().max(384000).optional(),
+  tools: z.array(z.unknown()).optional(),
 });
 
 export type ChatRequest = z.infer<typeof ChatRequestSchema>;
+export type ToolCall = z.infer<typeof ToolCallSchema>;
 
 export type ProviderInfo = {
   id: string;
@@ -28,6 +37,7 @@ export type ChatResult = {
   model: string;
   content: string;
   reasoningContent?: string;
+  toolCalls?: ToolCall[];
   usage?: {
     promptTokens: number;
     completionTokens: number;
