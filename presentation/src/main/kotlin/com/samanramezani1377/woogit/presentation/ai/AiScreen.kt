@@ -46,6 +46,7 @@ internal fun AiScreen() {
     val context = LocalContext.current.applicationContext
     val vm = viewModel<AiViewModel>(factory = AiViewModel.Factory(context))
     val state by vm.state.collectAsState()
+    val uiState = state
     var apiKey by remember { mutableStateOf(vm.apiKey) }
     var input by remember { mutableStateOf("") }
     var showSettings by remember { mutableStateOf(vm.apiKey.isBlank()) }
@@ -75,12 +76,12 @@ internal fun AiScreen() {
                     GlassButton("ذخیره کلید", { vm.saveApiKey(apiKey); showSettings = false })
                 }
             }
-            val messages = when (state) {
+            val messages = when (uiState) {
                 AiUiState.Idle, AiUiState.Sending -> emptyList()
-                is AiUiState.Ready -> state.messages
-                is AiUiState.Error -> state.messages
+                is AiUiState.Ready -> uiState.messages
+                is AiUiState.Error -> uiState.messages
             }
-            if (messages.isEmpty() && state !is AiUiState.Error) GlassCard(Modifier.fillMaxWidth()) {
+            if (messages.isEmpty() && uiState !is AiUiState.Error) GlassCard(Modifier.fillMaxWidth()) {
                 Text("از Agent بخواهید روی فروشگاه کاری انجام دهد", fontWeight = FontWeight.SemiBold)
                 Text("مثلاً: محصول شماره ۱۲ را پیدا کن، یا محصولات ناموجود را فهرست کن.", color = GlassTokens.muted)
             }
@@ -96,7 +97,7 @@ internal fun AiScreen() {
                         }
                     }
                 }
-                val pending = (state as? AiUiState.Ready)?.pending
+                val pending = (uiState as? AiUiState.Ready)?.pending
                 if (pending != null) item {
                     GlassCard {
                         Text("تأیید عملیات", fontWeight = FontWeight.Bold)
@@ -106,12 +107,12 @@ internal fun AiScreen() {
                         GlassButton("تأیید و اجرا", { vm.confirm(pending) })
                     }
                 }
-                if (state is AiUiState.Error) item { GlassCard { Text("خطا: ${(state as AiUiState.Error).message}", color = GlassTokens.urgent) } }
+                if (uiState is AiUiState.Error) item { GlassCard { Text("خطا: ${uiState.message}", color = GlassTokens.urgent) } }
             }
-            if (state is AiUiState.Sending) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) { CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp, color = GlassTokens.accent) }
+            if (uiState is AiUiState.Sending) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) { CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp, color = GlassTokens.accent) }
             Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Color.White.copy(alpha = .60f)).padding(5.dp), verticalAlignment = Alignment.CenterVertically) {
                 AiField(input, { input = it }, "دستور به AI", Modifier.weight(1f), singleLine = false)
-                IconButton(onClick = { vm.send(input); input = "" }, enabled = input.isNotBlank() && state !is AiUiState.Sending && apiKey.isNotBlank()) {
+                IconButton(onClick = { vm.send(input); input = "" }, enabled = input.isNotBlank() && uiState !is AiUiState.Sending && apiKey.isNotBlank()) {
                     Box(Modifier.size(44.dp).clip(CircleShape).background(GlassTokens.accent), contentAlignment = Alignment.Center) { Text("↑", color = Color.White, fontWeight = FontWeight.Bold) }
                 }
             }
