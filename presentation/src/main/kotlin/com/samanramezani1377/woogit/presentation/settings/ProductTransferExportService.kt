@@ -4,6 +4,8 @@ import android.content.ContentResolver
 import android.net.Uri
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.core.domain.error.CoreResult
+import com.samanramezani1377.woogit.core.domain.model.IdName
+import com.samanramezani1377.woogit.core.domain.model.ProductType
 import com.samanramezani1377.woogit.debug.TechnicalErrorReporter
 import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
 import kotlinx.coroutines.Dispatchers
