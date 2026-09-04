@@ -14,6 +14,13 @@ internal class GeminiProvider(context: Context) : AiProvider {
         get() = prefs.getString("gemini_api_key", "") ?: ""
         set(value) { prefs.edit().putString("gemini_api_key", value.trim()).apply() }
 
+    var modelId: String
+        get() = prefs.getString("gemini_model", DEFAULT_MODEL) ?: DEFAULT_MODEL
+        set(value) {
+            val normalized = value.trim()
+            if (normalized.isNotBlank()) prefs.edit().putString("gemini_model", normalized).apply()
+        }
+
     override suspend fun complete(messages: JSONArray, tools: JSONArray): JSONObject = request(messages, tools, false)
 
     override suspend fun stream(messages: JSONArray, tools: JSONArray, onEvent: suspend (AiStreamEvent) -> Unit): JSONObject {
@@ -42,7 +49,7 @@ internal class GeminiProvider(context: Context) : AiProvider {
     }
 
     private fun connection(key: String, stream: Boolean) =
-        (URL("https://generativelanguage.googleapis.com/v1beta/models/$MODEL:${if (stream) "streamGenerateContent?alt=sse" else "generateContent"}").openConnection() as HttpURLConnection).apply {
+        (URL("https://generativelanguage.googleapis.com/v1beta/models/$modelId:${if (stream) "streamGenerateContent?alt=sse" else "generateContent"}").openConnection() as HttpURLConnection).apply {
             requestMethod = "POST"
             connectTimeout = 10_000
             readTimeout = 120_000
@@ -222,5 +229,5 @@ internal class GeminiProvider(context: Context) : AiProvider {
         return if (message.isNotBlank()) "Gemini HTTP $status: $message" else "Gemini HTTP $status: ${text.take(400)}"
     }
 
-    private companion object { const val MODEL = "gemini-3.7-flash" }
+    private companion object { const val DEFAULT_MODEL = "gemini-3.8-flash" }
 }
