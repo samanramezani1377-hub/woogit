@@ -22,17 +22,19 @@ internal sealed interface AiUiState {
 }
 
 internal class AiViewModel(context: Context, dependencies: V1PresentationDependencies) : ViewModel() {
-    private val storeId = StoreId(context.getSharedPreferences("woogit_session", Context.MODE_PRIVATE).getString("active_store_id", null) ?: throw IllegalStateException("فروشگاه فعالی برای Agent وجود ندارد."))
-    private val client = AiBackendClient(context, dependencies, storeId)
+    private val appContext = context.applicationContext
+    private val storeId = StoreId(appContext.getSharedPreferences("woogit_session", Context.MODE_PRIVATE).getString("active_store_id", null) ?: throw IllegalStateException("فروشگاه فعالی برای Agent وجود ندارد."))
+    private val provider = DeepSeekProvider(appContext)
+    private val agent = AiAgent(provider, WooGitToolExecutor(dependencies, storeId))
     private val _state = MutableStateFlow<AiUiState>(AiUiState.Idle)
     val state: StateFlow<AiUiState> = _state.asStateFlow()
-    val apiKey: String get() = client.apiKey
+    val apiKey: String get() = provider.apiKey
 
-    fun saveApiKey(key: String) { client.apiKey = key }
+    fun saveApiKey(key: String) { provider.apiKey = key }
 
     fun send(text: String) {
         val value = text.trim()
-        if (value.isBlank() || client.apiKey.isBlank()) return
+        if (value.isBlank() || provider.apiKey.isBlank()) return
         val current = (_state.value as? AiUiState.Ready)?.messages.orEmpty()
         request(current + AiMessage("user", value))
     }
@@ -47,10 +49,10 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
         _state.value = AiUiState.Sending
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val reply = client.agent(messages.map { it.role to it.content }, confirmationToken)
+                val reply = agent.run(messages.map { it.role to it.content }, confirmationToken)
                 _state.value = if (reply.confirmationToken != null) AiUiState.Ready(messages, reply) else AiUiState.Ready(messages + AiMessage("assistant", reply.text), null)
             } catch (error: Throwable) {
-                _state.value = AiUiState.Error(messages, error.message ?: "ارتباط با DeepSeek ناموفق بود.")
+                _state.value = AiUiState.Error(messages, error.message ?: "ارتباط با سرویس AI ناموفق بود.")
             }
         }
     }
