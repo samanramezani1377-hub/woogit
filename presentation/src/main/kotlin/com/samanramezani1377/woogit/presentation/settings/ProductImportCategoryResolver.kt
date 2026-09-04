@@ -3,6 +3,7 @@ package com.samanramezani1377.woogit.presentation.settings
 import com.samanramezani1377.woogit.core.domain.entity.EntityId
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.core.domain.error.CoreResult
+import com.samanramezani1377.woogit.core.domain.model.IdName
 import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
 
 internal class ProductImportCategoryResolver(
