@@ -90,7 +90,7 @@ internal class AiAgent(
         put(tool("products_list", "فهرست محصولات موجود در WooGit.", listSchema()))
         put(tool("products_get", "دریافت یک محصول از WooGit.", idSchema()))
         put(tool("products_create", "ایجاد محصول؛ نیازمند تأیید کاربر.", productCreateSchema()))
-        put(tool("products_update", "به‌روزرسانی محصول؛ نیازمند تأیید کاربر. برای تغییر موجودی، stockQuantity و در صورت نیاز stockStatus را صریح ارسال کن.", productPatchSchema()))
+        put(tool("products_update", "به‌روزرسانی محصول؛ نیازمند تأیید کاربر. برای انتشار محصول status=publish را ارسال کن. برای تغییر موجودی، stockQuantity و در صورت نیاز stockStatus را صریح ارسال کن.", productPatchSchema()))
         put(tool("products_delete", "حذف محصول؛ نیازمند تأیید کاربر.", idSchema()))
         put(tool("orders_list", "فهرست سفارش‌ها از طریق WooGit.", listSchema()))
         put(tool("orders_get", "دریافت سفارش از طریق WooGit.", idSchema()))
@@ -111,6 +111,7 @@ internal class AiAgent(
             .put("sku", JSONObject().put("type", "string"))
             .put("description", JSONObject().put("type", "string"))
             .put("regularPrice", JSONObject().put("type", "string"))
+            .put("status", productStatusSchema())
             .put("stockQuantity", JSONObject().put("type", "number").put("description", "موجودی عددی؛ با ارسال آن مدیریت موجودی فعال می‌شود."))
             .put("stockStatus", stockStatusSchema())
             .put("manageStock", JSONObject().put("type", "boolean")))
@@ -131,6 +132,7 @@ internal class AiAgent(
                     .put("shortDescription", JSONObject().put("type", "string"))
                     .put("regularPrice", JSONObject().put("type", "string"))
                     .put("salePrice", JSONObject().put("type", "string"))
+                    .put("status", productStatusSchema())
                     .put("stockQuantity", JSONObject().put("type", "number").put("description", "موجودی دقیق محصول"))
                     .put("stockStatus", stockStatusSchema())
                     .put("manageStock", JSONObject().put("type", "boolean")))
@@ -139,6 +141,11 @@ internal class AiAgent(
         put("required", JSONArray().put("id").put("patch"))
         put("additionalProperties", false)
     }
+
+    private fun productStatusSchema() = JSONObject()
+        .put("type", "string")
+        .put("enum", JSONArray().put("publish").put("draft").put("pending").put("private"))
+        .put("description", "وضعیت محصول. برای منتشر کردن محصول از publish استفاده کن.")
 
     private fun stockStatusSchema() = JSONObject()
         .put("type", "string")
@@ -176,6 +183,6 @@ internal class AiAgent(
 
     companion object {
         private const val MAX_STEPS = 6
-        private const val SYSTEM_PROMPT = "تو Agent داخلی WooGit هستی. تمام اطلاعات و تغییرات فروشگاه باید فقط از ابزارهای WooGit استفاده کنند. هرگز API ووکامرس را مستقیم صدا نزن. برای تغییر موجودی محصول، مقدار stockQuantity را دقیقاً همان عدد درخواستی قرار بده؛ اگر stockQuantity ارسال شد manageStock را true کن مگر کاربر صریحاً خلاف آن را خواسته باشد. اگر موجودی صفر یا کمتر شد stockStatus را outofstock و اگر بیشتر از صفر شد instock قرار بده، مگر کاربر وضعیت دیگری خواسته باشد. عملیات تغییردهنده فقط پس از تأیید صریح کاربر اجرا می‌شوند. پاسخ نهایی کوتاه، دقیق و فارسی باشد."
+        private const val SYSTEM_PROMPT = "تو Agent داخلی WooGit هستی. تمام اطلاعات و تغییرات فروشگاه باید فقط از ابزارهای WooGit استفاده کنند. هرگز API ووکامرس را مستقیم صدا نزن. برای تغییر وضعیت محصول، از products_update با patch.status استفاده کن؛ برای منتشر کردن محصول مقدار status را دقیقاً publish قرار بده. برای تغییر موجودی محصول، مقدار stockQuantity را دقیقاً همان عدد درخواستی قرار بده؛ اگر stockQuantity ارسال شد manageStock را true کن مگر کاربر صریحاً خلاف آن را خواسته باشد. اگر موجودی صفر یا کمتر شد stockStatus را outofstock و اگر بیشتر از صفر شد instock قرار بده، مگر کاربر وضعیت دیگری خواسته باشد. عملیات تغییردهنده فقط پس از تأیید صریح کاربر اجرا می‌شوند. پاسخ نهایی کوتاه، دقیق و فارسی باشد."
     }
 }
