@@ -17,7 +17,7 @@ internal class WooGitToolExecutor(
         val result: CoreResult<*> = when (name) {
             "products_list" -> dependencies.getProducts(storeId, a.optInt("page", 1), a.optInt("perPage", 20), a.optString("search").takeIf { it.isNotBlank() })
             "products_get" -> dependencies.getProduct(storeId, EntityId(a.getLong("id").toString()))
-            "products_create" -> dependencies.createProduct(storeId, Product(EntityId("new"), a.getString("name"), a.optString("sku").takeIf { it.isNotBlank() }, a.optString("description").takeIf { it.isNotBlank() }, null, ProductStatus.DRAFT, ProductType.SIMPLE, Pricing(a.optString("regularPrice").takeIf { it.isNotBlank() }, null, false), null, emptyList(), emptyList(), emptyList(), null))
+            "products_create" -> dependencies.createProduct(storeId, Product(EntityId("new"), a.getString("name"), a.optString("sku").takeIf { it.isNotBlank() }, a.optString("description").takeIf { it.isNotBlank() }, null, ProductStatus.DRAFT, ProductType.SIMPLE, Pricing(a.optString("regularPrice").takeIf { it.isNotBlank() }, null, false), stockFromPatch(a, null), emptyList(), emptyList(), emptyList(), null))
             "products_update" -> updateProduct(a)
             "products_delete" -> dependencies.deleteProduct(storeId, EntityId(a.getLong("id").toString()))
             "orders_list" -> dependencies.getOrders(storeId, a.optInt("page", 1), a.optInt("perPage", 20), a.optString("search").takeIf { it.isNotBlank() }, a.optString("status").takeIf { it.isNotBlank() })
@@ -47,10 +47,34 @@ internal class WooGitToolExecutor(
                         sale = if (patch.has("salePrice")) patch.getString("salePrice") else p.pricing.sale,
                         onSale = if (patch.has("salePrice")) patch.getString("salePrice").isNotBlank() else p.pricing.onSale,
                     ),
+                    stock = stockFromPatch(patch, p.stock),
                 ))
             }
             is CoreResult.Failure -> current
         }
+    }
+
+    private fun stockFromPatch(patch: JSONObject, current: Stock?): Stock? {
+        val hasQuantity = patch.has("stockQuantity") && !patch.isNull("stockQuantity")
+        val hasStatus = patch.has("stockStatus") && !patch.isNull("stockStatus")
+        val hasManage = patch.has("manageStock") && !patch.isNull("manageStock")
+        if (!hasQuantity && !hasStatus && !hasManage) return current
+
+        val quantity = if (hasQuantity) patch.optDouble("stockQuantity", Double.NaN).takeUnless { it.isNaN() } else current?.quantity
+        val status = if (hasStatus) {
+            when (patch.optString("stockStatus").trim().lowercase()) {
+                "outofstock", "out_of_stock" -> StockStatus.OUT_OF_STOCK
+                "onbackorder", "on_backorder" -> StockStatus.ON_BACKORDER
+                "instock", "in_stock" -> StockStatus.IN_STOCK
+                else -> throw IllegalArgumentException("stockStatus باید یکی از instock، outofstock یا onbackorder باشد.")
+            }
+        } else if (hasQuantity) {
+            if ((quantity ?: 0.0) <= 0.0) StockStatus.OUT_OF_STOCK else StockStatus.IN_STOCK
+        } else {
+            current?.status ?: StockStatus.IN_STOCK
+        }
+        val manageStock = if (hasManage) patch.optBoolean("manageStock") else if (hasQuantity) true else current?.manageStock ?: true
+        return Stock(quantity, status, manageStock)
     }
 
     private suspend fun updateOrderStatus(a: JSONObject): CoreResult<*> {
@@ -74,5 +98,6 @@ internal class WooGitToolExecutor(
         put("status", p.status.name); put("type", p.type.name)
         put("regularPrice", p.pricing.regular ?: JSONObject.NULL); put("salePrice", p.pricing.sale ?: JSONObject.NULL)
         put("stockQuantity", p.stock?.quantity ?: JSONObject.NULL); put("stockStatus", p.stock?.status?.name ?: JSONObject.NULL)
+        put("manageStock", p.stock?.manageStock ?: JSONObject.NULL)
     }
 }
