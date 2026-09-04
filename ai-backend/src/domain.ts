@@ -1,15 +1,13 @@
 import { z } from "zod";
 
+export const ToolCallSchema = z.object({ id: z.string(), name: z.string(), arguments: z.string() });
+export type ToolCall = z.infer<typeof ToolCallSchema>;
+
 export const ChatMessageSchema = z.object({
   role: z.enum(["system", "user", "assistant", "tool"]),
   content: z.string().min(1),
   tool_call_id: z.string().optional(),
-});
-
-export const ToolCallSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  arguments: z.string(),
+  tool_calls: z.array(z.unknown()).optional(),
 });
 
 export const ChatRequestSchema = z.object({
@@ -24,13 +22,9 @@ export const ChatRequestSchema = z.object({
 });
 
 export type ChatRequest = z.infer<typeof ChatRequestSchema>;
-export type ToolCall = z.infer<typeof ToolCallSchema>;
+export type ChatMessage = z.infer<typeof ChatMessageSchema>;
 
-export type ProviderInfo = {
-  id: string;
-  models: string[];
-};
-
+export type ProviderInfo = { id: string; models: string[] };
 export type ChatResult = {
   id: string;
   provider: string;
@@ -38,11 +32,7 @@ export type ChatResult = {
   content: string;
   reasoningContent?: string;
   toolCalls?: ToolCall[];
-  usage?: {
-    promptTokens: number;
-    completionTokens: number;
-    totalTokens: number;
-  };
+  usage?: { promptTokens: number; completionTokens: number; totalTokens: number };
 };
 
 export interface AiProvider {
