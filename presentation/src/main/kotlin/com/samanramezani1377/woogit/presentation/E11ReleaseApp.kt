@@ -1,6 +1,7 @@
 package com.samanramezani1377.woogit.presentation
 
 import androidx.compose.runtime.Composable
+import com.samanramezani1377.woogit.presentation.ai.AiRuntime
 
 /**
  * E11 composition entry point.
@@ -14,6 +15,7 @@ fun E11ReleaseApp(
     dependencies: V1PresentationDependencies,
     initialOrderId: String? = null,
 ) {
+    AiRuntime.dependencies = dependencies
     E11AppNavigation(
         dependencies = dependencies,
         initialOrderId = initialOrderId,
