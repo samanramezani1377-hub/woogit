@@ -99,13 +99,10 @@ internal fun AiScreen() {
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         items(visibleHistory, key = { it.id }) { session ->
-                            HistoryItem(
-                                session = session,
-                                onClick = {
-                                    vm.openChat(session.id)
-                                    scope.launch { drawerState.close() }
-                                },
-                            )
+                            HistoryItem(session = session, onClick = {
+                                vm.openChat(session.id)
+                                scope.launch { drawerState.close() }
+                            })
                         }
                     }
 
@@ -136,18 +133,14 @@ internal fun AiScreen() {
                     IconButton(
                         onClick = { apiKey = vm.apiKey; showSettings = true },
                         modifier = Modifier.size(44.dp).clip(CircleShape).background(GlassTokens.accent.copy(alpha = .14f)),
-                    ) {
-                        Text("⚙", color = GlassTokens.accent, fontWeight = FontWeight.Bold)
-                    }
+                    ) { Text("⚙", color = GlassTokens.accent, fontWeight = FontWeight.Bold) }
                 }
 
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
                     IconButton(
                         onClick = { scope.launch { drawerState.open() } },
                         modifier = Modifier.size(46.dp).clip(CircleShape).background(GlassTokens.accent.copy(alpha = .12f)),
-                    ) {
-                        Text("☰", color = GlassTokens.accent, fontWeight = FontWeight.Bold)
-                    }
+                    ) { Text("☰", color = GlassTokens.accent, fontWeight = FontWeight.Bold) }
                 }
 
                 if (messages.isEmpty() && state !is AiUiState.Error) {
@@ -192,7 +185,10 @@ internal fun AiScreen() {
                             Text("AI می‌خواهد این تغییر را از طریق WooGit اجرا کند:", color = GlassTokens.muted)
                             Text(pending.toolName.orEmpty(), color = GlassTokens.accent, fontWeight = FontWeight.SemiBold)
                             Text(pending.toolArguments.orEmpty(), color = GlassTokens.muted)
-                            GlassButton("تأیید و اجرا", { vm.confirm(pending) })
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                GlassButton("تأیید و اجرا", { vm.confirm(pending) }, Modifier.weight(1f))
+                                GlassOutlinedButton("رد کردن", { vm.reject(pending) }, Modifier.weight(1f))
+                            }
                         }
                     }
                     if (state is AiUiState.Error) item { GlassCard { Text("خطا: ${(state as AiUiState.Error).message}", color = GlassTokens.urgent) } }
@@ -236,11 +232,7 @@ internal fun AiScreen() {
 
 @Composable
 private fun HistoryItem(session: AiChatSession, onClick: () -> Unit) {
-    GlassOutlinedButton(
-        session.title,
-        onClick,
-        Modifier.fillMaxWidth(),
-    )
+    GlassOutlinedButton(session.title, onClick, Modifier.fillMaxWidth())
 }
 
 @Composable
