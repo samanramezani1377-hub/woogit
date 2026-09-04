@@ -19,6 +19,8 @@ internal class AiAgent(
     private data class PendingAction(val name: String, val arguments: String, val callId: String)
     private val pending = mutableMapOf<String, PendingAction>()
 
+    fun cancel(confirmationToken: String): Boolean = pending.remove(confirmationToken) != null
+
     suspend fun run(
         messages: List<Pair<String, String>>,
         confirmationToken: String? = null,
