@@ -4,12 +4,8 @@ const BASE_URL = "https://api.deepseek.com";
 
 export class DeepSeekProvider implements AiProvider {
   readonly id = "deepseek";
-  private readonly apiKey: string;
 
-  constructor(apiKey = process.env.DEEPSEEK_API_KEY ?? "") {
-    if (!apiKey) throw new Error("DEEPSEEK_API_KEY is not configured");
-    this.apiKey = apiKey;
-  }
+  constructor(private readonly configuredApiKey?: string) {}
 
   async models(): Promise<ProviderInfo> {
     return {
@@ -66,6 +62,9 @@ export class DeepSeekProvider implements AiProvider {
   }
 
   private async request(request: ChatRequest, streaming: boolean): Promise<Response> {
+    const apiKey = this.configuredApiKey ?? process.env.DEEPSEEK_API_KEY;
+    if (!apiKey) throw new Error("DEEPSEEK_API_KEY is not configured");
+
     const body: Record<string, unknown> = {
       model: request.model,
       messages: request.messages,
@@ -79,7 +78,7 @@ export class DeepSeekProvider implements AiProvider {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${this.apiKey}`,
+        Authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify(body),
     });
