@@ -21,14 +21,12 @@ internal class AiAgent(
     suspend fun run(messages: List<Pair<String, String>>, confirmationToken: String? = null): AgentReply {
         val working = JSONArray().put(JSONObject().put("role", "system").put("content", SYSTEM_PROMPT))
         messages.forEach { (role, content) -> working.put(JSONObject().put("role", role).put("content", content)) }
-
         if (confirmationToken != null) {
             val action = pending.remove(confirmationToken)
                 ?: throw IllegalStateException("عملیات در انتظار تأیید پیدا نشد. دوباره درخواست را ارسال کنید.")
             working.put(assistantToolCall(action.callId, action.name, action.arguments))
             working.put(JSONObject().put("role", "tool").put("tool_call_id", action.callId).put("content", executor.execute(action.name, action.arguments)))
         }
-
         repeat(MAX_STEPS) {
             val response = provider.complete(working, toolDefinitions())
             val message = response.optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("message")
@@ -58,11 +56,7 @@ internal class AiAgent(
         put(tool("products_list", "فهرست محصولات موجود در WooGit.", listSchema()))
         put(tool("products_get", "دریافت یک محصول از WooGit.", idSchema()))
         put(tool("products_create", "ایجاد محصول؛ نیازمند تأیید کاربر.", JSONObject().apply {
-            put("type", "object"); put("properties", JSONObject()
-                .put("name", JSONObject().put("type", "string"))
-                .put("sku", JSONObject().put("type", "string"))
-                .put("description", JSONObject().put("type", "string"))
-                .put("regularPrice", JSONObject().put("type", "string")))
+            put("type", "object"); put("properties", JSONObject().put("name", JSONObject().put("type", "string")).put("sku", JSONObject().put("type", "string")).put("description", JSONObject().put("type", "string")).put("regularPrice", JSONObject().put("type", "string")))
             put("required", JSONArray().put("name")); put("additionalProperties", false)
         }))
         put(tool("products_update", "به‌روزرسانی محصول؛ نیازمند تأیید کاربر.", productPatchSchema()))
@@ -70,9 +64,7 @@ internal class AiAgent(
         put(tool("orders_list", "فهرست سفارش‌ها از طریق WooGit.", listSchema()))
         put(tool("orders_get", "دریافت سفارش از طریق WooGit.", idSchema()))
         put(tool("orders_update_status", "تغییر وضعیت سفارش؛ نیازمند تأیید کاربر.", JSONObject().apply {
-            put("type", "object"); put("properties", JSONObject()
-                .put("id", JSONObject().put("type", "integer").put("minimum", 1))
-                .put("status", JSONObject().put("type", "string").put("enum", JSONArray().apply { OrderStatus.values().forEach { put(it.name) } })))
+            put("type", "object"); put("properties", JSONObject().put("id", JSONObject().put("type", "integer").put("minimum", 1)).put("status", JSONObject().put("type", "string").put("enum", JSONArray().apply { OrderStatus.values().forEach { put(it.name) } })))
             put("required", JSONArray().put("id").put("status")); put("additionalProperties", false)
         }))
     }
@@ -83,9 +75,8 @@ internal class AiAgent(
     private fun assistantToolCall(id: String, name: String, args: String) = JSONObject().put("role", "assistant").put("content", JSONObject.NULL).put("tool_calls", JSONArray().put(JSONObject().put("id", id).put("type", "function").put("function", JSONObject().put("name", name).put("arguments", args))))
     private fun tool(name: String, description: String, schema: JSONObject) = JSONObject().put("type", "function").put("function", JSONObject().put("name", name).put("description", description).put("parameters", schema))
     private fun idSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("id", JSONObject().put("type", "integer").put("minimum", 1))).put("required", JSONArray().put("id")).put("additionalProperties", false)
-    private fun listSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("page", JSONObject().put("type", "integer").put("minimum", 1)).put("perPage", JSONObject().put("type", "integer").put("minimum", 1).put("maximum", 100)).put("search", JSONObject().put("type", "string")).put("status", JSONObject().put("type", "string")).put("additionalProperties", false)
+    private fun listSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("page", JSONObject().put("type", "integer").put("minimum", 1)).put("perPage", JSONObject().put("type", "integer").put("minimum", 1).put("maximum", 100)).put("search", JSONObject().put("type", "string")).put("status", JSONObject().put("type", "string"))).put("additionalProperties", false)
     private fun productPatchSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("id", JSONObject().put("type", "integer").put("minimum", 1)).put("patch", JSONObject().put("type", "object").put("properties", JSONObject().put("name", JSONObject().put("type", "string")).put("sku", JSONObject().put("type", "string")).put("description", JSONObject().put("type", "string")).put("shortDescription", JSONObject().put("type", "string")).put("regularPrice", JSONObject().put("type", "string")).put("salePrice", JSONObject().put("type", "string")).put("stockQuantity", JSONObject().put("type", "number")).put("stockStatus", JSONObject().put("type", "string")).put("additionalProperties", false))).put("required", JSONArray().put("id").put("patch")).put("additionalProperties", false)
-
     private data class PendingAction(val name: String, val arguments: String, val callId: String)
 
     companion object {
