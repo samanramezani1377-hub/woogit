@@ -178,7 +178,7 @@ class WooCommerceOperationExecutor(
     private suspend fun enforceProductStatus(baseUrl: String, api: TypedWooCommerceApi, remote: WooProductTypedDto, requestedStatus: String): WooProductTypedDto {
         val requested = requestedStatus.trim().lowercase()
         if (requested.isBlank() || remote.status.trim().equals(requested, true)) return remote
-        val corrected = api.updateProductFields(baseUrl, remote.id, kotlinx.serialization.json.buildJsonObject { put("status", requested) }).getOrThrow()
+        val corrected = api.updateProductFields(baseUrl, remote.id, kotlinx.serialization.json.buildJsonObject { put("status", JsonPrimitive(requested)) }).getOrThrow()
         val verified = api.product(baseUrl, remote.id).getOrThrow()
         if (!verified.status.trim().equals(requested, true)) throw IllegalStateException("WooCommerce did not apply requested product status: $requested")
         return corrected
