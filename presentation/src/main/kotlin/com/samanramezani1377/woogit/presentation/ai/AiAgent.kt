@@ -37,6 +37,12 @@ internal class AiAgent(
             val result = executor.execute(action.name, action.arguments)
             working.put(JSONObject().put("role", "tool").put("tool_call_id", action.callId).put("content", result))
             onEvent(AiStreamEvent.ToolResult(action.name, summarize(result)))
+            if (isWriteTool(action.name)) {
+                val resultJson = JSONObject(result)
+                if (!resultJson.optBoolean("ok", false) || !resultJson.optBoolean("verified", false)) {
+                    return AgentReply(text = writeFailureMessage(resultJson))
+                }
+            }
         }
 
         repeat(MAX_STEPS) { step ->
@@ -71,6 +77,9 @@ internal class AiAgent(
         }
         throw IllegalStateException("Agent به حداکثر مراحل مجاز رسید.")
     }
+
+    private fun writeFailureMessage(result: JSONObject): String =
+        result.optString("error").ifBlank { "عملیات تغییر انجام نشد یا وضعیت نهایی آن قابل تأیید نیست." }
 
     private fun summarize(result: String): String = result.replace("\n", " ").trim().let { if (it.length > 140) it.take(137) + "..." else it }
 
@@ -183,6 +192,6 @@ internal class AiAgent(
 
     companion object {
         private const val MAX_STEPS = 6
-        private const val SYSTEM_PROMPT = "تو Agent داخلی WooGit هستی. تمام اطلاعات و تغییرات فروشگاه باید فقط از ابزارهای WooGit استفاده کنند. هرگز API ووکامرس را مستقیم صدا نزن. برای تغییر وضعیت محصول، از products_update با patch.status استفاده کن؛ برای منتشر کردن محصول مقدار status را دقیقاً publish قرار بده. برای تغییر موجودی محصول، مقدار stockQuantity را دقیقاً همان عدد درخواستی قرار بده؛ اگر stockQuantity ارسال شد manageStock را true کن مگر کاربر صریحاً خلاف آن را خواسته باشد. اگر موجودی صفر یا کمتر شد stockStatus را outofstock و اگر بیشتر از صفر شد instock قرار بده، مگر کاربر وضعیت دیگری خواسته باشد. عملیات تغییردهنده فقط پس از تأیید صریح کاربر اجرا می‌شوند. پاسخ نهایی کوتاه، دقیق و فارسی باشد."
+        private const val SYSTEM_PROMPT = "تو Agent داخلی WooGit هستی. تمام اطلاعات و تغییرات فروشگاه باید فقط از ابزارهای WooGit استفاده کنند. هرگز API ووکامرس را مستقیم صدا نزن. نتیجه واقعی ابزار منبع حقیقت است؛ هرگز بر اساس حدس یا متن خودت ادعا نکن که تغییری انجام شده است. برای تغییر وضعیت محصول، از products_update با patch.status استفاده کن؛ برای منتشر کردن محصول مقدار status را دقیقاً publish قرار بده. برای تغییر موجودی محصول، مقدار stockQuantity را دقیقاً همان عدد درخواستی قرار بده؛ اگر stockQuantity ارسال شد manageStock را true کن مگر کاربر صریحاً خلاف آن را خواسته باشد. اگر موجودی صفر یا کمتر شد stockStatus را outofstock و اگر بیشتر از صفر شد instock قرار بده، مگر کاربر وضعیت دیگری خواسته باشد. عملیات تغییردهنده فقط پس از تأیید صریح کاربر اجرا می‌شوند. پاسخ نهایی کوتاه، دقیق و فارسی باشد. اگر ابزار تغییر ok=false یا verified=false برگرداند، هرگز نگو انجام شد و دقیقاً خطا یا عدم تأیید را گزارش کن."
     }
 }
