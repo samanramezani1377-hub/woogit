@@ -58,7 +58,7 @@ internal fun AiScreen() {
                     if (streamingText.isNotBlank()) item { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) { Box(Modifier.fillMaxWidth(.88f).clip(RoundedCornerShape(20.dp)).background(Color.White.copy(alpha = .54f)).padding(14.dp)) { Column(verticalArrangement = Arrangement.spacedBy(4.dp)) { Text("WooGit AI", color = GlassTokens.ink, fontWeight = FontWeight.SemiBold); Text(streamingText + "▌", color = GlassTokens.ink) } } } }
                     val pending = (state as? AiUiState.Ready)?.pending
                     if (pending != null) item { GlassCard { Text("تأیید عملیات", fontWeight = FontWeight.Bold); Text("AI می‌خواهد این تغییر را از طریق WooGit اجرا کند:", color = GlassTokens.muted); Text(pending.toolName.orEmpty(), color = GlassTokens.accent, fontWeight = FontWeight.SemiBold); Text(pending.toolArguments.orEmpty(), color = GlassTokens.muted); Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) { GlassButton("تأیید و اجرا", { vm.confirm(pending) }, Modifier.weight(1f)); GlassOutlinedButton("رد کردن", { vm.reject(pending) }, Modifier.weight(1f)) } } }
-                    if (state is AiUiState.Error) item { GlassCard { Text("خطا: ${(state as AiUiState.Error).message}", color = GlassTokens.urgent) } }
+                    if (state is AiUiState.Error) item { GlassCard { Text("خطا: ${(state as AiUiState.Error).message", color = GlassTokens.urgent) } }
                 }
                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Color.White.copy(alpha = .60f)).padding(5.dp), verticalAlignment = Alignment.CenterVertically) { AiField(input, { input = it }, "دستور به AI", Modifier.weight(1f), singleLine = false); IconButton(onClick = { vm.send(input); input = "" }, enabled = input.isNotBlank() && state !is AiUiState.Working && apiKey.isNotBlank()) { Box(Modifier.size(44.dp).clip(CircleShape).background(GlassTokens.accent), contentAlignment = Alignment.Center) { Text("↑", color = Color.White, fontWeight = FontWeight.Bold) } } }
                 Spacer(Modifier.height(6.dp))
@@ -72,6 +72,7 @@ internal fun AiScreen() {
             GlassOutlinedButton("Gemini", { vm.selectProvider("gemini"); apiKey = vm.apiKey; geminiModel = vm.geminiModel }, Modifier.weight(1f))
             GlassOutlinedButton("OpenRouter", { vm.selectProvider("openrouter"); apiKey = vm.apiKey }, Modifier.weight(1f))
             GlassOutlinedButton("DeepSeek", { vm.selectProvider("deepseek"); apiKey = vm.apiKey }, Modifier.weight(1f))
+            GlassOutlinedButton("Groq", { vm.selectProvider("groq"); apiKey = vm.apiKey }, Modifier.weight(1f))
         }
         if (providerId == "gemini") {
             Spacer(Modifier.height(10.dp)); Text("مدل Gemini", fontWeight = FontWeight.SemiBold)
@@ -85,8 +86,8 @@ internal fun AiScreen() {
     }
 }
 
-private fun providerLabel(id: String) = when (id) { "gemini" -> "Gemini"; "deepseek" -> "DeepSeek"; else -> "OpenRouter" }
-private fun providerDescription(id: String) = when (id) { "gemini" -> "اتصال مستقیم به Google Gemini API؛ مدل انتخاب‌شده با tool calling استفاده می‌شود."; "deepseek" -> "اتصال مستقیم به api.deepseek.com؛ Backend جداگانه لازم نیست."; else -> "اتصال مستقیم به OpenRouter؛ مدل رایگان openrouter/free با پشتیبانی از tool calling استفاده می‌شود." }
+private fun providerLabel(id: String) = when (id) { "gemini" -> "Gemini"; "deepseek" -> "DeepSeek"; "groq" -> "Groq"; else -> "OpenRouter" }
+private fun providerDescription(id: String) = when (id) { "gemini" -> "اتصال مستقیم به Google Gemini API؛ مدل انتخاب‌شده با tool calling استفاده می‌شود."; "deepseek" -> "اتصال مستقیم به api.deepseek.com؛ Backend جداگانه لازم نیست."; "groq" -> "اتصال مستقیم به Groq API؛ مدل openai/gpt-oss-20b با tool calling استفاده می‌شود."; else -> "اتصال مستقیم به OpenRouter؛ مدل رایگان openrouter/free با پشتیبانی از tool calling استفاده می‌شود." }
 
 @Composable private fun HistoryItem(session: AiChatSession, onClick: () -> Unit) { GlassOutlinedButton(session.title, onClick, Modifier.fillMaxWidth()) }
 @Composable private fun MessageBubble(message: AiMessage) { val user = message.role == "user"; Row(Modifier.fillMaxWidth(), horizontalArrangement = if (user) Arrangement.End else Arrangement.Start) { Box(Modifier.fillMaxWidth(.88f).clip(RoundedCornerShape(20.dp)).background(if (user) GlassTokens.accent.copy(alpha = .12f) else Color.White.copy(alpha = .54f)).padding(14.dp)) { Column(verticalArrangement = Arrangement.spacedBy(4.dp)) { Text(if (user) "شما" else "WooGit AI", color = if (user) GlassTokens.accent else GlassTokens.ink, fontWeight = FontWeight.SemiBold); Text(message.content, color = GlassTokens.ink) } } } }
