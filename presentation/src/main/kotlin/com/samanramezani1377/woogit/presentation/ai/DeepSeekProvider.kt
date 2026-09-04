@@ -10,7 +10,7 @@ internal class DeepSeekProvider(context: Context) : AiProvider {
     override val id: String = "deepseek"
     private val prefs = context.applicationContext.getSharedPreferences("woogit_ai", Context.MODE_PRIVATE)
 
-    var apiKey: String
+    override var apiKey: String
         get() = prefs.getString("deepseek_api_key", "") ?: ""
         set(value) { prefs.edit().putString("deepseek_api_key", value.trim()).apply() }
 
