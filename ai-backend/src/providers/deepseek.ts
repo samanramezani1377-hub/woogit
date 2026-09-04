@@ -8,10 +8,7 @@ export class DeepSeekProvider implements AiProvider {
   constructor(private readonly configuredApiKey?: string) {}
 
   async models(): Promise<ProviderInfo> {
-    return {
-      id: this.id,
-      models: ["deepseek-v4-flash", "deepseek-v4-pro", "deepseek-v4-flash-vision-exp"],
-    };
+    return { id: this.id, models: ["deepseek-v4-flash", "deepseek-v4-pro", "deepseek-v4-flash-vision-exp"] };
   }
 
   async chat(request: ChatRequest): Promise<ChatResult> {
@@ -25,11 +22,9 @@ export class DeepSeekProvider implements AiProvider {
       model: data.model ?? request.model,
       content: choice.message?.content ?? "",
       reasoningContent: choice.message?.reasoning_content ?? undefined,
-      usage: data.usage ? {
-        promptTokens: data.usage.prompt_tokens,
-        completionTokens: data.usage.completion_tokens,
-        totalTokens: data.usage.total_tokens,
-      } : undefined,
+      toolCalls: choice.message?.tool_calls?.flatMap((call: any) =>
+        call.id && call.function?.name ? [{ id: call.id, name: call.function.name, arguments: call.function.arguments ?? "{}" }] : []),
+      usage: data.usage ? { promptTokens: data.usage.prompt_tokens, completionTokens: data.usage.completion_tokens, totalTokens: data.usage.total_tokens } : undefined,
     };
   }
 
@@ -56,33 +51,22 @@ export class DeepSeekProvider implements AiProvider {
           if (typeof text === "string" && text) onDelta(text);
         }
       }
-    } finally {
-      reader.releaseLock();
-    }
+    } finally { reader.releaseLock(); }
   }
 
   private async request(request: ChatRequest, streaming: boolean): Promise<Response> {
     const apiKey = this.configuredApiKey ?? process.env.DEEPSEEK_API_KEY;
     if (!apiKey) throw new Error("DEEPSEEK_API_KEY is not configured");
-
-    const body: Record<string, unknown> = {
-      model: request.model,
-      messages: request.messages,
-      stream: streaming,
-    };
+    const body: Record<string, unknown> = { model: request.model, messages: request.messages, stream: streaming };
+    if (request.tools) body.tools = request.tools;
     if (request.thinking) body.thinking = { type: request.thinking };
     if (request.reasoningEffort) body.reasoning_effort = request.reasoningEffort;
     if (request.maxTokens) body.max_tokens = request.maxTokens;
-
     const response = await fetch(`${BASE_URL}/chat/completions`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
       body: JSON.stringify(body),
     });
-
     if (!response.ok) {
       const detail = await response.text();
       throw new Error(`DeepSeek API ${response.status}: ${detail.slice(0, 500)}`);
