@@ -116,13 +116,22 @@ internal class GeminiProvider(context: Context) : AiProvider {
     private fun modelContent(message: JSONObject): JSONObject {
         val parts = JSONArray()
         val text = if (message.has("content") && !message.isNull("content")) message.optString("content") else ""
-        if (text.isNotBlank()) parts.put(JSONObject().put("text", text))
+        if (text.isNotBlank()) {
+            val textPart = JSONObject().put("text", text)
+            message.optString("thought_signature").takeIf { it.isNotBlank() }?.let { textPart.put("thoughtSignature", it) }
+            parts.put(textPart)
+        }
         val calls = message.optJSONArray("tool_calls")
         if (calls != null) for (i in 0 until calls.length()) {
             val call = calls.optJSONObject(i) ?: continue
             val fn = call.optJSONObject("function") ?: continue
             val args = runCatching { JSONObject(fn.optString("arguments", "{}")) }.getOrDefault(JSONObject())
-            parts.put(JSONObject().put("functionCall", JSONObject().put("name", fn.optString("name")).put("args", args).put("id", call.optString("id"))))
+            val functionCall = JSONObject()
+                .put("name", fn.optString("name"))
+                .put("args", args)
+                .put("id", call.optString("id"))
+            fn.optString("thought_signature").takeIf { it.isNotBlank() }?.let { functionCall.put("thoughtSignature", it) }
+            parts.put(JSONObject().put("functionCall", functionCall))
         }
         return JSONObject().put("role", "model").put("parts", parts)
     }
@@ -147,28 +156,33 @@ internal class GeminiProvider(context: Context) : AiProvider {
     }
 
     private suspend fun readSse(connection: HttpURLConnection, onEvent: suspend (AiStreamEvent) -> Unit): JSONObject {
-        val text = StringBuilder(); val calls = mutableListOf<JSONObject>()
+        val text = StringBuilder(); val calls = mutableListOf<JSONObject>(); var textSignature: String? = null
         connection.inputStream.bufferedReader().use { reader ->
             while (true) {
                 val line = reader.readLine() ?: break
                 if (!line.startsWith("data:")) continue
                 val raw = line.removePrefix("data:").trim()
-                if (raw.isBlank()) continue
+                if (raw.isBlank() || raw == "[DONE]") continue
                 val chunk = runCatching { JSONObject(raw) }.getOrNull() ?: continue
                 val parts = chunk.optJSONArray("candidates")?.optJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts") ?: continue
                 for (i in 0 until parts.length()) {
                     val part = parts.optJSONObject(i) ?: continue
+                    val signature = part.optString("thoughtSignature").takeIf { it.isNotBlank() }
+                    if (signature != null) textSignature = signature
                     part.optString("text", "").takeIf { it.isNotEmpty() }?.let { text.append(it); onEvent(AiStreamEvent.TextDelta(it)) }
                     val fc = part.optJSONObject("functionCall") ?: continue
                     val name = fc.optString("name")
                     if (name.isBlank()) continue
                     val args = fc.optJSONObject("args") ?: JSONObject()
                     val id = fc.optString("id").ifBlank { syntheticCallId(name, args.toString()) }
-                    calls += JSONObject().put("id", id).put("type", "function").put("function", JSONObject().put("name", name).put("arguments", args.toString()))
+                    val call = JSONObject().put("id", id).put("type", "function").put("function", JSONObject().put("name", name).put("arguments", args.toString()))
+                    signature?.let { call.getJSONObject("function").put("thought_signature", it) }
+                    calls += call
                 }
             }
         }
         val message = JSONObject().put("role", "assistant").put("content", text.toString())
+        if (textSignature != null && calls.isEmpty()) message.put("thought_signature", textSignature)
         if (calls.isNotEmpty()) message.put("tool_calls", JSONArray(calls))
         return JSONObject().put("choices", JSONArray().put(JSONObject().put("message", message)))
     }
@@ -176,17 +190,22 @@ internal class GeminiProvider(context: Context) : AiProvider {
     private fun toOpenAiResponse(response: JSONObject): JSONObject {
         val parts = response.optJSONArray("candidates")?.optJSONObject(0)?.optJSONObject("content")?.optJSONArray("parts")
             ?: throw IllegalStateException("Gemini پاسخ معتبری برنگرداند.")
-        val text = StringBuilder(); val calls = JSONArray()
+        val text = StringBuilder(); val calls = JSONArray(); var textSignature: String? = null
         for (i in 0 until parts.length()) {
             val part = parts.optJSONObject(i) ?: continue
+            val signature = part.optString("thoughtSignature").takeIf { it.isNotBlank() }
+            if (signature != null) textSignature = signature
             part.optString("text", "").takeIf { it.isNotEmpty() }?.let(text::append)
             val fc = part.optJSONObject("functionCall") ?: continue
             val name = fc.optString("name"); if (name.isBlank()) continue
             val args = fc.optJSONObject("args") ?: JSONObject()
             val id = fc.optString("id").ifBlank { syntheticCallId(name, args.toString()) }
-            calls.put(JSONObject().put("id", id).put("type", "function").put("function", JSONObject().put("name", name).put("arguments", args.toString())))
+            val function = JSONObject().put("name", name).put("arguments", args.toString())
+            signature?.let { function.put("thought_signature", it) }
+            calls.put(JSONObject().put("id", id).put("type", "function").put("function", function))
         }
         val message = JSONObject().put("role", "assistant").put("content", text.toString())
+        if (textSignature != null && calls.length() == 0) message.put("thought_signature", textSignature)
         if (calls.length() > 0) message.put("tool_calls", calls)
         return JSONObject().put("choices", JSONArray().put(JSONObject().put("message", message)))
     }
