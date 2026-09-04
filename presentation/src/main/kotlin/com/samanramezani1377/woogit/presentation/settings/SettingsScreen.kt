@@ -1,5 +1,6 @@
 package com.samanramezani1377.woogit.presentation.settings
 
+import android.content.Context
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -17,7 +18,6 @@ import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.debug.DebugConfig
 import com.samanramezani1377.woogit.debug.DebugLogStore
 import com.samanramezani1377.woogit.presentation.*
-import com.samanramezani1377.woogit.presentation.ai.AiBackendClient
 import kotlinx.coroutines.launch
 
 @Composable
@@ -25,13 +25,12 @@ fun SettingsScreen(storeName: String, storeId: StoreId, onBack: () -> Unit, onDi
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
-    val aiClient = remember { AiBackendClient(context.applicationContext) }
+    val aiPrefs = remember { context.applicationContext.getSharedPreferences("woogit_ai", Context.MODE_PRIVATE) }
     val transfer = remember(dependencies) { RobustProductTransferService(dependencies, context.contentResolver) }
     var logs by remember { mutableStateOf(DebugLogStore.read(context)) }
     var showSalesDebug by remember { mutableStateOf(true) }
     var showAiSettings by remember { mutableStateOf(false) }
-    var aiBackendUrl by remember { mutableStateOf(aiClient.baseUrl) }
-    var aiApiKey by remember { mutableStateOf(aiClient.apiKey) }
+    var aiApiKey by remember { mutableStateOf(aiPrefs.getString("deepseek_api_key", "") ?: "") }
     var aiSaved by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var progress by remember { mutableStateOf(ProductTransferProgress("", 0, 0)) }
@@ -114,21 +113,20 @@ fun SettingsScreen(storeName: String, storeId: StoreId, onBack: () -> Unit, onDi
                         Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
                             Column(Modifier.weight(1f)) {
                                 GlassText("WooGit AI")
-                                GlassText(if (aiBackendUrl.isBlank()) "اتصال Agent تنظیم نشده" else "Agent آماده اتصال")
+                                GlassText(if (aiApiKey.isBlank()) "کلید DeepSeek تنظیم نشده" else "DeepSeek آماده استفاده است")
                             }
                             TextButton(onClick = { showAiSettings = !showAiSettings }) { GlassText(if (showAiSettings) "بستن" else "تنظیمات") }
                         }
                         if (showAiSettings) {
-                            GlassText("اتصال به AI Backend")
-                            GlassText("کلید DeepSeek روی Backend نگهداری می‌شود و داخل برنامه ذخیره نمی‌شود.")
-                            GlassTextField(value = aiBackendUrl, onValueChange = { aiBackendUrl = it }, label = "آدرس Backend")
-                            GlassTextField(value = aiApiKey, onValueChange = { aiApiKey = it }, label = "کلید API Backend")
-                            GlassPrimaryAction("ذخیره اتصال AI", onClick = {
-                                aiClient.baseUrl = aiBackendUrl
-                                aiClient.apiKey = aiApiKey
+                            GlassText("اتصال مستقیم به DeepSeek")
+                            GlassText("کلید API فقط روی همین دستگاه ذخیره می‌شود و Backend جداگانه‌ای لازم نیست.")
+                            GlassTextField(value = aiApiKey, onValueChange = { aiApiKey = it }, label = "کلید API دیپ‌سیک")
+                            GlassPrimaryAction("ذخیره کلید DeepSeek", onClick = {
+                                aiPrefs.edit().putString("deepseek_api_key", aiApiKey.trim()).apply()
+                                aiApiKey = aiApiKey.trim()
                                 aiSaved = true
                             })
-                            if (aiSaved) GlassText("تنظیمات AI ذخیره شد.")
+                            if (aiSaved) GlassText("کلید DeepSeek ذخیره شد.")
                         }
                     }
                 }
