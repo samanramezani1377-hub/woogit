@@ -96,8 +96,11 @@ internal class AiAgent(
         put(tool("orders_get", "دریافت سفارش از طریق WooGit.", idSchema()))
         put(tool("orders_update_status", "تغییر وضعیت سفارش؛ نیازمند تأیید کاربر.", JSONObject().apply {
             put("type", "object")
-            put("properties", JSONObject().put("id", JSONObject().put("type", "integer").put("minimum", 1)).put("status", JSONObject().put("type", "string").put("enum", JSONArray().apply { OrderStatus.values().forEach { put(it.name) } })))
-            put("required", JSONArray().put("id").put("status")); put("additionalProperties", false)
+            put("properties", JSONObject()
+                .put("id", JSONObject().put("type", "integer").put("minimum", 1))
+                .put("status", JSONObject().put("type", "string").put("enum", JSONArray().apply { OrderStatus.values().forEach { put(it.name) } })))
+            put("required", JSONArray().put("id").put("status"))
+            put("additionalProperties", false)
         }))
     }
 
@@ -115,30 +118,61 @@ internal class AiAgent(
         put("additionalProperties", false)
     }
 
-    private fun productPatchSchema() = JSONObject().put("type", "object").put("properties", JSONObject()
-        .put("id", JSONObject().put("type", "integer").put("minimum", 1))
-        .put("patch", JSONObject().put("type", "object").put("properties", JSONObject()
-            .put("name", JSONObject().put("type", "string"))
-            .put("sku", JSONObject().put("type", "string"))
-            .put("description", JSONObject().put("type", "string"))
-            .put("shortDescription", JSONObject().put("type", "string"))
-            .put("regularPrice", JSONObject().put("type", "string"))
-            .put("salePrice", JSONObject().put("type", "string"))
-            .put("stockQuantity", JSONObject().put("type", "number").put("description", "موجودی دقیق محصول"))
-            .put("stockStatus", stockStatusSchema())
-            .put("manageStock", JSONObject().put("type", "boolean")))
-            .put("additionalProperties", false))
-        .put("required", JSONArray().put("id").put("patch"))
-        .put("additionalProperties", false)
+    private fun productPatchSchema() = JSONObject().apply {
+        put("type", "object")
+        put("properties", JSONObject()
+            .put("id", JSONObject().put("type", "integer").put("minimum", 1))
+            .put("patch", JSONObject().apply {
+                put("type", "object")
+                put("properties", JSONObject()
+                    .put("name", JSONObject().put("type", "string"))
+                    .put("sku", JSONObject().put("type", "string"))
+                    .put("description", JSONObject().put("type", "string"))
+                    .put("shortDescription", JSONObject().put("type", "string"))
+                    .put("regularPrice", JSONObject().put("type", "string"))
+                    .put("salePrice", JSONObject().put("type", "string"))
+                    .put("stockQuantity", JSONObject().put("type", "number").put("description", "موجودی دقیق محصول"))
+                    .put("stockStatus", stockStatusSchema())
+                    .put("manageStock", JSONObject().put("type", "boolean")))
+                put("additionalProperties", false)
+            }))
+        put("required", JSONArray().put("id").put("patch"))
+        put("additionalProperties", false)
+    }
 
-    private fun stockStatusSchema() = JSONObject().put("type", "string").put("enum", JSONArray().put("instock").put("outofstock").put("onbackorder"))
+    private fun stockStatusSchema() = JSONObject()
+        .put("type", "string")
+        .put("enum", JSONArray().put("instock").put("outofstock").put("onbackorder"))
+
     private fun tokenFor(name: String, args: String) = sha256("$name:$args").take(32)
     private fun sha256(value: String) = MessageDigest.getInstance("SHA-256").digest(value.toByteArray()).joinToString("") { "%02x".format(it) }
     private fun isWriteTool(name: String) = name.endsWith("_create") || name.endsWith("_update") || name.endsWith("_delete") || name == "orders_update_status"
-    private fun assistantToolCall(id: String, name: String, args: String) = JSONObject().put("role", "assistant").put("content", JSONObject.NULL).put("tool_calls", JSONArray().put(JSONObject().put("id", id).put("type", "function").put("function", JSONObject().put("name", name).put("arguments", args))))
-    private fun tool(name: String, description: String, schema: JSONObject) = JSONObject().put("type", "function").put("function", JSONObject().put("name", name).put("description", description).put("parameters", schema))
-    private fun idSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("id", JSONObject().put("type", "integer").put("minimum", 1))).put("required", JSONArray().put("id")).put("additionalProperties", false)
-    private fun listSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("page", JSONObject().put("type", "integer").put("minimum", 1)).put("perPage", JSONObject().put("type", "integer").put("minimum", 1).put("maximum", 100)).put("search", JSONObject().put("type", "string")).put("status", JSONObject().put("type", "string"))).put("additionalProperties", false)
+    private fun assistantToolCall(id: String, name: String, args: String) = JSONObject()
+        .put("role", "assistant")
+        .put("content", JSONObject.NULL)
+        .put("tool_calls", JSONArray().put(JSONObject()
+            .put("id", id)
+            .put("type", "function")
+            .put("function", JSONObject().put("name", name).put("arguments", args))))
+
+    private fun tool(name: String, description: String, schema: JSONObject) = JSONObject()
+        .put("type", "function")
+        .put("function", JSONObject().put("name", name).put("description", description).put("parameters", schema))
+
+    private fun idSchema() = JSONObject()
+        .put("type", "object")
+        .put("properties", JSONObject().put("id", JSONObject().put("type", "integer").put("minimum", 1)))
+        .put("required", JSONArray().put("id"))
+        .put("additionalProperties", false)
+
+    private fun listSchema() = JSONObject()
+        .put("type", "object")
+        .put("properties", JSONObject()
+            .put("page", JSONObject().put("type", "integer").put("minimum", 1))
+            .put("perPage", JSONObject().put("type", "integer").put("minimum", 1).put("maximum", 100))
+            .put("search", JSONObject().put("type", "string"))
+            .put("status", JSONObject().put("type", "string")))
+        .put("additionalProperties", false)
 
     companion object {
         private const val MAX_STEPS = 6
