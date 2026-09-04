@@ -43,8 +43,12 @@ internal class GeminiProvider(context: Context) : AiProvider {
 
     private fun connection(key: String, stream: Boolean) =
         (URL("https://generativelanguage.googleapis.com/v1beta/models/$MODEL:${if (stream) "streamGenerateContent?alt=sse" else "generateContent"}").openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"; connectTimeout = 10_000; readTimeout = 120_000; doOutput = true
-            setRequestProperty("Content-Type", "application/json"); setRequestProperty("x-goog-api-key", key)
+            requestMethod = "POST"
+            connectTimeout = 10_000
+            readTimeout = 120_000
+            doOutput = true
+            setRequestProperty("Content-Type", "application/json")
+            setRequestProperty("x-goog-api-key", key)
         }
 
     private fun body(messages: JSONArray, tools: JSONArray): JSONObject {
@@ -70,12 +74,43 @@ internal class GeminiProvider(context: Context) : AiProvider {
         for (i in 0 until tools.length()) {
             val outer = tools.optJSONObject(i) ?: continue
             val fn = outer.optJSONObject("function") ?: continue
+            val parameters = fn.optJSONObject("parameters") ?: JSONObject().put("type", "object")
             declarations.put(JSONObject()
                 .put("name", fn.optString("name"))
                 .put("description", fn.optString("description"))
-                .put("parameters", fn.optJSONObject("parameters") ?: JSONObject().put("type", "object")))
+                .put("parameters", sanitizeSchema(parameters)))
         }
         return declarations
+    }
+
+    /** Gemini's schema does not accept OpenAI's additionalProperties keyword. */
+    private fun sanitizeSchema(value: JSONObject): JSONObject {
+        val result = JSONObject()
+        val keys = value.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            if (key == "additionalProperties") continue
+            val child = value.opt(key)
+            result.put(key, when (child) {
+                is JSONObject -> sanitizeSchema(child)
+                is JSONArray -> sanitizeArray(child)
+                else -> child
+            })
+        }
+        return result
+    }
+
+    private fun sanitizeArray(value: JSONArray): JSONArray {
+        val result = JSONArray()
+        for (i in 0 until value.length()) {
+            val child = value.opt(i)
+            result.put(when (child) {
+                is JSONObject -> sanitizeSchema(child)
+                is JSONArray -> sanitizeArray(child)
+                else -> child
+            })
+        }
+        return result
     }
 
     private fun modelContent(message: JSONObject): JSONObject {
@@ -97,8 +132,7 @@ internal class GeminiProvider(context: Context) : AiProvider {
         val name = findFunctionName(messages, index, callId)
         val result = runCatching { JSONObject(message.optString("content", "{}")) }
             .getOrElse { JSONObject().put("result", message.optString("content")) }
-        return JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("functionResponse", JSONObject()
-            .put("name", name).put("response", result).put("id", callId))))
+        return JSONObject().put("role", "user").put("parts", JSONArray().put(JSONObject().put("functionResponse", JSONObject().put("name", name).put("response", result).put("id", callId))))
     }
 
     private fun findFunctionName(messages: JSONArray, index: Int, callId: String): String {
@@ -157,8 +191,7 @@ internal class GeminiProvider(context: Context) : AiProvider {
         return JSONObject().put("choices", JSONArray().put(JSONObject().put("message", message)))
     }
 
-    private fun syntheticCallId(name: String, args: String) = MessageDigest.getInstance("SHA-256")
-        .digest("$name:$args".toByteArray()).joinToString("") { "%02x".format(it) }.take(32)
+    private fun syntheticCallId(name: String, args: String) = MessageDigest.getInstance("SHA-256").digest("$name:$args".toByteArray()).joinToString("") { "%02x".format(it) }.take(32)
 
     private fun httpError(connection: HttpURLConnection, status: Int): IllegalStateException {
         val text = connection.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
