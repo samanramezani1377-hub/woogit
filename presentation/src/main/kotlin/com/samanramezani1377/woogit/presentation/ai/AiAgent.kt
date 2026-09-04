@@ -16,48 +16,36 @@ internal class AiAgent(
     private val provider: AiProvider,
     private val executor: WooGitToolExecutor,
 ) {
-    private data class PendingAction(
-        val name: String,
-        val arguments: String,
-        val callId: String,
-    )
-
+    private data class PendingAction(val name: String, val arguments: String, val callId: String)
     private val pending = mutableMapOf<String, PendingAction>()
 
     suspend fun run(
         messages: List<Pair<String, String>>,
         confirmationToken: String? = null,
+        onEvent: suspend (AiStreamEvent) -> Unit = {},
     ): AgentReply {
         val working = JSONArray().apply {
             put(JSONObject().put("role", "system").put("content", SYSTEM_PROMPT))
-            messages.forEach { (role, content) ->
-                put(JSONObject().put("role", role).put("content", content))
-            }
+            messages.forEach { (role, content) -> put(JSONObject().put("role", role).put("content", content)) }
         }
 
         if (confirmationToken != null) {
             val action = pending.remove(confirmationToken)
                 ?: throw IllegalStateException("عملیات در انتظار تأیید پیدا نشد. دوباره درخواست را ارسال کنید.")
+            onEvent(AiStreamEvent.Status("در حال اجرای عملیات تأییدشده..."))
             working.put(assistantToolCall(action.callId, action.name, action.arguments))
-            working.put(
-                JSONObject()
-                    .put("role", "tool")
-                    .put("tool_call_id", action.callId)
-                    .put("content", executor.execute(action.name, action.arguments)),
-            )
+            val result = executor.execute(action.name, action.arguments)
+            working.put(JSONObject().put("role", "tool").put("tool_call_id", action.callId).put("content", result))
+            onEvent(AiStreamEvent.ToolResult(action.name, summarize(result)))
         }
 
-        repeat(MAX_STEPS) {
-            val response = provider.complete(working, toolDefinitions())
-            val message = response.optJSONArray("choices")
-                ?.optJSONObject(0)
-                ?.optJSONObject("message")
+        repeat(MAX_STEPS) { step ->
+            onEvent(AiStreamEvent.Status(if (step == 0) "در حال بررسی درخواست..." else "در حال بررسی نتیجه مرحله قبل..."))
+            val response = provider.stream(working, toolDefinitions(), onEvent)
+            val message = response.optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("message")
                 ?: throw IllegalStateException("${provider.id} پاسخ معتبری برنگرداند.")
-
             val calls = message.optJSONArray("tool_calls")
-            if (calls == null || calls.length() == 0) {
-                return AgentReply(text = message.optString("content"))
-            }
+            if (calls == null || calls.length() == 0) return AgentReply(text = message.optString("content"))
 
             working.put(message)
             for (i in 0 until calls.length()) {
@@ -66,189 +54,68 @@ internal class AiAgent(
                 val name = fn.optString("name")
                 val arguments = fn.optString("arguments", "{}")
                 val callId = call.optString("id")
+                if (name.isBlank() || callId.isBlank()) throw IllegalStateException("${provider.id} ابزار نامعتبر ارسال کرد.")
 
-                if (name.isBlank() || callId.isBlank()) {
-                    throw IllegalStateException("${provider.id} ابزار نامعتبر ارسال کرد.")
-                }
-
+                onEvent(AiStreamEvent.ToolCall(toolLabel(name)))
                 if (isWriteTool(name)) {
                     val token = tokenFor(name, arguments)
                     pending[token] = PendingAction(name, arguments, callId)
-                    return AgentReply(
-                        confirmationToken = token,
-                        toolName = name,
-                        toolArguments = arguments,
-                    )
+                    onEvent(AiStreamEvent.Status("این عملیات برای اجرا نیاز به تأیید شما دارد."))
+                    return AgentReply(confirmationToken = token, toolName = name, toolArguments = arguments)
                 }
 
-                working.put(
-                    JSONObject()
-                        .put("role", "tool")
-                        .put("tool_call_id", callId)
-                        .put("content", executor.execute(name, arguments)),
-                )
+                val result = executor.execute(name, arguments)
+                working.put(JSONObject().put("role", "tool").put("tool_call_id", callId).put("content", result))
+                onEvent(AiStreamEvent.ToolResult(toolLabel(name), summarize(result)))
             }
         }
-
         throw IllegalStateException("Agent به حداکثر مراحل مجاز رسید.")
+    }
+
+    private fun summarize(result: String): String = result.replace("\n", " ").trim().let { if (it.length > 140) it.take(137) + "..." else it }
+
+    private fun toolLabel(name: String) = when (name) {
+        "products_list" -> "در حال بررسی فهرست محصولات"
+        "products_get" -> "در حال دریافت محصول"
+        "products_create" -> "در حال آماده‌سازی ایجاد محصول"
+        "products_update" -> "در حال آماده‌سازی ویرایش محصول"
+        "products_delete" -> "در حال آماده‌سازی حذف محصول"
+        "orders_list" -> "در حال بررسی سفارش‌ها"
+        "orders_get" -> "در حال دریافت سفارش"
+        "orders_update_status" -> "در حال آماده‌سازی تغییر وضعیت سفارش"
+        else -> "در حال اجرای ابزار WooGit"
     }
 
     private fun toolDefinitions() = JSONArray().apply {
         put(tool("products_list", "فهرست محصولات موجود در WooGit.", listSchema()))
         put(tool("products_get", "دریافت یک محصول از WooGit.", idSchema()))
-        put(
-            tool(
-                "products_create",
-                "ایجاد محصول؛ نیازمند تأیید کاربر.",
-                JSONObject().apply {
-                    put("type", "object")
-                    put(
-                        "properties",
-                        JSONObject()
-                            .put("name", JSONObject().put("type", "string"))
-                            .put("sku", JSONObject().put("type", "string"))
-                            .put("description", JSONObject().put("type", "string"))
-                            .put("regularPrice", JSONObject().put("type", "string")),
-                    )
-                    put("required", JSONArray().put("name"))
-                    put("additionalProperties", false)
-                },
-            ),
-        )
+        put(tool("products_create", "ایجاد محصول؛ نیازمند تأیید کاربر.", JSONObject().apply {
+            put("type", "object")
+            put("properties", JSONObject().put("name", JSONObject().put("type", "string")).put("sku", JSONObject().put("type", "string")).put("description", JSONObject().put("type", "string")).put("regularPrice", JSONObject().put("type", "string")))
+            put("required", JSONArray().put("name")); put("additionalProperties", false)
+        }))
         put(tool("products_update", "به‌روزرسانی محصول؛ نیازمند تأیید کاربر.", productPatchSchema()))
         put(tool("products_delete", "حذف محصول؛ نیازمند تأیید کاربر.", idSchema()))
         put(tool("orders_list", "فهرست سفارش‌ها از طریق WooGit.", listSchema()))
         put(tool("orders_get", "دریافت سفارش از طریق WooGit.", idSchema()))
-        put(
-            tool(
-                "orders_update_status",
-                "تغییر وضعیت سفارش؛ نیازمند تأیید کاربر.",
-                JSONObject().apply {
-                    put("type", "object")
-                    put(
-                        "properties",
-                        JSONObject()
-                            .put("id", JSONObject().put("type", "integer").put("minimum", 1))
-                            .put(
-                                "status",
-                                JSONObject()
-                                    .put("type", "string")
-                                    .put(
-                                        "enum",
-                                        JSONArray().apply {
-                                            OrderStatus.values().forEach { put(it.name) }
-                                        },
-                                    ),
-                            ),
-                    )
-                    put("required", JSONArray().put("id").put("status"))
-                    put("additionalProperties", false)
-                },
-            ),
-        )
+        put(tool("orders_update_status", "تغییر وضعیت سفارش؛ نیازمند تأیید کاربر.", JSONObject().apply {
+            put("type", "object")
+            put("properties", JSONObject().put("id", JSONObject().put("type", "integer").put("minimum", 1)).put("status", JSONObject().put("type", "string").put("enum", JSONArray().apply { OrderStatus.values().forEach { put(it.name) } })))
+            put("required", JSONArray().put("id").put("status")); put("additionalProperties", false)
+        }))
     }
 
     private fun tokenFor(name: String, args: String) = sha256("$name:$args").take(32)
-
-    private fun sha256(value: String) = MessageDigest
-        .getInstance("SHA-256")
-        .digest(value.toByteArray())
-        .joinToString("") { "%02x".format(it) }
-
-    private fun isWriteTool(name: String) =
-        name.endsWith("_create") ||
-            name.endsWith("_update") ||
-            name.endsWith("_delete") ||
-            name == "orders_update_status"
-
-    private fun assistantToolCall(id: String, name: String, args: String) =
-        JSONObject()
-            .put("role", "assistant")
-            .put("content", JSONObject.NULL)
-            .put(
-                "tool_calls",
-                JSONArray().put(
-                    JSONObject()
-                        .put("id", id)
-                        .put("type", "function")
-                        .put(
-                            "function",
-                            JSONObject()
-                                .put("name", name)
-                                .put("arguments", args),
-                        ),
-                ),
-            )
-
-    private fun tool(name: String, description: String, schema: JSONObject) =
-        JSONObject()
-            .put("type", "function")
-            .put(
-                "function",
-                JSONObject()
-                    .put("name", name)
-                    .put("description", description)
-                    .put("parameters", schema),
-            )
-
-    private fun idSchema() =
-        JSONObject()
-            .put("type", "object")
-            .put(
-                "properties",
-                JSONObject().put(
-                    "id",
-                    JSONObject().put("type", "integer").put("minimum", 1),
-                ),
-            )
-            .put("required", JSONArray().put("id"))
-            .put("additionalProperties", false)
-
-    private fun listSchema() =
-        JSONObject()
-            .put("type", "object")
-            .put(
-                "properties",
-                JSONObject()
-                    .put("page", JSONObject().put("type", "integer").put("minimum", 1))
-                    .put("perPage", JSONObject().put("type", "integer").put("minimum", 1).put("maximum", 100))
-                    .put("search", JSONObject().put("type", "string"))
-                    .put("status", JSONObject().put("type", "string")),
-            )
-            .put("additionalProperties", false)
-
-    private fun productPatchSchema() =
-        JSONObject()
-            .put("type", "object")
-            .put(
-                "properties",
-                JSONObject()
-                    .put("id", JSONObject().put("type", "integer").put("minimum", 1))
-                    .put(
-                        "patch",
-                        JSONObject()
-                            .put("type", "object")
-                            .put(
-                                "properties",
-                                JSONObject()
-                                    .put("name", JSONObject().put("type", "string"))
-                                    .put("sku", JSONObject().put("type", "string"))
-                                    .put("description", JSONObject().put("type", "string"))
-                                    .put("shortDescription", JSONObject().put("type", "string"))
-                                    .put("regularPrice", JSONObject().put("type", "string"))
-                                    .put("salePrice", JSONObject().put("type", "string"))
-                                    .put("stockQuantity", JSONObject().put("type", "number"))
-                                    .put("stockStatus", JSONObject().put("type", "string")),
-                            )
-                            .put("additionalProperties", false),
-                    ),
-            )
-            .put("required", JSONArray().put("id").put("patch"))
-            .put("additionalProperties", false)
+    private fun sha256(value: String) = MessageDigest.getInstance("SHA-256").digest(value.toByteArray()).joinToString("") { "%02x".format(it) }
+    private fun isWriteTool(name: String) = name.endsWith("_create") || name.endsWith("_update") || name.endsWith("_delete") || name == "orders_update_status"
+    private fun assistantToolCall(id: String, name: String, args: String) = JSONObject().put("role", "assistant").put("content", JSONObject.NULL).put("tool_calls", JSONArray().put(JSONObject().put("id", id).put("type", "function").put("function", JSONObject().put("name", name).put("arguments", args))))
+    private fun tool(name: String, description: String, schema: JSONObject) = JSONObject().put("type", "function").put("function", JSONObject().put("name", name).put("description", description).put("parameters", schema))
+    private fun idSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("id", JSONObject().put("type", "integer").put("minimum", 1))).put("required", JSONArray().put("id")).put("additionalProperties", false)
+    private fun listSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("page", JSONObject().put("type", "integer").put("minimum", 1)).put("perPage", JSONObject().put("type", "integer").put("minimum", 1).put("maximum", 100)).put("search", JSONObject().put("type", "string")).put("status", JSONObject().put("type", "string"))).put("additionalProperties", false)
+    private fun productPatchSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("id", JSONObject().put("type", "integer").put("minimum", 1)).put("patch", JSONObject().put("type", "object").put("properties", JSONObject().put("name", JSONObject().put("type", "string")).put("sku", JSONObject().put("type", "string")).put("description", JSONObject().put("type", "string")).put("shortDescription", JSONObject().put("type", "string")).put("regularPrice", JSONObject().put("type", "string")).put("salePrice", JSONObject().put("type", "string")).put("stockQuantity", JSONObject().put("type", "number")).put("stockStatus", JSONObject().put("type", "string"))).put("additionalProperties", false))).put("required", JSONArray().put("id").put("patch")).put("additionalProperties", false)
 
     companion object {
         private const val MAX_STEPS = 6
-        private const val SYSTEM_PROMPT =
-            "تو Agent داخلی WooGit هستی. تمام اطلاعات و تغییرات فروشگاه باید فقط از ابزارهای WooGit استفاده کنند. هرگز API ووکامرس را مستقیم صدا نزن. عملیات تغییردهنده فقط پس از تأیید صریح کاربر اجرا می‌شوند. پاسخ نهایی کوتاه، دقیق و فارسی باشد."
+        private const val SYSTEM_PROMPT = "تو Agent داخلی WooGit هستی. تمام اطلاعات و تغییرات فروشگاه باید فقط از ابزارهای WooGit استفاده کنند. هرگز API ووکامرس را مستقیم صدا نزن. عملیات تغییردهنده فقط پس از تأیید صریح کاربر اجرا می‌شوند. پاسخ نهایی کوتاه، دقیق و فارسی باشد."
     }
 }
