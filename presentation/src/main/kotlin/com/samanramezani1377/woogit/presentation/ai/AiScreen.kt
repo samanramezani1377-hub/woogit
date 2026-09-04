@@ -19,15 +19,16 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.runtime.collectAsState
 import com.samanramezani1377.woogit.presentation.GlassScaffold
 
 @Composable
 internal fun AiScreen() {
     val vm = viewModel<AiViewModel>(factory = AiViewModel.Factory(LocalContext.current.applicationContext))
-    val state by vm.state.collectAsStateCompat()
+    val state by vm.state.collectAsState()
     var backendUrl by remember { mutableStateOf("") }
     var apiKey by remember { mutableStateOf("") }
     var input by remember { mutableStateOf("") }
@@ -42,8 +43,7 @@ internal fun AiScreen() {
             OutlinedTextField(apiKey, { apiKey = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text("Backend API Key") })
 
             val messages = when (state) {
-                AiUiState.Idle -> emptyList()
-                AiUiState.Sending -> emptyList()
+                AiUiState.Idle, AiUiState.Sending -> emptyList()
                 is AiUiState.Ready -> (state as AiUiState.Ready).messages
                 is AiUiState.Error -> (state as AiUiState.Error).messages
             }
@@ -73,9 +73,4 @@ internal fun AiScreen() {
             }
         }
     }
-}
-
-@Composable
-private fun <T> AiUiState.collectAsStateCompat(): androidx.compose.runtime.State<T> {
-    error("unreachable")
 }
