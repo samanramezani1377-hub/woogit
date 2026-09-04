@@ -89,12 +89,8 @@ internal class AiAgent(
     private fun toolDefinitions() = JSONArray().apply {
         put(tool("products_list", "فهرست محصولات موجود در WooGit.", listSchema()))
         put(tool("products_get", "دریافت یک محصول از WooGit.", idSchema()))
-        put(tool("products_create", "ایجاد محصول؛ نیازمند تأیید کاربر.", JSONObject().apply {
-            put("type", "object")
-            put("properties", JSONObject().put("name", JSONObject().put("type", "string")).put("sku", JSONObject().put("type", "string")).put("description", JSONObject().put("type", "string")).put("regularPrice", JSONObject().put("type", "string")))
-            put("required", JSONArray().put("name")); put("additionalProperties", false)
-        }))
-        put(tool("products_update", "به‌روزرسانی محصول؛ نیازمند تأیید کاربر.", productPatchSchema()))
+        put(tool("products_create", "ایجاد محصول؛ نیازمند تأیید کاربر.", productCreateSchema()))
+        put(tool("products_update", "به‌روزرسانی محصول؛ نیازمند تأیید کاربر. برای تغییر موجودی، stockQuantity و در صورت نیاز stockStatus را صریح ارسال کن.", productPatchSchema()))
         put(tool("products_delete", "حذف محصول؛ نیازمند تأیید کاربر.", idSchema()))
         put(tool("orders_list", "فهرست سفارش‌ها از طریق WooGit.", listSchema()))
         put(tool("orders_get", "دریافت سفارش از طریق WooGit.", idSchema()))
@@ -105,6 +101,37 @@ internal class AiAgent(
         }))
     }
 
+    private fun productCreateSchema() = JSONObject().apply {
+        put("type", "object")
+        put("properties", JSONObject()
+            .put("name", JSONObject().put("type", "string"))
+            .put("sku", JSONObject().put("type", "string"))
+            .put("description", JSONObject().put("type", "string"))
+            .put("regularPrice", JSONObject().put("type", "string"))
+            .put("stockQuantity", JSONObject().put("type", "number").put("description", "موجودی عددی؛ با ارسال آن مدیریت موجودی فعال می‌شود."))
+            .put("stockStatus", stockStatusSchema())
+            .put("manageStock", JSONObject().put("type", "boolean")))
+        put("required", JSONArray().put("name"))
+        put("additionalProperties", false)
+    }
+
+    private fun productPatchSchema() = JSONObject().put("type", "object").put("properties", JSONObject()
+        .put("id", JSONObject().put("type", "integer").put("minimum", 1))
+        .put("patch", JSONObject().put("type", "object").put("properties", JSONObject()
+            .put("name", JSONObject().put("type", "string"))
+            .put("sku", JSONObject().put("type", "string"))
+            .put("description", JSONObject().put("type", "string"))
+            .put("shortDescription", JSONObject().put("type", "string"))
+            .put("regularPrice", JSONObject().put("type", "string"))
+            .put("salePrice", JSONObject().put("type", "string"))
+            .put("stockQuantity", JSONObject().put("type", "number").put("description", "موجودی دقیق محصول"))
+            .put("stockStatus", stockStatusSchema())
+            .put("manageStock", JSONObject().put("type", "boolean")))
+            .put("additionalProperties", false))
+        .put("required", JSONArray().put("id").put("patch"))
+        .put("additionalProperties", false)
+
+    private fun stockStatusSchema() = JSONObject().put("type", "string").put("enum", JSONArray().put("instock").put("outofstock").put("onbackorder"))
     private fun tokenFor(name: String, args: String) = sha256("$name:$args").take(32)
     private fun sha256(value: String) = MessageDigest.getInstance("SHA-256").digest(value.toByteArray()).joinToString("") { "%02x".format(it) }
     private fun isWriteTool(name: String) = name.endsWith("_create") || name.endsWith("_update") || name.endsWith("_delete") || name == "orders_update_status"
@@ -112,10 +139,9 @@ internal class AiAgent(
     private fun tool(name: String, description: String, schema: JSONObject) = JSONObject().put("type", "function").put("function", JSONObject().put("name", name).put("description", description).put("parameters", schema))
     private fun idSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("id", JSONObject().put("type", "integer").put("minimum", 1))).put("required", JSONArray().put("id")).put("additionalProperties", false)
     private fun listSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("page", JSONObject().put("type", "integer").put("minimum", 1)).put("perPage", JSONObject().put("type", "integer").put("minimum", 1).put("maximum", 100)).put("search", JSONObject().put("type", "string")).put("status", JSONObject().put("type", "string"))).put("additionalProperties", false)
-    private fun productPatchSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("id", JSONObject().put("type", "integer").put("minimum", 1)).put("patch", JSONObject().put("type", "object").put("properties", JSONObject().put("name", JSONObject().put("type", "string")).put("sku", JSONObject().put("type", "string")).put("description", JSONObject().put("type", "string")).put("shortDescription", JSONObject().put("type", "string")).put("regularPrice", JSONObject().put("type", "string")).put("salePrice", JSONObject().put("type", "string")).put("stockQuantity", JSONObject().put("type", "number")).put("stockStatus", JSONObject().put("type", "string"))).put("additionalProperties", false))).put("required", JSONArray().put("id").put("patch")).put("additionalProperties", false)
 
     companion object {
         private const val MAX_STEPS = 6
-        private const val SYSTEM_PROMPT = "تو Agent داخلی WooGit هستی. تمام اطلاعات و تغییرات فروشگاه باید فقط از ابزارهای WooGit استفاده کنند. هرگز API ووکامرس را مستقیم صدا نزن. عملیات تغییردهنده فقط پس از تأیید صریح کاربر اجرا می‌شوند. پاسخ نهایی کوتاه، دقیق و فارسی باشد."
+        private const val SYSTEM_PROMPT = "تو Agent داخلی WooGit هستی. تمام اطلاعات و تغییرات فروشگاه باید فقط از ابزارهای WooGit استفاده کنند. هرگز API ووکامرس را مستقیم صدا نزن. برای تغییر موجودی محصول، مقدار stockQuantity را دقیقاً همان عدد درخواستی قرار بده؛ اگر stockQuantity ارسال شد manageStock را true کن مگر کاربر صریحاً خلاف آن را خواسته باشد. اگر موجودی صفر یا کمتر شد stockStatus را outofstock و اگر بیشتر از صفر شد instock قرار بده، مگر کاربر وضعیت دیگری خواسته باشد. عملیات تغییردهنده فقط پس از تأیید صریح کاربر اجرا می‌شوند. پاسخ نهایی کوتاه، دقیق و فارسی باشد."
     }
 }
