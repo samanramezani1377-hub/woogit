@@ -21,21 +21,14 @@ internal sealed interface AiUiState {
     data class Error(val messages: List<AiMessage>, val message: String) : AiUiState
 }
 
-internal class AiViewModel(
-    context: Context,
-    dependencies: V1PresentationDependencies,
-    storeId: StoreId,
-) : ViewModel() {
+internal class AiViewModel(context: Context, dependencies: V1PresentationDependencies) : ViewModel() {
+    private val storeId = StoreId(context.getSharedPreferences("woogit_session", Context.MODE_PRIVATE).getString("active_store_id", null) ?: throw IllegalStateException("فروشگاه فعالی برای Agent وجود ندارد."))
     private val client = AiBackendClient(context, dependencies, storeId)
     private val _state = MutableStateFlow<AiUiState>(AiUiState.Idle)
     val state: StateFlow<AiUiState> = _state.asStateFlow()
+    val apiKey: String get() = client.apiKey
 
-    val apiKey: String
-        get() = client.apiKey
-
-    fun saveApiKey(key: String) {
-        client.apiKey = key
-    }
+    fun saveApiKey(key: String) { client.apiKey = key }
 
     fun send(text: String) {
         val value = text.trim()
@@ -55,24 +48,15 @@ internal class AiViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val reply = client.agent(messages.map { it.role to it.content }, confirmationToken)
-                _state.value = if (reply.confirmationToken != null) {
-                    AiUiState.Ready(messages, reply)
-                } else {
-                    AiUiState.Ready(messages + AiMessage("assistant", reply.text), null)
-                }
+                _state.value = if (reply.confirmationToken != null) AiUiState.Ready(messages, reply) else AiUiState.Ready(messages + AiMessage("assistant", reply.text), null)
             } catch (error: Throwable) {
                 _state.value = AiUiState.Error(messages, error.message ?: "ارتباط با DeepSeek ناموفق بود.")
             }
         }
     }
 
-    class Factory(
-        private val context: Context,
-        private val dependencies: V1PresentationDependencies,
-        private val storeId: StoreId,
-    ) : ViewModelProvider.Factory {
+    class Factory(private val context: Context) : ViewModelProvider.Factory {
         @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T =
-            AiViewModel(context, dependencies, storeId) as T
+        override fun <T : ViewModel> create(modelClass: Class<T>): T = AiViewModel(context, AiRuntime.dependencies) as T
     }
 }
