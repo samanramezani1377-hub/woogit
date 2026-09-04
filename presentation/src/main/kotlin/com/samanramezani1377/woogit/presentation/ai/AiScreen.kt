@@ -11,12 +11,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
@@ -48,68 +46,68 @@ internal fun AiScreen() {
     val vm = viewModel<AiViewModel>(factory = AiViewModel.Factory(context))
     val state by vm.state.collectAsState()
     val providerId by vm.providerId.collectAsState()
-    val uiState = state
     var apiKey by remember(providerId) { mutableStateOf(vm.apiKey) }
     var input by remember { mutableStateOf("") }
     var showSettings by remember { mutableStateOf(false) }
     var hasSentMessage by remember { mutableStateOf(false) }
 
+    val messages = when (val value = state) {
+        AiUiState.Idle -> emptyList()
+        is AiUiState.Working -> value.messages
+        is AiUiState.Ready -> value.messages
+        is AiUiState.Error -> value.messages
+    }
+    val activities = (state as? AiUiState.Working)?.activities.orEmpty()
+    val streamingText = (state as? AiUiState.Working)?.streamingText.orEmpty()
+
     GlassScaffold { padding ->
-        Column(
-            Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
+        Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Spacer(Modifier.height(6.dp))
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("WooGit AI", fontWeight = FontWeight.Bold)
                     Text("Agent داخلی WooGit · ${if (providerId == "openrouter") "OpenRouter" else "DeepSeek"}", color = GlassTokens.muted)
                 }
-                IconButton(
-                    onClick = { apiKey = vm.apiKey; showSettings = true },
-                    modifier = Modifier.size(44.dp).clip(CircleShape).background(GlassTokens.accent.copy(alpha = .14f)),
-                ) {
+                IconButton(onClick = { apiKey = vm.apiKey; showSettings = true }, modifier = Modifier.size(44.dp).clip(CircleShape).background(GlassTokens.accent.copy(alpha = .14f))) {
                     Text("⚙", color = GlassTokens.accent, fontWeight = FontWeight.Bold)
                 }
             }
 
-            val messages = when (uiState) {
-                AiUiState.Idle, AiUiState.Sending -> emptyList()
-                is AiUiState.Ready -> uiState.messages
-                is AiUiState.Error -> uiState.messages
-            }
-
-            if (!hasSentMessage && messages.isEmpty() && uiState !is AiUiState.Error) {
+            if (!hasSentMessage && messages.isEmpty() && state !is AiUiState.Error) {
                 GlassCard(Modifier.fillMaxWidth()) {
                     Text("از Agent بخواهید روی فروشگاه کاری انجام دهد", fontWeight = FontWeight.SemiBold)
                     Text("مثلاً: محصول شماره ۱۲ را پیدا کن، یا محصولات ناموجود را فهرست کن.", color = GlassTokens.muted)
                 }
             }
 
-            LazyColumn(
-                Modifier.weight(1f).fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                items(messages) { message ->
-                    val user = message.role == "user"
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = if (user) Arrangement.End else Arrangement.Start,
-                    ) {
-                        Box(
-                            Modifier.fillMaxWidth(.88f)
-                                .clip(RoundedCornerShape(20.dp))
-                                .background(if (user) GlassTokens.accent.copy(alpha = .12f) else Color.White.copy(alpha = .54f))
-                                .padding(14.dp),
-                        ) {
-                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text(if (user) "شما" else "WooGit AI", color = if (user) GlassTokens.accent else GlassTokens.ink, fontWeight = FontWeight.SemiBold)
-                                Text(message.content, color = GlassTokens.ink)
+            LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                items(messages) { message -> MessageBubble(message) }
+
+                if (state is AiUiState.Working && activities.isNotEmpty()) item {
+                    GlassCard(Modifier.fillMaxWidth()) {
+                        Text("فعالیت Agent", fontWeight = FontWeight.SemiBold)
+                        Spacer(Modifier.height(4.dp))
+                        activities.forEach { activity ->
+                            Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Text(if (activity.completed) "✓" else "●", color = if (activity.completed) GlassTokens.live else GlassTokens.accent, fontWeight = FontWeight.Bold)
+                                Text("  ${activity.text}", color = GlassTokens.muted)
                             }
                         }
                     }
                 }
-                val pending = (uiState as? AiUiState.Ready)?.pending
+
+                if (streamingText.isNotBlank()) item {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
+                        Box(Modifier.fillMaxWidth(.88f).clip(RoundedCornerShape(20.dp)).background(Color.White.copy(alpha = .54f)).padding(14.dp)) {
+                            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text("WooGit AI", color = GlassTokens.ink, fontWeight = FontWeight.SemiBold)
+                                Text(streamingText + "▌", color = GlassTokens.ink)
+                            }
+                        }
+                    }
+                }
+
+                val pending = (state as? AiUiState.Ready)?.pending
                 if (pending != null) item {
                     GlassCard {
                         Text("تأیید عملیات", fontWeight = FontWeight.Bold)
@@ -119,31 +117,13 @@ internal fun AiScreen() {
                         GlassButton("تأیید و اجرا", { vm.confirm(pending) })
                     }
                 }
-                if (uiState is AiUiState.Error) item { GlassCard { Text("خطا: ${uiState.message}", color = GlassTokens.urgent) } }
+                if (state is AiUiState.Error) item { GlassCard { Text("خطا: ${(state as AiUiState.Error).message}", color = GlassTokens.urgent) } }
             }
 
-            if (uiState is AiUiState.Sending) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-                    CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp, color = GlassTokens.accent)
-                }
-            }
-
-            Row(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Color.White.copy(alpha = .60f)).padding(5.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
+            Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Color.White.copy(alpha = .60f)).padding(5.dp), verticalAlignment = Alignment.CenterVertically) {
                 AiField(input, { input = it }, "دستور به AI", Modifier.weight(1f), singleLine = false)
-                IconButton(
-                    onClick = {
-                        hasSentMessage = true
-                        vm.send(input)
-                        input = ""
-                    },
-                    enabled = input.isNotBlank() && uiState !is AiUiState.Sending && apiKey.isNotBlank(),
-                ) {
-                    Box(Modifier.size(44.dp).clip(CircleShape).background(GlassTokens.accent), contentAlignment = Alignment.Center) {
-                        Text("↑", color = Color.White, fontWeight = FontWeight.Bold)
-                    }
+                IconButton(onClick = { hasSentMessage = true; vm.send(input); input = "" }, enabled = input.isNotBlank() && state !is AiUiState.Working && apiKey.isNotBlank()) {
+                    Box(Modifier.size(44.dp).clip(CircleShape).background(GlassTokens.accent), contentAlignment = Alignment.Center) { Text("↑", color = Color.White, fontWeight = FontWeight.Bold) }
                 }
             }
             Spacer(Modifier.height(6.dp))
@@ -156,67 +136,43 @@ internal fun AiScreen() {
         Text("سرویس AI", fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(4.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            GlassOutlinedButton(
-                label = "OpenRouter",
-                onClick = { vm.selectProvider("openrouter"); apiKey = vm.apiKey },
-                modifier = Modifier.weight(1f),
-            )
-            GlassOutlinedButton(
-                label = "DeepSeek",
-                onClick = { vm.selectProvider("deepseek"); apiKey = vm.apiKey },
-                modifier = Modifier.weight(1f),
-            )
+            GlassOutlinedButton("OpenRouter", { vm.selectProvider("openrouter"); apiKey = vm.apiKey }, Modifier.weight(1f))
+            GlassOutlinedButton("DeepSeek", { vm.selectProvider("deepseek"); apiKey = vm.apiKey }, Modifier.weight(1f))
         }
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(if (providerId == "openrouter") "OpenRouter API" else "DeepSeek API", fontWeight = FontWeight.SemiBold)
-                Text(
-                    if (apiKey.isBlank()) "کلید تنظیم نشده" else "کلید روی دستگاه ذخیره شده است",
-                    color = if (apiKey.isBlank()) GlassTokens.faint else GlassTokens.live,
-                )
+                Text(if (apiKey.isBlank()) "کلید تنظیم نشده" else "کلید روی دستگاه ذخیره شده است", color = if (apiKey.isBlank()) GlassTokens.faint else GlassTokens.live)
             }
             Text("مستقیم", color = GlassTokens.muted)
         }
         Spacer(Modifier.height(4.dp))
-        AiField(
-            apiKey,
-            { apiKey = it },
-            if (providerId == "openrouter") "کلید API اوپن‌روتر" else "کلید API دیپ‌سیک",
-            secret = true,
-        )
-        Text(
-            if (providerId == "openrouter") "اتصال مستقیم به OpenRouter؛ مدل رایگان openrouter/free با پشتیبانی از tool calling استفاده می‌شود."
-            else "اتصال مستقیم به api.deepseek.com؛ Backend جداگانه لازم نیست.",
-            color = GlassTokens.muted,
-        )
+        AiField(apiKey, { apiKey = it }, if (providerId == "openrouter") "کلید API اوپن‌روتر" else "کلید API دیپ‌سیک", secret = true)
+        Text(if (providerId == "openrouter") "اتصال مستقیم به OpenRouter؛ مدل رایگان openrouter/free با پشتیبانی از tool calling استفاده می‌شود." else "اتصال مستقیم به api.deepseek.com؛ Backend جداگانه لازم نیست.", color = GlassTokens.muted)
         Spacer(Modifier.height(4.dp))
         GlassButton("ذخیره کلید", { vm.saveApiKey(apiKey); showSettings = false })
     }
 }
 
 @Composable
-private fun AiField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    label: String,
-    modifier: Modifier = Modifier,
-    secret: Boolean = false,
-    singleLine: Boolean = true,
-) {
+private fun MessageBubble(message: AiMessage) {
+    val user = message.role == "user"
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = if (user) Arrangement.End else Arrangement.Start) {
+        Box(Modifier.fillMaxWidth(.88f).clip(RoundedCornerShape(20.dp)).background(if (user) GlassTokens.accent.copy(alpha = .12f) else Color.White.copy(alpha = .54f)).padding(14.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(if (user) "شما" else "WooGit AI", color = if (user) GlassTokens.accent else GlassTokens.ink, fontWeight = FontWeight.SemiBold)
+                Text(message.content, color = GlassTokens.ink)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AiField(value: String, onValueChange: (String) -> Unit, label: String, modifier: Modifier = Modifier, secret: Boolean = false, singleLine: Boolean = true) {
     TextField(
-        value = value,
-        onValueChange = onValueChange,
-        modifier = modifier.fillMaxWidth(),
-        label = { Text(label) },
-        singleLine = singleLine,
+        value = value, onValueChange = onValueChange, modifier = modifier.fillMaxWidth(), label = { Text(label) }, singleLine = singleLine,
         visualTransformation = if (secret) androidx.compose.ui.text.input.PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
-        colors = TextFieldDefaults.colors(
-            focusedContainerColor = Color.Transparent,
-            unfocusedContainerColor = Color.Transparent,
-            disabledContainerColor = Color.Transparent,
-            focusedIndicatorColor = GlassTokens.accent,
-            unfocusedIndicatorColor = GlassTokens.glassBorder,
-        ),
+        colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent, disabledContainerColor = Color.Transparent, focusedIndicatorColor = GlassTokens.accent, unfocusedIndicatorColor = GlassTokens.glassBorder),
     )
 }
