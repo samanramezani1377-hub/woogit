@@ -71,6 +71,13 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
         request(currentMessages(), token)
     }
 
+    fun reject(pending: AgentReply) {
+        val token = pending.confirmationToken ?: return
+        val agent = agents[_providerId.value] ?: return
+        agent.cancel(token)
+        _state.value = AiUiState.Ready(currentMessages(), null)
+    }
+
     fun newChat() {
         if (_state.value is AiUiState.Working) return
         currentSessionId = historyStore.newSessionId()
