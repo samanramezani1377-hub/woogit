@@ -90,7 +90,6 @@ internal class GeminiProvider(context: Context) : AiProvider {
         return declarations
     }
 
-    /** Gemini's schema does not accept OpenAI's additionalProperties keyword. */
     private fun sanitizeSchema(value: JSONObject): JSONObject {
         val result = JSONObject()
         val keys = value.keys()
@@ -133,12 +132,14 @@ internal class GeminiProvider(context: Context) : AiProvider {
             val call = calls.optJSONObject(i) ?: continue
             val fn = call.optJSONObject("function") ?: continue
             val args = runCatching { JSONObject(fn.optString("arguments", "{}")) }.getOrDefault(JSONObject())
-            val functionCall = JSONObject()
+            val part = JSONObject().put("functionCall", JSONObject()
                 .put("name", fn.optString("name"))
                 .put("args", args)
-                .put("id", call.optString("id"))
-            fn.optString("thought_signature").takeIf { it.isNotBlank() }?.let { functionCall.put("thoughtSignature", it) }
-            parts.put(JSONObject().put("functionCall", functionCall))
+                .put("id", call.optString("id")))
+            val signature = fn.optString("thought_signature").takeIf { it.isNotBlank() }
+                ?: call.optString("thought_signature").takeIf { it.isNotBlank() }
+            signature?.let { part.put("thoughtSignature", it) }
+            parts.put(part)
         }
         return JSONObject().put("role", "model").put("parts", parts)
     }
@@ -182,9 +183,9 @@ internal class GeminiProvider(context: Context) : AiProvider {
                     if (name.isBlank()) continue
                     val args = fc.optJSONObject("args") ?: JSONObject()
                     val id = fc.optString("id").ifBlank { syntheticCallId(name, args.toString()) }
-                    val call = JSONObject().put("id", id).put("type", "function").put("function", JSONObject().put("name", name).put("arguments", args.toString()))
-                    signature?.let { call.getJSONObject("function").put("thought_signature", it) }
-                    calls += call
+                    val function = JSONObject().put("name", name).put("arguments", args.toString())
+                    signature?.let { function.put("thought_signature", it) }
+                    calls += JSONObject().put("id", id).put("type", "function").put("function", function)
                 }
             }
         }
