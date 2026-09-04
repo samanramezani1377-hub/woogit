@@ -4,6 +4,7 @@ package com.samanramezani1377.woogit.presentation
 internal object E11Routes {
     const val CONNECTION = "connection"
     const val DASHBOARD = "dashboard"
+    const val AI = "ai"
     const val ORDERS = "orders"
     const val ORDER_ID = "orderId"
     const val ORDER_DETAIL = "orders/{$ORDER_ID}"
