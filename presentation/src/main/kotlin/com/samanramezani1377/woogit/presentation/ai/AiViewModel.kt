@@ -39,6 +39,7 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
     )
     private val _providerId = MutableStateFlow(prefs.getString("provider", "openrouter") ?: "openrouter")
     val providerId: StateFlow<String> = _providerId.asStateFlow()
+    val geminiModel: String get() = gemini.modelId
     private val _history = MutableStateFlow(historyStore.loadSessions())
     val history: StateFlow<List<AiChatSession>> = _history.asStateFlow()
     private val initialSession = historyStore.activeSessionId()?.let { id -> _history.value.firstOrNull { it.id == id } }
@@ -53,6 +54,11 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
     }
 
     fun saveApiKey(key: String) { currentProvider().apiKey = key }
+
+    fun saveGeminiModel(model: String) {
+        if (model.trim().isBlank()) return
+        gemini.modelId = model
+    }
 
     fun send(text: String) {
         val value = text.trim()
