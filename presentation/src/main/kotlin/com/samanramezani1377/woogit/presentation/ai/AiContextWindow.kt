@@ -7,7 +7,7 @@ import org.json.JSONObject
  * Bounds the request sent to an AI model without destroying conversation continuity.
  * Persisted chat history is never mutated; this class only builds a compact, model-safe view.
  * Entity memory is intentionally small and WooCommerce-aware so older product/order turns can
- * be recovered by meaning, not just by lexical overlap.
+ * be recovered by identity and reference, not just lexical overlap.
  */
 internal class AiContextWindowProvider(private val delegate: AiProvider) : AiProvider {
     override val id: String get() = delegate.id
@@ -113,7 +113,9 @@ internal class AiContextWindowProvider(private val delegate: AiProvider) : AiPro
 
     private fun extractEntities(messages: JSONArray): List<WooEntity> {
         val byKey = linkedMapOf<String, WooEntity>()
+        val aliasIndex = linkedMapOf<String, String>()
         val lastUser = findLastUser(messages)
+
         for (i in 1 until messages.length()) {
             val item = messages.optJSONObject(i) ?: continue
             val text = item.optString("content").orEmpty()
@@ -134,24 +136,81 @@ internal class AiContextWindowProvider(private val delegate: AiProvider) : AiPro
             if (parsed != null) collectStructuredEntities(parsed, inferredType, i, candidates)
             else parseEmbeddedJson(text)?.let { collectStructuredEntities(it, inferredType, i, candidates) }
 
-            for (entity in candidates) {
-                val active = i == lastUser && refersToEntity(text, entity)
-                val old = byKey[entity.key()]
-                byKey[entity.key()] = mergeEntity(old, entity.copy(active = active))
+            for (candidate in candidates) {
+                val normalizedSku = candidate.sku?.let(::normalizeAlias)
+                val normalizedName = candidate.name?.let(::normalizeAlias)
+                val aliasKey = normalizedSku?.let { "${candidate.type}:sku:$it" }
+                    ?: normalizedName?.let { "${candidate.type}:name:$it" }
+                val existingKey = aliasKey?.let(aliasIndex::get)
+                val canonicalKey = when {
+                    existingKey != null -> existingKey
+                    candidate.id.startsWith("sku:") -> "$${candidate.type}:${candidate.id}".removePrefix("$")
+                    else -> candidate.key()
+                }
+                val existing = byKey[canonicalKey]
+                val merged = mergeEntity(existing, candidate.copy(id = canonicalKey.removePrefix("${candidate.type}:")))
+                byKey[canonicalKey] = merged
+                normalizedSku?.let { aliasIndex["${candidate.type}:sku:$it"] = canonicalKey }
+                normalizedName?.let { aliasIndex["${candidate.type}:name:$it"] = canonicalKey }
+                aliasIndex["${candidate.type}:id:${normalizeAlias(candidate.id)}"] = canonicalKey
             }
         }
 
         val all = byKey.values.toList()
-        val latestMentioned = all.filter { entity ->
-            lastUser >= 0 && refersToEntity(messages.optJSONObject(lastUser)?.optString("content").orEmpty(), entity)
-        }.map { it.key() }.toSet()
-        val activeKeys = if (latestMentioned.isNotEmpty()) latestMentioned
-        else all.sortedByDescending { it.lastIndex }.take(MAX_ACTIVE_ENTITIES).map { it.key() }.toSet()
+        val latestText = if (lastUser >= 0) messages.optJSONObject(lastUser)?.optString("content").orEmpty() else ""
+        val explicitKeys = resolveExplicitEntities(latestText, all)
+        val referenceKeys = resolveReferences(latestText, all)
+        val activeKeys = when {
+            explicitKeys.isNotEmpty() -> explicitKeys + referenceKeys
+            referenceKeys.isNotEmpty() -> referenceKeys
+            else -> all.sortedByDescending { it.lastIndex }.take(MAX_ACTIVE_ENTITIES).map { it.key() }.toSet()
+        }
 
         return all
             .map { it.copy(active = it.key() in activeKeys) }
             .sortedWith(compareByDescending<WooEntity> { it.active }.thenByDescending { it.lastIndex })
             .take(MAX_ENTITIES)
+    }
+
+    private fun resolveExplicitEntities(text: String, entities: List<WooEntity>): Set<String> {
+        val normalized = text.lowercase()
+        return entities.filter { entity ->
+            normalized.contains(entity.id.lowercase()) ||
+                entity.sku?.let { normalized.contains(it.lowercase()) } == true ||
+                entity.name?.let { normalized.contains(it.lowercase()) } == true ||
+                entity.aliases.any { normalized.contains(it.lowercase()) }
+        }.map { it.key() }.toSet()
+    }
+
+    private fun resolveReferences(text: String, entities: List<WooEntity>): Set<String> {
+        val normalized = normalizeAlias(text)
+        if (text.isBlank()) return emptySet()
+        val products = entities.filter { it.type == "product" }.sortedBy { it.lastIndex }
+        val orders = entities.filter { it.type == "order" }.sortedBy { it.lastIndex }
+        val result = linkedSetOf<String>()
+
+        fun latest(type: String) = entities.filter { it.type == type }.maxByOrNull { it.lastIndex }?.key()
+        if (Regex("(?i)(همین|همون|این|آن)\\s+(محصول|product)").containsMatchIn(text)) latest("product")?.let(result::add)
+        if (Regex("(?i)(همین|همون|این|آن)\\s+(سفارش|order)").containsMatchIn(text)) latest("order")?.let(result::add)
+
+        val productOrdinal = Regex("(?i)محصول\\s*(اول|دوم|سوم|چهارم|پنجم|اولی|دومی|سومی)").find(normalized)
+        if (productOrdinal != null) ordinalKey(productOrdinal.groupValues[1], products)?.let(result::add)
+        val orderOrdinal = Regex("(?i)(سفارش|order)\\s*(اول|دوم|سوم|چهارم|پنجم|اولی|دومی|سومی)").find(normalized)
+        if (orderOrdinal != null) ordinalKey(orderOrdinal.groupValues[2], orders)?.let(result::add)
+
+        return result
+    }
+
+    private fun ordinalKey(word: String, entities: List<WooEntity>): String? {
+        val ordinal = when (word) {
+            "اول", "اولی" -> 0
+            "دوم", "دومی" -> 1
+            "سوم", "سومی" -> 2
+            "چهارم" -> 3
+            "پنجم" -> 4
+            else -> return null
+        }
+        return entities.getOrNull(ordinal)?.key()
     }
 
     private fun parseEmbeddedJson(text: String): JSONObject? {
@@ -191,19 +250,14 @@ internal class AiContextWindowProvider(private val delegate: AiProvider) : AiPro
         return old.copy(
             name = next.name ?: old.name,
             sku = next.sku ?: old.sku,
-            aliases = (old.aliases + listOfNotNull(next.name, next.sku)).takeLast(MAX_ALIASES).toSet(),
+            aliases = (old.aliases + next.aliases + listOfNotNull(next.name, next.sku)).filterNot { it.isBlank() }.takeLast(MAX_ALIASES).toSet(),
             lastIndex = maxOf(old.lastIndex, next.lastIndex),
             active = next.active,
         )
     }
 
-    private fun refersToEntity(text: String, entity: WooEntity): Boolean {
-        val normalized = text.lowercase()
-        if (normalized.contains(entity.id.lowercase())) return true
-        if (entity.name?.let { normalized.contains(it.lowercase()) } == true) return true
-        if (entity.sku?.let { normalized.contains(it.lowercase()) } == true) return true
-        return entity.type == "product" && Regex("(?i)\\b(همین|همون|این|آن)\\s+محصول\\b").containsMatchIn(text)
-    }
+    private fun normalizeAlias(value: String): String =
+        value.lowercase().replace(Regex("\\s+"), " ").trim()
 
     private fun inferEntityType(text: String, fallback: String?): String? {
         val value = text.lowercase()
@@ -307,11 +361,11 @@ internal class AiContextWindowProvider(private val delegate: AiProvider) : AiPro
             if (text.contains(entity.id.lowercase())) score += 6
             if (entity.name?.let { text.contains(it.lowercase()) } == true) score += 5
             if (entity.sku?.let { text.contains(it.lowercase()) } == true) score += 5
+            for (alias in entity.aliases) if (text.contains(alias.lowercase())) score += 4
         }
         for (entity in allEntities) {
-            val queryMentions = listOfNotNull(entity.id, entity.name, entity.sku)
-                .any { it.isNotBlank() && query.lowercase().contains(it.lowercase()) }
-            if (queryMentions && text.contains(entity.id.lowercase())) score += 10
+            val queryMentions = listOfNotNull(entity.id, entity.name, entity.sku) + entity.aliases
+            if (queryMentions.any { it.isNotBlank() && query.lowercase().contains(it.lowercase()) } && text.contains(entity.id.lowercase())) score += 10
         }
         score += ((index.toDouble() / size) * 2).toInt()
         if (item.optString("role") == "tool") score++
