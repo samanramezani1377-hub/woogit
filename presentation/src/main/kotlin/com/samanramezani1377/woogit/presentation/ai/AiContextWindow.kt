@@ -132,21 +132,38 @@ internal class AiContextWindowProvider(private val delegate: AiProvider) : AiPro
 
             val parsed = runCatching { JSONObject(text) }.getOrNull()
             if (parsed != null) collectStructuredEntities(parsed, inferredType, i, candidates)
+            else parseEmbeddedJson(text)?.let { collectStructuredEntities(it, inferredType, i, candidates) }
 
             for (entity in candidates) {
-                val active = i == lastUser || refersToEntity(text, entity)
+                val active = i == lastUser && refersToEntity(text, entity)
                 val old = byKey[entity.key()]
-                byKey[entity.key()] = mergeEntity(old, entity.copy(active = active || old?.active == true))
+                byKey[entity.key()] = mergeEntity(old, entity.copy(active = active))
             }
         }
-        return byKey.values
+
+        val all = byKey.values.toList()
+        val latestMentioned = all.filter { entity ->
+            lastUser >= 0 && refersToEntity(messages.optJSONObject(lastUser)?.optString("content").orEmpty(), entity)
+        }.map { it.key() }.toSet()
+        val activeKeys = if (latestMentioned.isNotEmpty()) latestMentioned
+        else all.sortedByDescending { it.lastIndex }.take(MAX_ACTIVE_ENTITIES).map { it.key() }.toSet()
+
+        return all
+            .map { it.copy(active = it.key() in activeKeys) }
             .sortedWith(compareByDescending<WooEntity> { it.active }.thenByDescending { it.lastIndex })
             .take(MAX_ENTITIES)
     }
 
+    private fun parseEmbeddedJson(text: String): JSONObject? {
+        val start = text.indexOf('{')
+        val end = text.lastIndexOf('}')
+        if (start < 0 || end <= start) return null
+        return runCatching { JSONObject(text.substring(start, end + 1)) }.getOrNull()
+    }
+
     private fun collectStructuredEntities(json: JSONObject, inferredType: String?, index: Int, out: MutableList<WooEntity>) {
         val type = inferredType ?: when {
-            json.has("order") || json.has("orders") -> "order"
+            json.has("order") || json.has("orders") || json.has("order_id") -> "order"
             json.has("product") || json.has("products") || json.has("sku") || json.has("regular_price") -> "product"
             else -> null
         }
@@ -164,6 +181,7 @@ internal class AiContextWindowProvider(private val delegate: AiProvider) : AiPro
                 is JSONArray -> for (i in 0 until value.length()) {
                     value.optJSONObject(i)?.let { collectStructuredEntities(it, type ?: inferEntityType(key, null), index, out) }
                 }
+                is String -> parseEmbeddedJson(value)?.let { collectStructuredEntities(it, type ?: inferEntityType(key, null), index, out) }
             }
         }
     }
@@ -175,7 +193,7 @@ internal class AiContextWindowProvider(private val delegate: AiProvider) : AiPro
             sku = next.sku ?: old.sku,
             aliases = (old.aliases + listOfNotNull(next.name, next.sku)).takeLast(MAX_ALIASES).toSet(),
             lastIndex = maxOf(old.lastIndex, next.lastIndex),
-            active = old.active || next.active,
+            active = next.active,
         )
     }
 
@@ -285,25 +303,16 @@ internal class AiContextWindowProvider(private val delegate: AiProvider) : AiPro
         val text = item.toString().lowercase()
         var score = 0
         for (term in queryTerms) if (term.length >= MIN_TERM_LENGTH && text.contains(term)) score += 2
-
-        // Entity identity is stronger than a generic word match. This lets a later
-        // "همون محصول" recover the turn that introduced the active product.
         for (entity in activeEntities) {
-            val entityText = entity.searchableText()
-            if (text.contains(entityText)) score += 8
-            else if (text.contains(entity.id.lowercase())) score += 6
-            else if (entity.name?.let { text.contains(it.lowercase()) } == true) score += 5
-            else if (entity.sku?.let { text.contains(it.lowercase()) } == true) score += 5
+            if (text.contains(entity.id.lowercase())) score += 6
+            if (entity.name?.let { text.contains(it.lowercase()) } == true) score += 5
+            if (entity.sku?.let { text.contains(it.lowercase()) } == true) score += 5
         }
-
-        // A direct entity reference in the current query gets a bonus against matching
-        // historical entities, including turns where the exact words differ.
         for (entity in allEntities) {
             val queryMentions = listOfNotNull(entity.id, entity.name, entity.sku)
                 .any { it.isNotBlank() && query.lowercase().contains(it.lowercase()) }
-            if (queryMentions && text.contains(entity.searchableText())) score += 10
+            if (queryMentions && text.contains(entity.id.lowercase())) score += 10
         }
-
         score += ((index.toDouble() / size) * 2).toInt()
         if (item.optString("role") == "tool") score++
         return score
