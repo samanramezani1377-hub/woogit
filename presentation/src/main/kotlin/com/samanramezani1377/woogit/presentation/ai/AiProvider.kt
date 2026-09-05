@@ -3,12 +3,6 @@ package com.samanramezani1377.woogit.presentation.ai
 import org.json.JSONArray
 import org.json.JSONObject
 
-internal data class AiAttachment(
-    val name: String,
-    val mimeType: String,
-    val bytes: ByteArray,
-)
-
 internal sealed interface AiStreamEvent {
     data class Status(val text: String) : AiStreamEvent
     data class Thinking(val text: String) : AiStreamEvent
