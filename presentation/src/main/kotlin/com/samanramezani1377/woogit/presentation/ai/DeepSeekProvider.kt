@@ -8,6 +8,7 @@ import java.net.URL
 
 internal class DeepSeekProvider(context: Context) : AiProvider {
     override val id: String = "deepseek"
+    override val modelId: String = MODEL
     override val capabilities: Set<AiCapability> = setOf(AiCapability.TEXT, AiCapability.IMAGE_INPUT, AiCapability.TOOL_CALLING)
     private val prefs = context.applicationContext.getSharedPreferences("woogit_ai", Context.MODE_PRIVATE)
     override var apiKey: String
