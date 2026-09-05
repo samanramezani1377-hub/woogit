@@ -46,7 +46,7 @@ internal class DeepSeekProvider(context: Context) : AiProvider {
             val status = connection.responseCode
             val text = (if (status in 200..299) connection.inputStream else connection.errorStream)?.bufferedReader()?.use { it.readText() }.orEmpty()
             if (status !in 200..299) throw IllegalStateException("DeepSeek HTTP $status: ${text.take(400)}")
-            JSONObject(text)
+            JSONObject(text).let(::normalizeImageContent)
         } finally { connection.disconnect() }
     }
 
@@ -65,11 +65,32 @@ internal class DeepSeekProvider(context: Context) : AiProvider {
             val delta = runCatching { JSONObject(raw).optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("delta") }.getOrNull() ?: continue
             val reasoning = delta.nonNullString("reasoning_content") ?: delta.nonNullString("reasoning")
             if (!reasoning.isNullOrBlank()) onEvent(AiStreamEvent.Thinking(reasoning))
-            val text = delta.nonNullString("content"); if (!text.isNullOrEmpty()) { content.append(text); onEvent(AiStreamEvent.TextDelta(text)) }
+            val rawContent = delta.opt("content")
+            when (rawContent) {
+                is String -> if (rawContent.isNotEmpty()) { content.append(rawContent); onEvent(AiStreamEvent.TextDelta(rawContent)) }
+                is JSONArray -> AiOutputImageCodec.appendOpenAiContentPartMarkers(content, rawContent)
+                is JSONObject -> AiOutputImageCodec.appendOpenAiContentPartMarkers(content, rawContent)
+            }
             val streamedCalls = delta.optJSONArray("tool_calls") ?: continue
             for (i in 0 until streamedCalls.length()) { val part = streamedCalls.optJSONObject(i) ?: continue; val index = part.optInt("index", i); val call = calls.getOrPut(index) { JSONObject().put("id", "").put("type", "function").put("function", JSONObject().put("name", "").put("arguments", "")) }; part.nonNullString("id")?.let { call.put("id", call.optString("id") + it) }; val fn = part.optJSONObject("function") ?: continue; val current = call.optJSONObject("function")!!; fn.nonNullString("name")?.let { current.put("name", current.optString("name") + it) }; fn.nonNullString("arguments")?.let { current.put("arguments", current.optString("arguments") + it) } }
         } }
         val message = JSONObject().put("role", "assistant").put("content", content.toString()); if (calls.isNotEmpty()) message.put("tool_calls", JSONArray(calls.toSortedMap().values.toList())); return JSONObject().put("choices", JSONArray().put(JSONObject().put("message", message)))
+    }
+
+    private fun normalizeImageContent(response: JSONObject): JSONObject {
+        val message = response.optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("message") ?: return response
+        val content = message.opt("content")
+        if (content is JSONArray || content is JSONObject) {
+            val builder = StringBuilder()
+            AiOutputImageCodec.appendOpenAiContentPartMarkers(builder, content)
+            val text = when (content) {
+                is JSONArray -> (0 until content.length()).mapNotNull { content.optJSONObject(it)?.optString("text")?.takeIf(String::isNotBlank) }.joinToString("")
+                is JSONObject -> content.optString("text")
+                else -> ""
+            }
+            message.put("content", text + builder.toString())
+        }
+        return response
     }
 
     private companion object {
