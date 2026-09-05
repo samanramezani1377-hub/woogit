@@ -72,6 +72,7 @@ class TypedWooCommerceApi(private val raw: WooCommerceApi) {
     suspend fun updateTerm(b:String,a:Long,id:Long,v:WooAttributeTermDto) = decode(raw.updateAttributeTerm(b,a,id,typedJson.encodeToString(v))) { typedJson.decodeFromString<WooAttributeTermDto>(it) }
     suspend fun deleteTerm(b:String,a:Long,id:Long) = decode(raw.deleteAttributeTerm(b,a,id,true)) { Unit }
     suspend fun media(b:String,p:Int,n:Int,s:String?) = decode(raw.listMedia(b,p,n,s)) { typedJson.decodeFromString<List<WooMediaDto>>(it) }
+    suspend fun downloadMedia(b:String,sourceUrl:String) = runCatching { raw.downloadMedia(b,sourceUrl) }
     suspend fun uploadMedia(b:String,f:String,bytes:ByteArray,m:String) = decode(raw.uploadMedia(b,f,bytes,m)) { typedJson.decodeFromString<WooMediaDto>(it) }
     suspend fun deleteMedia(b:String,id:Long) = decode(raw.deleteMedia(b,id,true)) { Unit }
 }
