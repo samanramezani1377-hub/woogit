@@ -11,7 +11,6 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.Json
 
 private val typedJson = Json { ignoreUnknownKeys = true; explicitNulls = false }
-
 @Serializable data class WooAddressDto(val first_name:String?=null,val last_name:String?=null,val company:String?=null,val address_1:String?=null,val address_2:String?=null,val city:String?=null,val state:String?=null,val postcode:String?=null,val country:String?=null,val phone:String?=null)
 @Serializable data class WooLineItemDto(val id:Long,val name:String="",val product_id:Long=0,val variation_id:Long=0,val quantity:Double=0.0,val subtotal:String="0",val total:String="0")
 @Serializable data class WooShippingLineDto(val id:Long=0,val method_id:String?=null,val method_title:String?=null,val total:String?=null)
@@ -27,11 +26,7 @@ private val typedJson = Json { ignoreUnknownKeys = true; explicitNulls = false }
 @Serializable data class WooVariationTypedDto(val id:Long,val product_id:Long=0,val sku:String?=null,val price:String?=null,val regular_price:String?=null,val sale_price:String?=null,val stock_quantity:Double?=null,val stock_status:String="instock",val manage_stock:Boolean=false,val image:WooImageTypedDto?=null,val date_modified_gmt:String?=null,val attributes:List<WooVariationAttributeDto> = emptyList(),val meta_data:List<WooMetaDataDto> = emptyList())
 @Serializable data class WooGlobalAttributeDto(val id:Long,val name:String="",val slug:String="")
 @Serializable data class WooAttributeTermDto(val id:Long,val name:String="",val slug:String="")
-@Serializable data class WooSystemStatusDto(val environment: Map<String, JsonElement> = emptyMap(), val settings: WooSystemStatusSettingsDto = WooSystemStatusSettingsDto()) {
-    fun environmentString(key: String): String? = environment[key]?.asText()
-    fun environmentBoolean(key: String): Boolean? = environment[key]?.asBoolean()
-    fun environmentInt(key: String): Int? = environment[key]?.asInt()
-}
+@Serializable data class WooSystemStatusDto(val environment: Map<String, JsonElement> = emptyMap(), val settings: WooSystemStatusSettingsDto = WooSystemStatusSettingsDto()) { fun environmentString(key: String): String? = environment[key]?.asText(); fun environmentBoolean(key: String): Boolean? = environment[key]?.asBoolean(); fun environmentInt(key: String): Int? = environment[key]?.asInt() }
 private fun JsonElement.asText(): String? = (this as? JsonPrimitive)?.contentOrNull
 private fun JsonElement.asBoolean(): Boolean? = (this as? JsonPrimitive)?.booleanOrNull
 private fun JsonElement.asInt(): Int? = (this as? JsonPrimitive)?.intOrNull
@@ -46,7 +41,7 @@ class TypedWooCommerceApi(private val raw: WooCommerceApi) {
     suspend fun ordersTotal(b:String,s:String?,st:String?) = total(raw.listOrders(b,1,1,s,st))
     suspend fun order(b:String,id:Long) = decode(raw.getOrder(b,id)) { typedJson.decodeFromString<WooOrderTypedDto>(it) }
     suspend fun updateOrder(b:String,id:Long,o:WooOrderTypedDto) = decode(raw.updateOrder(b,id,typedJson.encodeToString(o))) { typedJson.decodeFromString<WooOrderTypedDto>(it) }
-    suspend fun orderNotes(b:String,id:Long) = decode(raw.listOrderNotes(b,id)) { typedJson.decodeFromString<List<WooOrderNoteDto>>(it) }
+    suspend fun orderNotes(b:String,id:Long,page:Int=1,perPage:Int=100) = decode(raw.listOrderNotes(b,id,page,perPage)) { typedJson.decodeFromString<List<WooOrderNoteDto>>(it) }
     suspend fun addOrderNote(b:String,id:Long,n:WooOrderNoteDto) = decode(raw.addOrderNote(b,id,typedJson.encodeToString(n))) { typedJson.decodeFromString<WooOrderNoteDto>(it) }
     suspend fun salesReport(b:String,dateMin:String,dateMax:String) = decode(raw.salesReport(b,dateMin,dateMax)) { typedJson.decodeFromString<List<WooSalesReportDto>>(it).firstOrNull() ?: WooSalesReportDto() }
     suspend fun products(b:String,p:Int,n:Int,s:String?,modifiedAfter:String?=null) = decode(raw.listProducts(b,p,n,s,modifiedAfter)) { typedJson.decodeFromString<List<WooProductTypedDto>>(it) }
