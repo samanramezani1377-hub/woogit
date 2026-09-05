@@ -34,6 +34,7 @@ internal class GroqProvider(context: Context) : AiProvider {
         .put("stream", stream)
         .put("tools", tools)
         .put("tool_choice", "auto")
+        .put("max_completion_tokens", MAX_COMPLETION_TOKENS)
 
     private fun request(messages: JSONArray, tools: JSONArray, stream: Boolean): JSONObject {
         val key = apiKey.trim()
@@ -101,5 +102,8 @@ internal class GroqProvider(context: Context) : AiProvider {
         return IllegalStateException(if (message.isNotBlank()) "Groq HTTP $status: $message" else "Groq HTTP $status: ${text.take(400)}")
     }
 
-    private companion object { const val MODEL = "openai/gpt-oss-20b" }
+    private companion object {
+        const val MODEL = "openai/gpt-oss-20b"
+        const val MAX_COMPLETION_TOKENS = 2048
+    }
 }
