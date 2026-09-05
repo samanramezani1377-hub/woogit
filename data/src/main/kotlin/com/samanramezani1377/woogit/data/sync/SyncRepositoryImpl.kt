@@ -25,122 +25,59 @@ class SyncRepositoryImpl(private val db: WooGitDatabase, private val engine: Syn
         val row = db.syncQueries.selectMetadata(storeId.value).executeAsOneOrNull()
         val queue = pending.getPending(storeId)
         val state = row?.state?.let { runCatching { SyncState.valueOf(it) }.getOrDefault(SyncState.IDLE) } ?: SyncState.IDLE
-        val version = row?.version?.let { EntityVersion(it, row.modified_at?.let(Instant::parse)) }
-        return if (queue is CoreResult.Success) {
-            CoreResult.Success(SyncMetadata(state, version, queue.value))
-        } else {
-            CoreResult.Failure((queue as CoreResult.Failure).error)
-        }
+        val version = row?.version?.let { EntityVersion(it, row.modified_at?.let { value -> runCatching { Instant.parse(value) }.getOrNull() }) }
+        return if (queue is CoreResult.Success) CoreResult.Success(SyncMetadata(state, version, queue.value))
+        else CoreResult.Failure((queue as CoreResult.Failure).error)
     }
 
     override suspend fun getConflicts(storeId: StoreId): CoreResult<List<Conflict>> =
-        CoreResult.Success(
-            db.syncQueries.selectConflicts(storeId.value).executeAsList().map { row ->
-                Conflict(
-                    EntityId(row.id),
-                    EntityId(row.entity_id),
-                    EntityVersion(row.base_snapshot ?: "", null),
-                    null,
-                    row.conflicting_fields,
-                    row.local_snapshot,
-                    row.server_snapshot,
-                    null,
-                    row.entity_type
-                )
-            }
-        )
+        CoreResult.Success(db.syncQueries.selectConflicts(storeId.value).executeAsList().map { row ->
+            Conflict(EntityId(row.id), EntityId(row.entity_id), EntityVersion(row.base_snapshot ?: "", null), null,
+                row.conflicting_fields, row.local_snapshot, row.server_snapshot, null, row.entity_type)
+        })
 
-    override suspend fun resolveConflict(
-        storeId: StoreId,
-        conflictId: EntityId,
-        resolution: ConflictResolution
-    ): CoreResult<Unit> {
+    override suspend fun resolveConflict(storeId: StoreId, conflictId: EntityId, resolution: ConflictResolution): CoreResult<Unit> {
         val row = db.syncQueries.selectConflictById(conflictId.value).executeAsOneOrNull()
             ?: return CoreResult.Failure(DomainError.NotFound("conflict", conflictId.value))
-        if (row.store_id != storeId.value) {
-            return CoreResult.Failure(DomainError.NotFound("conflict", conflictId.value))
-        }
+        if (row.store_id != storeId.value) return CoreResult.Failure(DomainError.NotFound("conflict", conflictId.value))
 
         return when (resolution) {
             ConflictResolution.KEEP_LOCAL -> {
                 val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
-                val original = json.parseToJsonElement(row.local_snapshot)
-                val payload = if (original is JsonObject) {
-                    JsonObject(original.toMutableMap().apply {
-                        put("__woogit_force_local", JsonPrimitive(true))
-                    })
-                } else {
-                    buildJsonObject { put("__woogit_force_local", true) }
-                }
+                val original = runCatching { json.parseToJsonElement(row.local_snapshot) }.getOrElse { return CoreResult.Failure(DomainError.Validation("Local conflict snapshot is invalid")) }
+                val payload = if (original is JsonObject) JsonObject(original.toMutableMap().apply { put("__woogit_force_local", JsonPrimitive(true)) })
+                else buildJsonObject { put("__woogit_force_local", true) }
                 val payloadText = payload.toString()
                 val payloadHash = sha256(payloadText)
                 db.transaction {
-                    db.syncQueries.updatePayload(
-                        payloadText,
-                        payloadHash,
-                        System.currentTimeMillis(),
-                        row.operation_id,
-                        storeId.value
-                    )
-                    db.syncQueries.resolveConflict(
-                        "RESOLVED_LOCAL",
-                        System.currentTimeMillis(),
-                        conflictId.value,
-                        storeId.value
-                    )
-                    db.syncQueries.updateState(
-                        "PENDING",
-                        0,
-                        null,
-                        null,
-                        System.currentTimeMillis(),
-                        row.operation_id
-                    )
+                    db.syncQueries.updatePayload(payloadText, payloadHash, System.currentTimeMillis(), row.operation_id, storeId.value)
+                    db.syncQueries.resolveConflict("RESOLVED_LOCAL", System.currentTimeMillis(), conflictId.value, storeId.value)
+                    db.syncQueries.updateState("PENDING", 0, null, null, System.currentTimeMillis(), row.operation_id)
                 }
                 CoreResult.Success(Unit)
             }
-
             ConflictResolution.KEEP_SERVER -> {
                 val json = Json { ignoreUnknownKeys = true }
                 when (row.entity_type) {
-                    "order" -> {
-                        val dto = json.decodeFromString<com.samanramezani1377.woogit.data.network.WooOrderTypedDto>(row.server_snapshot)
-                        com.samanramezani1377.woogit.data.local.SqlOrderDataSource(db)
-                            .upsert(storeId, com.samanramezani1377.woogit.data.repository.OrderRepositoryV1Mapper.toDomain(dto))
-                    }
-                    "product" -> {
-                        val dto = json.decodeFromString<com.samanramezani1377.woogit.data.network.WooProductTypedDto>(row.server_snapshot)
-                        com.samanramezani1377.woogit.data.local.SqlProductDataSource(db)
-                            .upsert(storeId, com.samanramezani1377.woogit.data.repository.ProductRepositoryV1Mapper.toDomain(dto))
-                    }
+                    "order" -> runCatching { json.decodeFromString<com.samanramezani1377.woogit.data.network.WooOrderTypedDto>(row.server_snapshot) }.fold(
+                        { dto -> com.samanramezani1377.woogit.data.local.SqlOrderDataSource(db).upsert(storeId, com.samanramezani1377.woogit.data.repository.OrderRepositoryV1Mapper.toDomain(dto)) },
+                        { CoreResult.Failure(DomainError.Validation("Server order conflict snapshot is invalid")) }
+                    )
+                    "product" -> runCatching { json.decodeFromString<com.samanramezani1377.woogit.data.network.WooProductTypedDto>(row.server_snapshot) }.fold(
+                        { dto -> com.samanramezani1377.woogit.data.local.SqlProductDataSource(db).upsert(storeId, com.samanramezani1377.woogit.data.repository.ProductRepositoryV1Mapper.toDomain(dto)) },
+                        { CoreResult.Failure(DomainError.Validation("Server product conflict snapshot is invalid")) }
+                    )
                     else -> return CoreResult.Failure(DomainError.Validation("Unsupported conflict entity"))
-                }
+                }.let { result -> if (result is CoreResult.Failure) return result }
                 db.transaction {
-                    db.syncQueries.resolveConflict(
-                        "RESOLVED_SERVER",
-                        System.currentTimeMillis(),
-                        conflictId.value,
-                        storeId.value
-                    )
-                    db.syncQueries.updateState(
-                        "SUCCEEDED",
-                        0,
-                        null,
-                        null,
-                        System.currentTimeMillis(),
-                        row.operation_id
-                    )
+                    db.syncQueries.resolveConflict("RESOLVED_SERVER", System.currentTimeMillis(), conflictId.value, storeId.value)
+                    db.syncQueries.updateState("SUCCEEDED", 0, null, null, System.currentTimeMillis(), row.operation_id)
                 }
                 CoreResult.Success(Unit)
             }
-
-            ConflictResolution.MERGE ->
-                CoreResult.Failure(DomainError.Validation("Automatic merge is not safe for this V1 resource"))
+            ConflictResolution.MERGE -> CoreResult.Failure(DomainError.Validation("Automatic merge is not safe for this V1 resource"))
         }
     }
 
-    private fun sha256(value: String): String =
-        MessageDigest.getInstance("SHA-256")
-            .digest(value.toByteArray(Charsets.UTF_8))
-            .joinToString("") { "%02x".format(it) }
+    private fun sha256(value: String): String = MessageDigest.getInstance("SHA-256").digest(value.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }
 }
