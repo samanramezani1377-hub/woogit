@@ -1,5 +1,7 @@
 package com.samanramezani1377.woogit.presentation.ai
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -23,13 +25,13 @@ import kotlinx.coroutines.launch
 internal fun AiScreen() {
     val context = LocalContext.current.applicationContext
     val vm = viewModel<AiViewModel>(factory = AiViewModel.Factory(context))
-    val state by vm.state.collectAsState(); val providerId by vm.providerId.collectAsState(); val history by vm.history.collectAsState()
+    val state by vm.state.collectAsState(); val providerId by vm.providerId.collectAsState(); val history by vm.history.collectAsState(); val attachments by vm.attachments.collectAsState()
     var apiKey by remember(providerId) { mutableStateOf(vm.apiKey) }; var geminiModel by remember { mutableStateOf(vm.geminiModel) }; var input by remember { mutableStateOf("") }
     var showSettings by remember { mutableStateOf(false) }; var showMoreHistory by remember { mutableStateOf(false) }
     val drawerState = rememberDrawerState(DrawerValue.Closed); val scope = rememberCoroutineScope()
+    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri -> if (uri != null) vm.addImage(uri) }
     val messages = when (val value = state) { AiUiState.Idle -> emptyList(); is AiUiState.Working -> value.messages; is AiUiState.Ready -> value.messages; is AiUiState.Error -> value.messages }
-    val activities = (state as? AiUiState.Working)?.activities.orEmpty(); val streamingText = (state as? AiUiState.Working)?.streamingText.orEmpty()
-    val visibleHistory = history.take(if (showMoreHistory) 10 else 5)
+    val activities = (state as? AiUiState.Working)?.activities.orEmpty(); val streamingText = (state as? AiUiState.Working)?.streamingText.orEmpty(); val visibleHistory = history.take(if (showMoreHistory) 10 else 5)
 
     ModalNavigationDrawer(drawerState = drawerState, drawerContent = {
         ModalDrawerSheet(modifier = Modifier.fillMaxWidth(.86f), drawerShape = RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp), drawerContainerColor = Color.White.copy(alpha = .96f)) {
@@ -60,7 +62,17 @@ internal fun AiScreen() {
                     if (pending != null) item { GlassCard { Text("تأیید عملیات", fontWeight = FontWeight.Bold); Text("AI می‌خواهد این تغییر را از طریق WooGit اجرا کند:", color = GlassTokens.muted); Text(pending.toolName.orEmpty(), color = GlassTokens.accent, fontWeight = FontWeight.SemiBold); Text(pending.toolArguments.orEmpty(), color = GlassTokens.muted); Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) { GlassButton("تأیید و اجرا", { vm.confirm(pending) }, Modifier.weight(1f)); GlassOutlinedButton("رد کردن", { vm.reject(pending) }, Modifier.weight(1f)) } } }
                     if (state is AiUiState.Error) item { GlassCard { Text("خطا: ${(state as AiUiState.Error).message}", color = GlassTokens.urgent) } }
                 }
-                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Color.White.copy(alpha = .60f)).padding(5.dp), verticalAlignment = Alignment.CenterVertically) { AiField(input, { input = it }, "دستور به AI", Modifier.weight(1f), singleLine = false); IconButton(onClick = { vm.send(input); input = "" }, enabled = input.isNotBlank() && state !is AiUiState.Working && apiKey.isNotBlank()) { Box(Modifier.size(44.dp).clip(CircleShape).background(GlassTokens.accent), contentAlignment = Alignment.Center) { Text("↑", color = Color.White, fontWeight = FontWeight.Bold) } } }
+                if (attachments.isNotEmpty()) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        GlassOutlinedButton("🖼  ${attachments.first().name}", {}, Modifier.weight(1f))
+                        TextButton(onClick = vm::removeImage) { Text("حذف") }
+                    }
+                }
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Color.White.copy(alpha = .60f)).padding(5.dp), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = { imagePicker.launch("image/*") }, enabled = state !is AiUiState.Working) { Text("+", color = GlassTokens.accent, fontWeight = FontWeight.Bold) }
+                    AiField(input, { input = it }, "دستور به AI", Modifier.weight(1f), singleLine = false)
+                    IconButton(onClick = { vm.send(input); input = "" }, enabled = (input.isNotBlank() || attachments.isNotEmpty()) && state !is AiUiState.Working && apiKey.isNotBlank()) { Box(Modifier.size(44.dp).clip(CircleShape).background(GlassTokens.accent), contentAlignment = Alignment.Center) { Text("↑", color = Color.White, fontWeight = FontWeight.Bold) } }
+                }
                 Spacer(Modifier.height(6.dp))
             }
         }
@@ -69,26 +81,16 @@ internal fun AiScreen() {
     GlassBottomSheet(show = showSettings, onDismiss = { showSettings = false }) {
         Text("تنظیمات AI", fontWeight = FontWeight.Bold); Spacer(Modifier.height(6.dp)); Text("سرویس AI", fontWeight = FontWeight.SemiBold); Spacer(Modifier.height(4.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            GlassOutlinedButton("Gemini", { vm.selectProvider("gemini"); apiKey = vm.apiKey; geminiModel = vm.geminiModel }, Modifier.weight(1f))
-            GlassOutlinedButton("OpenRouter", { vm.selectProvider("openrouter"); apiKey = vm.apiKey }, Modifier.weight(1f))
-            GlassOutlinedButton("DeepSeek", { vm.selectProvider("deepseek"); apiKey = vm.apiKey }, Modifier.weight(1f))
-            GlassOutlinedButton("Groq", { vm.selectProvider("groq"); apiKey = vm.apiKey }, Modifier.weight(1f))
+            GlassOutlinedButton("Gemini", { vm.selectProvider("gemini"); apiKey = vm.apiKey; geminiModel = vm.geminiModel }, Modifier.weight(1f)); GlassOutlinedButton("OpenRouter", { vm.selectProvider("openrouter"); apiKey = vm.apiKey }, Modifier.weight(1f)); GlassOutlinedButton("DeepSeek", { vm.selectProvider("deepseek"); apiKey = vm.apiKey }, Modifier.weight(1f)); GlassOutlinedButton("Groq", { vm.selectProvider("groq"); apiKey = vm.apiKey }, Modifier.weight(1f))
         }
-        if (providerId == "gemini") {
-            Spacer(Modifier.height(10.dp)); Text("مدل Gemini", fontWeight = FontWeight.SemiBold)
-            AiField(geminiModel, { geminiModel = it }, "Model ID (مثلاً gemini-3.8-flash)")
-            Text("شناسه مدل مستقیماً از تنظیمات خوانده می‌شود؛ با تغییر مدل نیازی به تغییر Agent نیست.", color = GlassTokens.muted)
-            Spacer(Modifier.height(4.dp))
-        }
+        if (providerId == "gemini") { Spacer(Modifier.height(10.dp)); Text("مدل Gemini", fontWeight = FontWeight.SemiBold); AiField(geminiModel, { geminiModel = it }, "Model ID (مثلاً gemini-3.8-flash)"); Text("شناسه مدل مستقیماً از تنظیمات خوانده می‌شود؛ با تغییر مدل نیازی به تغییر Agent نیست.", color = GlassTokens.muted); Spacer(Modifier.height(4.dp)) }
         Spacer(Modifier.height(8.dp)); Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("${providerLabel(providerId)} API", fontWeight = FontWeight.SemiBold); Text(if (apiKey.isBlank()) "کلید تنظیم نشده" else "کلید روی دستگاه ذخیره شده است", color = if (apiKey.isBlank()) GlassTokens.faint else GlassTokens.live) }; Text("مستقیم", color = GlassTokens.muted) }
-        Spacer(Modifier.height(4.dp)); AiField(apiKey, { apiKey = it }, "کلید API ${providerLabel(providerId)}", secret = true)
-        Text(providerDescription(providerId), color = GlassTokens.muted); Spacer(Modifier.height(4.dp)); GlassButton("ذخیره تنظیمات", { vm.saveApiKey(apiKey); if (providerId == "gemini") vm.saveGeminiModel(geminiModel); showSettings = false })
+        Spacer(Modifier.height(4.dp)); AiField(apiKey, { apiKey = it }, "کلید API ${providerLabel(providerId)}", secret = true); Text(providerDescription(providerId), color = GlassTokens.muted); Spacer(Modifier.height(4.dp)); GlassButton("ذخیره تنظیمات", { vm.saveApiKey(apiKey); if (providerId == "gemini") vm.saveGeminiModel(geminiModel); showSettings = false })
     }
 }
 
 private fun providerLabel(id: String) = when (id) { "gemini" -> "Gemini"; "deepseek" -> "DeepSeek"; "groq" -> "Groq"; else -> "OpenRouter" }
 private fun providerDescription(id: String) = when (id) { "gemini" -> "اتصال مستقیم به Google Gemini API؛ مدل انتخاب‌شده با tool calling استفاده می‌شود."; "deepseek" -> "اتصال مستقیم به api.deepseek.com؛ Backend جداگانه لازم نیست."; "groq" -> "اتصال مستقیم به Groq API؛ مدل openai/gpt-oss-20b با tool calling استفاده می‌شود."; else -> "اتصال مستقیم به OpenRouter؛ مدل رایگان openrouter/free با پشتیبانی از tool calling استفاده می‌شود." }
-
 @Composable private fun HistoryItem(session: AiChatSession, onClick: () -> Unit) { GlassOutlinedButton(session.title, onClick, Modifier.fillMaxWidth()) }
 @Composable private fun MessageBubble(message: AiMessage) { val user = message.role == "user"; Row(Modifier.fillMaxWidth(), horizontalArrangement = if (user) Arrangement.End else Arrangement.Start) { Box(Modifier.fillMaxWidth(.88f).clip(RoundedCornerShape(20.dp)).background(if (user) GlassTokens.accent.copy(alpha = .12f) else Color.White.copy(alpha = .54f)).padding(14.dp)) { Column(verticalArrangement = Arrangement.spacedBy(4.dp)) { Text(if (user) "شما" else "WooGit AI", color = if (user) GlassTokens.accent else GlassTokens.ink, fontWeight = FontWeight.SemiBold); Text(message.content, color = GlassTokens.ink) } } } }
 @Composable private fun AiField(value: String, onValueChange: (String) -> Unit, label: String, modifier: Modifier = Modifier, secret: Boolean = false, singleLine: Boolean = true) { TextField(value = value, onValueChange = onValueChange, modifier = modifier.fillMaxWidth(), label = { Text(label) }, singleLine = singleLine, visualTransformation = if (secret) androidx.compose.ui.text.input.PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None, colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent, disabledContainerColor = Color.Transparent, focusedIndicatorColor = GlassTokens.accent, unfocusedIndicatorColor = GlassTokens.glassBorder)) }
