@@ -11,11 +11,25 @@ import org.json.JSONObject
 internal class WooGitToolExecutor(
     private val dependencies: V1PresentationDependencies,
     private val storeId: StoreId,
+    private val groqMode: Boolean = false,
 ) {
     suspend fun execute(name: String, raw: String): String {
         val a = JSONObject(raw)
         return when (name) {
-            "products_list" -> readResult(dependencies.getProducts(storeId, a.optInt("page", 1), a.optInt("perPage", 20), a.optString("search").takeIf { it.isNotBlank() }))
+            "products_list" -> {
+                val requestedPerPage = a.optInt("perPage", if (groqMode) GROQ_PRODUCTS_PAGE_SIZE else 20)
+                val perPage = if (groqMode) requestedPerPage.coerceIn(1, GROQ_PRODUCTS_PAGE_SIZE) else requestedPerPage.coerceIn(1, 100)
+                productsListResult(
+                    dependencies.getProducts(
+                        storeId,
+                        a.optInt("page", 1),
+                        perPage,
+                        a.optString("search").takeIf { it.isNotBlank() },
+                    ),
+                    a.optInt("page", 1),
+                    perPage,
+                )
+            }
             "products_get" -> readResult(dependencies.getProduct(storeId, EntityId(a.getLong("id").toString())))
             "products_create" -> createProduct(a)
             "products_update" -> updateProduct(a)
@@ -30,6 +44,26 @@ internal class WooGitToolExecutor(
     private fun readResult(result: CoreResult<*>): String = when (result) {
         is CoreResult.Success -> JSONObject().put("ok", true).put("data", stringify(result.value)).toString()
         is CoreResult.Failure -> JSONObject().put("ok", false).put("error", result.error.toString()).toString()
+    }
+
+    private fun productsListResult(result: CoreResult<*>, page: Int, perPage: Int): String = when (result) {
+        is CoreResult.Failure -> JSONObject().put("ok", false).put("error", result.error.toString()).toString()
+        is CoreResult.Success -> {
+            val products = result.value as? List<*> ?: emptyList<Any?>()
+            val data = JSONArray().apply {
+                products.forEach { value ->
+                    if (value is Product && groqMode) put(productSummaryJson(value)) else put(stringify(value))
+                }
+            }
+            JSONObject()
+                .put("ok", true)
+                .put("page", page)
+                .put("perPage", perPage)
+                .put("count", products.size)
+                .put("hasMore", products.size >= perPage)
+                .put("data", data)
+                .toString()
+        }
     }
 
     private suspend fun createProduct(a: JSONObject): String {
@@ -182,6 +216,19 @@ internal class WooGitToolExecutor(
         else -> v.toString()
     }
 
+    private fun productSummaryJson(p: Product) = JSONObject().apply {
+        put("id", p.id.value)
+        put("name", p.name)
+        put("sku", p.sku ?: JSONObject.NULL)
+        put("status", p.status.name)
+        put("type", p.type.name)
+        put("regularPrice", p.pricing.regular ?: JSONObject.NULL)
+        put("salePrice", p.pricing.sale ?: JSONObject.NULL)
+        put("stockQuantity", p.stock?.quantity ?: JSONObject.NULL)
+        put("stockStatus", p.stock?.status?.name ?: JSONObject.NULL)
+        put("manageStock", p.stock?.manageStock ?: JSONObject.NULL)
+    }
+
     private fun productJson(p: Product) = JSONObject().apply {
         put("id", p.id.value); put("name", p.name); put("sku", p.sku ?: JSONObject.NULL)
         put("description", p.description ?: JSONObject.NULL); put("shortDescription", p.shortDescription ?: JSONObject.NULL)
@@ -189,5 +236,9 @@ internal class WooGitToolExecutor(
         put("regularPrice", p.pricing.regular ?: JSONObject.NULL); put("salePrice", p.pricing.sale ?: JSONObject.NULL)
         put("stockQuantity", p.stock?.quantity ?: JSONObject.NULL); put("stockStatus", p.stock?.status?.name ?: JSONObject.NULL)
         put("manageStock", p.stock?.manageStock ?: JSONObject.NULL)
+    }
+
+    private companion object {
+        const val GROQ_PRODUCTS_PAGE_SIZE = 10
     }
 }
