@@ -83,7 +83,26 @@ internal class CloudflareProvider(context: Context) : AiProvider {
             if (!reasoning.isNullOrBlank()) onEvent(AiStreamEvent.Thinking(reasoning))
             val text = delta.nonNullString("content"); if (!text.isNullOrEmpty()) { content.append(text); onEvent(AiStreamEvent.TextDelta(text)) }
             val streamedCalls = delta.optJSONArray("tool_calls") ?: continue
-            for (i in 0 until streamedCalls.length()) { val part = streamedCalls.optJSONObject(i) ?: continue; val index = part.optInt("index", i); val call = calls.getOrPut(index) { JSONObject().put("id", "").put("type", "function").put("function", JSONObject().put("name", "").put("arguments", "")) }; part.nonNullString("id")?.let { call.put("id", call.optString("id") + it) }; val fn = part.optJSONObject("function") ?: continue; val current = call.optJSONObject("function")!!; fn.nonNullString("name")?.let { current.put("name", current.optString("name") + it) }; fn.nonNullString("arguments")?.let { current.put("arguments", current.optString("arguments") + it) } }
+            for (i in 0 until streamedCalls.length()) {
+                val part = streamedCalls.optJSONObject(i) ?: continue
+                val index = part.optInt("index", i)
+                val call = calls.getOrPut(index) { JSONObject().put("id", "").put("type", "function").put("function", JSONObject().put("name", "").put("arguments", "")) }
+                part.nonNullString("id")?.let { incoming -> if (call.optString("id").isBlank()) call.put("id", incoming) }
+                val fn = part.optJSONObject("function") ?: continue
+                val current = call.optJSONObject("function")!!
+                fn.nonNullString("name")?.let { incoming ->
+                    val existing = current.optString("name")
+                    if (existing.isBlank()) current.put("name", incoming)
+                }
+                fn.nonNullString("arguments")?.let { incoming ->
+                    val existing = current.optString("arguments")
+                    current.put("arguments", when {
+                        existing.isBlank() -> incoming
+                        incoming == existing || incoming.startsWith(existing) -> incoming
+                        else -> existing + incoming
+                    })
+                }
+            }
         } }
         val message = JSONObject().put("role", "assistant").put("content", content.toString()); if (calls.isNotEmpty()) message.put("tool_calls", JSONArray(calls.toSortedMap().values.toList())); return JSONObject().put("choices", JSONArray().put(JSONObject().put("message", message)))
     }
