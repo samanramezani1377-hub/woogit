@@ -37,11 +37,11 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
     private val groq = GroqProvider(appContext)
     private val cloudflare = CloudflareProvider(appContext)
     private val agents = mapOf(
-        "deepseek" to AiAgent(deepSeek, WooGitToolExecutor(dependencies, storeId)),
-        "openrouter" to AiAgent(openRouter, WooGitToolExecutor(dependencies, storeId)),
-        "gemini" to AiAgent(gemini, WooGitToolExecutor(dependencies, storeId)),
-        "groq" to AiAgent(groq, WooGitToolExecutor(dependencies, storeId, groqMode = true)),
-        "cloudflare" to AiAgent(cloudflare, WooGitToolExecutor(dependencies, storeId)),
+        "deepseek" to AiAgent(AiContextWindowProvider(deepSeek), WooGitToolExecutor(dependencies, storeId)),
+        "openrouter" to AiAgent(AiContextWindowProvider(openRouter), WooGitToolExecutor(dependencies, storeId)),
+        "gemini" to AiAgent(AiContextWindowProvider(gemini), WooGitToolExecutor(dependencies, storeId)),
+        "groq" to AiAgent(AiContextWindowProvider(groq), WooGitToolExecutor(dependencies, storeId, groqMode = true)),
+        "cloudflare" to AiAgent(AiContextWindowProvider(cloudflare), WooGitToolExecutor(dependencies, storeId)),
     )
     private val _providerId = MutableStateFlow(prefs.getString("provider", "openrouter") ?: "openrouter")
     val providerId: StateFlow<String> = _providerId.asStateFlow()
