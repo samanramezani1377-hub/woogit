@@ -40,6 +40,7 @@ internal fun AiScreen() {
     var cloudflareAccountId by remember { mutableStateOf(vm.cloudflareAccountId) }
     var input by remember { mutableStateOf("") }
     var showSettings by remember { mutableStateOf(false) }
+    var showMemory by remember { mutableStateOf(false) }
     var showMoreHistory by remember { mutableStateOf(false) }
     var providerMenuExpanded by remember { mutableStateOf(false) }
     var groqMenuExpanded by remember { mutableStateOf(false) }
@@ -64,6 +65,10 @@ internal fun AiScreen() {
                 Text("گفتگوها", fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(12.dp))
                 GlassButton("＋  چت جدید", { vm.newChat(); showMoreHistory = false; scope.launch { drawerState.close() } }, Modifier.fillMaxWidth())
+                if (SHOW_AGENT_MEMORY_DEBUG) {
+                    Spacer(Modifier.height(8.dp))
+                    GlassOutlinedButton("🧠  حافظه Agent", { showMemory = true }, Modifier.fillMaxWidth())
+                }
                 Spacer(Modifier.height(16.dp))
                 HorizontalDivider(color = GlassTokens.glassBorder)
                 Spacer(Modifier.height(14.dp))
@@ -153,6 +158,8 @@ internal fun AiScreen() {
         Spacer(Modifier.height(8.dp)); Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("${providerLabel(providerId)} API", fontWeight = FontWeight.SemiBold); Text(if (apiKey.isBlank()) "کلید تنظیم نشده" else "کلید روی دستگاه ذخیره شده است", color = if (apiKey.isBlank()) GlassTokens.faint else GlassTokens.live) }; Text("مستقیم", color = GlassTokens.muted) }
         Spacer(Modifier.height(4.dp)); AiField(apiKey, { apiKey = it }, if (providerId == "cloudflare") "API Token کلادفلر" else "کلید API ${providerLabel(providerId)}", secret = true); Text(providerDescription(providerId), color = GlassTokens.muted); Spacer(Modifier.height(4.dp)); GlassButton("ذخیره تنظیمات", { vm.saveApiKey(apiKey); if (providerId == "gemini") vm.saveGeminiModel(geminiModel); if (providerId == "groq") vm.saveGroqModel(groqModel); if (providerId == "cloudflare") { vm.saveCloudflareModel(cloudflareModel); vm.saveCloudflareAccountId(cloudflareAccountId) }; showSettings = false })
     }
+
+    AgentMemoryDebugSheet(context, showMemory, { showMemory = false })
 }
 
 private val AI_PROVIDERS = listOf("gemini", "openrouter", "deepseek", "groq", "cloudflare")
