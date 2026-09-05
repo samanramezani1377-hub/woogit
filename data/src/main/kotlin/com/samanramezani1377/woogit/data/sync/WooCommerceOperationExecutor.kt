@@ -29,7 +29,7 @@ private const val OP_BIT_ZERO = '\u200B'
 private const val OP_BIT_ONE = '\u200C'
 private fun operationMarker(operationId:String):String = buildString { append(OP_MARKER_START); operationId.toByteArray(Charsets.UTF_8).forEach { byte -> for (bit in 7 downTo 0) append(if (((byte.toInt() shr bit) and 1) == 0) OP_BIT_ZERO else OP_BIT_ONE) }; append(OP_MARKER_END) }
 private fun hasOperationMarker(note:String,operationId:String)=note.contains(operationMarker(operationId))
-private fun operationSuffixWithoutUuid(id:String):String { val last=id.lastIndexOf('-'); require(last>0){"Invalid operation id: $id"}; return id.substring(0,last-35) }
+private fun operationSuffixWithoutUuid(id:String):String { require(id.length>=37){"Invalid operation id: $id"}; return id.dropLast(36).removeSuffix("-") }
 
 class WooCommerceOperationExecutor(private val db:WooGitDatabase,private val provider:WooCommerceClientProvider,private val orders:LocalOrderDataSource<Order>,private val products:LocalProductDataSource<Product>,private val variations:LocalVariationDataSource,private val attributes:LocalAttributeDataSource,private val terms:LocalTermDataSource):OperationExecutor {
  override suspend fun execute(operation:PendingOperation){
