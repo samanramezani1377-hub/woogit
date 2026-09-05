@@ -1,7 +1,6 @@
 package com.samanramezani1377.woogit.presentation.ai
 
 import android.content.Context
-import android.util.Base64
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -10,6 +9,7 @@ import java.security.MessageDigest
 
 internal class GeminiProvider(context: Context) : AiProvider {
     override val id: String = "gemini"
+    override val capabilities: Set<AiCapability> = setOf(AiCapability.TEXT, AiCapability.IMAGE_INPUT, AiCapability.TOOL_CALLING)
     private val prefs = context.applicationContext.getSharedPreferences("woogit_ai", Context.MODE_PRIVATE)
     override var apiKey: String
         get() = prefs.getString("gemini_api_key", "") ?: ""
@@ -20,16 +20,9 @@ internal class GeminiProvider(context: Context) : AiProvider {
         set(value) { value.trim().takeIf { it.isNotBlank() }?.let { prefs.edit().putString("gemini_model", it).apply() } }
 
     override suspend fun complete(messages: JSONArray, tools: JSONArray): JSONObject = request(messages, tools, false, emptyList())
+    override suspend fun stream(messages: JSONArray, tools: JSONArray, onEvent: suspend (AiStreamEvent) -> Unit): JSONObject = stream(messages, tools, emptyList(), onEvent)
 
-    override suspend fun stream(messages: JSONArray, tools: JSONArray, onEvent: suspend (AiStreamEvent) -> Unit): JSONObject =
-        stream(messages, tools, emptyList(), onEvent)
-
-    override suspend fun stream(
-        messages: JSONArray,
-        tools: JSONArray,
-        attachments: List<AiAttachment>,
-        onEvent: suspend (AiStreamEvent) -> Unit,
-    ): JSONObject {
+    override suspend fun stream(messages: JSONArray, tools: JSONArray, attachments: List<AiAttachment>, onEvent: suspend (AiStreamEvent) -> Unit): JSONObject {
         val key = apiKey.trim()
         if (key.isBlank()) throw IllegalStateException("کلید API جمنای تنظیم نشده است.")
         val connection = connection(key, true)
@@ -54,50 +47,35 @@ internal class GeminiProvider(context: Context) : AiProvider {
         } finally { connection.disconnect() }
     }
 
-    private fun connection(key: String, stream: Boolean) =
-        (URL("https://generativelanguage.googleapis.com/v1beta/models/$modelId:${if (stream) "streamGenerateContent?alt=sse" else "generateContent"}").openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"
-            connectTimeout = 10_000
-            readTimeout = 120_000
-            doOutput = true
-            setRequestProperty("Content-Type", "application/json")
-            setRequestProperty("x-goog-api-key", key)
-        }
+    private fun connection(key: String, stream: Boolean) = (URL("https://generativelanguage.googleapis.com/v1beta/models/$modelId:${if (stream) "streamGenerateContent?alt=sse" else "generateContent"}").openConnection() as HttpURLConnection).apply {
+        requestMethod = "POST"; connectTimeout = 10_000; readTimeout = 120_000; doOutput = true
+        setRequestProperty("Content-Type", "application/json"); setRequestProperty("x-goog-api-key", key)
+    }
 
     private fun body(messages: JSONArray, tools: JSONArray, attachments: List<AiAttachment>): JSONObject {
         val system = messages.optJSONObject(0)?.takeIf { it.optString("role") == "system" }?.optString("content").orEmpty()
-        val contents = JSONArray()
-        var lastUserIndex = -1
+        val contents = JSONArray(); var lastUserIndex = -1
         for (i in 0 until messages.length()) if (messages.optJSONObject(i)?.optString("role") == "user") lastUserIndex = i
         for (i in 0 until messages.length()) {
             val message = messages.optJSONObject(i) ?: continue
             when (message.optString("role")) {
                 "system" -> Unit
                 "user" -> {
-                    val parts = JSONArray().put(JSONObject().put("text", message.optString("content")))
-                    if (i == lastUserIndex) attachments.forEach { attachment ->
-                        require(attachment.bytes.size <= MAX_INLINE_IMAGE_BYTES) { "تصویر انتخاب‌شده بیش از 20MB است." }
-                        parts.put(JSONObject().put("inlineData", JSONObject()
-                            .put("mimeType", attachment.mimeType)
-                            .put("data", Base64.encodeToString(attachment.bytes, Base64.NO_WRAP))))
-                    }
+                    val parts = if (i == lastUserIndex) AiMultimodal.geminiImageParts(message, attachments) else JSONArray().put(JSONObject().put("text", message.optString("content")))
                     contents.put(JSONObject().put("role", "user").put("parts", parts))
                 }
                 "assistant" -> contents.put(modelContent(message))
                 "tool" -> contents.put(functionResponseContent(messages, i, message))
             }
         }
-        return JSONObject()
-            .put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", system))))
-            .put("contents", contents)
-            .put("tools", JSONArray().put(JSONObject().put("functionDeclarations", geminiFunctions(tools))))
+        return JSONObject().put("systemInstruction", JSONObject().put("parts", JSONArray().put(JSONObject().put("text", system))))
+            .put("contents", contents).put("tools", JSONArray().put(JSONObject().put("functionDeclarations", geminiFunctions(tools))))
     }
 
     private fun geminiFunctions(tools: JSONArray): JSONArray {
         val declarations = JSONArray()
         for (i in 0 until tools.length()) {
-            val outer = tools.optJSONObject(i) ?: continue
-            val fn = outer.optJSONObject("function") ?: continue
+            val outer = tools.optJSONObject(i) ?: continue; val fn = outer.optJSONObject("function") ?: continue
             val parameters = fn.optJSONObject("parameters") ?: JSONObject().put("type", "object")
             declarations.put(JSONObject().put("name", fn.optString("name")).put("description", fn.optString("description")).put("parameters", sanitizeSchema(parameters)))
         }
@@ -147,6 +125,5 @@ internal class GeminiProvider(context: Context) : AiProvider {
     private fun syntheticCallId(name: String, args: String) = MessageDigest.getInstance("SHA-256").digest("$name:$args".toByteArray()).joinToString("") { "%02x".format(it) }.take(32)
     private fun httpError(connection: HttpURLConnection, status: Int): IllegalStateException { val text = connection.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty(); return IllegalStateException(geminiError(status, text)) }
     private fun geminiError(status: Int, text: String): String { val message = runCatching { JSONObject(text).optJSONObject("error")?.optString("message") }.getOrNull().orEmpty(); return if (message.isNotBlank()) "Gemini HTTP $status: $message" else "Gemini HTTP $status: ${text.take(400)}" }
-
-    private companion object { const val DEFAULT_MODEL = "gemini-3.8-flash"; const val MAX_INLINE_IMAGE_BYTES = 20 * 1024 * 1024 }
+    private companion object { const val DEFAULT_MODEL = "gemini-3.8-flash" }
 }
