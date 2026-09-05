@@ -13,7 +13,7 @@ internal class WooGitToolExecutor(
     private val storeId: StoreId,
     private val groqMode: Boolean = false,
 ) {
-    suspend fun execute(name: String, raw: String): String {
+    suspend fun execute(name: String, raw: String, attachments: List<AiAttachment> = emptyList()): String {
         val a = JSONObject(raw)
         return when (name) {
             "products_list" -> {
@@ -23,6 +23,8 @@ internal class WooGitToolExecutor(
             }
             "products_get" -> readResult(dependencies.getProduct(storeId, EntityId(a.getLong("id").toString())))
             "products_get_image" -> productImageResult(a)
+            "products_image_add" -> addProductImage(a, attachments)
+            "products_image_set_primary" -> setPrimaryProductImage(a)
             "products_create" -> createProduct(a)
             "products_update" -> updateProduct(a)
             "products_delete" -> deleteProduct(a)
@@ -49,6 +51,61 @@ internal class WooGitToolExecutor(
                         .put("src", image.src)
                         .put("name", image.name ?: JSONObject.NULL)
                         .put("alt", image.alt ?: JSONObject.NULL))).toString()
+            }
+        }
+    }
+
+    private suspend fun addProductImage(a: JSONObject, attachments: List<AiAttachment>): String {
+        val attachment = attachments.firstOrNull() ?: return failure("برای افزودن تصویر، ابتدا یک تصویر انتخاب کنید.")
+        require(attachment.bytes.isNotEmpty()) { "تصویر خالی است." }
+        require(attachment.bytes.size <= MAX_IMAGE_BYTES) { "تصویر بیش از 20MB است." }
+        val id = EntityId(a.getLong("id").toString())
+        val fileName = a.optString("fileName").trim().ifBlank { attachment.name.ifBlank { "product-image.jpg" } }
+        val mediaType = attachment.mimeType.takeIf { it.startsWith("image/") } ?: "image/jpeg"
+        return when (val current = dependencies.getProduct(storeId, id)) {
+            is CoreResult.Failure -> failure(current.error.toString())
+            is CoreResult.Success -> when (val upload = dependencies.uploadMedia(storeId, fileName, attachment.bytes, mediaType)) {
+                is CoreResult.Failure -> failure(upload.error.toString())
+                is CoreResult.Success -> {
+                    val image = upload.value
+                    val updated = current.value.copy(images = current.value.images + image)
+                    when (val saved = dependencies.updateProduct(storeId, id, updated)) {
+                        is CoreResult.Failure -> failure("تصویر در Media Library آپلود شد، اما اتصال آن به محصول ناموفق بود: ${saved.error}")
+                        is CoreResult.Success -> when (val reread = dependencies.getProduct(storeId, id)) {
+                            is CoreResult.Failure -> failure("تصویر به محصول اضافه شد، اما وضعیت نهایی قابل تأیید نیست: ${reread.error}")
+                            is CoreResult.Success -> {
+                                val product = reread.value
+                                val verified = product.images.any { it.id?.value == image.id?.value || it.src == image.src }
+                                if (verified) JSONObject().put("ok", true).put("verified", true).put("operation", "products_image_add").put("data", JSONObject().put("productId", id.value).put("image", JSONObject().put("id", image.id?.value ?: JSONObject.NULL).put("src", image.src)) ).toString()
+                                else failure("تصویر آپلود شد، اما اتصال آن به محصول تأیید نشد.")
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private suspend fun setPrimaryProductImage(a: JSONObject): String {
+        val id = EntityId(a.getLong("id").toString())
+        val index = a.optInt("imageIndex", 0)
+        return when (val current = dependencies.getProduct(storeId, id)) {
+            is CoreResult.Failure -> failure(current.error.toString())
+            is CoreResult.Success -> {
+                val product = current.value
+                val selected = product.images.getOrNull(index) ?: return failure("تصویر شماره ${index + 1} برای این محصول وجود ندارد.")
+                val reordered = listOf(selected) + product.images.filterIndexed { i, _ -> i != index }
+                when (val saved = dependencies.updateProduct(storeId, id, product.copy(images = reordered))) {
+                    is CoreResult.Failure -> failure(saved.error.toString())
+                    is CoreResult.Success -> when (val reread = dependencies.getProduct(storeId, id)) {
+                        is CoreResult.Failure -> failure("تغییر تصویر اصلی ارسال شد، اما وضعیت نهایی قابل تأیید نیست: ${reread.error}")
+                        is CoreResult.Success -> {
+                            val first = reread.value.images.firstOrNull()
+                            if (first?.id?.value == selected.id?.value || (selected.id == null && first?.src == selected.src)) JSONObject().put("ok", true).put("verified", true).put("operation", "products_image_set_primary").put("data", JSONObject().put("productId", id.value).put("imageId", selected.id?.value ?: JSONObject.NULL).put("src", selected.src)).toString()
+                            else failure("تغییر تصویر اصلی تأیید نشد.")
+                        }
+                    }
+                }
             }
         }
     }
@@ -147,5 +204,5 @@ internal class WooGitToolExecutor(
         put("stockQuantity", p.stock?.quantity ?: JSONObject.NULL); put("stockStatus", p.stock?.status?.name ?: JSONObject.NULL); put("manageStock", p.stock?.manageStock ?: JSONObject.NULL)
         put("images", JSONArray().apply { p.images.forEach { image -> put(JSONObject().put("id", image.id?.value ?: JSONObject.NULL).put("src", image.src).put("name", image.name ?: JSONObject.NULL).put("alt", image.alt ?: JSONObject.NULL)) } })
     }
-    private companion object { const val GROQ_PRODUCTS_PAGE_SIZE = 10 }
+    private companion object { const val GROQ_PRODUCTS_PAGE_SIZE = 10; const val MAX_IMAGE_BYTES = 20 * 1024 * 1024 }
 }
