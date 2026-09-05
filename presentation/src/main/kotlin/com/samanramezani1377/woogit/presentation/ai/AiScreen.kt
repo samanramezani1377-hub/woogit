@@ -28,7 +28,7 @@ import kotlinx.coroutines.launch
 internal fun AiScreen() {
     val context = LocalContext.current.applicationContext
     val vm = viewModel<AiViewModel>(factory = AiViewModel.Factory(context))
-    val state by vm.state.collectAsState(); val providerId by vm.providerId.collectAsState(); val history by vm.history.collectAsState(); val attachments by vm.attachments.collectAsState()
+    val state by vm.state.collectAsState(); val isGenerating by vm.isGenerating.collectAsState(); val providerId by vm.providerId.collectAsState(); val history by vm.history.collectAsState(); val attachments by vm.attachments.collectAsState()
     var apiKey by remember(providerId) { mutableStateOf(vm.apiKey) }; var geminiModel by remember { mutableStateOf(vm.geminiModel) }; var groqModel by remember { mutableStateOf(vm.groqModel) }; var cloudflareModel by remember { mutableStateOf(vm.cloudflareModel) }; var cloudflareAccountId by remember { mutableStateOf(vm.cloudflareAccountId) }; var input by remember { mutableStateOf("") }
     var showSettings by remember { mutableStateOf(false) }; var showMoreHistory by remember { mutableStateOf(false) }; var groqMenuExpanded by remember { mutableStateOf(false) }; var cloudflareMenuExpanded by remember { mutableStateOf(false) }
     val drawerState = rememberDrawerState(DrawerValue.Closed); val scope = rememberCoroutineScope()
@@ -71,12 +71,12 @@ internal fun AiScreen() {
                     }
                 }
                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Color.White.copy(alpha = .60f)).padding(5.dp), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { imagePicker.launch("image/*") }, enabled = state !is AiUiState.Working) { Text("+", color = GlassTokens.accent, fontWeight = FontWeight.Bold) }
+                    IconButton(onClick = { imagePicker.launch("image/*") }, enabled = !isGenerating) { Text("+", color = GlassTokens.accent, fontWeight = FontWeight.Bold) }
                     AiField(input, { input = it }, "دستور به AI", Modifier.weight(1f), singleLine = false)
-                    if (state is AiUiState.Working) {
-                        IconButton(onClick = vm::stopGeneration) {
-                            Box(Modifier.size(44.dp).clip(CircleShape).background(GlassTokens.accent), contentAlignment = Alignment.Center) {
-                                Box(Modifier.size(15.dp).clip(RoundedCornerShape(3.dp)).background(Color.White))
+                    if (isGenerating) {
+                        IconButton(onClick = vm::stopGeneration, modifier = Modifier.size(52.dp)) {
+                            Box(Modifier.size(44.dp).clip(CircleShape).background(GlassTokens.urgent), contentAlignment = Alignment.Center) {
+                                Box(Modifier.size(16.dp).clip(RoundedCornerShape(3.dp)).background(Color.White))
                             }
                         }
                     } else {
