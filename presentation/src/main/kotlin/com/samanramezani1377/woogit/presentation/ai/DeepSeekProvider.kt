@@ -9,6 +9,7 @@ import java.net.URL
 internal class DeepSeekProvider(context: Context) : AiProvider {
     override val id: String = "deepseek"
     override val modelId: String = MODEL
+    override fun effectiveModelId(hasAttachments: Boolean): String = if (hasAttachments) VISION_MODEL else MODEL
     override val capabilities: Set<AiCapability> = setOf(AiCapability.TEXT, AiCapability.IMAGE_INPUT, AiCapability.TOOL_CALLING)
     private val prefs = context.applicationContext.getSharedPreferences("woogit_ai", Context.MODE_PRIVATE)
     override var apiKey: String
@@ -33,7 +34,7 @@ internal class DeepSeekProvider(context: Context) : AiProvider {
     }
 
     private fun body(messages: JSONArray, tools: JSONArray, stream: Boolean, hasImages: Boolean) = JSONObject()
-        .put("model", if (hasImages) VISION_MODEL else MODEL).put("messages", messages)
+        .put("model", effectiveModelId(hasImages)).put("messages", messages)
         .put("thinking", JSONObject().put("type", "disabled")).put("stream", stream)
         .put("tools", tools).put("tool_choice", "auto")
 
