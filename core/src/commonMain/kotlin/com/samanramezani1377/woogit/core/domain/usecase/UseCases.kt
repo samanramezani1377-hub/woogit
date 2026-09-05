@@ -17,6 +17,7 @@ interface DeleteProduct { suspend operator fun invoke(storeId: StoreId, id: Enti
 interface GetProductCategories { suspend operator fun invoke(storeId: StoreId, page: Int = 1, perPage: Int = 100, search: String? = null): CoreResult<List<IdName>>; suspend fun create(storeId: StoreId, value: IdName): CoreResult<IdName> }
 interface GetMedia { suspend operator fun invoke(storeId: StoreId, page: Int = 1, perPage: Int = 30, search: String? = null): CoreResult<List<ProductImage>> }
 interface UploadMedia { suspend operator fun invoke(storeId: StoreId, fileName: String, bytes: ByteArray, mediaType: String): CoreResult<ProductImage> }
+interface DownloadMedia { suspend operator fun invoke(storeId: StoreId, image: ProductImage): CoreResult<MediaContent> }
 interface DeleteMedia { suspend operator fun invoke(storeId: StoreId, mediaId: EntityId): CoreResult<Unit> }
 interface GetStore { suspend operator fun invoke(storeId: StoreId): CoreResult<StoreConnection> }
 interface ConnectStore { suspend operator fun invoke(store: StoreConnection, consumerKey: String, consumerSecret: String, wordpressUsername: String? = null, wordpressApplicationPassword: String? = null): CoreResult<StoreConnection> }
