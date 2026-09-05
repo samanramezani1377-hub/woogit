@@ -15,7 +15,7 @@ internal class GroqProvider(context: Context) : AiProvider {
         get() = prefs.getString("groq_api_key", "") ?: ""
         set(value) { prefs.edit().putString("groq_api_key", value.trim()).apply() }
 
-    internal var modelId: String
+    override var modelId: String
         get() = prefs.getString("groq_model", DEFAULT_MODEL) ?: DEFAULT_MODEL
         set(value) { prefs.edit().putString("groq_model", value.trim().ifBlank { DEFAULT_MODEL }).apply() }
 
