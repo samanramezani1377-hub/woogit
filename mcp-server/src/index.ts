@@ -38,87 +38,75 @@ async function wc(path: string, init: RequestInit = {}) {
   return body;
 }
 
+async function wcCollection(path: string, init: RequestInit = {}) {
+  const url = new URL(`${WC_BASE_URL}${path}`);
+  url.searchParams.set('consumer_key', WC_CONSUMER_KEY!);
+  url.searchParams.set('consumer_secret', WC_CONSUMER_SECRET!);
+  const response = await fetch(url, {
+    ...init,
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json', ...(init.headers ?? {}) }
+  });
+  const text = await response.text();
+  let body: unknown;
+  try { body = JSON.parse(text); } catch { body = { message: text }; }
+  if (!response.ok) throw new Error(`WooCommerce HTTP ${response.status}: ${JSON.stringify(body)}`);
+  if (!Array.isArray(body)) throw new Error(`WooCommerce collection endpoint returned non-array data: ${JSON.stringify(body)}`);
+  return {
+    items: body,
+    total: Number(response.headers.get('x-wp-total') ?? body.length),
+    total_pages: Number(response.headers.get('x-wp-totalpages') ?? 1)
+  };
+}
+
 type JsonRecord = Record<string, any>;
+
+const ORDER_STATUS_INFO: Record<string, { label: string; meaning: string; is_paid: boolean | null; is_final: boolean }> = {
+  pending: { label: 'Pending / در انتظار پرداخت', meaning: 'در انتظار پرداخت', is_paid: false, is_final: false },
+  processing: { label: 'Processing / در حال پردازش', meaning: 'پرداخت شده و در حال پردازش سفارش', is_paid: true, is_final: false },
+  'on-hold': { label: 'On hold / در انتظار', meaning: 'سفارش در حالت انتظار/توقف', is_paid: null, is_final: false },
+  completed: { label: 'Completed / تکمیل شده', meaning: 'سفارش تکمیل شده', is_paid: true, is_final: true },
+  cancelled: { label: 'Cancelled / لغو شده', meaning: 'سفارش لغو شده', is_paid: false, is_final: true },
+  refunded: { label: 'Refunded / مسترد شده', meaning: 'مبلغ سفارش مسترد شده', is_paid: false, is_final: true },
+  failed: { label: 'Failed / ناموفق', meaning: 'پرداخت یا پردازش سفارش ناموفق بوده', is_paid: false, is_final: true },
+  trash: { label: 'Trash / زباله', meaning: 'سفارش حذف شده/در زباله', is_paid: null, is_final: true }
+};
 
 function normalizeProduct(product: JsonRecord): JsonRecord {
   const variations = Array.isArray(product.variations) ? product.variations : [];
   return {
-    id: product.id ?? null,
-    name: product.name ?? '',
-    slug: product.slug ?? null,
-    sku: product.sku ?? null,
-    type: product.type ?? null,
-    status: product.status ?? null,
-    catalog_visibility: product.catalog_visibility ?? null,
-    description: product.description ?? '',
-    short_description: product.short_description ?? '',
-    pricing: {
-      price: product.price ?? null,
-      regular_price: product.regular_price ?? null,
-      sale_price: product.sale_price ?? null,
-      on_sale: product.on_sale ?? false,
-      tax_status: product.tax_status ?? null,
-      tax_class: product.tax_class ?? null
-    },
-    inventory: {
-      manage_stock: product.manage_stock ?? null,
-      quantity: product.stock_quantity ?? null,
-      status: product.stock_status ?? null,
-      backorders: product.backorders ?? null,
-      backorders_allowed: product.backorders_allowed ?? null,
-      backordered: product.backordered ?? null
-    },
+    id: product.id ?? null, name: product.name ?? '', slug: product.slug ?? null, sku: product.sku ?? null,
+    type: product.type ?? null, status: product.status ?? null, catalog_visibility: product.catalog_visibility ?? null,
+    description: product.description ?? '', short_description: product.short_description ?? '',
+    pricing: { price: product.price ?? null, regular_price: product.regular_price ?? null, sale_price: product.sale_price ?? null, on_sale: product.on_sale ?? false, tax_status: product.tax_status ?? null, tax_class: product.tax_class ?? null },
+    inventory: { manage_stock: product.manage_stock ?? null, quantity: product.stock_quantity ?? null, status: product.stock_status ?? null, backorders: product.backorders ?? null, backorders_allowed: product.backorders_allowed ?? null, backordered: product.backordered ?? null },
     catalog: { categories: product.categories ?? [], tags: product.tags ?? [] },
-    shipping: {
-      weight: product.weight ?? null,
-      dimensions: product.dimensions ?? null,
-      shipping_class: product.shipping_class ?? null,
-      shipping_required: product.shipping_required ?? null,
-      shipping_taxable: product.shipping_taxable ?? null
-    },
-    images: product.images ?? [],
-    attributes: product.attributes ?? [],
-    default_attributes: product.default_attributes ?? [],
-    related_ids: product.related_ids ?? [],
-    upsell_ids: product.upsell_ids ?? [],
-    cross_sell_ids: product.cross_sell_ids ?? [],
-    purchase_note: product.purchase_note ?? null,
-    permalink: product.permalink ?? null,
-    variations: variations.map((v: JsonRecord) => ({
-      id: v.id ?? null,
-      sku: v.sku ?? null,
-      description: v.description ?? '',
-      attributes: v.attributes ?? [],
-      pricing: {
-        price: v.price ?? null,
-        regular_price: v.regular_price ?? null,
-        sale_price: v.sale_price ?? null,
-        on_sale: v.on_sale ?? false
-      },
-      inventory: {
-        manage_stock: v.manage_stock ?? null,
-        quantity: v.stock_quantity ?? null,
-        status: v.stock_status ?? null,
-        backorders: v.backorders ?? null,
-        backorders_allowed: v.backorders_allowed ?? null,
-        backordered: v.backordered ?? null
-      },
-      image: v.image ?? null,
-      weight: v.weight ?? null,
-      dimensions: v.dimensions ?? null
-    })),
+    shipping: { weight: product.weight ?? null, dimensions: product.dimensions ?? null, shipping_class: product.shipping_class ?? null, shipping_required: product.shipping_required ?? null, shipping_taxable: product.shipping_taxable ?? null },
+    images: product.images ?? [], attributes: product.attributes ?? [], default_attributes: product.default_attributes ?? [], related_ids: product.related_ids ?? [], upsell_ids: product.upsell_ids ?? [], cross_sell_ids: product.cross_sell_ids ?? [], purchase_note: product.purchase_note ?? null, permalink: product.permalink ?? null,
+    variations: variations.map((v: JsonRecord) => ({ id: v.id ?? null, sku: v.sku ?? null, description: v.description ?? '', attributes: v.attributes ?? [], pricing: { price: v.price ?? null, regular_price: v.regular_price ?? null, sale_price: v.sale_price ?? null, on_sale: v.on_sale ?? false }, inventory: { manage_stock: v.manage_stock ?? null, quantity: v.stock_quantity ?? null, status: v.stock_status ?? null, backorders: v.backorders ?? null, backorders_allowed: v.backorders_allowed ?? null, backordered: v.backordered ?? null }, image: v.image ?? null, weight: v.weight ?? null, dimensions: v.dimensions ?? null })),
     raw: product
   };
 }
 
 function normalizeOrder(order: JsonRecord): JsonRecord {
+  const status = String(order.status ?? 'unknown');
+  const statusInfo = ORDER_STATUS_INFO[status] ?? { label: status, meaning: 'وضعیت نامشخص', is_paid: null, is_final: false };
   return {
     id: order.id ?? null,
     number: order.number ?? null,
-    status: order.status ?? null,
+    status,
+    status_label: statusInfo.label,
+    status_meaning: statusInfo.meaning,
+    is_paid: order.date_paid != null ? true : statusInfo.is_paid,
+    is_completed: status === 'completed',
+    is_cancelled: status === 'cancelled',
+    is_refunded: status === 'refunded',
+    is_failed: status === 'failed',
+    is_final: statusInfo.is_final,
     currency: order.currency ?? null,
     date_created: order.date_created ?? null,
     date_modified: order.date_modified ?? null,
+    date_paid: order.date_paid ?? null,
+    date_completed: order.date_completed ?? null,
     total: order.total ?? null,
     total_tax: order.total_tax ?? null,
     shipping_total: order.shipping_total ?? null,
@@ -128,118 +116,76 @@ function normalizeOrder(order: JsonRecord): JsonRecord {
     transaction_id: order.transaction_id ?? null,
     customer: { id: order.customer_id ?? null, billing: order.billing ?? null, shipping: order.shipping ?? null },
     items: Array.isArray(order.line_items) ? order.line_items.map((item: JsonRecord) => ({
-      id: item.id ?? null,
-      product_id: item.product_id ?? null,
-      variation_id: item.variation_id ?? null,
-      name: item.name ?? '',
-      quantity: item.quantity ?? null,
-      sku: item.sku ?? null,
-      price: item.price ?? null,
-      subtotal: item.subtotal ?? null,
-      total: item.total ?? null,
-      total_tax: item.total_tax ?? null,
+      id: item.id ?? null, product_id: item.product_id ?? null, variation_id: item.variation_id ?? null,
+      name: item.name ?? '', parent_name: item.parent_name ?? null, quantity: item.quantity ?? null, sku: item.sku ?? null,
+      price: item.price ?? null, subtotal: item.subtotal ?? null, total: item.total ?? null, total_tax: item.total_tax ?? null,
       variation: item.variation ?? []
     })) : [],
-    shipping_lines: order.shipping_lines ?? [],
-    fee_lines: order.fee_lines ?? [],
-    coupon_lines: order.coupon_lines ?? [],
-    refunds: order.refunds ?? [],
+    shipping_lines: order.shipping_lines ?? [], fee_lines: order.fee_lines ?? [], coupon_lines: order.coupon_lines ?? [], refunds: order.refunds ?? [],
     raw: order
   };
 }
 
 function normalizeCategory(category: JsonRecord): JsonRecord {
-  return {
-    id: category.id ?? null,
-    name: category.name ?? '',
-    slug: category.slug ?? null,
-    parent: category.parent ?? 0,
-    description: category.description ?? '',
-    display: category.display ?? null,
-    image: category.image ?? null,
-    menu_order: category.menu_order ?? null,
-    count: category.count ?? null,
-    raw: category
-  };
+  return { id: category.id ?? null, name: category.name ?? '', slug: category.slug ?? null, parent: category.parent ?? 0, description: category.description ?? '', display: category.display ?? null, image: category.image ?? null, menu_order: category.menu_order ?? null, count: category.count ?? null, raw: category };
 }
 
 function normalizeCollection(items: unknown, normalizer: (item: JsonRecord) => JsonRecord) {
-  return Array.isArray(items) ? items.map(item => normalizer((item ?? {}) as JsonRecord)) : [];
+  if (!Array.isArray(items)) throw new Error(`Expected WooCommerce collection array, received: ${JSON.stringify(items)}`);
+  return items.map(item => normalizer((item ?? {}) as JsonRecord));
 }
 
 function createServer() {
   const server = new McpServer({ name: 'WooGit', version: '1.0.0' });
 
-  server.registerTool('products.list', {
-    title: 'List WooCommerce products',
-    description: 'Read products from the connected WooCommerce store. Returns structured product identity, pricing, inventory, catalog, shipping, images, attributes and variations. For inventory questions use inventory.quantity and inventory.status. A null quantity means quantity is not managed/available, not necessarily zero. Variable products expose variation-level inventory.',
-    inputSchema: { page: z.number().int().min(1).optional(), per_page: z.number().int().min(1).max(100).optional(), search: z.string().optional() },
-    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true }
-  }, async ({ page = 1, per_page = 20, search }) => {
-    const products = await wc(`/wp-json/wc/v3/products?page=${page}&per_page=${per_page}${search ? `&search=${encodeURIComponent(search)}` : ''}`);
-    return { content: [{ type: 'text', text: JSON.stringify({ items: normalizeCollection(products, normalizeProduct), page, per_page }) }] };
+  server.registerTool('products.list', { title: 'List WooCommerce products', description: 'Read products from the connected WooCommerce store. Returns structured product identity, pricing, inventory, catalog, shipping, images, attributes and variations. For inventory questions use inventory.quantity and inventory.status. A null quantity means quantity is not managed/available, not necessarily zero. Variable products expose variation-level inventory.', inputSchema: { page: z.number().int().min(1).optional(), per_page: z.number().int().min(1).max(100).optional(), search: z.string().optional() }, annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true } }, async ({ page = 1, per_page = 20, search }) => {
+    const result = await wcCollection(`/wp-json/wc/v3/products?page=${page}&per_page=${per_page}${search ? `&search=${encodeURIComponent(search)}` : ''}`);
+    return { content: [{ type: 'text', text: JSON.stringify({ items: normalizeCollection(result.items, normalizeProduct), page, per_page, total: result.total, total_pages: result.total_pages }) }] };
   });
 
-  server.registerTool('products.get', {
-    title: 'Get WooCommerce product',
-    description: 'Read one product by ID with complete structured product data, including inventory and variation inventory.',
-    inputSchema: { id: z.number().int().positive() },
-    annotations: { readOnlyHint: true, destructiveHint: false }
-  }, async ({ id }) => {
+  server.registerTool('products.get', { title: 'Get WooCommerce product', description: 'Read one product by ID with complete structured product data, including inventory and variation inventory.', inputSchema: { id: z.number().int().positive() }, annotations: { readOnlyHint: true, destructiveHint: false } }, async ({ id }) => {
     const product = await wc(`/wp-json/wc/v3/products/${id}`);
     return { content: [{ type: 'text', text: JSON.stringify(normalizeProduct(product as JsonRecord)) }] };
   });
 
-  server.registerTool('products.create', {
-    title: 'Create WooCommerce product', description: 'Create a new WooCommerce product. This changes store data and should require user confirmation in the client.',
-    inputSchema: { name: z.string().min(1), type: z.string().optional(), status: z.string().optional(), regular_price: z.string().optional(), description: z.string().optional(), short_description: z.string().optional(), sku: z.string().optional(), stock_quantity: z.number().int().nonnegative().optional(), categories: z.array(z.object({ id: z.number().int().positive() })).optional(), images: z.array(z.object({ id: z.number().int().positive().optional(), src: z.string().url().optional() })).optional() },
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true }
-  }, async (input) => {
+  server.registerTool('products.create', { title: 'Create WooCommerce product', description: 'Create a new WooCommerce product. This changes store data and should require user confirmation in the client.', inputSchema: { name: z.string().min(1), type: z.string().optional(), status: z.string().optional(), regular_price: z.string().optional(), description: z.string().optional(), short_description: z.string().optional(), sku: z.string().optional(), stock_quantity: z.number().int().nonnegative().optional(), categories: z.array(z.object({ id: z.number().int().positive() })).optional(), images: z.array(z.object({ id: z.number().int().positive().optional(), src: z.string().url().optional() })).optional() }, annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true } }, async (input) => {
     const product = await wc('/wp-json/wc/v3/products', { method: 'POST', body: JSON.stringify(input) });
     return { content: [{ type: 'text', text: JSON.stringify(normalizeProduct(product as JsonRecord)) }] };
   });
 
-  server.registerTool('products.update', {
-    title: 'Update WooCommerce product', description: 'Update an existing product. This changes store data and should require user confirmation in the client.',
-    inputSchema: { id: z.number().int().positive(), fields: z.record(z.string(), z.unknown()) },
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true }
-  }, async ({ id, fields }) => {
+  server.registerTool('products.update', { title: 'Update WooCommerce product', description: 'Update an existing product. This changes store data and should require user confirmation in the client.', inputSchema: { id: z.number().int().positive(), fields: z.record(z.string(), z.unknown()) }, annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true } }, async ({ id, fields }) => {
     const product = await wc(`/wp-json/wc/v3/products/${id}`, { method: 'PUT', body: JSON.stringify(fields) });
     return { content: [{ type: 'text', text: JSON.stringify(normalizeProduct(product as JsonRecord)) }] };
   });
 
-  server.registerTool('products.delete', {
-    title: 'Delete WooCommerce product', description: 'Permanently delete a product. This is destructive and should require explicit user confirmation.',
-    inputSchema: { id: z.number().int().positive(), force: z.boolean().default(true) },
-    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true }
-  }, async ({ id, force }) => ({ content: [{ type: 'text', text: JSON.stringify(await wc(`/wp-json/wc/v3/products/${id}?force=${force}`, { method: 'DELETE' })) }] }));
+  server.registerTool('products.delete', { title: 'Delete WooCommerce product', description: 'Permanently delete a product. This is destructive and should require explicit user confirmation.', inputSchema: { id: z.number().int().positive(), force: z.boolean().default(true) }, annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true } }, async ({ id, force }) => ({ content: [{ type: 'text', text: JSON.stringify(await wc(`/wp-json/wc/v3/products/${id}?force=${force}`, { method: 'DELETE' })) }] }));
 
-  server.registerTool('categories.list', {
-    title: 'List product categories', description: 'Read WooCommerce product categories as structured data including hierarchy, image and product count.',
-    inputSchema: { page: z.number().int().min(1).optional(), per_page: z.number().int().min(1).max(100).optional(), search: z.string().optional() }, annotations: { readOnlyHint: true, destructiveHint: false }
-  }, async ({ page = 1, per_page = 100, search }) => {
-    const categories = await wc(`/wp-json/wc/v3/products/categories?page=${page}&per_page=${per_page}${search ? `&search=${encodeURIComponent(search)}` : ''}`);
-    return { content: [{ type: 'text', text: JSON.stringify({ items: normalizeCollection(categories, normalizeCategory), page, per_page }) }] };
+  server.registerTool('categories.list', { title: 'List product categories', description: 'Read WooCommerce product categories as structured data including hierarchy, image and product count.', inputSchema: { page: z.number().int().min(1).optional(), per_page: z.number().int().min(1).max(100).optional(), search: z.string().optional() }, annotations: { readOnlyHint: true, destructiveHint: false } }, async ({ page = 1, per_page = 100, search }) => {
+    const result = await wcCollection(`/wp-json/wc/v3/products/categories?page=${page}&per_page=${per_page}${search ? `&search=${encodeURIComponent(search)}` : ''}`);
+    return { content: [{ type: 'text', text: JSON.stringify({ items: normalizeCollection(result.items, normalizeCategory), page, per_page, total: result.total, total_pages: result.total_pages }) }] };
   });
 
-  server.registerTool('orders.list', {
-    title: 'List WooCommerce orders', description: 'Read WooCommerce orders as structured data including totals, customer, line items, payment, shipping, discounts and refunds.',
-    inputSchema: { page: z.number().int().min(1).optional(), per_page: z.number().int().min(1).max(100).optional(), status: z.string().optional(), search: z.string().optional() }, annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true }
-  }, async ({ page = 1, per_page = 20, status, search }) => {
-    const orders = await wc(`/wp-json/wc/v3/orders?page=${page}&per_page=${per_page}${status ? `&status=${encodeURIComponent(status)}` : ''}${search ? `&search=${encodeURIComponent(search)}` : ''}`);
-    return { content: [{ type: 'text', text: JSON.stringify({ items: normalizeCollection(orders, normalizeOrder), page, per_page }) }] };
+  server.registerTool('orders.list', { title: 'List WooCommerce orders', description: 'Read WooCommerce orders. Returns a non-empty validated collection when WooCommerce has orders, pagination totals, and explicit status semantics. Statuses: pending=در انتظار پرداخت, processing=در حال پردازش, on-hold=در انتظار, completed=تکمیل شده, cancelled=لغو شده, refunded=مسترد شده, failed=ناموفق. Use status filter to request a specific state.', inputSchema: { page: z.number().int().min(1).optional(), per_page: z.number().int().min(1).max(100).optional(), status: z.enum(['any', 'pending', 'processing', 'on-hold', 'completed', 'cancelled', 'refunded', 'failed', 'trash']).optional(), search: z.string().optional() }, annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true } }, async ({ page = 1, per_page = 20, status, search }) => {
+    const result = await wcCollection(`/wp-json/wc/v3/orders?page=${page}&per_page=${per_page}${status ? `&status=${encodeURIComponent(status)}` : ''}${search ? `&search=${encodeURIComponent(search)}` : ''}`);
+    const items = normalizeCollection(result.items, normalizeOrder);
+    return { content: [{ type: 'text', text: JSON.stringify({ items, count: items.length, total: result.total, total_pages: result.total_pages, page, per_page, filter: { status: status ?? 'any', search: search ?? null }, empty: items.length === 0, message: items.length === 0 ? 'No orders matched this filter.' : null }) }] };
   });
 
-  server.registerTool('orders.get', {
-    title: 'Get WooCommerce order', description: 'Read one WooCommerce order with complete structured order data.', inputSchema: { id: z.number().int().positive() }, annotations: { readOnlyHint: true, destructiveHint: false }
-  }, async ({ id }) => {
+  server.registerTool('orders.summary', { title: 'Summarize WooCommerce orders', description: 'Return counts of WooCommerce orders by status. Use this for questions asking how many orders are completed, cancelled, processing, pending, refunded or failed instead of loading the full order list.', inputSchema: {}, annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true } }, async () => {
+    const statuses = ['pending', 'processing', 'on-hold', 'completed', 'cancelled', 'refunded', 'failed', 'trash'] as const;
+    const counts = Object.fromEntries(await Promise.all(statuses.map(async status => {
+      const result = await wcCollection(`/wp-json/wc/v3/orders?per_page=1&status=${encodeURIComponent(status)}`);
+      return [status, result.total];
+    })));
+    return { content: [{ type: 'text', text: JSON.stringify({ counts, meanings: Object.fromEntries(statuses.map(status => [status, ORDER_STATUS_INFO[status].meaning])) }) }] };
+  });
+
+  server.registerTool('orders.get', { title: 'Get WooCommerce order', description: 'Read one WooCommerce order with complete structured order data, explicit status meaning and payment/completion flags.', inputSchema: { id: z.number().int().positive() }, annotations: { readOnlyHint: true, destructiveHint: false } }, async ({ id }) => {
     const order = await wc(`/wp-json/wc/v3/orders/${id}`);
     return { content: [{ type: 'text', text: JSON.stringify(normalizeOrder(order as JsonRecord)) }] };
   });
 
-  server.registerTool('orders.update', {
-    title: 'Update WooCommerce order', description: 'Update an order. This changes store data and should require user confirmation.', inputSchema: { id: z.number().int().positive(), fields: z.record(z.string(), z.unknown()) }, annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true }
-  }, async ({ id, fields }) => {
+  server.registerTool('orders.update', { title: 'Update WooCommerce order', description: 'Update an order. This changes store data and should require user confirmation.', inputSchema: { id: z.number().int().positive(), fields: z.record(z.string(), z.unknown()) }, annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true } }, async ({ id, fields }) => {
     const order = await wc(`/wp-json/wc/v3/orders/${id}`, { method: 'PUT', body: JSON.stringify(fields) });
     return { content: [{ type: 'text', text: JSON.stringify(normalizeOrder(order as JsonRecord)) }] };
   });
