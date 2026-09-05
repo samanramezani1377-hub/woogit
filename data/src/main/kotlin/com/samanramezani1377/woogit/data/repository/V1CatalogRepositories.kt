@@ -8,6 +8,7 @@ import com.samanramezani1377.woogit.core.domain.error.fold
 import com.samanramezani1377.woogit.core.domain.model.*
 import com.samanramezani1377.woogit.core.domain.repository.*
 import com.samanramezani1377.woogit.data.network.*
+import kotlinx.datetime.Instant
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -28,20 +29,13 @@ class VariationRepositoryImpl(private val local:LocalVariationDataSource,private
  override suspend fun delete(storeId:StoreId,productId:EntityId,id:EntityId):CoreResult<Unit>{val op=PendingOperation(EntityId("variation-delete-${storeId.value}-${productId.value}-${id.value}"),storeId,"variation",id,OperationType.DELETE,"{}",id.value,0,null,null);val localResult=coordinator.execute(op){local.delete(storeId,productId,id)};if(localResult is CoreResult.Failure)return localResult;return provider.client(storeId).fold({(store,api)->api.deleteVariation(store.baseUrl,productId.value.toLong(),id.value.toLong()).fold({pending.markSucceeded(op.id);CoreResult.Success(Unit)},{e->if(e.isRetryableHttp())CoreResult.Success(Unit)else CoreResult.Failure(e.toDomain())})},{e->if(e.recoverable)CoreResult.Success(Unit)else CoreResult.Failure(e)})}
  private suspend fun mutate(storeId:StoreId,value:Variation,type:OperationType,remote:suspend(TypedWooCommerceApi,StoreConnection)->Result<WooVariationTypedDto>):CoreResult<Variation>{val payload=repoJson.encodeToString(value.toDto());val op=PendingOperation(EntityId("variation-${type.name.lowercase()}-${storeId.value}-${value.productId.value}-${value.id.value}"),storeId,"variation",value.id,type,payload,payload.hashCode().toString(),0,null,null);val localResult=coordinator.execute(op){local.upsert(storeId,value)};if(localResult is CoreResult.Failure)return localResult;return provider.client(storeId).fold({(store,api)->remote(api,store).fold({raw->val d=raw.toDomain(value.productId);local.upsert(storeId,d);pending.markSucceeded(op.id);CoreResult.Success(d)},{e->if(e.isRetryableHttp())CoreResult.Success(value)else CoreResult.Failure(e.toDomain())})},{e->if(e.recoverable)CoreResult.Success(value)else CoreResult.Failure(e)})}
 }
-private fun WooVariationTypedDto.toDomain(productId:EntityId)=Variation(EntityId(id.toString()),productId,attributes.map{VariationAttribute(it.name,it.option)},Pricing(regular_price,sale_price,sale_price!=null),Stock(stock_quantity,when(stock_status){"outofstock"->StockStatus.OUT_OF_STOCK;"onbackorder"->StockStatus.ON_BACKORDER;else->StockStatus.IN_STOCK},manage_stock),sku,image?.let{ProductImage(it.id?.let{v->EntityId(v.toString())},it.src.orEmpty(),it.name,it.alt)},date_modified_gmt?.let{kotlinx.datetime.Instant.parse(it)})
+private fun WooVariationTypedDto.toDomain(productId:EntityId)=Variation(EntityId(id.toString()),productId,attributes.map{VariationAttribute(it.name,it.option)},Pricing(regular_price,sale_price,sale_price!=null),Stock(stock_quantity,when(stock_status){"outofstock"->StockStatus.OUT_OF_STOCK;"onbackorder"->StockStatus.ON_BACKORDER;else->StockStatus.IN_STOCK},manage_stock),sku,image?.let{ProductImage(it.id?.let{v->EntityId(v.toString())},it.src.orEmpty(),it.name,it.alt)},date_modified_gmt?.let{runCatching{Instant.parse(it)}.getOrNull()})
 
 private fun Variation.toDto(): WooVariationTypedDto {
     val regular = pricing.regular?.trim()?.takeIf { it.isNotBlank() }
     val sale = pricing.sale?.trim()?.takeIf { it.isNotBlank() && it != regular }
     val stockStatus = when (stock?.status) { StockStatus.OUT_OF_STOCK -> "outofstock"; StockStatus.ON_BACKORDER -> "onbackorder"; StockStatus.IN_STOCK, null -> "instock" }
-    return WooVariationTypedDto(
-        id = id.value.toLongOrNull() ?: 0L, product_id = productId.value.toLongOrNull() ?: 0L,
-        sku = sku?.trim()?.takeIf { it.isNotBlank() }, regular_price = regular, sale_price = sale, price = sale ?: regular,
-        stock_quantity = stock?.quantity, stock_status = stockStatus, manage_stock = stock?.manageStock ?: false,
-        image = image?.let { WooImageTypedDto(it.id?.value?.toLongOrNull(), it.src, it.name, it.alt) },
-        date_modified_gmt = modifiedAt?.toString(),
-        attributes = attributes.filter { it.name.isNotBlank() && it.option.isNotBlank() }.map { WooVariationAttributeDto(null, it.name.trim(), it.option.trim()) },
-    )
+    return WooVariationTypedDto(id=id.value.toLongOrNull()?:0L,product_id=productId.value.toLongOrNull()?:0L,sku=sku?.trim()?.takeIf{it.isNotBlank()},regular_price=regular,sale_price=sale,price=sale?:regular,stock_quantity=stock?.quantity,stock_status=stockStatus,manage_stock=stock?.manageStock?:false,image=image?.let{WooImageTypedDto(it.id?.value?.toLongOrNull(),it.src,it.name,it.alt)},date_modified_gmt=modifiedAt?.toString(),attributes=attributes.filter{it.name.isNotBlank()&&it.option.isNotBlank()}.map{WooVariationAttributeDto(null,it.name.trim(),it.option.trim())})
 }
 
 class AttributeRepositoryImpl(private val local:LocalAttributeDataSource,private val provider:WooCommerceClientProvider,private val coordinator:MutationCoordinator,private val pending:PendingOperationRepository):AttributeRepository{
@@ -67,7 +61,7 @@ class TermRepositoryImpl(private val local:LocalTermDataSource,private val provi
  private suspend fun mutate(storeId:StoreId,attributeId:EntityId,value:AttributeTerm,type:OperationType,remote:suspend(TypedWooCommerceApi,StoreConnection)->Result<WooAttributeTermDto>):CoreResult<AttributeTerm>{val payload=repoJson.encodeToString(value.toDto());val id=value.id?:EntityId("local-${attributeId.value}-${value.name.hashCode()}");val op=PendingOperation(EntityId("term-${type.name.lowercase()}-${storeId.value}-${id.value}"),storeId,"term",id,type,payload,payload.hashCode().toString(),0,null,null);val localResult=coordinator.execute(op){local.upsert(storeId,attributeId,value)};if(localResult is CoreResult.Failure)return localResult;return provider.client(storeId).fold({(store,api)->remote(api,store).fold({raw->val d=raw.toDomain();local.upsert(storeId,attributeId,d);pending.markSucceeded(op.id);CoreResult.Success(d)},{e->if(e.isRetryableHttp())CoreResult.Success(value)else CoreResult.Failure(e.toDomain())})},{e->if(e.recoverable)CoreResult.Success(value)else CoreResult.Failure(e)})}
 }
 private fun WooAttributeTermDto.toDomain()=AttributeTerm(EntityId(id.toString()),name,slug)
-private fun AttributeTerm.toDto()=WooAttributeTermDto(id?.value?.toLongOrNull()?:0L,name,slug ?: "")
+private fun AttributeTerm.toDto()=WooAttributeTermDto(id.value.toLongOrNull()?:0L,name,slug ?: "")
 
 class OrderNoteRepositoryImpl(private val provider:WooCommerceClientProvider,private val pending:PendingOperationRepository):OrderNoteRepository{
  override suspend fun addNote(storeId:StoreId,orderId:EntityId,content:String,customerNote:Boolean):CoreResult<OrderNote>{val payload=repoJson.encodeToString(NoteWrite(content,customerNote));val op=PendingOperation(EntityId("order-note-${storeId.value}-${orderId.value}-${payload.hashCode()}"),storeId,"order_note",orderId,OperationType.CREATE,payload,payload.hashCode().toString(),0,null,null);pending.enqueue(op);return provider.client(storeId).fold({(store,api)->api.addOrderNote(store.baseUrl,orderId.value.toLong(),WooOrderNoteDto(note=content,customer_note=customerNote)).fold({note->pending.markSucceeded(op.id);CoreResult.Success(OrderNote(EntityId(note.id.toString()),note.note,note.customer_note))},{e->if(e.isRetryableHttp())CoreResult.Success(OrderNote(null,content,customerNote))else CoreResult.Failure(e.toDomain())})},{e->if(e.recoverable)CoreResult.Success(OrderNote(null,content,customerNote))else CoreResult.Failure(e)})}
