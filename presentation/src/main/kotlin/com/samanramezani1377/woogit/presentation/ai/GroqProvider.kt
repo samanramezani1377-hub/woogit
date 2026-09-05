@@ -10,6 +10,8 @@ import java.net.URL
 internal class GroqProvider(context: Context) : AiProvider {
     override val id: String = "groq"
     override val capabilities: Set<AiCapability> = setOf(AiCapability.TEXT, AiCapability.IMAGE_INPUT, AiCapability.TOOL_CALLING)
+    override fun effectiveModelId(hasAttachments: Boolean): String = if (hasAttachments) VISION_MODEL else modelId
+    override val requestLimits: AiLimitOverrides = AiLimitOverrides(maxOutputTokens = MAX_COMPLETION_TOKENS)
     private val prefs = context.applicationContext.getSharedPreferences("woogit_ai", Context.MODE_PRIVATE)
     override var apiKey: String
         get() = prefs.getString("groq_api_key", "") ?: ""
@@ -36,7 +38,7 @@ internal class GroqProvider(context: Context) : AiProvider {
     }
 
     private fun body(messages: JSONArray, tools: JSONArray, stream: Boolean, hasImages: Boolean) = JSONObject()
-        .put("model", if (hasImages) VISION_MODEL else modelId).put("messages", messages).put("stream", stream)
+        .put("model", effectiveModelId(hasImages)).put("messages", messages).put("stream", stream)
         .put("tools", tools).put("tool_choice", "auto").put("parallel_tool_calls", false)
         .put("reasoning_effort", if (hasImages) "default" else if (modelId.startsWith("qwen/")) "default" else "low")
         .put("max_completion_tokens", MAX_COMPLETION_TOKENS)
