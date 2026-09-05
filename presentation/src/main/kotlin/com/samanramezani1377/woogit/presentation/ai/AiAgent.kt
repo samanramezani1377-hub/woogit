@@ -15,8 +15,12 @@ internal class AiAgent(private val provider: AiProvider, private val executor: W
     fun cancel(token: String): Boolean = pending.remove(token) != null
 
     suspend fun run(messages: List<Pair<String, String>>, confirmationToken: String? = null, attachments: List<AiAttachment> = emptyList(), onEvent: suspend (AiStreamEvent) -> Unit = {}): AgentReply {
+        val activeAttachments = if (attachments.isNotEmpty()) attachments else pending[confirmationToken]?.attachments.orEmpty()
+        val attachmentContext = if (activeAttachments.isNotEmpty()) {
+            "\n\nمهم: کاربر در همین درخواست ${activeAttachments.size} تصویر را از داخل برنامه انتخاب و به پیام پیوست کرده است. این تصاویر همین حالا در اختیار Agent هستند. اگر کاربر می‌خواهد تصویر انتخاب‌شده را به یک محصول اضافه کند، مستقیماً ابزار products_image_add را با شناسه محصول صدا بزن؛ هرگز از کاربر نخواه فایل یا تصویر را دوباره انتخاب کند و هرگز برای افزودن تصویر نام فایل را از کاربر نپرس. نام فایل و بایت تصویر توسط برنامه مدیریت می‌شوند."
+        } else ""
         val working = JSONArray().apply {
-            put(JSONObject().put("role", "system").put("content", SYSTEM_PROMPT))
+            put(JSONObject().put("role", "system").put("content", SYSTEM_PROMPT + attachmentContext))
             messages.forEach { (role, content) -> put(JSONObject().put("role", role).put("content", content)) }
         }
         var attachmentsForNextRequest = attachments
@@ -156,7 +160,7 @@ internal class AiAgent(private val provider: AiProvider, private val executor: W
         put(tool("products_list", "فهرست خلاصه محصولات؛ بدون تصویر.", listSchema()))
         put(tool("products_get", "جزئیات محصول؛ بدون ارسال تصویر به مدل.", idSchema()))
         put(tool("products_get_image", "فقط یک تصویر مشخص محصول را برای تحلیل تصویری دریافت کن. فقط در صورت نیاز واقعی.", imageSchema()))
-        put(tool("products_image_add", "تصویر انتخاب‌شده کاربر را به محصول اضافه کن؛ نیازمند تأیید.", imageAddSchema()))
+        put(tool("products_image_add", "تصویر انتخاب‌شده و از قبل پیوست‌شده توسط کاربر را به محصول اضافه کن. تصویر از قبل در برنامه انتخاب شده است؛ هرگز نام فایل یا انتخاب دوباره تصویر را از کاربر نخواه. فقط شناسه محصول را مشخص کن؛ نیازمند تأیید.", imageAddSchema()))
         put(tool("products_image_set_primary", "یک تصویر موجود محصول را تصویر اصلی کن؛ نیازمند تأیید.", imageSchema()))
         put(tool("products_image_remove", "یک تصویر موجود محصول را از محصول جدا کن؛ نیازمند تأیید.", imageRemoveSchema()))
         put(tool("products_create", "ایجاد محصول؛ نیازمند تأیید.", genericProductSchema()))
@@ -170,7 +174,7 @@ internal class AiAgent(private val provider: AiProvider, private val executor: W
     private fun idSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("id", JSONObject().put("type", "integer").put("minimum", 1))).put("required", JSONArray().put("id"))
     private fun listSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("page", JSONObject().put("type", "integer")).put("perPage", JSONObject().put("type", "integer")).put("search", JSONObject().put("type", "string")).put("status", JSONObject().put("type", "string")))
     private fun imageSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("id", JSONObject().put("type", "integer").put("minimum", 1)).put("imageIndex", JSONObject().put("type", "integer").put("minimum", 0))).put("required", JSONArray().put("id"))
-    private fun imageAddSchema() = imageSchema().apply { getJSONObject("properties").put("fileName", JSONObject().put("type", "string")) }
+    private fun imageAddSchema() = idSchema()
     private fun imageRemoveSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("id", JSONObject().put("type", "integer").put("minimum", 1)).put("imageIndex", JSONObject().put("type", "integer").put("minimum", 0)).put("imageId", JSONObject().put("type", "string"))).put("required", JSONArray().put("id"))
     private fun orderStatusSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("id", JSONObject().put("type", "integer").put("minimum", 1)).put("status", JSONObject().put("type", "string"))).put("required", JSONArray().put("id").put("status"))
     private fun genericProductSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("name", JSONObject().put("type", "string")).put("sku", JSONObject().put("type", "string")).put("description", JSONObject().put("type", "string")).put("shortDescription", JSONObject().put("type", "string")).put("regularPrice", JSONObject().put("type", "string")).put("salePrice", JSONObject().put("type", "string")).put("status", JSONObject().put("type", "string")).put("stockQuantity", JSONObject().put("type", "number")).put("stockStatus", JSONObject().put("type", "string")).put("manageStock", JSONObject().put("type", "boolean")))
