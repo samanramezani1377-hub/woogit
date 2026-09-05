@@ -5,11 +5,11 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
-import java.util.Base64
 
 /** OpenRouter provider using its free-model router. The API is OpenAI-compatible. */
 internal class OpenRouterProvider(context: Context) : AiProvider {
     override val id: String = "openrouter"
+    override val capabilities: Set<AiCapability> = setOf(AiCapability.TEXT, AiCapability.IMAGE_INPUT, AiCapability.TOOL_CALLING)
     private val prefs = context.applicationContext.getSharedPreferences("woogit_ai", Context.MODE_PRIVATE)
     override var apiKey: String
         get() = prefs.getString("openrouter_api_key", "") ?: ""
@@ -22,40 +22,18 @@ internal class OpenRouterProvider(context: Context) : AiProvider {
     override suspend fun stream(messages: JSONArray, tools: JSONArray, attachments: List<AiAttachment>, onEvent: suspend (AiStreamEvent) -> Unit): JSONObject {
         val key = apiKey.trim()
         if (key.isBlank()) throw IllegalStateException("کلید API اوپن‌روتر تنظیم نشده است.")
+        val requestMessages = AiMultimodal.openAiImageMessages(messages, attachments)
         val connection = connection(key)
         return try {
-            connection.outputStream.use { it.write(body(messages, tools, true, attachments).toString().toByteArray(Charsets.UTF_8)) }
+            connection.outputStream.use { it.write(body(requestMessages, tools, true).toString().toByteArray(Charsets.UTF_8)) }
             val status = connection.responseCode
             if (status !in 200..299) throw httpError(connection, status)
             readSse(connection, onEvent)
         } finally { connection.disconnect() }
     }
 
-    private fun body(messages: JSONArray, tools: JSONArray, stream: Boolean, attachments: List<AiAttachment> = emptyList()): JSONObject {
-        val requestMessages = if (attachments.isEmpty()) messages else messagesWithAttachments(messages, attachments)
-        return JSONObject().put("model", "openrouter/free").put("messages", requestMessages).put("stream", stream).put("tools", tools).put("tool_choice", "auto")
-    }
-
-    private fun messagesWithAttachments(messages: JSONArray, attachments: List<AiAttachment>): JSONArray {
-        val result = JSONArray()
-        for (i in 0 until messages.length()) result.put(messages.get(i))
-        val last = result.length() - 1
-        if (last < 0) return result
-        val user = result.optJSONObject(last) ?: return result
-        if (user.optString("role") != "user") return result
-        val original = user.optString("content")
-        val content = JSONArray().put(JSONObject().put("type", "text").put("text", original))
-        attachments.forEach { attachment ->
-            val encoded = Base64.getEncoder().encodeToString(attachment.bytes)
-            content.put(
-                JSONObject()
-                    .put("type", "image_url")
-                    .put("image_url", JSONObject().put("url", "data:${attachment.mimeType};base64,$encoded")),
-            )
-        }
-        user.put("content", content)
-        return result
-    }
+    private fun body(messages: JSONArray, tools: JSONArray, stream: Boolean): JSONObject = JSONObject()
+        .put("model", "openrouter/free").put("messages", messages).put("stream", stream).put("tools", tools).put("tool_choice", "auto")
 
     private fun request(messages: JSONArray, tools: JSONArray, stream: Boolean): JSONObject {
         val key = apiKey.trim()
