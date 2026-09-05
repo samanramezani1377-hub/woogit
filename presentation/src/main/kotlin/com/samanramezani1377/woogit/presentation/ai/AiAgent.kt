@@ -1,5 +1,6 @@
 package com.samanramezani1377.woogit.presentation.ai
 
+import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 import java.security.MessageDigest
@@ -12,9 +13,15 @@ internal data class AgentReply(
     val attachments: List<AiAttachment> = emptyList(),
 )
 
-internal class AiAgent(private val provider: AiProvider, private val executor: WooGitToolExecutor) {
+internal class AiAgent(
+    private val provider: AiProvider,
+    private val executor: WooGitToolExecutor,
+    context: Context,
+    storeId: String,
+) {
     private data class PendingAction(val name: String, val arguments: String, val callId: String, val thoughtSignature: String?, val attachments: List<AiAttachment>)
     private val pending = mutableMapOf<String, PendingAction>()
+    private val memory = AgentMemoryStore(context, storeId)
 
     fun cancel(token: String): Boolean = pending.remove(token) != null
 
@@ -23,8 +30,9 @@ internal class AiAgent(private val provider: AiProvider, private val executor: W
         val attachmentContext = if (activeAttachments.isNotEmpty()) {
             "\n\nمهم: کاربر در همین درخواست ${activeAttachments.size} تصویر را از داخل برنامه انتخاب و به پیام پیوست کرده است. این تصاویر همین حالا در اختیار Agent هستند. اگر کاربر می‌خواهد تصویر انتخاب‌شده را به یک محصول اضافه کند، مستقیماً ابزار products_image_add را با شناسه محصول صدا بزن؛ هرگز از کاربر نخواه فایل یا تصویر را دوباره انتخاب کند و هرگز برای افزودن تصویر نام فایل را از کاربر نپرس. نام فایل و بایت تصویر توسط برنامه مدیریت می‌شوند."
         } else ""
+        val memoryContext = memoryContext()
         val working = JSONArray().apply {
-            put(JSONObject().put("role", "system").put("content", SYSTEM_PROMPT + attachmentContext))
+            put(JSONObject().put("role", "system").put("content", SYSTEM_PROMPT + attachmentContext + memoryContext))
             messages.forEach { (role, content) -> put(JSONObject().put("role", role).put("content", content)) }
         }
         var attachmentsForNextRequest = attachments
@@ -70,6 +78,13 @@ internal class AiAgent(private val provider: AiProvider, private val executor: W
                 if (name.isBlank() || callId.isBlank()) throw IllegalStateException("${provider.id} ابزار نامعتبر ارسال کرد.")
                 onEvent(AiStreamEvent.ToolCall(toolLabel(name)))
 
+                if (isMemoryTool(name)) {
+                    val result = executeMemoryTool(name, arguments)
+                    working.put(JSONObject().put("role", "tool").put("tool_call_id", callId).put("content", result))
+                    onEvent(AiStreamEvent.ToolResult(toolLabel(name), summarize(result)))
+                    continue
+                }
+
                 if (isWriteTool(name)) {
                     val token = tokenFor(name, arguments)
                     pending[token] = PendingAction(name, arguments, callId, thoughtSignature, attachments)
@@ -90,6 +105,23 @@ internal class AiAgent(private val provider: AiProvider, private val executor: W
         throw IllegalStateException("Agent به حداکثر مراحل مجاز رسید.")
     }
 
+    private fun memoryContext(): String {
+        val saved = memory.read()
+        return "\n\nحافظه کاری پایدار Agent: یک حافظه کوچک برای یادداشت‌های کاری مهم وجود دارد که بین Sessionهای گفتگو باقی می‌ماند. این حافظه را فقط وقتی استفاده کن که اطلاعاتی واقعاً برای ادامه کار در Sessionهای بعدی ارزش نگهداری دارد؛ تاریخچه گفتگو را در آن کپی نکن. خودت مسئول تشخیص، نوشتن، بازنویسی و حذف یادداشت‌ها هستی. برای این کار از ابزارهای memory_read، memory_write، memory_update و memory_delete استفاده کن. اگر حافظه خالی است چیزی به‌صورت پیش‌فرض وجود ندارد.\n" +
+            if (saved.length() == 0) "حافظه فعلاً خالی است." else "محتوای فعلی حافظه:\n${saved}"
+    }
+
+    private fun executeMemoryTool(name: String, arguments: String): String = runCatching {
+        val args = JSONObject(arguments)
+        when (name) {
+            "memory_read" -> memory.read().toString()
+            "memory_write" -> memory.write(args.getString("content")).toString()
+            "memory_update" -> memory.write(args.getString("content"), args.getString("id")).toString()
+            "memory_delete" -> JSONObject().put("deleted", memory.delete(args.getString("id"))).toString()
+            else -> JSONObject().put("error", "unknown memory tool").toString()
+        }
+    }.getOrElse { JSONObject().put("error", it.message ?: "memory operation failed").toString() }
+
     private fun writeFailureMessage(result: JSONObject) = result.optString("error").ifBlank { "عملیات تغییر انجام نشد یا قابل تأیید نیست." }
     private fun summarize(result: String) = result.replace("\n", " ").trim().let { if (it.length > 140) it.take(137) + "..." else it }
 
@@ -106,6 +138,10 @@ internal class AiAgent(private val provider: AiProvider, private val executor: W
         "orders_list" -> "در حال بررسی سفارش‌ها"
         "orders_get" -> "در حال دریافت سفارش"
         "orders_update_status" -> "در حال آماده‌سازی تغییر وضعیت سفارش"
+        "memory_read" -> "در حال خواندن حافظه کاری"
+        "memory_write" -> "در حال ثبت یادداشت در حافظه"
+        "memory_update" -> "در حال بازنویسی حافظه"
+        "memory_delete" -> "در حال حذف یادداشت از حافظه"
         else -> "در حال اجرای ابزار WooGit"
     }
 
@@ -122,6 +158,10 @@ internal class AiAgent(private val provider: AiProvider, private val executor: W
         put(tool("orders_list", "فهرست سفارش‌ها از مسیر WooGit.", listSchema()))
         put(tool("orders_get", "جزئیات سفارش از مسیر WooGit.", idSchema()))
         put(tool("orders_update_status", "تغییر وضعیت سفارش؛ نیازمند تأیید.", orderStatusSchema()))
+        put(tool("memory_read", "حافظه کاری پایدار Agent را بخوان. فقط وقتی لازم است از یادداشت‌های بین Sessionها مطلع شوی از آن استفاده کن.", emptySchema()))
+        put(tool("memory_write", "یک یادداشت مهم و واقعاً قابل استفاده در Sessionهای بعدی در حافظه کاری بنویس. تاریخچه گفتگو را کپی نکن.", memoryWriteSchema()))
+        put(tool("memory_update", "یک یادداشت موجود حافظه کاری را با محتوای جدید بازنویسی کن.", memoryUpdateSchema()))
+        put(tool("memory_delete", "یک یادداشت حافظه کاری را وقتی دیگر معتبر یا لازم نیست حذف کن.", memoryIdSchema()))
     }
 
     private fun idSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("id", JSONObject().put("type", "integer").put("minimum", 1))).put("required", JSONArray().put("id"))
@@ -132,10 +172,15 @@ internal class AiAgent(private val provider: AiProvider, private val executor: W
     private fun orderStatusSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("id", JSONObject().put("type", "integer").put("minimum", 1)).put("status", JSONObject().put("type", "string"))).put("required", JSONArray().put("id").put("status"))
     private fun genericProductSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("name", JSONObject().put("type", "string")).put("sku", JSONObject().put("type", "string")).put("description", JSONObject().put("type", "string")).put("shortDescription", JSONObject().put("type", "string")).put("regularPrice", JSONObject().put("type", "string")).put("salePrice", JSONObject().put("type", "string")).put("status", JSONObject().put("type", "string")).put("stockQuantity", JSONObject().put("type", "number")).put("stockStatus", JSONObject().put("type", "string")).put("manageStock", JSONObject().put("type", "boolean")))
     private fun genericPatchSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("id", JSONObject().put("type", "integer")).put("patch", genericProductSchema())).put("required", JSONArray().put("id").put("patch"))
+    private fun emptySchema() = JSONObject().put("type", "object").put("properties", JSONObject())
+    private fun memoryWriteSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("content", JSONObject().put("type", "string").put("minLength", 1))).put("required", JSONArray().put("content"))
+    private fun memoryUpdateSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("id", JSONObject().put("type", "string")).put("content", JSONObject().put("type", "string").put("minLength", 1))).put("required", JSONArray().put("id").put("content"))
+    private fun memoryIdSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("id", JSONObject().put("type", "string"))).put("required", JSONArray().put("id"))
     private fun tool(name: String, description: String, schema: JSONObject) = JSONObject().put("type", "function").put("function", JSONObject().put("name", name).put("description", description).put("parameters", schema))
     private fun tokenFor(name: String, arguments: String) = sha256("$name:$arguments").take(32)
     private fun sha256(value: String) = MessageDigest.getInstance("SHA-256").digest(value.toByteArray()).joinToString("") { "%02x".format(it) }
     private fun isWriteTool(name: String) = name.endsWith("_create") || name.endsWith("_update") || name.endsWith("_delete") || name == "orders_update_status" || name == "products_image_add" || name == "products_image_set_primary" || name == "products_image_remove"
+    private fun isMemoryTool(name: String) = name == "memory_read" || name == "memory_write" || name == "memory_update" || name == "memory_delete"
     private fun assistantToolCall(id: String, name: String, arguments: String, signature: String?) = JSONObject().put("role", "assistant").put("content", JSONObject.NULL).put("tool_calls", JSONArray().put(JSONObject().put("id", id).put("type", "function").put("function", JSONObject().put("name", name).put("arguments", arguments).apply { signature?.let { put("thought_signature", it) } })))
 
     private companion object {
