@@ -1,7 +1,6 @@
 package com.samanramezani1377.woogit.presentation.ai
 
 import android.content.Context
-import android.util.Base64
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -10,30 +9,22 @@ import java.net.URL
 /** Groq provider using its OpenAI-compatible chat completions API. */
 internal class GroqProvider(context: Context) : AiProvider {
     override val id: String = "groq"
+    override val capabilities: Set<AiCapability> = setOf(AiCapability.TEXT, AiCapability.IMAGE_INPUT, AiCapability.TOOL_CALLING)
     private val prefs = context.applicationContext.getSharedPreferences("woogit_ai", Context.MODE_PRIVATE)
     override var apiKey: String
         get() = prefs.getString("groq_api_key", "") ?: ""
         set(value) { prefs.edit().putString("groq_api_key", value.trim()).apply() }
 
     override suspend fun complete(messages: JSONArray, tools: JSONArray): JSONObject = request(messages, tools, false)
+    override suspend fun stream(messages: JSONArray, tools: JSONArray, onEvent: suspend (AiStreamEvent) -> Unit): JSONObject = stream(messages, tools, emptyList(), onEvent)
 
-    override suspend fun stream(messages: JSONArray, tools: JSONArray, onEvent: suspend (AiStreamEvent) -> Unit): JSONObject =
-        stream(messages, tools, emptyList(), onEvent)
-
-    override suspend fun stream(
-        messages: JSONArray,
-        tools: JSONArray,
-        attachments: List<AiAttachment>,
-        onEvent: suspend (AiStreamEvent) -> Unit,
-    ): JSONObject {
+    override suspend fun stream(messages: JSONArray, tools: JSONArray, attachments: List<AiAttachment>, onEvent: suspend (AiStreamEvent) -> Unit): JSONObject {
         val key = apiKey.trim()
         if (key.isBlank()) throw IllegalStateException("کلید API گروک تنظیم نشده است.")
-        val requestMessages = messagesWithAttachments(messages, attachments)
+        val requestMessages = AiMultimodal.openAiImageMessages(messages, attachments, MAX_IMAGES, MAX_IMAGE_BYTES)
         val connection = connection(key)
         return try {
-            connection.outputStream.use {
-                it.write(body(requestMessages, tools, true, attachments.isNotEmpty()).toString().toByteArray(Charsets.UTF_8))
-            }
+            connection.outputStream.use { it.write(body(requestMessages, tools, true, attachments.isNotEmpty()).toString().toByteArray(Charsets.UTF_8)) }
             val status = connection.responseCode
             if (status !in 200..299) throw httpError(connection, status)
             readSse(connection, onEvent)
@@ -41,49 +32,9 @@ internal class GroqProvider(context: Context) : AiProvider {
     }
 
     private fun body(messages: JSONArray, tools: JSONArray, stream: Boolean, hasImages: Boolean) = JSONObject()
-        .put("model", if (hasImages) VISION_MODEL else MODEL)
-        .put("messages", messages)
-        .put("stream", stream)
-        .put("tools", tools)
-        .put("tool_choice", "auto")
-        .put("parallel_tool_calls", false)
-        .put("reasoning_effort", "low")
-        .put("max_completion_tokens", MAX_COMPLETION_TOKENS)
-
-    private fun messagesWithAttachments(messages: JSONArray, attachments: List<AiAttachment>): JSONArray {
-        if (attachments.isEmpty()) return messages
-        require(attachments.size <= MAX_IMAGES) { "حداکثر $MAX_IMAGES تصویر را می‌توان هم‌زمان به Groq فرستاد." }
-        attachments.forEach { attachment ->
-            require(attachment.bytes.size <= MAX_IMAGE_BYTES) {
-                "تصویر ${attachment.name} بزرگ‌تر از 20MB است و Groq آن را نمی‌پذیرد."
-            }
-        }
-
-        val result = JSONArray()
-        for (i in 0 until messages.length()) {
-            val message = messages.optJSONObject(i) ?: continue
-            if (i != messages.length() - 1 || message.optString("role") != "user") {
-                result.put(message)
-                continue
-            }
-            val text = when (val original = message.opt("content")) {
-                is String -> original
-                JSONObject.NULL, null -> ""
-                else -> original.toString()
-            }
-            val content = JSONArray().put(JSONObject().put("type", "text").put("text", text))
-            attachments.forEach { attachment ->
-                val encoded = Base64.encodeToString(attachment.bytes, Base64.NO_WRAP)
-                content.put(
-                    JSONObject()
-                        .put("type", "image_url")
-                        .put("image_url", JSONObject().put("url", "data:${attachment.mimeType};base64,$encoded"))
-                )
-            }
-            result.put(JSONObject(message.toString()).put("content", content))
-        }
-        return result
-    }
+        .put("model", if (hasImages) VISION_MODEL else MODEL).put("messages", messages).put("stream", stream)
+        .put("tools", tools).put("tool_choice", "auto").put("parallel_tool_calls", false)
+        .put("reasoning_effort", "low").put("max_completion_tokens", MAX_COMPLETION_TOKENS)
 
     private fun request(messages: JSONArray, tools: JSONArray, stream: Boolean): JSONObject {
         val key = apiKey.trim()
@@ -102,19 +53,14 @@ internal class GroqProvider(context: Context) : AiProvider {
     }
 
     private fun connection(key: String) = (URL("https://api.groq.com/openai/v1/chat/completions").openConnection() as HttpURLConnection).apply {
-        requestMethod = "POST"
-        connectTimeout = 10_000
-        readTimeout = 120_000
-        doOutput = true
-        setRequestProperty("Content-Type", "application/json")
-        setRequestProperty("Authorization", "Bearer $key")
+        requestMethod = "POST"; connectTimeout = 10_000; readTimeout = 120_000; doOutput = true
+        setRequestProperty("Content-Type", "application/json"); setRequestProperty("Authorization", "Bearer $key")
     }
 
     private fun JSONObject.nonNullString(key: String): String? = if (!has(key) || isNull(key)) null else optString(key).takeIf { it.isNotBlank() && it != "null" }
 
     private suspend fun readSse(connection: HttpURLConnection, onEvent: suspend (AiStreamEvent) -> Unit): JSONObject {
-        val content = StringBuilder()
-        val calls = mutableMapOf<Int, JSONObject>()
+        val content = StringBuilder(); val calls = mutableMapOf<Int, JSONObject>()
         connection.inputStream.bufferedReader().use { reader ->
             while (true) {
                 val line = reader.readLine() ?: break
@@ -129,12 +75,10 @@ internal class GroqProvider(context: Context) : AiProvider {
                 if (!text.isNullOrEmpty()) { content.append(text); onEvent(AiStreamEvent.TextDelta(text)) }
                 val streamedCalls = delta.optJSONArray("tool_calls") ?: continue
                 for (i in 0 until streamedCalls.length()) {
-                    val part = streamedCalls.optJSONObject(i) ?: continue
-                    val index = part.optInt("index", i)
+                    val part = streamedCalls.optJSONObject(i) ?: continue; val index = part.optInt("index", i)
                     val call = calls.getOrPut(index) { JSONObject().put("id", "").put("type", "function").put("function", JSONObject().put("name", "").put("arguments", "")) }
                     part.nonNullString("id")?.let { call.put("id", call.optString("id") + it) }
-                    val fn = part.optJSONObject("function") ?: continue
-                    val current = call.optJSONObject("function")!!
+                    val fn = part.optJSONObject("function") ?: continue; val current = call.optJSONObject("function")!!
                     fn.nonNullString("name")?.let { current.put("name", current.optString("name") + it) }
                     fn.nonNullString("arguments")?.let { current.put("arguments", current.optString("arguments") + it) }
                 }
