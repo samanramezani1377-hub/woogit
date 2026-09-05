@@ -34,6 +34,8 @@ internal class GroqProvider(context: Context) : AiProvider {
         .put("stream", stream)
         .put("tools", tools)
         .put("tool_choice", "auto")
+        .put("parallel_tool_calls", false)
+        .put("reasoning_effort", "low")
         .put("max_completion_tokens", MAX_COMPLETION_TOKENS)
 
     private fun request(messages: JSONArray, tools: JSONArray, stream: Boolean): JSONObject {
