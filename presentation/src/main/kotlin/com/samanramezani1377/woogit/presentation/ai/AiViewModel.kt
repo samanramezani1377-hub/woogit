@@ -117,7 +117,8 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
                 val baseMessages = messages
                 _state.value = if (reply.confirmationToken != null) AiUiState.Ready(baseMessages, reply) else {
                     val rawText = reply.text.ifBlank { streaming }
-                    val (cleanText, outputImage) = AiOutputImageCodec.extract(rawText)
+                    val (cleanText, outputImageFromText) = AiOutputImageCodec.extract(rawText)
+                    val outputImage = reply.attachment ?: outputImageFromText
                     val completedMessages = baseMessages + AiMessage("assistant", cleanText, outputImage)
                     historyStore.saveSession(currentSessionId, completedMessages)
                     refreshHistory()
