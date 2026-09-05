@@ -19,9 +19,17 @@ internal sealed interface AiStreamEvent {
 
 internal interface AiProvider {
     val id: String
-    /** Model currently used by this provider. A provider may expose a mutable selection. */
+    /** Model selected for a text-only request. */
     val modelId: String
         get() = id
+
+    /** Effective model for this request, including provider-side vision model switching. */
+    fun effectiveModelId(hasAttachments: Boolean): String = modelId
+
+    /** Request/provider constraints, independent from model capabilities and account/plan limits. */
+    val requestLimits: AiLimitOverrides
+        get() = AiLimitOverrides()
+
     var apiKey: String
     val capabilities: Set<AiCapability>
         get() = setOf(AiCapability.TEXT, AiCapability.TOOL_CALLING)
