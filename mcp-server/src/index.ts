@@ -42,14 +42,6 @@ type JsonRecord = Record<string, any>;
 
 function normalizeProduct(product: JsonRecord): JsonRecord {
   const variations = Array.isArray(product.variations) ? product.variations : [];
-  const inventory = {
-    manage_stock: product.manage_stock ?? null,
-    quantity: product.stock_quantity ?? null,
-    status: product.stock_status ?? null,
-    backorders: product.backorders ?? null,
-    backorders_allowed: product.backorders_allowed ?? null,
-    backordered: product.backordered ?? null
-  };
   return {
     id: product.id ?? null,
     name: product.name ?? '',
@@ -68,11 +60,15 @@ function normalizeProduct(product: JsonRecord): JsonRecord {
       tax_status: product.tax_status ?? null,
       tax_class: product.tax_class ?? null
     },
-    inventory,
-    catalog: {
-      categories: product.categories ?? [],
-      tags: product.tags ?? []
+    inventory: {
+      manage_stock: product.manage_stock ?? null,
+      quantity: product.stock_quantity ?? null,
+      status: product.stock_status ?? null,
+      backorders: product.backorders ?? null,
+      backorders_allowed: product.backorders_allowed ?? null,
+      backordered: product.backordered ?? null
     },
+    catalog: { categories: product.categories ?? [], tags: product.tags ?? [] },
     shipping: {
       weight: product.weight ?? null,
       dimensions: product.dimensions ?? null,
@@ -130,11 +126,7 @@ function normalizeOrder(order: JsonRecord): JsonRecord {
     payment_method: order.payment_method ?? null,
     payment_method_title: order.payment_method_title ?? null,
     transaction_id: order.transaction_id ?? null,
-    customer: {
-      id: order.customer_id ?? null,
-      billing: order.billing ?? null,
-      shipping: order.shipping ?? null
-    },
+    customer: { id: order.customer_id ?? null, billing: order.billing ?? null, shipping: order.shipping ?? null },
     items: Array.isArray(order.line_items) ? order.line_items.map((item: JsonRecord) => ({
       id: item.id ?? null,
       product_id: item.product_id ?? null,
@@ -171,7 +163,7 @@ function normalizeCategory(category: JsonRecord): JsonRecord {
   };
 }
 
-function normalizeCollection<T extends JsonRecord>(items: unknown, normalizer: (item: JsonRecord) => T) {
+function normalizeCollection(items: unknown, normalizer: (item: JsonRecord) => JsonRecord) {
   return Array.isArray(items) ? items.map(item => normalizer((item ?? {}) as JsonRecord)) : [];
 }
 
@@ -180,7 +172,7 @@ function createServer() {
 
   server.registerTool('products.list', {
     title: 'List WooCommerce products',
-    description: 'Read products from the connected WooCommerce store. Returns AI-friendly structured product data including identity, pricing, inventory, catalog, shipping, images, attributes and variations. For inventory questions use inventory.quantity and inventory.status; null quantity means quantity is not managed/available, not necessarily zero. Variable products expose variation-level inventory.',
+    description: 'Read products from the connected WooCommerce store. Returns structured product identity, pricing, inventory, catalog, shipping, images, attributes and variations. For inventory questions use inventory.quantity and inventory.status. A null quantity means quantity is not managed/available, not necessarily zero. Variable products expose variation-level inventory.',
     inputSchema: { page: z.number().int().min(1).optional(), per_page: z.number().int().min(1).max(100).optional(), search: z.string().optional() },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true }
   }, async ({ page = 1, per_page = 20, search }) => {
@@ -190,7 +182,7 @@ function createServer() {
 
   server.registerTool('products.get', {
     title: 'Get WooCommerce product',
-    description: 'Read one product by ID with the same complete AI-friendly structure as products.list, including inventory and variation inventory.',
+    description: 'Read one product by ID with complete structured product data, including inventory and variation inventory.',
     inputSchema: { id: z.number().int().positive() },
     annotations: { readOnlyHint: true, destructiveHint: false }
   }, async ({ id }) => {
@@ -223,39 +215,30 @@ function createServer() {
   }, async ({ id, force }) => ({ content: [{ type: 'text', text: JSON.stringify(await wc(`/wp-json/wc/v3/products/${id}?force=${force}`, { method: 'DELETE' })) }] }));
 
   server.registerTool('categories.list', {
-    title: 'List product categories',
-    description: 'Read WooCommerce product categories as AI-friendly structured data including hierarchy, image and product count.',
-    inputSchema: { page: z.number().int().min(1).optional(), per_page: z.number().int().min(1).max(100).optional(), search: z.string().optional() },
-    annotations: { readOnlyHint: true, destructiveHint: false }
+    title: 'List product categories', description: 'Read WooCommerce product categories as structured data including hierarchy, image and product count.',
+    inputSchema: { page: z.number().int().min(1).optional(), per_page: z.number().int().min(1).max(100).optional(), search: z.string().optional() }, annotations: { readOnlyHint: true, destructiveHint: false }
   }, async ({ page = 1, per_page = 100, search }) => {
     const categories = await wc(`/wp-json/wc/v3/products/categories?page=${page}&per_page=${per_page}${search ? `&search=${encodeURIComponent(search)}` : ''}`);
     return { content: [{ type: 'text', text: JSON.stringify({ items: normalizeCollection(categories, normalizeCategory), page, per_page }) }] };
   });
 
   server.registerTool('orders.list', {
-    title: 'List WooCommerce orders',
-    description: 'Read WooCommerce orders as AI-friendly structured data including totals, customer, line items, payment, shipping, discounts and refunds.',
-    inputSchema: { page: z.number().int().min(1).optional(), per_page: z.number().int().min(1).max(100).optional(), status: z.string().optional(), search: z.string().optional() },
-    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true }
+    title: 'List WooCommerce orders', description: 'Read WooCommerce orders as structured data including totals, customer, line items, payment, shipping, discounts and refunds.',
+    inputSchema: { page: z.number().int().min(1).optional(), per_page: z.number().int().min(1).max(100).optional(), status: z.string().optional(), search: z.string().optional() }, annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true }
   }, async ({ page = 1, per_page = 20, status, search }) => {
     const orders = await wc(`/wp-json/wc/v3/orders?page=${page}&per_page=${per_page}${status ? `&status=${encodeURIComponent(status)}` : ''}${search ? `&search=${encodeURIComponent(search)}` : ''}`);
     return { content: [{ type: 'text', text: JSON.stringify({ items: normalizeCollection(orders, normalizeOrder), page, per_page }) }] };
   });
 
   server.registerTool('orders.get', {
-    title: 'Get WooCommerce order',
-    description: 'Read one WooCommerce order with complete AI-friendly structured data.',
-    inputSchema: { id: z.number().int().positive() },
-    annotations: { readOnlyHint: true, destructiveHint: false }
+    title: 'Get WooCommerce order', description: 'Read one WooCommerce order with complete structured order data.', inputSchema: { id: z.number().int().positive() }, annotations: { readOnlyHint: true, destructiveHint: false }
   }, async ({ id }) => {
     const order = await wc(`/wp-json/wc/v3/orders/${id}`);
     return { content: [{ type: 'text', text: JSON.stringify(normalizeOrder(order as JsonRecord)) }] };
   });
 
   server.registerTool('orders.update', {
-    title: 'Update WooCommerce order', description: 'Update an order. This changes store data and should require user confirmation.',
-    inputSchema: { id: z.number().int().positive(), fields: z.record(z.string(), z.unknown()) },
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true }
+    title: 'Update WooCommerce order', description: 'Update an order. This changes store data and should require user confirmation.', inputSchema: { id: z.number().int().positive(), fields: z.record(z.string(), z.unknown()) }, annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true }
   }, async ({ id, fields }) => {
     const order = await wc(`/wp-json/wc/v3/orders/${id}`, { method: 'PUT', body: JSON.stringify(fields) });
     return { content: [{ type: 'text', text: JSON.stringify(normalizeOrder(order as JsonRecord)) }] };
