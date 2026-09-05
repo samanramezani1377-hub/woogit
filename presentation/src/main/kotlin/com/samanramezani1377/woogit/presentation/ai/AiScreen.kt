@@ -29,8 +29,8 @@ internal fun AiScreen() {
     val context = LocalContext.current.applicationContext
     val vm = viewModel<AiViewModel>(factory = AiViewModel.Factory(context))
     val state by vm.state.collectAsState(); val providerId by vm.providerId.collectAsState(); val history by vm.history.collectAsState(); val attachments by vm.attachments.collectAsState()
-    var apiKey by remember(providerId) { mutableStateOf(vm.apiKey) }; var geminiModel by remember { mutableStateOf(vm.geminiModel) }; var input by remember { mutableStateOf("") }
-    var showSettings by remember { mutableStateOf(false) }; var showMoreHistory by remember { mutableStateOf(false) }
+    var apiKey by remember(providerId) { mutableStateOf(vm.apiKey) }; var geminiModel by remember { mutableStateOf(vm.geminiModel) }; var groqModel by remember { mutableStateOf(vm.groqModel) }; var input by remember { mutableStateOf("") }
+    var showSettings by remember { mutableStateOf(false) }; var showMoreHistory by remember { mutableStateOf(false) }; var groqMenuExpanded by remember { mutableStateOf(false) }
     val drawerState = rememberDrawerState(DrawerValue.Closed); val scope = rememberCoroutineScope()
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri -> if (uri != null) vm.addImage(uri) }
     val messages = when (val value = state) { AiUiState.Idle -> emptyList(); is AiUiState.Working -> value.messages; is AiUiState.Ready -> value.messages; is AiUiState.Error -> value.messages }
@@ -53,7 +53,7 @@ internal fun AiScreen() {
                 Spacer(Modifier.height(6.dp))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) { Text("WooGit AI", fontWeight = FontWeight.Bold); Text("Agent داخلی WooGit · ${providerLabel(providerId)}", color = GlassTokens.muted) }
-                    IconButton(onClick = { apiKey = vm.apiKey; geminiModel = vm.geminiModel; showSettings = true }, modifier = Modifier.size(44.dp).clip(CircleShape).background(GlassTokens.accent.copy(alpha = .14f))) { Text("⚙", color = GlassTokens.accent, fontWeight = FontWeight.Bold) }
+                    IconButton(onClick = { apiKey = vm.apiKey; geminiModel = vm.geminiModel; groqModel = vm.groqModel; showSettings = true }, modifier = Modifier.size(44.dp).clip(CircleShape).background(GlassTokens.accent.copy(alpha = .14f))) { Text("⚙", color = GlassTokens.accent, fontWeight = FontWeight.Bold) }
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) { IconButton(onClick = { scope.launch { drawerState.open() } }, modifier = Modifier.size(46.dp).clip(CircleShape).background(GlassTokens.accent.copy(alpha = .12f))) { Text("☰", color = GlassTokens.accent, fontWeight = FontWeight.Bold) } }
                 if (messages.isEmpty() && state !is AiUiState.Error) { Spacer(Modifier.height(4.dp)); GlassCard(Modifier.fillMaxWidth()) { Text("از Agent بخواهید روی فروشگاه کاری انجام دهد", fontWeight = FontWeight.SemiBold); Text("مثلاً: محصول شماره ۱۲ را پیدا کن، یا محصولات ناموجود را فهرست کن.", color = GlassTokens.muted) } }
@@ -84,16 +84,38 @@ internal fun AiScreen() {
     GlassBottomSheet(show = showSettings, onDismiss = { showSettings = false }) {
         Text("تنظیمات AI", fontWeight = FontWeight.Bold); Spacer(Modifier.height(6.dp)); Text("سرویس AI", fontWeight = FontWeight.SemiBold); Spacer(Modifier.height(4.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            GlassOutlinedButton("Gemini", { vm.selectProvider("gemini"); apiKey = vm.apiKey; geminiModel = vm.geminiModel }, Modifier.weight(1f)); GlassOutlinedButton("OpenRouter", { vm.selectProvider("openrouter"); apiKey = vm.apiKey }, Modifier.weight(1f)); GlassOutlinedButton("DeepSeek", { vm.selectProvider("deepseek"); apiKey = vm.apiKey }, Modifier.weight(1f)); GlassOutlinedButton("Groq", { vm.selectProvider("groq"); apiKey = vm.apiKey }, Modifier.weight(1f))
+            GlassOutlinedButton("Gemini", { vm.selectProvider("gemini"); apiKey = vm.apiKey; geminiModel = vm.geminiModel }, Modifier.weight(1f)); GlassOutlinedButton("OpenRouter", { vm.selectProvider("openrouter"); apiKey = vm.apiKey }, Modifier.weight(1f)); GlassOutlinedButton("DeepSeek", { vm.selectProvider("deepseek"); apiKey = vm.apiKey }, Modifier.weight(1f)); GlassOutlinedButton("Groq", { vm.selectProvider("groq"); apiKey = vm.apiKey; groqModel = vm.groqModel }, Modifier.weight(1f))
         }
         if (providerId == "gemini") { Spacer(Modifier.height(10.dp)); Text("مدل Gemini", fontWeight = FontWeight.SemiBold); AiField(geminiModel, { geminiModel = it }, "Model ID (مثلاً gemini-3.8-flash)"); Text("شناسه مدل مستقیماً از تنظیمات خوانده می‌شود؛ با تغییر مدل نیازی به تغییر Agent نیست.", color = GlassTokens.muted); Spacer(Modifier.height(4.dp)) }
+        if (providerId == "groq") {
+            Spacer(Modifier.height(10.dp)); Text("مدل Groq", fontWeight = FontWeight.SemiBold); Spacer(Modifier.height(4.dp))
+            Box {
+                GlassOutlinedButton(groqModel, { groqMenuExpanded = true }, Modifier.fillMaxWidth())
+                DropdownMenu(expanded = groqMenuExpanded, onDismissRequest = { groqMenuExpanded = false }) {
+                    GROQ_MODELS.forEach { model ->
+                        DropdownMenuItem(text = { Text(model) }, onClick = { groqModel = model; groqMenuExpanded = false })
+                    }
+                }
+            }
+            Text("برای پیام متنی مدل انتخاب‌شده استفاده می‌شود. هنگام ارسال تصویر، Groq به‌صورت خودکار از Qwen3.6-27B Vision استفاده می‌کند.", color = GlassTokens.muted); Spacer(Modifier.height(4.dp))
+        }
         Spacer(Modifier.height(8.dp)); Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("${providerLabel(providerId)} API", fontWeight = FontWeight.SemiBold); Text(if (apiKey.isBlank()) "کلید تنظیم نشده" else "کلید روی دستگاه ذخیره شده است", color = if (apiKey.isBlank()) GlassTokens.faint else GlassTokens.live) }; Text("مستقیم", color = GlassTokens.muted) }
-        Spacer(Modifier.height(4.dp)); AiField(apiKey, { apiKey = it }, "کلید API ${providerLabel(providerId)}", secret = true); Text(providerDescription(providerId), color = GlassTokens.muted); Spacer(Modifier.height(4.dp)); GlassButton("ذخیره تنظیمات", { vm.saveApiKey(apiKey); if (providerId == "gemini") vm.saveGeminiModel(geminiModel); showSettings = false })
+        Spacer(Modifier.height(4.dp)); AiField(apiKey, { apiKey = it }, "کلید API ${providerLabel(providerId)}", secret = true); Text(providerDescription(providerId), color = GlassTokens.muted); Spacer(Modifier.height(4.dp)); GlassButton("ذخیره تنظیمات", { vm.saveApiKey(apiKey); if (providerId == "gemini") vm.saveGeminiModel(geminiModel); if (providerId == "groq") vm.saveGroqModel(groqModel); showSettings = false })
     }
 }
 
+private val GROQ_MODELS = listOf(
+    "openai/gpt-oss-20b",
+    "openai/gpt-oss-120b",
+    "qwen/qwen3.6-27b",
+    "qwen/qwen3.8-27b",
+    "llama-3.3-70b-versatile",
+    "llama-3.1-8b-instant",
+    "minimaxai/minimax-m2.7",
+)
+
 private fun providerLabel(id: String) = when (id) { "gemini" -> "Gemini"; "deepseek" -> "DeepSeek"; "groq" -> "Groq"; else -> "OpenRouter" }
-private fun providerDescription(id: String) = when (id) { "gemini" -> "اتصال مستقیم به Google Gemini API؛ مدل انتخاب‌شده با tool calling استفاده می‌شود."; "deepseek" -> "اتصال مستقیم به api.deepseek.com؛ Backend جداگانه لازم نیست."; "groq" -> "اتصال مستقیم به Groq API؛ مدل openai/gpt-oss-20b با tool calling استفاده می‌شود."; else -> "اتصال مستقیم به OpenRouter؛ مدل رایگان openrouter/free با پشتیبانی از tool calling استفاده می‌شود." }
+private fun providerDescription(id: String) = when (id) { "gemini" -> "اتصال مستقیم به Google Gemini API؛ مدل انتخاب‌شده با tool calling استفاده می‌شود."; "deepseek" -> "اتصال مستقیم به api.deepseek.com؛ Backend جداگانه لازم نیست."; "groq" -> "اتصال مستقیم به Groq API؛ مدل انتخاب‌شده برای متن و Qwen3.6-27B برای ورودی تصویر استفاده می‌شود."; else -> "اتصال مستقیم به OpenRouter؛ مدل رایگان openrouter/free با پشتیبانی از tool calling استفاده می‌شود." }
 @Composable private fun HistoryItem(session: AiChatSession, onClick: () -> Unit) { GlassOutlinedButton(session.title, onClick, Modifier.fillMaxWidth()) }
 @Composable private fun MessageBubble(message: AiMessage) {
     val user = message.role == "user"
