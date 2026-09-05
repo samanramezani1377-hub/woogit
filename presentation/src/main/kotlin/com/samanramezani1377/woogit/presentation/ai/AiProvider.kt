@@ -16,4 +16,12 @@ internal interface AiProvider {
     var apiKey: String
     suspend fun complete(messages: JSONArray, tools: JSONArray): JSONObject
     suspend fun stream(messages: JSONArray, tools: JSONArray, onEvent: suspend (AiStreamEvent) -> Unit): JSONObject
+
+    /** Providers that support multimodal input override this. Text-only providers keep the old path. */
+    suspend fun stream(
+        messages: JSONArray,
+        tools: JSONArray,
+        attachments: List<AiAttachment>,
+        onEvent: suspend (AiStreamEvent) -> Unit,
+    ): JSONObject = stream(messages, tools, onEvent)
 }
