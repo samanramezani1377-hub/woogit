@@ -8,35 +8,41 @@ import java.net.URL
 
 internal class DeepSeekProvider(context: Context) : AiProvider {
     override val id: String = "deepseek"
+    override val capabilities: Set<AiCapability> = setOf(AiCapability.TEXT, AiCapability.IMAGE_INPUT, AiCapability.TOOL_CALLING)
     private val prefs = context.applicationContext.getSharedPreferences("woogit_ai", Context.MODE_PRIVATE)
     override var apiKey: String
         get() = prefs.getString("deepseek_api_key", "") ?: ""
         set(value) { prefs.edit().putString("deepseek_api_key", value.trim()).apply() }
 
-    override suspend fun complete(messages: JSONArray, tools: JSONArray): JSONObject = request(messages, tools, false)
-    override suspend fun stream(messages: JSONArray, tools: JSONArray, onEvent: suspend (AiStreamEvent) -> Unit): JSONObject {
+    override suspend fun complete(messages: JSONArray, tools: JSONArray): JSONObject = request(messages, tools, false, emptyList())
+
+    override suspend fun stream(messages: JSONArray, tools: JSONArray, onEvent: suspend (AiStreamEvent) -> Unit): JSONObject = stream(messages, tools, emptyList(), onEvent)
+
+    override suspend fun stream(messages: JSONArray, tools: JSONArray, attachments: List<AiAttachment>, onEvent: suspend (AiStreamEvent) -> Unit): JSONObject {
         val key = apiKey.trim()
         if (key.isBlank()) throw IllegalStateException("کلید API دیپ‌سیک تنظیم نشده است.")
+        val requestMessages = AiMultimodal.openAiImageMessages(messages, attachments, MAX_IMAGES, MAX_IMAGE_BYTES)
         val connection = connection(key)
         return try {
-            connection.outputStream.use { it.write(body(messages, tools, true).toString().toByteArray(Charsets.UTF_8)) }
+            connection.outputStream.use { it.write(body(requestMessages, tools, true, attachments.isNotEmpty()).toString().toByteArray(Charsets.UTF_8)) }
             val status = connection.responseCode
             if (status !in 200..299) throw IllegalStateException("DeepSeek HTTP $status: ${connection.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty().take(400)}")
             readSse(connection, onEvent)
         } finally { connection.disconnect() }
     }
 
-    private fun body(messages: JSONArray, tools: JSONArray, stream: Boolean) = JSONObject()
-        .put("model", "deepseek-v4-flash").put("messages", messages)
+    private fun body(messages: JSONArray, tools: JSONArray, stream: Boolean, hasImages: Boolean) = JSONObject()
+        .put("model", if (hasImages) VISION_MODEL else MODEL).put("messages", messages)
         .put("thinking", JSONObject().put("type", "disabled")).put("stream", stream)
         .put("tools", tools).put("tool_choice", "auto")
 
-    private fun request(messages: JSONArray, tools: JSONArray, stream: Boolean): JSONObject {
+    private fun request(messages: JSONArray, tools: JSONArray, stream: Boolean, attachments: List<AiAttachment>): JSONObject {
         val key = apiKey.trim()
         if (key.isBlank()) throw IllegalStateException("کلید API دیپ‌سیک تنظیم نشده است.")
+        val requestMessages = AiMultimodal.openAiImageMessages(messages, attachments, MAX_IMAGES, MAX_IMAGE_BYTES)
         val connection = connection(key)
         return try {
-            connection.outputStream.use { it.write(body(messages, tools, stream).toString().toByteArray(Charsets.UTF_8)) }
+            connection.outputStream.use { it.write(body(requestMessages, tools, stream, attachments.isNotEmpty()).toString().toByteArray(Charsets.UTF_8)) }
             val status = connection.responseCode
             val text = (if (status in 200..299) connection.inputStream else connection.errorStream)?.bufferedReader()?.use { it.readText() }.orEmpty()
             if (status !in 200..299) throw IllegalStateException("DeepSeek HTTP $status: ${text.take(400)}")
@@ -52,35 +58,24 @@ internal class DeepSeekProvider(context: Context) : AiProvider {
     private fun JSONObject.nonNullString(key: String): String? = if (!has(key) || isNull(key)) null else optString(key).takeIf { it.isNotBlank() && it != "null" }
 
     private suspend fun readSse(connection: HttpURLConnection, onEvent: suspend (AiStreamEvent) -> Unit): JSONObject {
-        val content = StringBuilder()
-        val calls = mutableMapOf<Int, JSONObject>()
-        connection.inputStream.bufferedReader().use { reader ->
-            while (true) {
-                val line = reader.readLine() ?: break
-                if (!line.startsWith("data:")) continue
-                val raw = line.removePrefix("data:").trim()
-                if (raw == "[DONE]") break
-                if (raw.isBlank()) continue
-                val delta = runCatching { JSONObject(raw).optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("delta") }.getOrNull() ?: continue
-                val reasoning = delta.nonNullString("reasoning_content") ?: delta.nonNullString("reasoning")
-                if (!reasoning.isNullOrBlank()) onEvent(AiStreamEvent.Thinking(reasoning))
-                val text = delta.nonNullString("content")
-                if (!text.isNullOrEmpty()) { content.append(text); onEvent(AiStreamEvent.TextDelta(text)) }
-                val streamedCalls = delta.optJSONArray("tool_calls") ?: continue
-                for (i in 0 until streamedCalls.length()) {
-                    val part = streamedCalls.optJSONObject(i) ?: continue
-                    val index = part.optInt("index", i)
-                    val call = calls.getOrPut(index) { JSONObject().put("id", "").put("type", "function").put("function", JSONObject().put("name", "").put("arguments", "")) }
-                    part.nonNullString("id")?.let { call.put("id", call.optString("id") + it) }
-                    val fn = part.optJSONObject("function") ?: continue
-                    val current = call.optJSONObject("function")!!
-                    fn.nonNullString("name")?.let { current.put("name", current.optString("name") + it) }
-                    fn.nonNullString("arguments")?.let { current.put("arguments", current.optString("arguments") + it) }
-                }
-            }
-        }
-        val message = JSONObject().put("role", "assistant").put("content", content.toString())
-        if (calls.isNotEmpty()) message.put("tool_calls", JSONArray(calls.toSortedMap().values.toList()))
-        return JSONObject().put("choices", JSONArray().put(JSONObject().put("message", message)))
+        val content = StringBuilder(); val calls = mutableMapOf<Int, JSONObject>()
+        connection.inputStream.bufferedReader().use { reader -> while (true) {
+            val line = reader.readLine() ?: break; if (!line.startsWith("data:")) continue
+            val raw = line.removePrefix("data:").trim(); if (raw == "[DONE]") break; if (raw.isBlank()) continue
+            val delta = runCatching { JSONObject(raw).optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("delta") }.getOrNull() ?: continue
+            val reasoning = delta.nonNullString("reasoning_content") ?: delta.nonNullString("reasoning")
+            if (!reasoning.isNullOrBlank()) onEvent(AiStreamEvent.Thinking(reasoning))
+            val text = delta.nonNullString("content"); if (!text.isNullOrEmpty()) { content.append(text); onEvent(AiStreamEvent.TextDelta(text)) }
+            val streamedCalls = delta.optJSONArray("tool_calls") ?: continue
+            for (i in 0 until streamedCalls.length()) { val part = streamedCalls.optJSONObject(i) ?: continue; val index = part.optInt("index", i); val call = calls.getOrPut(index) { JSONObject().put("id", "").put("type", "function").put("function", JSONObject().put("name", "").put("arguments", "")) }; part.nonNullString("id")?.let { call.put("id", call.optString("id") + it) }; val fn = part.optJSONObject("function") ?: continue; val current = call.optJSONObject("function")!!; fn.nonNullString("name")?.let { current.put("name", current.optString("name") + it) }; fn.nonNullString("arguments")?.let { current.put("arguments", current.optString("arguments") + it) } }
+        } }
+        val message = JSONObject().put("role", "assistant").put("content", content.toString()); if (calls.isNotEmpty()) message.put("tool_calls", JSONArray(calls.toSortedMap().values.toList())); return JSONObject().put("choices", JSONArray().put(JSONObject().put("message", message)))
+    }
+
+    private companion object {
+        const val MODEL = "deepseek-v4-flash"
+        const val VISION_MODEL = "deepseek-v4-flash-vision-exp"
+        const val MAX_IMAGES = 5
+        const val MAX_IMAGE_BYTES = 32 * 1024 * 1024
     }
 }
