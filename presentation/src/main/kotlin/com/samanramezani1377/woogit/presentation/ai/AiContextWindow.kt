@@ -4,13 +4,14 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * Bounds the request sent to an AI provider without destroying conversation continuity.
- * Persisted chat history is never mutated; this class only builds a compact, provider-safe
- * view of that history. The compact view contains a deterministic rolling summary and
- * working memory so old-but-important facts survive context pressure.
+ * Bounds the request sent to an AI model without destroying conversation continuity.
+ * Persisted chat history is never mutated; this class only builds a compact, model-safe view.
+ * The model capabilities are resolved at request time, so changing a provider/model is reflected
+ * immediately without changing the context-window algorithm.
  */
 internal class AiContextWindowProvider(private val delegate: AiProvider) : AiProvider {
     override val id: String get() = delegate.id
+    override val modelId: String get() = delegate.modelId
     override var apiKey: String
         get() = delegate.apiKey
         set(value) { delegate.apiKey = value }
@@ -32,7 +33,8 @@ internal class AiContextWindowProvider(private val delegate: AiProvider) : AiPro
     private fun select(messages: JSONArray, tools: JSONArray): JSONArray {
         if (messages.length() <= 2) return messages
 
-        val budget = inputBudget(delegate.id)
+        val capabilities = AiModelCapabilities.forModel(delegate.id, delegate.modelId)
+        val budget = inputBudget(capabilities)
         val summary = buildRollingSummary(messages)
         val memory = buildWorkingMemory(messages)
         val system = JSONObject(messages.getJSONObject(0).toString())
@@ -40,7 +42,6 @@ internal class AiContextWindowProvider(private val delegate: AiProvider) : AiPro
 
         val enriched = JSONArray().put(system)
         for (i in 1 until messages.length()) enriched.put(messages.get(i))
-
         if (estimateTokens(enriched, tools) <= budget) return enriched
 
         val result = JSONArray().put(system)
@@ -91,12 +92,15 @@ internal class AiContextWindowProvider(private val delegate: AiProvider) : AiPro
         return result
     }
 
+    private fun inputBudget(capabilities: AiModelCapabilities): Int =
+        (capabilities.contextWindowTokens - capabilities.maxOutputTokens - TOOL_HEADROOM_TOKENS)
+            .coerceAtLeast(MIN_INPUT_BUDGET_TOKENS)
+
     private fun buildRollingSummary(messages: JSONArray): String {
         if (messages.length() <= SUMMARY_TRIGGER_MESSAGES) return ""
-        val start = 1
-        val end = maxOf(start, messages.length() - RECENT_MESSAGES)
+        val end = maxOf(1, messages.length() - RECENT_MESSAGES)
         val lines = ArrayList<String>()
-        for (i in start until end) {
+        for (i in 1 until end) {
             val item = messages.optJSONObject(i) ?: continue
             val role = item.optString("role")
             if (role != "user" && role != "assistant") continue
@@ -106,8 +110,8 @@ internal class AiContextWindowProvider(private val delegate: AiProvider) : AiPro
             lines += "$prefix: ${text.take(SUMMARY_LINE_CHARS)}"
         }
         if (lines.isEmpty()) return ""
-        val selected = lines.takeLast(SUMMARY_MAX_LINES)
-        return "\n\n[خلاصه فشرده سابقه قدیمی؛ تاریخچه اصلی همچنان حفظ شده است]\n" + selected.joinToString("\n") + "\n"
+        return "\n\n[خلاصه فشرده سابقه قدیمی؛ تاریخچه اصلی همچنان حفظ شده است]\n" +
+            lines.takeLast(SUMMARY_MAX_LINES).joinToString("\n") + "\n"
     }
 
     private fun buildWorkingMemory(messages: JSONArray): String {
@@ -124,7 +128,8 @@ internal class AiContextWindowProvider(private val delegate: AiProvider) : AiPro
             if (request.isNotBlank()) facts += "آخرین درخواست کاربر=${request.take(LAST_REQUEST_CHARS)}"
         }
         if (facts.isEmpty()) return ""
-        return "\n[Working Memory — facts extracted from the full conversation; treat these as continuity hints and verify with WooGit tools when needed]\n" + facts.take(WORKING_MEMORY_MAX_FACTS).joinToString("\n") + "\n"
+        return "\n[Working Memory — facts extracted from the full conversation; treat these as continuity hints and verify with WooGit tools when needed]\n" +
+            facts.take(WORKING_MEMORY_MAX_FACTS).joinToString("\n") + "\n"
     }
 
     private fun relatedTurn(index: Int, messages: JSONArray): Set<Int> {
@@ -181,17 +186,11 @@ internal class AiContextWindowProvider(private val delegate: AiProvider) : AiPro
     private fun estimateTokens(messages: JSONArray, tools: JSONArray): Int =
         (messages.toString().length + tools.toString().length + CHARS_PER_TOKEN - 1) / CHARS_PER_TOKEN
 
-    private fun inputBudget(providerId: String): Int = when (providerId) {
-        "groq" -> 6_000
-        "cloudflare" -> 8_000
-        "gemini" -> 12_000
-        "deepseek" -> 12_000
-        else -> 12_000
-    }
-
     private companion object {
         const val CHARS_PER_TOKEN = 4
         const val SAFETY_MARGIN_TOKENS = 250
+        const val TOOL_HEADROOM_TOKENS = 1_000
+        const val MIN_INPUT_BUDGET_TOKENS = 2_000
         const val RECENT_MESSAGES = 10
         const val OLD_TOOL_CHAR_LIMIT = 3_000
         const val MIN_TERM_LENGTH = 2
