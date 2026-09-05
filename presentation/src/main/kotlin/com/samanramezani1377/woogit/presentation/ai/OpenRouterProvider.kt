@@ -81,11 +81,7 @@ internal class OpenRouterProvider(context: Context) : AiProvider {
                     val output = model.optJSONObject("top_provider")?.optInt("max_completion_tokens", 0)?.takeIf { it > 0 } ?: 4_096
                     val modalities = model.optJSONObject("architecture")?.optJSONArray("input_modalities")
                     val vision = modalities?.let { array -> (0 until array.length()).any { array.optString(it) == "image" } } ?: false
-                    AiModelCapabilitiesRegistry.put(
-                        providerId = id,
-                        modelId = downstream,
-                        capabilities = AiModelCapabilities(context, output, vision, true),
-                    )
+                    AiModelCapabilitiesRegistry.put(providerId = id, modelId = downstream, capabilities = AiModelCapabilities(context, output, vision, true))
                     break
                 }
             } finally { connection.disconnect() }
@@ -129,11 +125,14 @@ internal class OpenRouterProvider(context: Context) : AiProvider {
                     val part = streamedCalls.optJSONObject(i) ?: continue
                     val index = part.optInt("index", i)
                     val call = calls.getOrPut(index) { JSONObject().put("id", "").put("type", "function").put("function", JSONObject().put("name", "").put("arguments", "")) }
-                    part.nonNullString("id")?.let { call.put("id", call.optString("id") + it) }
+                    part.nonNullString("id")?.let { incoming -> if (call.optString("id").isBlank()) call.put("id", incoming) }
                     val fn = part.optJSONObject("function") ?: continue
                     val current = call.optJSONObject("function")!!
-                    fn.nonNullString("name")?.let { current.put("name", current.optString("name") + it) }
-                    fn.nonNullString("arguments")?.let { current.put("arguments", current.optString("arguments") + it) }
+                    fn.nonNullString("name")?.let { incoming -> if (current.optString("name").isBlank()) current.put("name", incoming) }
+                    fn.nonNullString("arguments")?.let { incoming ->
+                        val existing = current.optString("arguments")
+                        current.put("arguments", if (existing.isBlank()) incoming else if (incoming == existing || incoming.startsWith(existing)) incoming else existing + incoming)
+                    }
                 }
             }
         }
