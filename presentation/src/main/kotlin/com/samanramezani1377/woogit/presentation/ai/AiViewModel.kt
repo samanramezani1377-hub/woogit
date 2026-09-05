@@ -106,13 +106,7 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
             generationJob = null
             return
         }
-        val completedMessages = if (working.streamingText.isBlank()) {
-            working.messages
-        } else {
-            working.messages + AiMessage("assistant", working.streamingText)
-        }
-        // Invalidate callbacks before cancelling the job. This prevents a late provider
-        // event from switching the UI back to Working after the Stop button was pressed.
+        val completedMessages = if (working.streamingText.isBlank()) working.messages else working.messages + AiMessage("assistant", working.streamingText)
         generationId++
         _isGenerating.value = false
         generationJob?.cancel()
@@ -146,9 +140,7 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
                 val agent = agents[_providerId.value] ?: throw IllegalStateException("سرویس AI انتخاب‌شده پشتیبانی نمی‌شود.")
                 var activities = emptyList<AiActivity>(); var streaming = ""
                 fun isCurrentGeneration() = generationId == requestGenerationId
-                fun publish() {
-                    if (isCurrentGeneration()) _state.value = AiUiState.Working(messages, activities, streaming)
-                }
+                fun publish() { if (isCurrentGeneration()) _state.value = AiUiState.Working(messages, activities, streaming) }
                 val reply = agent.run(messages.map { it.role to it.content }, confirmationToken, attachments) { event ->
                     if (!isCurrentGeneration()) return@run
                     when (event) {
@@ -163,13 +155,12 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
                 if (!isCurrentGeneration()) return@launch
                 val baseMessages = messages
                 _state.value = if (reply.confirmationToken != null) AiUiState.Ready(baseMessages, reply) else {
-                    val completedMessages = baseMessages + AiMessage("assistant", reply.text.ifBlank { streaming })
+                    val completedMessages = baseMessages + AiMessage("assistant", reply.text.ifBlank { streaming }, reply.attachments.firstOrNull())
                     historyStore.saveSession(currentSessionId, completedMessages)
                     refreshHistory()
                     AiUiState.Ready(completedMessages, null)
                 }
             } catch (error: CancellationException) {
-                // Stop already finalized the partial response and invalidated this generation.
             } catch (error: Throwable) {
                 if (generationId == requestGenerationId) {
                     historyStore.saveSession(currentSessionId, messages)
