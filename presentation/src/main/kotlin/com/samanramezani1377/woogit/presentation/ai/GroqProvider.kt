@@ -84,10 +84,20 @@ internal class GroqProvider(context: Context) : AiProvider {
                 for (i in 0 until streamedCalls.length()) {
                     val part = streamedCalls.optJSONObject(i) ?: continue; val index = part.optInt("index", i)
                     val call = calls.getOrPut(index) { JSONObject().put("id", "").put("type", "function").put("function", JSONObject().put("name", "").put("arguments", "")) }
-                    part.nonNullString("id")?.let { call.put("id", call.optString("id") + it) }
+                    part.nonNullString("id")?.let { incoming -> if (call.optString("id").isBlank()) call.put("id", incoming) }
                     val fn = part.optJSONObject("function") ?: continue; val current = call.optJSONObject("function")!!
-                    fn.nonNullString("name")?.let { current.put("name", current.optString("name") + it) }
-                    fn.nonNullString("arguments")?.let { current.put("arguments", current.optString("arguments") + it) }
+                    fn.nonNullString("name")?.let { incoming ->
+                        val existing = current.optString("name")
+                        if (existing.isBlank()) current.put("name", incoming)
+                    }
+                    fn.nonNullString("arguments")?.let { incoming ->
+                        val existing = current.optString("arguments")
+                        current.put("arguments", when {
+                            existing.isBlank() -> incoming
+                            incoming == existing || incoming.startsWith(existing) -> incoming
+                            else -> existing + incoming
+                        })
+                    }
                 }
             }
         }
