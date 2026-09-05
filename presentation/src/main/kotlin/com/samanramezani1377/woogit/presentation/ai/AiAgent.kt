@@ -49,7 +49,9 @@ internal class AiAgent(
 
         repeat(MAX_STEPS) { step ->
             onEvent(AiStreamEvent.Status(if (step == 0) "در حال بررسی درخواست..." else "در حال بررسی نتیجه مرحله قبل..."))
-            val response = provider.stream(working, toolDefinitions(), onEvent)
+            val tools = toolDefinitions()
+            val requestMessages = prepareMessagesForProvider(working, tools)
+            val response = provider.stream(requestMessages, tools, onEvent)
             val message = response.optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("message")
                 ?: throw IllegalStateException("${provider.id} پاسخ معتبری برنگرداند.")
             val calls = message.optJSONArray("tool_calls")
@@ -81,6 +83,44 @@ internal class AiAgent(
         throw IllegalStateException("Agent به حداکثر مراحل مجاز رسید.")
     }
 
+    private fun prepareMessagesForProvider(working: JSONArray, tools: JSONArray): JSONArray {
+        if (provider.id != "groq") return working
+        val compacted = JSONArray()
+        for (i in 0 until working.length()) compacted.put(working.get(i))
+
+        while (estimatedGroqTokens(compacted, tools) > GROQ_INPUT_BUDGET_TOKENS && removeOldestToolRound(compacted)) {
+            // Only intermediate tool-call/result rounds are compacted. User/assistant chat history is untouched.
+        }
+
+        val estimated = estimatedGroqTokens(compacted, tools)
+        if (estimated > GROQ_INPUT_BUDGET_TOKENS) {
+            throw IllegalStateException("درخواست فعلی برای پلن رایگان Groq هنوز بیش از ظرفیت امن است (حدود ${estimated} توکن). سابقه پیام‌ها دست‌نخورده مانده است؛ گفت‌وگوی جدید یا درخواست کوتاه‌تر لازم است.")
+        }
+        return compacted
+    }
+
+    private fun estimatedGroqTokens(messages: JSONArray, tools: JSONArray): Int {
+        val characters = messages.toString().length + tools.toString().length
+        return (characters + GROQ_CHARS_PER_TOKEN - 1) / GROQ_CHARS_PER_TOKEN
+    }
+
+    private fun removeOldestToolRound(messages: JSONArray): Boolean {
+        for (i in 1 until messages.length()) {
+            val item = messages.optJSONObject(i) ?: continue
+            if (item.optString("role") != "assistant" || item.optJSONArray("tool_calls") == null) continue
+            var end = i + 1
+            while (end < messages.length() && messages.optJSONObject(end)?.optString("role") == "tool") end++
+            val kept = JSONArray()
+            for (j in 0 until messages.length()) {
+                if (j < i || j >= end) kept.put(messages.get(j))
+            }
+            while (messages.length() > 0) messages.remove(messages.length() - 1)
+            for (j in 0 until kept.length()) messages.put(kept.get(j))
+            return true
+        }
+        return false
+    }
+
     private fun writeFailureMessage(result: JSONObject): String =
         result.optString("error").ifBlank { "عملیات تغییر انجام نشد یا وضعیت نهایی آن قابل تأیید نیست." }
 
@@ -99,8 +139,8 @@ internal class AiAgent(
     }
 
     private fun toolDefinitions() = JSONArray().apply {
-        put(tool("products_list", "فهرست محصولات موجود در WooGit.", listSchema()))
-        put(tool("products_get", "دریافت یک محصول از WooGit.", idSchema()))
+        put(tool("products_list", "فهرست خلاصه محصولات موجود در WooGit. برای جزئیات یک محصول از products_get استفاده کن. در Groq هر صفحه حداکثر ۱۰ محصول است و برای بررسی همه محصولات از pageهای بعدی استفاده کن.", listSchema()))
+        put(tool("products_get", "دریافت جزئیات یک محصول از WooGit.", idSchema()))
         put(tool("products_create", "ایجاد محصول؛ نیازمند تأیید کاربر.", productCreateSchema()))
         put(tool("products_update", "به‌روزرسانی محصول؛ نیازمند تأیید کاربر. برای انتشار محصول status=publish را ارسال کن. برای تغییر موجودی، stockQuantity و در صورت نیاز stockStatus را صریح ارسال کن.", productPatchSchema()))
         put(tool("products_delete", "حذف محصول؛ نیازمند تأیید کاربر.", idSchema()))
@@ -197,6 +237,8 @@ internal class AiAgent(
 
     companion object {
         private const val MAX_STEPS = 6
+        private const val GROQ_INPUT_BUDGET_TOKENS = 5000
+        private const val GROQ_CHARS_PER_TOKEN = 3
         private const val SYSTEM_PROMPT = "تو Agent داخلی WooGit هستی. تمام اطلاعات و تغییرات فروشگاه باید فقط از ابزارهای WooGit استفاده کنند. هرگز API ووکامرس را مستقیم صدا نزن. نتیجه واقعی ابزار منبع حقیقت است؛ هرگز بر اساس حدس یا متن خودت ادعا نکن که تغییری انجام شده است. برای تغییر وضعیت محصول، از products_update با patch.status استفاده کن؛ برای منتشر کردن محصول مقدار status را دقیقاً publish قرار بده. برای تغییر موجودی محصول، مقدار stockQuantity را دقیقاً همان عدد درخواستی قرار بده؛ اگر stockQuantity ارسال شد manageStock را true کن مگر کاربر صریحاً خلاف آن را خواسته باشد. اگر موجودی صفر یا کمتر شد stockStatus را outofstock و اگر بیشتر از صفر شد instock قرار بده، مگر کاربر وضعیت دیگری خواسته باشد. عملیات تغییردهنده فقط پس از تأیید صریح کاربر اجرا می‌شوند. پاسخ نهایی کوتاه، دقیق و فارسی باشد. اگر ابزار تغییر ok=false یا verified=false برگرداند، هرگز نگو انجام شد و دقیقاً خطا یا عدم تأیید را گزارش کن."
     }
 }
