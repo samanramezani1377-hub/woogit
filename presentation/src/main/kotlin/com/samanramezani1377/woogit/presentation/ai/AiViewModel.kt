@@ -13,7 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-internal data class AiMessage(val role: String, val content: String)
+internal data class AiMessage(val role: String, val content: String, val attachment: AiAttachment? = null)
 internal data class AiActivity(val text: String, val completed: Boolean = false)
 
 internal sealed interface AiUiState {
@@ -75,7 +75,7 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
         if (value.isBlank() || apiKey.isBlank() || _state.value is AiUiState.Working) return
         val currentAttachments = _attachments.value
         _attachments.value = emptyList()
-        request(currentMessages() + AiMessage("user", value), attachments = currentAttachments)
+        request(currentMessages() + AiMessage("user", value, currentAttachments.firstOrNull()), attachments = currentAttachments)
     }
 
     fun confirm(pending: AgentReply) {
@@ -99,7 +99,8 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
         _state.value = AiUiState.Working(messages)
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                historyStore.saveSession(currentSessionId, messages); refreshHistory()
+                historyStore.saveSession(currentSessionId, messages)
+                refreshHistory()
                 val agent = agents[_providerId.value] ?: throw IllegalStateException("سرویس AI انتخاب‌شده پشتیبانی نمی‌شود.")
                 var activities = emptyList<AiActivity>(); var streaming = ""
                 fun publish() { _state.value = AiUiState.Working(messages, activities, streaming) }
@@ -110,18 +111,24 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
                         is AiStreamEvent.TextDelta -> streaming += event.text
                         is AiStreamEvent.ToolCall -> activities = (activities.map { it.copy(completed = true) } + AiActivity(event.name)).takeLast(5)
                         is AiStreamEvent.ToolResult -> activities = (activities.map { it.copy(completed = true) } + AiActivity("${event.name} · انجام شد", true)).takeLast(5)
-                    }; publish()
+                    }
+                    publish()
                 }
                 val baseMessages = messages
                 _state.value = if (reply.confirmationToken != null) AiUiState.Ready(baseMessages, reply) else {
                     val completedMessages = baseMessages + AiMessage("assistant", reply.text.ifBlank { streaming })
-                    historyStore.saveSession(currentSessionId, completedMessages); refreshHistory(); AiUiState.Ready(completedMessages, null)
+                    historyStore.saveSession(currentSessionId, completedMessages)
+                    refreshHistory()
+                    AiUiState.Ready(completedMessages, null)
                 }
             } catch (error: Throwable) {
-                historyStore.saveSession(currentSessionId, messages); refreshHistory(); _state.value = AiUiState.Error(messages, error.message ?: "ارتباط با سرویس AI ناموفق بود.")
+                historyStore.saveSession(currentSessionId, messages)
+                refreshHistory()
+                _state.value = AiUiState.Error(messages, error.message ?: "ارتباط با سرویس AI ناموفق بود.")
             }
         }
     }
+
     private fun refreshHistory() { _history.value = historyStore.loadSessions() }
     class Factory(private val context: Context) : ViewModelProvider.Factory { @Suppress("UNCHECKED_CAST") override fun <T : ViewModel> create(modelClass: Class<T>): T = AiViewModel(context, AiRuntime.dependencies) as T }
     private companion object { const val MAX_IMAGE_BYTES = 20 * 1024 * 1024 }
