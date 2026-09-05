@@ -37,7 +37,7 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
         "deepseek" to AiAgent(deepSeek, WooGitToolExecutor(dependencies, storeId)),
         "openrouter" to AiAgent(openRouter, WooGitToolExecutor(dependencies, storeId)),
         "gemini" to AiAgent(gemini, WooGitToolExecutor(dependencies, storeId)),
-        "groq" to AiAgent(groq, WooGitToolExecutor(dependencies, storeId)),
+        "groq" to AiAgent(groq, WooGitToolExecutor(dependencies, storeId, groqMode = true)),
     )
     private val _providerId = MutableStateFlow(prefs.getString("provider", "openrouter") ?: "openrouter")
     val providerId: StateFlow<String> = _providerId.asStateFlow()
