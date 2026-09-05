@@ -1,6 +1,7 @@
 package com.samanramezani1377.woogit.presentation.ai
 
 import android.content.Context
+import android.util.Base64
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
@@ -16,20 +17,31 @@ internal class GroqProvider(context: Context) : AiProvider {
 
     override suspend fun complete(messages: JSONArray, tools: JSONArray): JSONObject = request(messages, tools, false)
 
-    override suspend fun stream(messages: JSONArray, tools: JSONArray, onEvent: suspend (AiStreamEvent) -> Unit): JSONObject {
+    override suspend fun stream(messages: JSONArray, tools: JSONArray, onEvent: suspend (AiStreamEvent) -> Unit): JSONObject =
+        stream(messages, tools, emptyList(), onEvent)
+
+    override suspend fun stream(
+        messages: JSONArray,
+        tools: JSONArray,
+        attachments: List<AiAttachment>,
+        onEvent: suspend (AiStreamEvent) -> Unit,
+    ): JSONObject {
         val key = apiKey.trim()
         if (key.isBlank()) throw IllegalStateException("کلید API گروک تنظیم نشده است.")
+        val requestMessages = messagesWithAttachments(messages, attachments)
         val connection = connection(key)
         return try {
-            connection.outputStream.use { it.write(body(messages, tools, true).toString().toByteArray(Charsets.UTF_8)) }
+            connection.outputStream.use {
+                it.write(body(requestMessages, tools, true, attachments.isNotEmpty()).toString().toByteArray(Charsets.UTF_8))
+            }
             val status = connection.responseCode
             if (status !in 200..299) throw httpError(connection, status)
             readSse(connection, onEvent)
         } finally { connection.disconnect() }
     }
 
-    private fun body(messages: JSONArray, tools: JSONArray, stream: Boolean) = JSONObject()
-        .put("model", MODEL)
+    private fun body(messages: JSONArray, tools: JSONArray, stream: Boolean, hasImages: Boolean) = JSONObject()
+        .put("model", if (hasImages) VISION_MODEL else MODEL)
         .put("messages", messages)
         .put("stream", stream)
         .put("tools", tools)
@@ -38,12 +50,47 @@ internal class GroqProvider(context: Context) : AiProvider {
         .put("reasoning_effort", "low")
         .put("max_completion_tokens", MAX_COMPLETION_TOKENS)
 
+    private fun messagesWithAttachments(messages: JSONArray, attachments: List<AiAttachment>): JSONArray {
+        if (attachments.isEmpty()) return messages
+        require(attachments.size <= MAX_IMAGES) { "حداکثر $MAX_IMAGES تصویر را می‌توان هم‌زمان به Groq فرستاد." }
+        attachments.forEach { attachment ->
+            require(attachment.bytes.size <= MAX_IMAGE_BYTES) {
+                "تصویر ${attachment.name} بزرگ‌تر از 20MB است و Groq آن را نمی‌پذیرد."
+            }
+        }
+
+        val result = JSONArray()
+        for (i in 0 until messages.length()) {
+            val message = messages.optJSONObject(i) ?: continue
+            if (i != messages.length() - 1 || message.optString("role") != "user") {
+                result.put(message)
+                continue
+            }
+            val text = when (val original = message.opt("content")) {
+                is String -> original
+                JSONObject.NULL, null -> ""
+                else -> original.toString()
+            }
+            val content = JSONArray().put(JSONObject().put("type", "text").put("text", text))
+            attachments.forEach { attachment ->
+                val encoded = Base64.encodeToString(attachment.bytes, Base64.NO_WRAP)
+                content.put(
+                    JSONObject()
+                        .put("type", "image_url")
+                        .put("image_url", JSONObject().put("url", "data:${attachment.mimeType};base64,$encoded"))
+                )
+            }
+            result.put(JSONObject(message.toString()).put("content", content))
+        }
+        return result
+    }
+
     private fun request(messages: JSONArray, tools: JSONArray, stream: Boolean): JSONObject {
         val key = apiKey.trim()
         if (key.isBlank()) throw IllegalStateException("کلید API گروک تنظیم نشده است.")
         val connection = connection(key)
         return try {
-            connection.outputStream.use { it.write(body(messages, tools, stream).toString().toByteArray(Charsets.UTF_8)) }
+            connection.outputStream.use { it.write(body(messages, tools, stream, false).toString().toByteArray(Charsets.UTF_8)) }
             val status = connection.responseCode
             val text = (if (status in 200..299) connection.inputStream else connection.errorStream)?.bufferedReader()?.use { it.readText() }.orEmpty()
             if (status !in 200..299) {
@@ -106,6 +153,9 @@ internal class GroqProvider(context: Context) : AiProvider {
 
     private companion object {
         const val MODEL = "openai/gpt-oss-20b"
+        const val VISION_MODEL = "qwen/qwen3.6-27b"
         const val MAX_COMPLETION_TOKENS = 2048
+        const val MAX_IMAGES = 5
+        const val MAX_IMAGE_BYTES = 20 * 1024 * 1024
     }
 }
