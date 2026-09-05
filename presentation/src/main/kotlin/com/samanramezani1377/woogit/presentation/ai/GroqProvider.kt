@@ -15,6 +15,10 @@ internal class GroqProvider(context: Context) : AiProvider {
         get() = prefs.getString("groq_api_key", "") ?: ""
         set(value) { prefs.edit().putString("groq_api_key", value.trim()).apply() }
 
+    internal var modelId: String
+        get() = prefs.getString("groq_model", DEFAULT_MODEL) ?: DEFAULT_MODEL
+        set(value) { prefs.edit().putString("groq_model", value.trim().ifBlank { DEFAULT_MODEL }).apply() }
+
     override suspend fun complete(messages: JSONArray, tools: JSONArray): JSONObject = request(messages, tools, false)
     override suspend fun stream(messages: JSONArray, tools: JSONArray, onEvent: suspend (AiStreamEvent) -> Unit): JSONObject = stream(messages, tools, emptyList(), onEvent)
 
@@ -32,10 +36,9 @@ internal class GroqProvider(context: Context) : AiProvider {
     }
 
     private fun body(messages: JSONArray, tools: JSONArray, stream: Boolean, hasImages: Boolean) = JSONObject()
-        .put("model", if (hasImages) VISION_MODEL else MODEL).put("messages", messages).put("stream", stream)
+        .put("model", if (hasImages) VISION_MODEL else modelId).put("messages", messages).put("stream", stream)
         .put("tools", tools).put("tool_choice", "auto").put("parallel_tool_calls", false)
-        // GPT-OSS supports low/medium/high; Qwen 3.6 only supports none/default.
-        .put("reasoning_effort", if (hasImages) "default" else "low")
+        .put("reasoning_effort", if (hasImages) "default" else if (modelId.startsWith("qwen/")) "default" else "low")
         .put("max_completion_tokens", MAX_COMPLETION_TOKENS)
 
     private fun request(messages: JSONArray, tools: JSONArray, stream: Boolean): JSONObject {
@@ -98,7 +101,7 @@ internal class GroqProvider(context: Context) : AiProvider {
     }
 
     private companion object {
-        const val MODEL = "openai/gpt-oss-20b"
+        const val DEFAULT_MODEL = "openai/gpt-oss-20b"
         const val VISION_MODEL = "qwen/qwen3.6-27b"
         const val MAX_COMPLETION_TOKENS = 2048
         const val MAX_IMAGES = 5
