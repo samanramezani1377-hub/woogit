@@ -6,7 +6,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
 
-internal data class AgentReply(val text: String = "", val confirmationToken: String? = null, val toolName: String? = null, val toolArguments: String? = null)
+internal data class AgentReply(val text: String = "", val confirmationToken: String? = null, val toolName: String? = null, val toolArguments: String? = null, val attachment: AiAttachment? = null)
 
 internal class AiAgent(private val provider: AiProvider, private val executor: WooGitToolExecutor) {
     private data class PendingAction(val name: String, val arguments: String, val callId: String, val thoughtSignature: String?, val attachments: List<AiAttachment>)
@@ -23,7 +23,8 @@ internal class AiAgent(private val provider: AiProvider, private val executor: W
             put(JSONObject().put("role", "system").put("content", SYSTEM_PROMPT + attachmentContext))
             messages.forEach { (role, content) -> put(JSONObject().put("role", role).put("content", content)) }
         }
-        var attachmentsForNextRequest = attachments
+        var attachmentsForNextRequest = activeAttachments
+        var outputAttachment: AiAttachment? = null
 
         if (confirmationToken != null) {
             val action = pending.remove(confirmationToken) ?: throw IllegalStateException("عملیات در انتظار تأیید پیدا نشد. دوباره درخواست را ارسال کنید.")
@@ -47,7 +48,7 @@ internal class AiAgent(private val provider: AiProvider, private val executor: W
             attachmentsForNextRequest = emptyList()
             val message = response.optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("message") ?: throw IllegalStateException("${provider.id} پاسخ معتبری برنگرداند.")
             val calls = message.optJSONArray("tool_calls")
-            if (calls == null || calls.length() == 0) return AgentReply(text = message.optString("content"))
+            if (calls == null || calls.length() == 0) return AgentReply(text = message.optString("content"), attachment = outputAttachment)
             working.put(message)
 
             for (i in 0 until calls.length()) {
@@ -62,7 +63,7 @@ internal class AiAgent(private val provider: AiProvider, private val executor: W
 
                 if (isWriteTool(name)) {
                     val token = tokenFor(name, arguments)
-                    pending[token] = PendingAction(name, arguments, callId, thoughtSignature, attachments)
+                    pending[token] = PendingAction(name, arguments, callId, thoughtSignature, activeAttachments)
                     onEvent(AiStreamEvent.Status("این عملیات برای اجرا نیاز به تأیید شما دارد."))
                     return AgentReply(confirmationToken = token, toolName = name, toolArguments = arguments)
                 }
@@ -70,8 +71,14 @@ internal class AiAgent(private val provider: AiProvider, private val executor: W
                 val result = executor.execute(name, arguments)
                 working.put(JSONObject().put("role", "tool").put("tool_call_id", callId).put("content", result))
                 onEvent(AiStreamEvent.ToolResult(toolLabel(name), summarize(result)))
-                if (provider.id == "gemini" && name == "products_get_image") {
-                    attachmentsForNextRequest = productImageAttachment(result)?.let(::listOf).orEmpty()
+                if (name == "products_get_image") {
+                    val productAttachment = productImageAttachment(result)
+                    if (productAttachment != null) {
+                        outputAttachment = productAttachment
+                        if (AiCapability.IMAGE_INPUT in provider.capabilities) {
+                            attachmentsForNextRequest = listOf(productAttachment)
+                        }
+                    }
                 }
             }
         }

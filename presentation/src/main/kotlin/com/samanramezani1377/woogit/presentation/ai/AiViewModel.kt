@@ -72,7 +72,7 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
 
     fun send(text: String) {
         val value = text.trim()
-        if (value.isBlank() || apiKey.isBlank() || _state.value is AiUiState.Working) return
+        if ((value.isBlank() && _attachments.value.isEmpty()) || apiKey.isBlank() || _state.value is AiUiState.Working) return
         val currentAttachments = _attachments.value
         _attachments.value = emptyList()
         request(currentMessages() + AiMessage("user", value, currentAttachments.firstOrNull()), attachments = currentAttachments)
@@ -116,7 +116,10 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
                 }
                 val baseMessages = messages
                 _state.value = if (reply.confirmationToken != null) AiUiState.Ready(baseMessages, reply) else {
-                    val completedMessages = baseMessages + AiMessage("assistant", reply.text.ifBlank { streaming })
+                    val rawText = reply.text.ifBlank { streaming }
+                    val (cleanText, outputImageFromText) = AiOutputImageCodec.extract(rawText)
+                    val outputImage = reply.attachment ?: outputImageFromText
+                    val completedMessages = baseMessages + AiMessage("assistant", cleanText, outputImage)
                     historyStore.saveSession(currentSessionId, completedMessages)
                     refreshHistory()
                     AiUiState.Ready(completedMessages, null)
