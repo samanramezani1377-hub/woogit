@@ -5,6 +5,7 @@ import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.core.domain.error.CoreResult
 import com.samanramezani1377.woogit.core.domain.error.DomainError
 import com.samanramezani1377.woogit.core.domain.error.fold
+import com.samanramezani1377.woogit.core.domain.model.MediaContent
 import com.samanramezani1377.woogit.core.domain.model.ProductImage
 import com.samanramezani1377.woogit.core.domain.repository.MediaRepository
 import com.samanramezani1377.woogit.data.network.HttpApiException
@@ -36,14 +37,30 @@ class MediaRepositoryImpl(private val provider: WooCommerceClientProvider) : Med
             { CoreResult.Failure(it) },
         )
 
+    override suspend fun download(storeId: StoreId, image: ProductImage): CoreResult<MediaContent> =
+        provider.client(storeId).fold(
+            { (store, api) ->
+                runCatching {
+                    val bytes = api.downloadMedia(store.baseUrl, image.src)
+                    val mime = when (image.src.substringBefore('?').substringAfterLast('.').lowercase()) {
+                        "png" -> "image/png"
+                        "webp" -> "image/webp"
+                        "gif" -> "image/gif"
+                        "heic" -> "image/heic"
+                        "heif" -> "image/heif"
+                        else -> "image/jpeg"
+                    }
+                    MediaContent(bytes, mime, image.name?.ifBlank { "product-image" } ?: "product-image")
+                }.fold({ CoreResult.Success(it) }, { CoreResult.Failure(it.toDomain()) })
+            },
+            { CoreResult.Failure(it) },
+        )
+
     override suspend fun delete(storeId: StoreId, mediaId: EntityId): CoreResult<Unit> =
         provider.client(storeId).fold(
             { (store, api) ->
                 runCatching { api.deleteMedia(store.baseUrl, mediaId.value.toLong()).getOrThrow() }
-                    .fold(
-                        { CoreResult.Success(Unit) },
-                        { CoreResult.Failure(it.toDomain()) },
-                    )
+                    .fold({ CoreResult.Success(Unit) }, { CoreResult.Failure(it.toDomain()) })
             },
             { CoreResult.Failure(it) },
         )
