@@ -62,7 +62,7 @@ internal class AiAgent(private val provider: AiProvider, private val executor: W
 
                 if (isWriteTool(name)) {
                     val token = tokenFor(name, arguments)
-                    pending[token] = PendingAction(name, arguments, callId, thoughtSignature, requestAttachments)
+                    pending[token] = PendingAction(name, arguments, callId, thoughtSignature, attachments)
                     onEvent(AiStreamEvent.Status("این عملیات برای اجرا نیاز به تأیید شما دارد."))
                     return AgentReply(confirmationToken = token, toolName = name, toolArguments = arguments)
                 }
