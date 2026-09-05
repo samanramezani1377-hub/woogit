@@ -51,7 +51,7 @@ internal class AiAgent(private val provider: AiProvider, private val executor: W
         repeat(MAX_STEPS) { step ->
             onEvent(AiStreamEvent.Status(if (step == 0) "در حال بررسی درخواست..." else "در حال بررسی نتیجه مرحله قبل..."))
             val tools = toolDefinitions()
-            val requestMessages = prepareMessagesForProvider(working, tools)
+            val requestMessages = working
             val requestAttachments = attachmentsForNextRequest
             val response = provider.stream(requestMessages, tools, requestAttachments, onEvent)
             attachmentsForNextRequest = emptyList()
@@ -88,33 +88,6 @@ internal class AiAgent(private val provider: AiProvider, private val executor: W
             }
         }
         throw IllegalStateException("Agent به حداکثر مراحل مجاز رسید.")
-    }
-
-    private fun prepareMessagesForProvider(working: JSONArray, tools: JSONArray): JSONArray {
-        if (provider.id != "groq") return working
-        val compacted = JSONArray()
-        for (i in 0 until working.length()) compacted.put(working.get(i))
-        while (estimatedGroqTokens(compacted, tools) > GROQ_INPUT_BUDGET_TOKENS && removeOldestToolRound(compacted)) { }
-        val estimated = estimatedGroqTokens(compacted, tools)
-        if (estimated > GROQ_INPUT_BUDGET_TOKENS) throw IllegalStateException("درخواست فعلی برای پلن رایگان Groq هنوز بیش از ظرفیت امن است (حدود ${estimated} توکن). سابقه پیام‌ها دست‌نخورده مانده است؛ گفت‌وگوی جدید یا درخواست کوتاه‌تر لازم است.")
-        return compacted
-    }
-
-    private fun estimatedGroqTokens(messages: JSONArray, tools: JSONArray): Int = (messages.toString().length + tools.toString().length + GROQ_CHARS_PER_TOKEN - 1) / GROQ_CHARS_PER_TOKEN
-
-    private fun removeOldestToolRound(messages: JSONArray): Boolean {
-        for (i in 1 until messages.length()) {
-            val item = messages.optJSONObject(i) ?: continue
-            if (item.optString("role") != "assistant" || item.optJSONArray("tool_calls") == null) continue
-            var end = i + 1
-            while (end < messages.length() && messages.optJSONObject(end)?.optString("role") == "tool") end++
-            val kept = JSONArray()
-            for (j in 0 until messages.length()) if (j < i || j >= end) kept.put(messages.get(j))
-            while (messages.length() > 0) messages.remove(messages.length() - 1)
-            for (j in 0 until kept.length()) messages.put(kept.get(j))
-            return true
-        }
-        return false
     }
 
     private fun writeFailureMessage(result: JSONObject) = result.optString("error").ifBlank { "عملیات تغییر انجام نشد یا قابل تأیید نیست." }
@@ -167,8 +140,6 @@ internal class AiAgent(private val provider: AiProvider, private val executor: W
 
     private companion object {
         const val MAX_STEPS = 6
-        const val GROQ_INPUT_BUDGET_TOKENS = 5000
-        const val GROQ_CHARS_PER_TOKEN = 3
         const val SYSTEM_PROMPT = "تو Agent داخلی WooGit هستی. تمام اطلاعات و تغییرات فروشگاه فقط از ابزارهای WooGit انجام می‌شوند. داده فروشگاه را فقط از toolها معتبر بدان. products_list اطلاعات ساختاریافته محصول، وضعیت موجودی، قیمت، دسته‌بندی، ویژگی‌ها و متادیتای تصویر را می‌دهد؛ برای دیدن خود تصویر فقط products_get_image را صدا بزن. products_get_image تصویر را به‌صورت attachment واقعی در اختیار Agent قرار می‌دهد و URL تصویر را نباید بخواهی یا به کاربر نشان بدهی. در pagination اگر endOfCollection=true بود صفحه بعدی وجود ندارد و نباید دوباره درخواست شود. provenance هر نتیجه نشان می‌دهد داده از کدام tool و فروشگاه WooGit آمده است. نتیجه واقعی ابزار منبع حقیقت است؛ اگر ok یا verified موفق نباشد هرگز ادعا نکن تغییر انجام شده است. برای انتشار محصول از products_update با patch.status=publish استفاده کن. برای موجودی، stockQuantity را دقیقاً همان مقدار درخواست‌شده قرار بده و اگر مقدار ارسال شد manageStock را true کن مگر کاربر خلاف آن را خواسته باشد. پاسخ کوتاه و فارسی باشد."
     }
 }
