@@ -34,7 +34,6 @@ internal class GroqProvider(context: Context) : AiProvider {
     private fun body(messages: JSONArray, tools: JSONArray, stream: Boolean, hasImages: Boolean) = JSONObject()
         .put("model", if (hasImages) VISION_MODEL else MODEL).put("messages", messages).put("stream", stream)
         .put("tools", tools).put("tool_choice", "auto").put("parallel_tool_calls", false)
-        // GPT-OSS supports low/medium/high; Qwen 3.6 only supports none/default.
         .put("reasoning_effort", if (hasImages) "default" else "low")
         .put("max_completion_tokens", MAX_COMPLETION_TOKENS)
 
@@ -50,7 +49,7 @@ internal class GroqProvider(context: Context) : AiProvider {
                 val message = runCatching { JSONObject(text).optJSONObject("error")?.optString("message") }.getOrNull().orEmpty()
                 throw IllegalStateException(if (message.isNotBlank()) "Groq HTTP $status: $message" else "Groq HTTP $status: ${text.take(400)}")
             }
-            JSONObject(text)
+            JSONObject(text).let(::normalizeImageContent)
         } finally { connection.disconnect() }
     }
 
@@ -63,32 +62,45 @@ internal class GroqProvider(context: Context) : AiProvider {
 
     private suspend fun readSse(connection: HttpURLConnection, onEvent: suspend (AiStreamEvent) -> Unit): JSONObject {
         val content = StringBuilder(); val calls = mutableMapOf<Int, JSONObject>()
-        connection.inputStream.bufferedReader().use { reader ->
-            while (true) {
-                val line = reader.readLine() ?: break
-                if (!line.startsWith("data:")) continue
-                val raw = line.removePrefix("data:").trim()
-                if (raw == "[DONE]") break
-                if (raw.isBlank()) continue
-                val delta = runCatching { JSONObject(raw).optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("delta") }.getOrNull() ?: continue
-                val reasoning = delta.nonNullString("reasoning_content") ?: delta.nonNullString("reasoning")
-                if (!reasoning.isNullOrBlank()) onEvent(AiStreamEvent.Thinking(reasoning))
-                val text = delta.nonNullString("content")
-                if (!text.isNullOrEmpty()) { content.append(text); onEvent(AiStreamEvent.TextDelta(text)) }
-                val streamedCalls = delta.optJSONArray("tool_calls") ?: continue
-                for (i in 0 until streamedCalls.length()) {
-                    val part = streamedCalls.optJSONObject(i) ?: continue; val index = part.optInt("index", i)
-                    val call = calls.getOrPut(index) { JSONObject().put("id", "").put("type", "function").put("function", JSONObject().put("name", "").put("arguments", "")) }
-                    part.nonNullString("id")?.let { call.put("id", call.optString("id") + it) }
-                    val fn = part.optJSONObject("function") ?: continue; val current = call.optJSONObject("function")!!
-                    fn.nonNullString("name")?.let { current.put("name", current.optString("name") + it) }
-                    fn.nonNullString("arguments")?.let { current.put("arguments", current.optString("arguments") + it) }
-                }
+        connection.inputStream.bufferedReader().use { reader -> while (true) {
+            val line = reader.readLine() ?: break; if (!line.startsWith("data:")) continue
+            val raw = line.removePrefix("data:").trim(); if (raw == "[DONE]") break; if (raw.isBlank()) continue
+            val delta = runCatching { JSONObject(raw).optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("delta") }.getOrNull() ?: continue
+            val reasoning = delta.nonNullString("reasoning_content") ?: delta.nonNullString("reasoning")
+            if (!reasoning.isNullOrBlank()) onEvent(AiStreamEvent.Thinking(reasoning))
+            val rawContent = delta.opt("content")
+            when (rawContent) {
+                is String -> if (rawContent.isNotEmpty()) { content.append(rawContent); onEvent(AiStreamEvent.TextDelta(rawContent)) }
+                is JSONArray -> AiOutputImageCodec.appendOpenAiContentPartMarkers(content, rawContent)
+                is JSONObject -> AiOutputImageCodec.appendOpenAiContentPartMarkers(content, rawContent)
             }
+            val streamedCalls = delta.optJSONArray("tool_calls") ?: continue
+            for (i in 0 until streamedCalls.length()) {
+                val part = streamedCalls.optJSONObject(i) ?: continue; val index = part.optInt("index", i)
+                val call = calls.getOrPut(index) { JSONObject().put("id", "").put("type", "function").put("function", JSONObject().put("name", "").put("arguments", "")) }
+                part.nonNullString("id")?.let { call.put("id", call.optString("id") + it) }
+                val fn = part.optJSONObject("function") ?: continue; val current = call.optJSONObject("function")!!
+                fn.nonNullString("name")?.let { current.put("name", current.optString("name") + it) }
+                fn.nonNullString("arguments")?.let { current.put("arguments", current.optString("arguments") + it) }
+            }
+        } }
+        val message = JSONObject().put("role", "assistant").put("content", content.toString()); if (calls.isNotEmpty()) message.put("tool_calls", JSONArray(calls.toSortedMap().values.toList())); return JSONObject().put("choices", JSONArray().put(JSONObject().put("message", message)))
+    }
+
+    private fun normalizeImageContent(response: JSONObject): JSONObject {
+        val message = response.optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("message") ?: return response
+        val content = message.opt("content")
+        if (content is JSONArray || content is JSONObject) {
+            val builder = StringBuilder()
+            AiOutputImageCodec.appendOpenAiContentPartMarkers(builder, content)
+            val text = when (content) {
+                is JSONArray -> (0 until content.length()).mapNotNull { content.optJSONObject(it)?.optString("text")?.takeIf(String::isNotBlank) }.joinToString("")
+                is JSONObject -> content.optString("text")
+                else -> ""
+            }
+            message.put("content", text + builder.toString())
         }
-        val message = JSONObject().put("role", "assistant").put("content", content.toString())
-        if (calls.isNotEmpty()) message.put("tool_calls", JSONArray(calls.toSortedMap().values.toList()))
-        return JSONObject().put("choices", JSONArray().put(JSONObject().put("message", message)))
+        return response
     }
 
     private fun httpError(connection: HttpURLConnection, status: Int): IllegalStateException {
