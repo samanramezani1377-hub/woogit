@@ -2,13 +2,13 @@ package com.samanramezani1377.woogit.data.network
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.Json
 
 private val typedJson = Json { ignoreUnknownKeys = true; explicitNulls = false }
 
@@ -27,7 +27,6 @@ private val typedJson = Json { ignoreUnknownKeys = true; explicitNulls = false }
 @Serializable data class WooVariationTypedDto(val id:Long,val product_id:Long=0,val sku:String?=null,val price:String?=null,val regular_price:String?=null,val sale_price:String?=null,val stock_quantity:Double?=null,val stock_status:String="instock",val manage_stock:Boolean=false,val image:WooImageTypedDto?=null,val date_modified_gmt:String?=null,val attributes:List<WooVariationAttributeDto> = emptyList())
 @Serializable data class WooGlobalAttributeDto(val id:Long,val name:String="",val slug:String="")
 @Serializable data class WooAttributeTermDto(val id:Long,val name:String="",val slug:String="")
-
 @Serializable data class WooSystemStatusDto(val environment: Map<String, JsonElement> = emptyMap(), val settings: WooSystemStatusSettingsDto = WooSystemStatusSettingsDto()) {
     fun environmentString(key: String): String? = environment[key]?.asText()
     fun environmentBoolean(key: String): Boolean? = environment[key]?.asBoolean()
@@ -36,19 +35,21 @@ private val typedJson = Json { ignoreUnknownKeys = true; explicitNulls = false }
 private fun JsonElement.asText(): String? = (this as? JsonPrimitive)?.contentOrNull
 private fun JsonElement.asBoolean(): Boolean? = (this as? JsonPrimitive)?.booleanOrNull
 private fun JsonElement.asInt(): Int? = (this as? JsonPrimitive)?.intOrNull
-
 @Serializable data class WooMediaTitleDto(val rendered:String="")
 @Serializable data class WooMediaDto(val id:Long,val source_url:String="",val title:WooMediaTitleDto?=null,val alt_text:String="")
 
 class TypedWooCommerceApi(private val raw: WooCommerceApi) {
     private fun <T> decode(r: ApiResponse, decoder: (String) -> T): Result<T> = if (r.statusCode in 200..299) runCatching { decoder(r.body) } else Result.failure(HttpApiException(r.statusCode, r.body))
+    private fun total(r: ApiResponse): Result<Int> = if (r.statusCode in 200..299) r.total?.let(Result::success) ?: Result.failure(IllegalStateException("WooCommerce did not return X-WP-Total.")) else Result.failure(HttpApiException(r.statusCode, r.body))
     suspend fun validate(b:String) = decode(raw.validateStore(b)) { typedJson.decodeFromString<WooSystemStatusDto>(it) }
     suspend fun orders(b:String,p:Int,n:Int,s:String?,st:String?) = decode(raw.listOrders(b,p,n,s,st)) { typedJson.decodeFromString<List<WooOrderTypedDto>>(it) }
+    suspend fun ordersTotal(b:String,s:String?,st:String?) = total(raw.listOrders(b,1,1,s,st))
     suspend fun order(b:String,id:Long) = decode(raw.getOrder(b,id)) { typedJson.decodeFromString<WooOrderTypedDto>(it) }
     suspend fun updateOrder(b:String,id:Long,o:WooOrderTypedDto) = decode(raw.updateOrder(b,id,typedJson.encodeToString(o))) { typedJson.decodeFromString<WooOrderTypedDto>(it) }
     suspend fun addOrderNote(b:String,id:Long,n:WooOrderNoteDto) = decode(raw.addOrderNote(b,id,typedJson.encodeToString(n))) { typedJson.decodeFromString<WooOrderNoteDto>(it) }
     suspend fun salesReport(b:String,dateMin:String,dateMax:String) = decode(raw.salesReport(b,dateMin,dateMax)) { typedJson.decodeFromString<List<WooSalesReportDto>>(it).firstOrNull() ?: WooSalesReportDto() }
     suspend fun products(b:String,p:Int,n:Int,s:String?,modifiedAfter:String?=null) = decode(raw.listProducts(b,p,n,s,modifiedAfter)) { typedJson.decodeFromString<List<WooProductTypedDto>>(it) }
+    suspend fun productsTotal(b:String,s:String?) = total(raw.listProducts(b,1,1,s))
     suspend fun product(b:String,id:Long) = decode(raw.getProduct(b,id)) { typedJson.decodeFromString<WooProductTypedDto>(it) }
     suspend fun createProduct(b:String,p:WooProductTypedDto) = decode(raw.createProduct(b,typedJson.encodeToString(p))) { typedJson.decodeFromString<WooProductTypedDto>(it) }
     suspend fun updateProduct(b:String,id:Long,p:WooProductTypedDto) = decode(raw.updateProduct(b,id,typedJson.encodeToString(p))) { typedJson.decodeFromString<WooProductTypedDto>(it) }
