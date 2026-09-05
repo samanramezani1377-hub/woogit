@@ -2,11 +2,15 @@ package com.samanramezani1377.woogit.presentation.ai
 
 import org.json.JSONArray
 import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
 import java.security.MessageDigest
 
-internal data class AgentReply(val text: String = "", val confirmationToken: String? = null, val toolName: String? = null, val toolArguments: String? = null)
+internal data class AgentReply(
+    val text: String = "",
+    val confirmationToken: String? = null,
+    val toolName: String? = null,
+    val toolArguments: String? = null,
+    val attachments: List<AiAttachment> = emptyList(),
+)
 
 internal class AiAgent(private val provider: AiProvider, private val executor: WooGitToolExecutor) {
     private data class PendingAction(val name: String, val arguments: String, val callId: String, val thoughtSignature: String?, val attachments: List<AiAttachment>)
@@ -24,17 +28,23 @@ internal class AiAgent(private val provider: AiProvider, private val executor: W
             messages.forEach { (role, content) -> put(JSONObject().put("role", role).put("content", content)) }
         }
         var attachmentsForNextRequest = attachments
+        var resultAttachments = emptyList<AiAttachment>()
 
         if (confirmationToken != null) {
             val action = pending.remove(confirmationToken) ?: throw IllegalStateException("عملیات در انتظار تأیید پیدا نشد. دوباره درخواست را ارسال کنید.")
             onEvent(AiStreamEvent.Status("در حال اجرای عملیات تأییدشده..."))
             working.put(assistantToolCall(action.callId, action.name, action.arguments, action.thoughtSignature))
             val result = executor.execute(action.name, action.arguments, action.attachments)
+            val imageAttachment = executor.consumeImageAttachment()
+            if (imageAttachment != null) {
+                resultAttachments = listOf(imageAttachment)
+                attachmentsForNextRequest = resultAttachments
+            }
             working.put(JSONObject().put("role", "tool").put("tool_call_id", action.callId).put("content", result))
             onEvent(AiStreamEvent.ToolResult(toolLabel(action.name), summarize(result)))
             if (isWriteTool(action.name)) {
                 val json = JSONObject(result)
-                if (!json.optBoolean("ok") || !json.optBoolean("verified")) return AgentReply(text = writeFailureMessage(json))
+                if (!json.optBoolean("ok") || !json.optBoolean("verified")) return AgentReply(text = writeFailureMessage(json), attachments = resultAttachments)
             }
         }
 
@@ -47,7 +57,7 @@ internal class AiAgent(private val provider: AiProvider, private val executor: W
             attachmentsForNextRequest = emptyList()
             val message = response.optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("message") ?: throw IllegalStateException("${provider.id} پاسخ معتبری برنگرداند.")
             val calls = message.optJSONArray("tool_calls")
-            if (calls == null || calls.length() == 0) return AgentReply(text = message.optString("content"))
+            if (calls == null || calls.length() == 0) return AgentReply(text = message.optString("content"), attachments = resultAttachments)
             working.put(message)
 
             for (i in 0 until calls.length()) {
@@ -64,50 +74,20 @@ internal class AiAgent(private val provider: AiProvider, private val executor: W
                     val token = tokenFor(name, arguments)
                     pending[token] = PendingAction(name, arguments, callId, thoughtSignature, attachments)
                     onEvent(AiStreamEvent.Status("این عملیات برای اجرا نیاز به تأیید شما دارد."))
-                    return AgentReply(confirmationToken = token, toolName = name, toolArguments = arguments)
+                    return AgentReply(confirmationToken = token, toolName = name, toolArguments = arguments, attachments = resultAttachments)
                 }
 
                 val result = executor.execute(name, arguments)
+                val imageAttachment = executor.consumeImageAttachment()
+                if (imageAttachment != null) {
+                    resultAttachments = listOf(imageAttachment)
+                    attachmentsForNextRequest = resultAttachments
+                }
                 working.put(JSONObject().put("role", "tool").put("tool_call_id", callId).put("content", result))
                 onEvent(AiStreamEvent.ToolResult(toolLabel(name), summarize(result)))
-                if (provider.id == "gemini" && name == "products_get_image") {
-                    attachmentsForNextRequest = productImageAttachment(result)?.let(::listOf).orEmpty()
-                }
             }
         }
         throw IllegalStateException("Agent به حداکثر مراحل مجاز رسید.")
-    }
-
-    private fun productImageAttachment(result: String): AiAttachment? {
-        val image = runCatching { JSONObject(result).optJSONObject("data")?.optJSONObject("image") }.getOrNull() ?: return null
-        val src = image.optString("src").takeIf { it.isNotBlank() } ?: return null
-        return runCatching { downloadImage(src, image.optString("name").ifBlank { "product-image" }) }.getOrNull()
-    }
-
-    private fun downloadImage(src: String, name: String): AiAttachment {
-        val c = (URL(src).openConnection() as HttpURLConnection).apply {
-            connectTimeout = 10_000
-            readTimeout = 30_000
-            instanceFollowRedirects = true
-            requestMethod = "GET"
-        }
-        return try {
-            val status = c.responseCode
-            if (status !in 200..299) throw IllegalStateException("تصویر محصول قابل دریافت نیست (HTTP $status).")
-            val bytes = c.inputStream.use { it.readBytes() }
-            require(bytes.size <= MAX_IMAGE_BYTES) { "تصویر محصول بیش از 20MB است." }
-            val mime = c.contentType?.substringBefore(';')?.takeIf { it.startsWith("image/") } ?: guessMime(src)
-            AiAttachment(name, mime, bytes)
-        } finally { c.disconnect() }
-    }
-
-    private fun guessMime(src: String) = when (src.substringBefore('?').substringAfterLast('.').lowercase()) {
-        "png" -> "image/png"
-        "webp" -> "image/webp"
-        "gif" -> "image/gif"
-        "heic" -> "image/heic"
-        "heif" -> "image/heif"
-        else -> "image/jpeg"
     }
 
     private fun prepareMessagesForProvider(working: JSONArray, tools: JSONArray): JSONArray {
@@ -157,22 +137,22 @@ internal class AiAgent(private val provider: AiProvider, private val executor: W
     }
 
     private fun toolDefinitions() = JSONArray().apply {
-        put(tool("products_list", "فهرست خلاصه محصولات؛ بدون تصویر.", listSchema()))
-        put(tool("products_get", "جزئیات محصول؛ بدون ارسال تصویر به مدل.", idSchema()))
-        put(tool("products_get_image", "فقط یک تصویر مشخص محصول را برای تحلیل تصویری دریافت کن. فقط در صورت نیاز واقعی.", imageSchema()))
+        put(tool("products_list", "فهرست محصولات با اطلاعات لازم برای تصمیم‌گیری؛ بدون بایت تصویر. پاسخ pagination شامل endOfCollection و lastPage است و اگر endOfCollection=true بود دیگر صفحه بعدی را درخواست نکن.", listSchema()))
+        put(tool("products_get", "جزئیات کامل محصول از مسیر WooGit؛ بدون ارسال بایت تصویر.", idSchema()))
+        put(tool("products_get_image", "یک تصویر مشخص محصول را به‌صورت attachment واقعی از مسیر رسانه WooGit دریافت کن. URL تصویر به مدل داده نمی‌شود و برای تحلیل تصویری فقط attachment را استفاده کن.", imageSchema()))
         put(tool("products_image_add", "تصویر انتخاب‌شده و از قبل پیوست‌شده توسط کاربر را به محصول اضافه کن. تصویر از قبل در برنامه انتخاب شده است؛ هرگز نام فایل یا انتخاب دوباره تصویر را از کاربر نخواه. فقط شناسه محصول را مشخص کن؛ نیازمند تأیید.", imageAddSchema()))
         put(tool("products_image_set_primary", "یک تصویر موجود محصول را تصویر اصلی کن؛ نیازمند تأیید.", imageSchema()))
         put(tool("products_image_remove", "یک تصویر موجود محصول را از محصول جدا کن؛ نیازمند تأیید.", imageRemoveSchema()))
         put(tool("products_create", "ایجاد محصول؛ نیازمند تأیید.", genericProductSchema()))
         put(tool("products_update", "ویرایش محصول؛ نیازمند تأیید.", genericPatchSchema()))
         put(tool("products_delete", "حذف محصول؛ نیازمند تأیید.", idSchema()))
-        put(tool("orders_list", "فهرست سفارش‌ها.", listSchema()))
-        put(tool("orders_get", "جزئیات سفارش.", idSchema()))
+        put(tool("orders_list", "فهرست سفارش‌ها از مسیر WooGit.", listSchema()))
+        put(tool("orders_get", "جزئیات سفارش از مسیر WooGit.", idSchema()))
         put(tool("orders_update_status", "تغییر وضعیت سفارش؛ نیازمند تأیید.", orderStatusSchema()))
     }
 
     private fun idSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("id", JSONObject().put("type", "integer").put("minimum", 1))).put("required", JSONArray().put("id"))
-    private fun listSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("page", JSONObject().put("type", "integer")).put("perPage", JSONObject().put("type", "integer")).put("search", JSONObject().put("type", "string")).put("status", JSONObject().put("type", "string")))
+    private fun listSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("page", JSONObject().put("type", "integer").put("minimum", 1)).put("perPage", JSONObject().put("type", "integer").put("minimum", 1).put("maximum", 99)).put("search", JSONObject().put("type", "string")).put("status", JSONObject().put("type", "string")))
     private fun imageSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("id", JSONObject().put("type", "integer").put("minimum", 1)).put("imageIndex", JSONObject().put("type", "integer").put("minimum", 0))).put("required", JSONArray().put("id"))
     private fun imageAddSchema() = idSchema()
     private fun imageRemoveSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("id", JSONObject().put("type", "integer").put("minimum", 1)).put("imageIndex", JSONObject().put("type", "integer").put("minimum", 0)).put("imageId", JSONObject().put("type", "string"))).put("required", JSONArray().put("id"))
@@ -189,7 +169,6 @@ internal class AiAgent(private val provider: AiProvider, private val executor: W
         const val MAX_STEPS = 6
         const val GROQ_INPUT_BUDGET_TOKENS = 5000
         const val GROQ_CHARS_PER_TOKEN = 3
-        const val MAX_IMAGE_BYTES = 20 * 1024 * 1024
-        const val SYSTEM_PROMPT = "تو Agent داخلی WooGit هستی. تمام اطلاعات و تغییرات فروشگاه فقط از ابزارهای WooGit انجام می‌شوند. products_list فقط خلاصه محصول و بدون تصویر است؛ products_get نیز تصویر را به‌صورت attachment ارسال نمی‌کند. فقط وقتی تصویر واقعاً لازم است products_get_image را صدا بزن. برای افزودن تصویر products_image_add، تغییر تصویر اصلی products_image_set_primary و حذف تصویر products_image_remove استفاده کن؛ هر سه نیازمند تأیید صریح کاربر هستند. تغییر وضعیت سفارش با orders_update_status نیز نیازمند تأیید صریح است. نتیجه واقعی ابزار منبع حقیقت است؛ اگر ok یا verified موفق نباشد هرگز ادعا نکن تغییر انجام شده است. برای انتشار محصول از products_update با patch.status=publish استفاده کن. برای موجودی، stockQuantity را دقیقاً همان مقدار درخواست‌شده قرار بده و اگر مقدار ارسال شد manageStock را true کن مگر کاربر خلاف آن را خواسته باشد. پاسخ کوتاه و فارسی باشد."
+        const val SYSTEM_PROMPT = "تو Agent داخلی WooGit هستی. تمام اطلاعات و تغییرات فروشگاه فقط از ابزارهای WooGit انجام می‌شوند. داده فروشگاه را فقط از toolها معتبر بدان. products_list اطلاعات ساختاریافته محصول، وضعیت موجودی، قیمت، دسته‌بندی، ویژگی‌ها و متادیتای تصویر را می‌دهد؛ برای دیدن خود تصویر فقط products_get_image را صدا بزن. products_get_image تصویر را به‌صورت attachment واقعی در اختیار Agent قرار می‌دهد و URL تصویر را نباید بخواهی یا به کاربر نشان بدهی. در pagination اگر endOfCollection=true بود صفحه بعدی وجود ندارد و نباید دوباره درخواست شود. provenance هر نتیجه نشان می‌دهد داده از کدام tool و فروشگاه WooGit آمده است. نتیجه واقعی ابزار منبع حقیقت است؛ اگر ok یا verified موفق نباشد هرگز ادعا نکن تغییر انجام شده است. برای انتشار محصول از products_update با patch.status=publish استفاده کن. برای موجودی، stockQuantity را دقیقاً همان مقدار درخواست‌شده قرار بده و اگر مقدار ارسال شد manageStock را true کن مگر کاربر خلاف آن را خواسته باشد. پاسخ کوتاه و فارسی باشد."
     }
 }
