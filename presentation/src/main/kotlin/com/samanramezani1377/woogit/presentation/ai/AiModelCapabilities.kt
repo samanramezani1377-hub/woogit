@@ -9,6 +9,7 @@ internal data class AiModelCapabilities(
 ) {
     companion object {
         fun forModel(providerId: String, modelId: String): AiModelCapabilities {
+            AiModelCapabilitiesRegistry.get(providerId, modelId)?.let { return it }
             val model = modelId.lowercase()
             return when {
                 providerId == "groq" && model.contains("gpt-oss-120b") ->
@@ -28,8 +29,7 @@ internal data class AiModelCapabilities(
                 providerId == "deepseek" && (model.contains("deepseek-v4-flash") || model.contains("deepseek-v4-pro")) ->
                     AiModelCapabilities(1_048_576, 384_000, false, true)
                 providerId == "openrouter" && model == "openrouter/free" ->
-                    // This is a router, not a model. Until the selected downstream model is known,
-                    // keep a safe generic budget rather than pretending it has one fixed capability set.
+                    // Router fallback. The actual downstream model is learned from the response and cached.
                     AiModelCapabilities(32_000, 4_096, true, true)
                 else ->
                     AiModelCapabilities(16_000, 2_048, false, true)
