@@ -22,6 +22,7 @@ internal class WooGitToolExecutor(
                 productsListResult(dependencies.getProducts(storeId, a.optInt("page", 1), perPage, a.optString("search").takeIf { it.isNotBlank() }), a.optInt("page", 1), perPage)
             }
             "products_get" -> readResult(dependencies.getProduct(storeId, EntityId(a.getLong("id").toString())))
+            "products_get_image" -> productImageResult(a)
             "products_create" -> createProduct(a)
             "products_update" -> updateProduct(a)
             "products_delete" -> deleteProduct(a)
@@ -29,6 +30,26 @@ internal class WooGitToolExecutor(
             "orders_get" -> readResult(dependencies.getOrder(storeId, EntityId(a.getLong("id").toString())))
             "orders_update_status" -> updateOrderStatus(a)
             else -> throw IllegalArgumentException("ابزار ناشناخته: $name")
+        }
+    }
+
+    private suspend fun productImageResult(a: JSONObject): String {
+        val id = EntityId(a.getLong("id").toString())
+        val index = a.optInt("imageIndex", 0)
+        return when (val result = dependencies.getProduct(storeId, id)) {
+            is CoreResult.Failure -> failure(result.error.toString())
+            is CoreResult.Success -> {
+                val product = result.value as? Product ?: return failure("اطلاعات محصول قابل دریافت نیست.")
+                val image = product.images.getOrNull(index) ?: return failure("تصویر شماره ${index + 1} برای این محصول وجود ندارد.")
+                JSONObject().put("ok", true).put("data", JSONObject()
+                    .put("productId", product.id.value)
+                    .put("imageIndex", index)
+                    .put("image", JSONObject()
+                        .put("id", image.id?.value ?: JSONObject.NULL)
+                        .put("src", image.src)
+                        .put("name", image.name ?: JSONObject.NULL)
+                        .put("alt", image.alt ?: JSONObject.NULL))).toString()
+            }
         }
     }
 
