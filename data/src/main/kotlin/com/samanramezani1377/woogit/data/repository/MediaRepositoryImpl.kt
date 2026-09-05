@@ -41,7 +41,7 @@ class MediaRepositoryImpl(private val provider: WooCommerceClientProvider) : Med
         provider.client(storeId).fold(
             { (store, api) ->
                 runCatching {
-                    val bytes = api.downloadMedia(store.baseUrl, image.src)
+                    val bytes = api.downloadMedia(store.baseUrl, image.src).getOrThrow()
                     val mime = when (image.src.substringBefore('?').substringAfterLast('.').lowercase()) {
                         "png" -> "image/png"
                         "webp" -> "image/webp"
