@@ -19,6 +19,9 @@ internal sealed interface AiStreamEvent {
 
 internal interface AiProvider {
     val id: String
+    /** Model currently used by this provider. A provider may expose a mutable selection. */
+    val modelId: String
+        get() = id
     var apiKey: String
     val capabilities: Set<AiCapability>
         get() = setOf(AiCapability.TEXT, AiCapability.TOOL_CALLING)
