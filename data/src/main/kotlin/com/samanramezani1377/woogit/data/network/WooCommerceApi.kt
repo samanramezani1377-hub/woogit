@@ -8,6 +8,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.request.*
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
+import io.ktor.client.statement.readBytes
 import io.ktor.http.*
 import java.util.Base64
 
@@ -48,6 +49,23 @@ class WooCommerceApi(
 
     suspend fun listMedia(baseUrl: String, page: Int = 1, perPage: Int = 30, search: String? = null): ApiResponse = wordpressRequest(baseUrl, "/wp-json/wp/v2/media", params(page, perPage, search))
 
+    suspend fun downloadMedia(baseUrl: String, sourceUrl: String): ByteArray {
+        val url = Url(sourceUrl)
+        require(url.protocol.name == "https") { "Media download requires HTTPS" }
+        val response = try {
+            client.get(url) { header(HttpHeaders.Accept, "image/*") }
+        } catch (throwable: Throwable) {
+            reportTechnical("Media", "WooCommerceApi.downloadMedia", "GET", url, "NetworkException", throwable = throwable)
+            throw throwable
+        }
+        if (response.status.value !in 200..299) {
+            val body = response.bodyAsText()
+            reportHttpFailure("Media", "WooCommerceApi.downloadMedia", "GET", url, response.status.value, body)
+            throw HttpApiException(response.status.value, body)
+        }
+        return response.readBytes()
+    }
+
     suspend fun uploadMedia(baseUrl: String, fileName: String, bytes: ByteArray, mediaType: String): ApiResponse {
         val url = Url("${baseUrl.trimEnd('/')}/wp-json/wp/v2/media")
         require(url.protocol.name == "https") { "WordPress Media API requires HTTPS" }
@@ -75,12 +93,7 @@ class WooCommerceApi(
     private suspend fun request(baseUrl: String, path: String, params: Map<String, Any> = emptyMap(), method: String = "GET", body: String? = null): ApiResponse {
         val url = Url("${baseUrl.trimEnd('/')}$path")
         require(url.protocol.name == "https") { "WooCommerce API requires HTTPS" }
-        val response = try {
-            execute(url, method, body, params)
-        } catch (throwable: Throwable) {
-            reportTechnical("WooCommerce", "WooCommerceApi.request", method, url, "NetworkException", throwable = throwable)
-            throw throwable
-        }
+        val response = try { execute(url, method, body, params) } catch (throwable: Throwable) { reportTechnical("WooCommerce", "WooCommerceApi.request", method, url, "NetworkException", throwable = throwable); throw throwable }
         val responseBody = response.bodyAsText()
         reportHttpFailure("WooCommerce", "WooCommerceApi.request", method, url, response.status.value, responseBody)
         return ApiResponse(response.status.value, responseBody, method, url.toString())
@@ -91,58 +104,17 @@ class WooCommerceApi(
         require(url.protocol.name == "https") { "WooCommerce API requires HTTPS" }
         val auth = wordpressAuth() ?: return ApiResponse(401, "{\"code\":\"woogit_missing_wordpress_credentials\",\"message\":\"WordPress username and Application Password are required for media operations.\"}", method, url.toString())
         val requestUrl = URLBuilder(url).apply { params.forEach { (key, value) -> parameters.append(key, value.toString()) } }.build()
-        val response: HttpResponse = try {
-            when (method) {
-                "DELETE" -> client.delete(requestUrl) { header(HttpHeaders.Authorization, auth); header(HttpHeaders.Accept, ContentType.Application.Json.toString()) }
-                else -> client.get(requestUrl) { header(HttpHeaders.Authorization, auth); header(HttpHeaders.Accept, ContentType.Application.Json.toString()) }
-            }
-        } catch (throwable: Throwable) {
-            reportTechnical("WordPress", "WooCommerceApi.wordpressRequest", method, url, "NetworkException", throwable = throwable)
-            throw throwable
-        }
+        val response: HttpResponse = try { when (method) { "DELETE" -> client.delete(requestUrl) { header(HttpHeaders.Authorization, auth); header(HttpHeaders.Accept, ContentType.Application.Json.toString()) }; else -> client.get(requestUrl) { header(HttpHeaders.Authorization, auth); header(HttpHeaders.Accept, ContentType.Application.Json.toString()) } } } catch (throwable: Throwable) { reportTechnical("WordPress", "WooCommerceApi.wordpressRequest", method, url, "NetworkException", throwable = throwable); throw throwable }
         val body = response.bodyAsText()
         reportHttpFailure("WordPress", "WooCommerceApi.wordpressRequest", method, url, response.status.value, body)
         return ApiResponse(response.status.value, body, method, url.toString())
     }
 
-    private fun reportHttpFailure(feature: String, operation: String, method: String, url: Url, status: Int, body: String) {
-        if (status in 200..299) return
-        reportTechnical(feature, operation, method, url, "HttpError", status.toString(), body)
-    }
-
-    private fun reportTechnical(feature: String, operation: String, method: String, url: Url, type: String, status: String = "", body: String = "", throwable: Throwable? = null) {
-        technicalErrorReporter.report(TechnicalErrorContext(feature, operation, operation, type, method, url.toString().substringBefore('?'), status, body, "API request failure"), throwable)
-    }
-
-    private fun wordpressAuth(): String? {
-        val username = credentials.wordpressUsername
-        val password = credentials.wordpressApplicationPassword
-        if (username.isNullOrBlank() || password.isNullOrBlank()) return null
-        val token = Base64.getEncoder().encodeToString("$username:$password".toByteArray(Charsets.UTF_8))
-        return "Basic $token"
-    }
-
-    private suspend fun execute(url: Url, method: String, body: String?, params: Map<String, Any>): HttpResponse {
-        val requestUrl = URLBuilder(url).apply {
-            params.forEach { (key, value) -> parameters.append(key, value.toString()) }
-            parameters.append("consumer_key", credentials.consumerKey)
-            parameters.append("consumer_secret", credentials.consumerSecret)
-        }.build()
-        return when (method) {
-            "POST" -> client.post(requestUrl) { common(params); contentType(ContentType.Application.Json); setBody(body ?: "{}") }
-            "PUT" -> client.put(requestUrl) { common(params); contentType(ContentType.Application.Json); setBody(body ?: "{}") }
-            "PATCH" -> client.patch(requestUrl) { common(params); contentType(ContentType.Application.Json); setBody(body ?: "{}") }
-            "DELETE" -> client.delete(requestUrl) { common(params) }
-            else -> client.get(requestUrl) { common(params) }
-        }
-    }
-
-    private fun requestParams(page: Int, perPage: Int, search: String? = null, status: String? = null, modifiedAfter: String? = null) = buildMap<String, Any> {
-        put("page", page); put("per_page", perPage)
-        if (!search.isNullOrBlank()) put("search", search)
-        if (!status.isNullOrBlank()) put("status", status)
-        if (!modifiedAfter.isNullOrBlank()) { put("modified_after", modifiedAfter); put("dates_are_gmt", true) }
-    }
+    private fun reportHttpFailure(feature: String, operation: String, method: String, url: Url, status: Int, body: String) { if (status in 200..299) return; reportTechnical(feature, operation, method, url, "HttpError", status.toString(), body) }
+    private fun reportTechnical(feature: String, operation: String, method: String, url: Url, type: String, status: String = "", body: String = "", throwable: Throwable? = null) { technicalErrorReporter.report(TechnicalErrorContext(feature, operation, operation, type, method, url.toString().substringBefore('?'), status, body, "API request failure"), throwable) }
+    private fun wordpressAuth(): String? { val username = credentials.wordpressUsername; val password = credentials.wordpressApplicationPassword; if (username.isNullOrBlank() || password.isNullOrBlank()) return null; val token = Base64.getEncoder().encodeToString("$username:$password".toByteArray(Charsets.UTF_8)); return "Basic $token" }
+    private suspend fun execute(url: Url, method: String, body: String?, params: Map<String, Any>): HttpResponse { val requestUrl = URLBuilder(url).apply { params.forEach { (key, value) -> parameters.append(key, value.toString()) }; parameters.append("consumer_key", credentials.consumerKey); parameters.append("consumer_secret", credentials.consumerSecret) }.build(); return when (method) { "POST" -> client.post(requestUrl) { common(params); contentType(ContentType.Application.Json); setBody(body ?: "{}") }; "PUT" -> client.put(requestUrl) { common(params); contentType(ContentType.Application.Json); setBody(body ?: "{}") }; "PATCH" -> client.patch(requestUrl) { common(params); contentType(ContentType.Application.Json); setBody(body ?: "{}") }; "DELETE" -> client.delete(requestUrl) { common(params) }; else -> client.get(requestUrl) { common(params) } } }
+    private fun requestParams(page: Int, perPage: Int, search: String? = null, status: String? = null, modifiedAfter: String? = null) = buildMap<String, Any> { put("page", page); put("per_page", perPage); if (!search.isNullOrBlank()) put("search", search); if (!status.isNullOrBlank()) put("status", status); if (!modifiedAfter.isNullOrBlank()) { put("modified_after", modifiedAfter); put("dates_are_gmt", true) } }
     private fun HttpRequestBuilder.common(params: Map<String, Any>) { params.forEach { (key, value) -> parameter(key, value) } }
     private fun params(page: Int, perPage: Int, search: String? = null, status: String? = null, modifiedAfter: String? = null) = requestParams(page, perPage, search, status, modifiedAfter)
     private fun params(value: Boolean) = mapOf<String, Any>("force" to value)
