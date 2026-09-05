@@ -6,8 +6,8 @@ import org.json.JSONObject
 /**
  * Bounds the request sent to an AI model without destroying conversation continuity.
  * Persisted chat history is never mutated; this class only builds a compact, model-safe view.
- * The model capabilities are resolved at request time, so changing a provider/model is reflected
- * immediately without changing the context-window algorithm.
+ * Entity memory is intentionally small and WooCommerce-aware so older product/order turns can
+ * be recovered by meaning, not just by lexical overlap.
  */
 internal class AiContextWindowProvider(private val delegate: AiProvider) : AiProvider {
     override val id: String get() = delegate.id
@@ -35,8 +35,9 @@ internal class AiContextWindowProvider(private val delegate: AiProvider) : AiPro
 
         val capabilities = AiModelCapabilities.forModel(delegate.id, delegate.modelId)
         val budget = inputBudget(capabilities)
+        val entities = extractEntities(messages)
         val summary = buildRollingSummary(messages)
-        val memory = buildWorkingMemory(messages)
+        val memory = buildWorkingMemory(messages, entities)
         val system = JSONObject(messages.getJSONObject(0).toString())
             .put("content", messages.getJSONObject(0).optString("content") + summary + memory)
 
@@ -57,9 +58,10 @@ internal class AiContextWindowProvider(private val delegate: AiProvider) : AiPro
 
         val query = if (lastUser >= 0) messages.optJSONObject(lastUser)?.optString("content").orEmpty() else ""
         val queryTerms = terms(query)
+        val activeEntities = entities.filter { it.active }.take(MAX_ACTIVE_ENTITIES)
         val candidates = (1 until recentStart)
             .filter { messages.optJSONObject(it) != null }
-            .map { it to relevance(messages.optJSONObject(it)!!, queryTerms, it, messages.length()) }
+            .map { it to relevance(messages.optJSONObject(it)!!, query, queryTerms, activeEntities, entities, it, messages.length()) }
             .filter { it.second > 0 }
             .sortedWith(compareByDescending<Pair<Int, Int>> { it.second }.thenByDescending { it.first })
 
@@ -96,6 +98,116 @@ internal class AiContextWindowProvider(private val delegate: AiProvider) : AiPro
         (capabilities.contextWindowTokens - capabilities.maxOutputTokens - TOOL_HEADROOM_TOKENS)
             .coerceAtLeast(MIN_INPUT_BUDGET_TOKENS)
 
+    private data class WooEntity(
+        val type: String,
+        val id: String,
+        val name: String? = null,
+        val sku: String? = null,
+        val aliases: Set<String> = emptySet(),
+        val lastIndex: Int = -1,
+        val active: Boolean = false,
+    ) {
+        fun key(): String = "$type:$id"
+        fun searchableText(): String = listOf(type, id, name, sku).filterNotNull().joinToString(" ").lowercase()
+    }
+
+    private fun extractEntities(messages: JSONArray): List<WooEntity> {
+        val byKey = linkedMapOf<String, WooEntity>()
+        val lastUser = findLastUser(messages)
+        for (i in 1 until messages.length()) {
+            val item = messages.optJSONObject(i) ?: continue
+            val text = item.optString("content").orEmpty()
+            val inferredType = inferEntityType(text, previousToolType(messages, i))
+            val candidates = mutableListOf<WooEntity>()
+
+            Regex("(?i)(product|محصول)\\s*(?:#|شماره|id|آیدی)?\\s*[:#=]?\\s*(\\d{1,10})").findAll(text).forEach {
+                candidates += WooEntity("product", it.groupValues[2], lastIndex = i)
+            }
+            Regex("(?i)(order|سفارش)\\s*(?:#|شماره|id|آیدی)?\\s*[:#=]?\\s*(\\d{1,10})").findAll(text).forEach {
+                candidates += WooEntity("order", it.groupValues[2], lastIndex = i)
+            }
+            Regex("(?i)\\bsku\\s*[:=]?\\s*([A-Za-z0-9_-]{2,40})").findAll(text).forEach {
+                candidates += WooEntity(inferredType ?: "product", "sku:${it.groupValues[1]}", sku = it.groupValues[1], lastIndex = i)
+            }
+
+            val parsed = runCatching { JSONObject(text) }.getOrNull()
+            if (parsed != null) collectStructuredEntities(parsed, inferredType, i, candidates)
+
+            for (entity in candidates) {
+                val active = i == lastUser || refersToEntity(text, entity)
+                val old = byKey[entity.key()]
+                byKey[entity.key()] = mergeEntity(old, entity.copy(active = active || old?.active == true))
+            }
+        }
+        return byKey.values
+            .sortedWith(compareByDescending<WooEntity> { it.active }.thenByDescending { it.lastIndex })
+            .take(MAX_ENTITIES)
+    }
+
+    private fun collectStructuredEntities(json: JSONObject, inferredType: String?, index: Int, out: MutableList<WooEntity>) {
+        val type = inferredType ?: when {
+            json.has("order") || json.has("orders") -> "order"
+            json.has("product") || json.has("products") || json.has("sku") || json.has("regular_price") -> "product"
+            else -> null
+        }
+        val id = json.optLong("id", -1L)
+        if (type != null && id > 0) {
+            val name = json.optString("name").takeIf { it.isNotBlank() }
+            val sku = json.optString("sku").takeIf { it.isNotBlank() }
+            out += WooEntity(type, id.toString(), name, sku, lastIndex = index)
+        }
+        val keys = json.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            when (val value = json.opt(key)) {
+                is JSONObject -> collectStructuredEntities(value, type ?: inferEntityType(key, null), index, out)
+                is JSONArray -> for (i in 0 until value.length()) {
+                    value.optJSONObject(i)?.let { collectStructuredEntities(it, type ?: inferEntityType(key, null), index, out) }
+                }
+            }
+        }
+    }
+
+    private fun mergeEntity(old: WooEntity?, next: WooEntity): WooEntity {
+        if (old == null) return next
+        return old.copy(
+            name = next.name ?: old.name,
+            sku = next.sku ?: old.sku,
+            aliases = (old.aliases + listOfNotNull(next.name, next.sku)).takeLast(MAX_ALIASES).toSet(),
+            lastIndex = maxOf(old.lastIndex, next.lastIndex),
+            active = old.active || next.active,
+        )
+    }
+
+    private fun refersToEntity(text: String, entity: WooEntity): Boolean {
+        val normalized = text.lowercase()
+        if (normalized.contains(entity.id.lowercase())) return true
+        if (entity.name?.let { normalized.contains(it.lowercase()) } == true) return true
+        if (entity.sku?.let { normalized.contains(it.lowercase()) } == true) return true
+        return entity.type == "product" && Regex("(?i)\\b(همین|همون|این|آن)\\s+محصول\\b").containsMatchIn(text)
+    }
+
+    private fun inferEntityType(text: String, fallback: String?): String? {
+        val value = text.lowercase()
+        return when {
+            value.contains("product") || value.contains("محصول") || value.contains("sku") || value.contains("regular_price") -> "product"
+            value.contains("order") || value.contains("سفارش") || value.contains("order_id") -> "order"
+            else -> fallback
+        }
+    }
+
+    private fun previousToolType(messages: JSONArray, index: Int): String? {
+        if (index <= 0) return null
+        val previous = messages.optJSONObject(index - 1) ?: return null
+        val calls = previous.optJSONArray("tool_calls") ?: return null
+        for (i in 0 until calls.length()) {
+            val name = calls.optJSONObject(i)?.optJSONObject("function")?.optString("name").orEmpty()
+            if (name.startsWith("products_")) return "product"
+            if (name.startsWith("orders_")) return "order"
+        }
+        return null
+    }
+
     private fun buildRollingSummary(messages: JSONArray): String {
         if (messages.length() <= SUMMARY_TRIGGER_MESSAGES) return ""
         val end = maxOf(1, messages.length() - RECENT_MESSAGES)
@@ -114,21 +226,24 @@ internal class AiContextWindowProvider(private val delegate: AiProvider) : AiPro
             lines.takeLast(SUMMARY_MAX_LINES).joinToString("\n") + "\n"
     }
 
-    private fun buildWorkingMemory(messages: JSONArray): String {
-        val text = buildString {
-            for (i in 1 until messages.length()) append(messages.optJSONObject(i)?.optString("content").orEmpty()).append('\n')
-        }
+    private fun buildWorkingMemory(messages: JSONArray, entities: List<WooEntity>): String {
         val facts = linkedSetOf<String>()
-        Regex("(?i)(?:product|محصول|order|سفارش)[^\\d]{0,20}(\\d{1,10})").findAll(text).forEach { facts += "entity_id=${it.groupValues[1]}" }
-        Regex("(?i)(?:sku|اس\\s*کیو)\\s*[:=]?\\s*([A-Za-z0-9_-]{2,40})").findAll(text).forEach { facts += "sku=${it.groupValues[1]}" }
-        Regex("(?i)(?:price|قیمت)\\s*[:=]?\\s*([0-9][0-9,._]*)").findAll(text).forEach { facts += "price=${it.groupValues[1]}" }
+        entities.filter { it.active }.take(MAX_ACTIVE_ENTITIES).forEach { entity ->
+            val label = if (entity.type == "product") "محصول" else "سفارش"
+            val details = listOfNotNull(
+                "$label ${entity.id}",
+                entity.name?.let { "نام=$it" },
+                entity.sku?.let { "SKU=$it" },
+            ).joinToString(" | ")
+            facts += "entity=$details"
+        }
         val lastUser = findLastUser(messages)
         if (lastUser >= 0) {
             val request = messages.optJSONObject(lastUser)?.optString("content").orEmpty().replace(Regex("\\s+"), " ").trim()
             if (request.isNotBlank()) facts += "آخرین درخواست کاربر=${request.take(LAST_REQUEST_CHARS)}"
         }
         if (facts.isEmpty()) return ""
-        return "\n[Working Memory — facts extracted from the full conversation; treat these as continuity hints and verify with WooGit tools when needed]\n" +
+        return "\n[Working Memory — WooCommerce entities and the latest request; use entity IDs/SKUs to preserve continuity and verify current state with WooGit tools when needed]\n" +
             facts.take(WORKING_MEMORY_MAX_FACTS).joinToString("\n") + "\n"
     }
 
@@ -158,11 +273,37 @@ internal class AiContextWindowProvider(private val delegate: AiProvider) : AiPro
         return JSONObject(item.toString()).put("content", content.take(OLD_TOOL_CHAR_LIMIT) + "\n[old tool result compacted; original history remains available]")
     }
 
-    private fun relevance(item: JSONObject, queryTerms: Set<String>, index: Int, size: Int): Int {
-        if (queryTerms.isEmpty()) return 0
+    private fun relevance(
+        item: JSONObject,
+        query: String,
+        queryTerms: Set<String>,
+        activeEntities: List<WooEntity>,
+        allEntities: List<WooEntity>,
+        index: Int,
+        size: Int,
+    ): Int {
         val text = item.toString().lowercase()
         var score = 0
         for (term in queryTerms) if (term.length >= MIN_TERM_LENGTH && text.contains(term)) score += 2
+
+        // Entity identity is stronger than a generic word match. This lets a later
+        // "همون محصول" recover the turn that introduced the active product.
+        for (entity in activeEntities) {
+            val entityText = entity.searchableText()
+            if (text.contains(entityText)) score += 8
+            else if (text.contains(entity.id.lowercase())) score += 6
+            else if (entity.name?.let { text.contains(it.lowercase()) } == true) score += 5
+            else if (entity.sku?.let { text.contains(it.lowercase()) } == true) score += 5
+        }
+
+        // A direct entity reference in the current query gets a bonus against matching
+        // historical entities, including turns where the exact words differ.
+        for (entity in allEntities) {
+            val queryMentions = listOfNotNull(entity.id, entity.name, entity.sku)
+                .any { it.isNotBlank() && query.lowercase().contains(it.lowercase()) }
+            if (queryMentions && text.contains(entity.searchableText())) score += 10
+        }
+
         score += ((index.toDouble() / size) * 2).toInt()
         if (item.optString("role") == "tool") score++
         return score
@@ -199,5 +340,8 @@ internal class AiContextWindowProvider(private val delegate: AiProvider) : AiPro
         const val SUMMARY_LINE_CHARS = 220
         const val WORKING_MEMORY_MAX_FACTS = 16
         const val LAST_REQUEST_CHARS = 280
+        const val MAX_ENTITIES = 24
+        const val MAX_ACTIVE_ENTITIES = 6
+        const val MAX_ALIASES = 4
     }
 }
