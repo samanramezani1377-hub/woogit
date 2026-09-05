@@ -6,9 +6,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.weight
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
@@ -64,11 +61,8 @@ internal fun AgentMemoryDebugSheet(context: Context, show: Boolean, onDismiss: (
         } else {
             Text("${items.size} مورد ذخیره شده", color = GlassTokens.muted)
             Spacer(Modifier.height(8.dp))
-            LazyColumn(
-                Modifier.fillMaxWidth().weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                items(items, key = { it.id }) { item ->
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items.forEach { item ->
                     var value by remember(item.id, item.content) { mutableStateOf(item.content) }
                     GlassCard(Modifier.fillMaxWidth()) {
                         Text(item.id, color = GlassTokens.faint, style = MaterialTheme.typography.labelSmall)
