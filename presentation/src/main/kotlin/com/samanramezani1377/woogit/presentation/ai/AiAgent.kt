@@ -45,9 +45,7 @@ internal class AiAgent(
             onEvent(AiStreamEvent.ToolResult(action.name, summarize(result)))
             if (isWriteTool(action.name)) {
                 val resultJson = JSONObject(result)
-                if (!resultJson.optBoolean("ok", false) || !resultJson.optBoolean("verified", false)) {
-                    return AgentReply(text = writeFailureMessage(resultJson))
-                }
+                if (!resultJson.optBoolean("ok", false) || !resultJson.optBoolean("verified", false)) return AgentReply(text = writeFailureMessage(resultJson))
             }
         }
 
@@ -82,9 +80,7 @@ internal class AiAgent(
                 val result = executor.execute(name, arguments)
                 working.put(JSONObject().put("role", "tool").put("tool_call_id", callId).put("content", result))
                 onEvent(AiStreamEvent.ToolResult(toolLabel(name), summarize(result)))
-                if (provider.id == "gemini" && name == "products_get") {
-                    activeAttachments += productImages(result)
-                }
+                if (provider.id == "gemini" && name == "products_get_image") activeAttachments += productImages(result)
             }
         }
         throw IllegalStateException("Agent به حداکثر مراحل مجاز رسید.")
@@ -92,15 +88,9 @@ internal class AiAgent(
 
     private fun productImages(result: String): List<AiAttachment> {
         val data = runCatching { JSONObject(result).optJSONObject("data") }.getOrNull() ?: return emptyList()
-        val images = data.optJSONArray("images") ?: return emptyList()
-        return buildList {
-            for (i in 0 until images.length()) {
-                val src = images.optJSONObject(i)?.optString("src").orEmpty()
-                if (src.isBlank()) continue
-                runCatching { downloadImage(src, "product-${i + 1}") }.getOrNull()?.let(::add)
-                if (size >= MAX_PRODUCT_IMAGES) break
-            }
-        }
+        val image = data.optJSONObject("image") ?: return emptyList()
+        val src = image.optString("src").takeIf { it.isNotBlank() } ?: return emptyList()
+        return runCatching { listOf(downloadImage(src, image.optString("name").ifBlank { "product-image" })) }.getOrDefault(emptyList())
     }
 
     private fun downloadImage(src: String, name: String): AiAttachment {
@@ -117,15 +107,15 @@ internal class AiAgent(
             if (bytes.size > MAX_IMAGE_BYTES) throw IllegalStateException("تصویر محصول بیش از 20MB است.")
             val mime = connection.contentType?.substringBefore(';')?.takeIf { it.startsWith("image/") } ?: guessMime(src)
             AiAttachment(name, mime, bytes)
-        } finally {
-            connection.disconnect()
-        }
+        } finally { connection.disconnect() }
     }
 
     private fun guessMime(src: String) = when (src.substringBefore('?').substringAfterLast('.').lowercase()) {
         "png" -> "image/png"
         "webp" -> "image/webp"
         "gif" -> "image/gif"
+        "heic" -> "image/heic"
+        "heif" -> "image/heif"
         else -> "image/jpeg"
     }
 
@@ -164,6 +154,7 @@ internal class AiAgent(
     private fun toolLabel(name: String) = when (name) {
         "products_list" -> "در حال بررسی فهرست محصولات"
         "products_get" -> "در حال دریافت محصول"
+        "products_get_image" -> "در حال دریافت تصویر محصول"
         "products_create" -> "در حال آماده‌سازی ایجاد محصول"
         "products_update" -> "در حال آماده‌سازی ویرایش محصول"
         "products_delete" -> "در حال آماده‌سازی حذف محصول"
@@ -174,8 +165,9 @@ internal class AiAgent(
     }
 
     private fun toolDefinitions() = JSONArray().apply {
-        put(tool("products_list", "فهرست خلاصه محصولات موجود در WooGit. برای جزئیات یک محصول از products_get استفاده کن. در Groq هر صفحه حداکثر ۱۰ محصول است و برای بررسی همه محصولات از pageهای بعدی استفاده کن.", listSchema()))
-        put(tool("products_get", "دریافت جزئیات یک محصول از WooGit؛ شامل توضیحات و تصاویر محصول.", idSchema()))
+        put(tool("products_list", "فهرست خلاصه محصولات موجود در WooGit؛ هرگز تصویر محصول را برنمی‌گرداند. برای جزئیات یک محصول از products_get استفاده کن.", listSchema()))
+        put(tool("products_get", "دریافت جزئیات متنی یک محصول از WooGit. این ابزار تصویر را برای مدل ارسال نمی‌کند.", idSchema()))
+        put(tool("products_get_image", "دریافت یک تصویر مشخص از یک محصول برای تحلیل تصویری. فقط وقتی کاربر واقعاً درباره عکس محصول سؤال دارد یا می‌خواهد از روی عکس عنوان/توضیح بسازی از این ابزار استفاده کن. برای فهرست محصولات یا بررسی متنی عکس نگیر. imageIndex از صفر شروع می‌شود و پیش‌فرض صفر است.", productImageSchema()))
         put(tool("products_create", "ایجاد محصول؛ نیازمند تأیید کاربر.", productCreateSchema()))
         put(tool("products_update", "به‌روزرسانی محصول؛ نیازمند تأیید کاربر. برای انتشار محصول status=publish را ارسال کن. برای تغییر موجودی، stockQuantity و در صورت نیاز stockStatus را صریح ارسال کن.", productPatchSchema()))
         put(tool("products_delete", "حذف محصول؛ نیازمند تأیید کاربر.", idSchema()))
@@ -184,11 +176,15 @@ internal class AiAgent(
         put(tool("orders_update_status", "تغییر وضعیت سفارش؛ نیازمند تأیید کاربر.", JSONObject().apply {
             put("type", "object")
             put("properties", JSONObject().put("id", JSONObject().put("type", "integer").put("minimum", 1)).put("status", JSONObject().put("type", "string").put("enum", JSONArray().apply { OrderStatus.values().forEach { put(it.name) } })))
-            put("required", JSONArray().put("id").put("status"))
-            put("additionalProperties", false)
+            put("required", JSONArray().put("id").put("status")); put("additionalProperties", false)
         }))
     }
 
+    private fun productImageSchema() = JSONObject().apply {
+        put("type", "object")
+        put("properties", JSONObject().put("id", JSONObject().put("type", "integer").put("minimum", 1)).put("imageIndex", JSONObject().put("type", "integer").put("minimum", 0)))
+        put("required", JSONArray().put("id")); put("additionalProperties", false)
+    }
     private fun productCreateSchema() = JSONObject().apply {
         put("type", "object")
         put("properties", JSONObject().put("name", JSONObject().put("type", "string")).put("sku", JSONObject().put("type", "string")).put("description", JSONObject().put("type", "string")).put("regularPrice", JSONObject().put("type", "string")).put("status", productStatusSchema()).put("stockQuantity", JSONObject().put("type", "number").put("description", "موجودی عددی؛ با ارسال آن مدیریت موجودی فعال می‌شود.")).put("stockStatus", stockStatusSchema()).put("manageStock", JSONObject().put("type", "boolean")))
@@ -217,8 +213,7 @@ internal class AiAgent(
         private const val MAX_STEPS = 6
         private const val GROQ_INPUT_BUDGET_TOKENS = 5000
         private const val GROQ_CHARS_PER_TOKEN = 3
-        private const val MAX_PRODUCT_IMAGES = 3
         private const val MAX_IMAGE_BYTES = 20 * 1024 * 1024
-        private const val SYSTEM_PROMPT = "تو Agent داخلی WooGit هستی. تمام اطلاعات و تغییرات فروشگاه باید فقط از ابزارهای WooGit استفاده کنند. هرگز API ووکامرس را مستقیم صدا نزن. نتیجه واقعی ابزار منبع حقیقت است؛ هرگز بر اساس حدس یا متن خودت ادعا نکن که تغییری انجام شده است. برای تغییر وضعیت محصول، از products_update با patch.status استفاده کن؛ برای منتشر کردن محصول مقدار status را دقیقاً publish قرار بده. برای تغییر موجودی محصول، مقدار stockQuantity را دقیقاً همان عدد درخواستی قرار بده؛ اگر stockQuantity ارسال شد manageStock را true کن مگر کاربر صریحاً خلاف آن را خواسته باشد. اگر موجودی صفر یا کمتر شد stockStatus را outofstock و اگر بیشتر از صفر شد instock قرار بده، مگر کاربر وضعیت دیگری خواسته باشد. عملیات تغییردهنده فقط پس از تأیید صریح کاربر اجرا می‌شوند. پاسخ نهایی کوتاه، دقیق و فارسی باشد. اگر ابزار تغییر ok=false یا verified=false برگرداند، هرگز نگو انجام شد و دقیقاً خطا یا عدم تأیید را گزارش کن."
+        private const val SYSTEM_PROMPT = "تو Agent داخلی WooGit هستی. تمام اطلاعات و تغییرات فروشگاه باید فقط از ابزارهای WooGit استفاده کنند. هرگز API ووکامرس را مستقیم صدا نزن. نتیجه واقعی ابزار منبع حقیقت است؛ هرگز بر اساس حدس یا متن خودت ادعا نکن که تغییری انجام شده است. برای بررسی فهرست محصولات از products_list استفاده کن؛ این ابزار عمداً بدون تصویر است و نباید برای فهرست گرفتن عکس مصرف شود. برای جزئیات متنی از products_get استفاده کن؛ این ابزار هم تصویر را برای مدل ارسال نمی‌کند. فقط وقتی کاربر واقعاً نیاز به تحلیل عکس یک محصول دارد، از products_get_image برای همان محصول و همان تصویر موردنیاز استفاده کن تا فقط همان تصویر به مدل بینایی ارسال شود. برای تغییر وضعیت محصول، از products_update با patch.status استفاده کن؛ برای منتشر کردن محصول مقدار status را دقیقاً publish قرار بده. برای تغییر موجودی محصول، مقدار stockQuantity را دقیقاً همان عدد درخواستی قرار بده؛ اگر stockQuantity ارسال شد manageStock را true کن مگر کاربر صریحاً خلاف آن را خواسته باشد. اگر موجودی صفر یا کمتر شد stockStatus را outofstock و اگر بیشتر از صفر شد instock قرار بده، مگر کاربر وضعیت دیگری خواسته باشد. عملیات تغییردهنده فقط پس از تأیید صریح کاربر اجرا می‌شوند. پاسخ نهایی کوتاه، دقیق و فارسی باشد. اگر ابزار تغییر ok=false یا verified=false برگرداند، هرگز نگو انجام شد و دقیقاً خطا یا عدم تأیید را گزارش کن."
     }
 }
