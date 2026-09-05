@@ -94,7 +94,14 @@ internal fun AiScreen() {
                     if (state is AiUiState.Working && activities.isNotEmpty()) item { GlassCard(Modifier.fillMaxWidth()) { Text("فعالیت Agent", fontWeight = FontWeight.SemiBold); Spacer(Modifier.height(4.dp)); activities.forEach { activity -> Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) { Text(if (activity.completed) "✓" else "●", color = if (activity.completed) GlassTokens.live else GlassTokens.accent, fontWeight = FontWeight.Bold); Text("  ${activity.text}", color = GlassTokens.muted) } } } }
                     if (streamingText.isNotBlank()) item { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) { Box(Modifier.fillMaxWidth(.88f).clip(RoundedCornerShape(20.dp)).background(Color.White.copy(alpha = .54f)).padding(14.dp)) { Column(verticalArrangement = Arrangement.spacedBy(4.dp)) { Text("WooGit AI", color = GlassTokens.ink, fontWeight = FontWeight.SemiBold); Text(streamingText + "▌", color = GlassTokens.ink) } } } }
                     val pending = (state as? AiUiState.Ready)?.pending
-                    if (pending != null) item { GlassCard { Text("تأیید عملیات", fontWeight = FontWeight.Bold); Text("AI می‌خواهد این تغییر را از طریق WooGit اجرا کند:", color = GlassTokens.muted); Text(pending.toolName.orEmpty(), color = GlassTokens.accent, fontWeight = FontWeight.SemiBold); Text(pending.toolArguments.orEmpty(), color = GlassTokens.muted); Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) { GlassButton("تأیید و اجرا", { vm.confirm(pending) }, Modifier.weight(1f)); GlassOutlinedButton("رد کردن", { vm.reject(pending) }, Modifier.weight(1f)) } } }
+                    if (pending != null) item { GlassCard {
+                        Text("تأیید عملیات", fontWeight = FontWeight.Bold)
+                        Text("AI می‌خواهد این تغییر را از طریق WooGit اجرا کند:", color = GlassTokens.muted)
+                        Text(toolDisplayName(pending.toolName), color = GlassTokens.accent, fontWeight = FontWeight.SemiBold)
+                        val details = formatToolArguments(pending.toolArguments.orEmpty())
+                        if (details.isNotBlank()) Text(details, color = GlassTokens.muted)
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) { GlassButton("تأیید و اجرا", { vm.confirm(pending) }, Modifier.weight(1f)); GlassOutlinedButton("رد کردن", { vm.reject(pending) }, Modifier.weight(1f)) }
+                    } }
                     if (state is AiUiState.Error) item { GlassCard { Text("خطا: ${(state as AiUiState.Error).message}", color = GlassTokens.urgent) } }
                 }
                 if (attachments.isNotEmpty()) {
@@ -169,6 +176,63 @@ private val CLOUDFLARE_MODELS = listOf("@cf/zai-org/glm-4.7-flash", "@cf/google/
 private fun providerLabel(id: String) = when (id) { "gemini" -> "Gemini"; "deepseek" -> "DeepSeek"; "groq" -> "Groq"; "cloudflare" -> "Cloudflare"; else -> "OpenRouter" }
 private fun providerModelLabel(id: String, geminiModel: String, groqModel: String, cloudflareModel: String) = when (id) { "gemini" -> geminiModel; "deepseek" -> "deepseek-v4-flash"; "groq" -> groqModel; "cloudflare" -> cloudflareModel; else -> "openrouter/free" }
 private fun providerDescription(id: String) = when (id) { "gemini" -> "اتصال مستقیم به Google Gemini API؛ مدل انتخاب‌شده با tool calling استفاده می‌شود."; "deepseek" -> "اتصال مستقیم به api.deepseek.com؛ Backend جداگانه لازم نیست."; "groq" -> "اتصال مستقیم به Groq API؛ مدل انتخاب‌شده برای متن و Qwen3.6-27B برای ورودی تصویر استفاده می‌شود."; "cloudflare" -> "اتصال مستقیم به Workers AI REST API؛ Account ID و API Token لازم است."; else -> "اتصال مستقیم به OpenRouter؛ روتر openrouter/free مدل مناسب را انتخاب می‌کند." }
+
+private fun toolDisplayName(name: String?): String = when (name) {
+    "products_list" -> "فهرست محصولات"
+    "products_get" -> "دریافت محصول"
+    "products_get_image" -> "دریافت تصویر محصول"
+    "products_image_add" -> "افزودن تصویر محصول"
+    "products_image_set_primary" -> "تغییر تصویر اصلی محصول"
+    "products_image_remove" -> "حذف تصویر محصول"
+    "products_create" -> "ایجاد محصول"
+    "products_update" -> "ویرایش محصول"
+    "products_delete" -> "حذف محصول"
+    "orders_list" -> "فهرست سفارش‌ها"
+    "orders_get" -> "دریافت سفارش"
+    "orders_update_status" -> "تغییر وضعیت سفارش"
+    "memory_read" -> "خواندن حافظه کاری"
+    "memory_write" -> "ثبت یادداشت در حافظه"
+    "memory_update" -> "ویرایش یادداشت حافظه"
+    "memory_delete" -> "حذف یادداشت از حافظه"
+    null, "" -> "عملیات WooGit"
+    else -> "اجرای عملیات WooGit"
+}
+
+private fun formatToolArguments(raw: String): String = runCatching {
+    val json = org.json.JSONObject(raw)
+    val labels = mapOf(
+        "id" to "شناسه",
+        "productId" to "شناسه محصول",
+        "orderId" to "شناسه سفارش",
+        "imageId" to "شناسه تصویر",
+        "name" to "نام",
+        "sku" to "کد کالا",
+        "description" to "توضیحات",
+        "price" to "قیمت",
+        "regularPrice" to "قیمت اصلی",
+        "salePrice" to "قیمت فروش",
+        "status" to "وضعیت",
+        "type" to "نوع",
+        "page" to "صفحه",
+        "perPage" to "تعداد در صفحه",
+        "content" to "محتوا",
+        "title" to "عنوان",
+        "stockStatus" to "وضعیت موجودی",
+        "stockQuantity" to "موجودی",
+        "categoryId" to "شناسه دسته‌بندی",
+        "categories" to "دسته‌بندی‌ها"
+    )
+    buildString {
+        json.keys().forEach { key ->
+            val value = json.opt(key)
+            if (length > 0) append("\n")
+            append(labels[key] ?: key)
+            append(": ")
+            append(if (value is org.json.JSONArray || value is org.json.JSONObject) value.toString() else value.toString())
+        }
+    }
+}.getOrElse { raw }
+
 @Composable private fun HistoryItem(session: AiChatSession, onClick: () -> Unit) { GlassOutlinedButton(session.title, onClick, Modifier.fillMaxWidth()) }
 @Composable private fun MessageBubble(message: AiMessage) { val user = message.role == "user"; Row(Modifier.fillMaxWidth(), horizontalArrangement = if (user) Arrangement.End else Arrangement.Start) { Box(Modifier.fillMaxWidth(.88f).clip(RoundedCornerShape(20.dp)).background(if (user) GlassTokens.accent.copy(alpha = .12f) else Color.White.copy(alpha = .54f)).padding(14.dp)) { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { Text(if (user) "شما" else "WooGit AI", color = if (user) GlassTokens.accent else GlassTokens.ink, fontWeight = FontWeight.SemiBold); message.attachment?.let { attachment -> val bitmap = remember(attachment) { BitmapFactory.decodeByteArray(attachment.bytes, 0, attachment.bytes.size)?.asImageBitmap() }; bitmap?.let { Image(it, contentDescription = attachment.name, modifier = Modifier.fillMaxWidth().heightIn(max = 260.dp).clip(RoundedCornerShape(14.dp))) } }; if (message.content.isNotBlank()) Text(message.content, color = GlassTokens.ink) } } } }
 @Composable private fun AiField(value: String, onValueChange: (String) -> Unit, label: String, modifier: Modifier = Modifier, secret: Boolean = false, singleLine: Boolean = true) { TextField(value = value, onValueChange = onValueChange, modifier = modifier.fillMaxWidth(), label = { Text(label) }, singleLine = singleLine, visualTransformation = if (secret) androidx.compose.ui.text.input.PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None, colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent, disabledContainerColor = Color.Transparent, focusedIndicatorColor = GlassTokens.accent, unfocusedIndicatorColor = GlassTokens.glassBorder)) }
