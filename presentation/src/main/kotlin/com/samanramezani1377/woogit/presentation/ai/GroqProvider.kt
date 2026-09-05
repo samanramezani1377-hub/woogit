@@ -34,7 +34,9 @@ internal class GroqProvider(context: Context) : AiProvider {
     private fun body(messages: JSONArray, tools: JSONArray, stream: Boolean, hasImages: Boolean) = JSONObject()
         .put("model", if (hasImages) VISION_MODEL else MODEL).put("messages", messages).put("stream", stream)
         .put("tools", tools).put("tool_choice", "auto").put("parallel_tool_calls", false)
-        .put("reasoning_effort", "low").put("max_completion_tokens", MAX_COMPLETION_TOKENS)
+        // GPT-OSS supports low/medium/high; Qwen 3.6 only supports none/default.
+        .put("reasoning_effort", if (hasImages) "default" else "low")
+        .put("max_completion_tokens", MAX_COMPLETION_TOKENS)
 
     private fun request(messages: JSONArray, tools: JSONArray, stream: Boolean): JSONObject {
         val key = apiKey.trim()
