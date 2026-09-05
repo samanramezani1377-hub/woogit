@@ -10,6 +10,8 @@ import java.net.URL
 internal class CloudflareProvider(context: Context) : AiProvider {
     override val id: String = "cloudflare"
     override val capabilities: Set<AiCapability> = setOf(AiCapability.TEXT, AiCapability.IMAGE_INPUT, AiCapability.TOOL_CALLING)
+    override fun effectiveModelId(hasAttachments: Boolean): String = if (hasAttachments) VISION_MODEL else modelId
+    override val requestLimits: AiLimitOverrides = AiLimitOverrides(maxOutputTokens = MAX_COMPLETION_TOKENS)
     private val prefs = context.applicationContext.getSharedPreferences("woogit_ai", Context.MODE_PRIVATE)
 
     override var apiKey: String
@@ -35,10 +37,9 @@ internal class CloudflareProvider(context: Context) : AiProvider {
         if (token.isBlank()) throw IllegalStateException("توکن API کلادفلر تنظیم نشده است.")
         if (account.isBlank()) throw IllegalStateException("Account ID کلادفلر تنظیم نشده است.")
         val requestMessages = if (attachments.isNotEmpty()) AiMultimodal.openAiImageMessages(messages, attachments, MAX_IMAGES, MAX_IMAGE_BYTES) else messages
-        val selectedModel = if (attachments.isNotEmpty()) VISION_MODEL else modelId
         val connection = connection(account, token)
         return try {
-            connection.outputStream.use { it.write(body(requestMessages, tools, true, selectedModel).toString().toByteArray(Charsets.UTF_8)) }
+            connection.outputStream.use { it.write(body(requestMessages, tools, true, effectiveModelId(attachments.isNotEmpty())).toString().toByteArray(Charsets.UTF_8)) }
             val status = connection.responseCode
             if (status !in 200..299) throw httpError(connection, status)
             readSse(connection, onEvent)
@@ -51,10 +52,9 @@ internal class CloudflareProvider(context: Context) : AiProvider {
         if (token.isBlank()) throw IllegalStateException("توکن API کلادفلر تنظیم نشده است.")
         if (account.isBlank()) throw IllegalStateException("Account ID کلادفلر تنظیم نشده است.")
         val requestMessages = if (attachments.isNotEmpty()) AiMultimodal.openAiImageMessages(messages, attachments, MAX_IMAGES, MAX_IMAGE_BYTES) else messages
-        val selectedModel = if (attachments.isNotEmpty()) VISION_MODEL else modelId
         val connection = connection(account, token)
         return try {
-            connection.outputStream.use { it.write(body(requestMessages, tools, stream, selectedModel).toString().toByteArray(Charsets.UTF_8)) }
+            connection.outputStream.use { it.write(body(requestMessages, tools, stream, effectiveModelId(attachments.isNotEmpty())).toString().toByteArray(Charsets.UTF_8)) }
             val status = connection.responseCode
             val text = (if (status in 200..299) connection.inputStream else connection.errorStream)?.bufferedReader()?.use { it.readText() }.orEmpty()
             if (status !in 200..299) throw httpErrorText(status, text)
