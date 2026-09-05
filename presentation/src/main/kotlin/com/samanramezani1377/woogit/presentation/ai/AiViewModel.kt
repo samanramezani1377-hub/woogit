@@ -33,16 +33,20 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
     private val openRouter = OpenRouterProvider(appContext)
     private val gemini = GeminiProvider(appContext)
     private val groq = GroqProvider(appContext)
+    private val cloudflare = CloudflareProvider(appContext)
     private val agents = mapOf(
         "deepseek" to AiAgent(deepSeek, WooGitToolExecutor(dependencies, storeId)),
         "openrouter" to AiAgent(openRouter, WooGitToolExecutor(dependencies, storeId)),
         "gemini" to AiAgent(gemini, WooGitToolExecutor(dependencies, storeId)),
         "groq" to AiAgent(groq, WooGitToolExecutor(dependencies, storeId, groqMode = true)),
+        "cloudflare" to AiAgent(cloudflare, WooGitToolExecutor(dependencies, storeId)),
     )
     private val _providerId = MutableStateFlow(prefs.getString("provider", "openrouter") ?: "openrouter")
     val providerId: StateFlow<String> = _providerId.asStateFlow()
     val geminiModel: String get() = gemini.modelId
     val groqModel: String get() = groq.modelId
+    val cloudflareModel: String get() = cloudflare.modelId
+    val cloudflareAccountId: String get() = cloudflare.accountId
     private val _history = MutableStateFlow(historyStore.loadSessions())
     val history: StateFlow<List<AiChatSession>> = _history.asStateFlow()
     private val _attachments = MutableStateFlow<List<AiAttachment>>(emptyList())
@@ -57,6 +61,8 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
     fun saveApiKey(key: String) { currentProvider().apiKey = key }
     fun saveGeminiModel(model: String) { if (model.trim().isNotBlank()) gemini.modelId = model }
     fun saveGroqModel(model: String) { if (model.trim().isNotBlank()) groq.modelId = model }
+    fun saveCloudflareModel(model: String) { if (model.trim().isNotBlank()) cloudflare.modelId = model }
+    fun saveCloudflareAccountId(accountId: String) { cloudflare.accountId = accountId }
 
     fun addImage(uri: Uri): Boolean {
         val resolver = appContext.contentResolver
@@ -95,7 +101,7 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
     fun openChat(sessionId: String) { if (_state.value !is AiUiState.Working) _history.value.firstOrNull { it.id == sessionId }?.let { currentSessionId = it.id; historyStore.setActiveSession(it.id); _state.value = AiUiState.Ready(it.messages); _attachments.value = emptyList() } }
 
     private fun currentMessages() = when (val value = _state.value) { AiUiState.Idle -> emptyList(); is AiUiState.Working -> value.messages; is AiUiState.Ready -> value.messages; is AiUiState.Error -> value.messages }
-    private fun currentProvider(): AiProvider = when (_providerId.value) { "deepseek" -> deepSeek; "gemini" -> gemini; "groq" -> groq; else -> openRouter }
+    private fun currentProvider(): AiProvider = when (_providerId.value) { "deepseek" -> deepSeek; "gemini" -> gemini; "groq" -> groq; "cloudflare" -> cloudflare; else -> openRouter }
 
     private fun request(messages: List<AiMessage>, confirmationToken: String? = null, attachments: List<AiAttachment> = emptyList()) {
         _state.value = AiUiState.Working(messages)
