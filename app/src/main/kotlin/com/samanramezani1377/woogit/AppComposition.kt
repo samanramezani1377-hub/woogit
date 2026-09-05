@@ -40,26 +40,14 @@ class AppComposition(context: Context) {
     private val pending = PendingOperationRepositoryImpl(db)
     private val provider = WooCommerceClientProvider(db, secure, network.httpClient)
     private val mutationCoordinator = SqlMutationCoordinator(db)
-
-    /** Restores a previously connected store without requiring the network. */
     private val restoredStoreId: String? = run {
         val savedId = prefs.getString("active_store_id", null)
-        val savedStore = savedId?.let { id ->
-            when (val result = storeLocal.get(StoreId(id))) {
-                is CoreResult.Success -> result.value
-                is CoreResult.Failure -> null
-            }
-        }
-        when {
-            savedStore?.credentialReference != null -> savedId
-            else -> storeLocal.findConnectedStoreId()?.also { id ->
-                prefs.edit().putString("active_store_id", id).apply()
-            }
-        }
+        val savedStore = savedId?.let { id -> when (val result = storeLocal.get(StoreId(id))) { is CoreResult.Success -> result.value; is CoreResult.Failure -> null } }
+        when { savedStore?.credentialReference != null -> savedId; else -> storeLocal.findConnectedStoreId()?.also { id -> prefs.edit().putString("active_store_id", id).apply() } }
     }
 
     val storeRepository = StoreRepositoryImpl(storeLocal, secure, network.httpClient)
-    val orderRepository = OrderRepositoryV1Impl(orderLocal, provider, mutationCoordinator, pending)
+    val orderRepository = OrderRepositoryV1Impl(orderLocal, provider, mutationCoordinator, pending, scope)
     val productRepository = ProductRepositoryV1Impl(productLocal, provider, mutationCoordinator, pending)
     val productCategoryRepository = ProductCategoryRepositoryImpl(provider)
     val variationRepository = VariationRepositoryImpl(variationLocal, provider, mutationCoordinator, pending)
@@ -67,92 +55,25 @@ class AppComposition(context: Context) {
     val termRepository = TermRepositoryImpl(termLocal, provider, mutationCoordinator, pending)
     val orderNoteRepository = OrderNoteRepositoryImpl(provider, pending)
     val mediaRepository = MediaRepositoryImpl(provider)
-
     private val executor = WooCommerceOperationExecutor(db, provider, orderLocal, productLocal, variationLocal, attributeLocal, termLocal)
     private val syncEngine = SyncEngine(db, executor)
     private val syncRepository = SyncRepositoryImpl(db, syncEngine, pending)
 
-    val getStore = GetStoreUseCase(storeRepository)
-    val connectStore = ConnectStoreUseCase(storeRepository)
-    val disconnectStore = DisconnectStoreUseCase(storeRepository)
-    val getConnectionState = GetConnectionStateUseCase(storeRepository)
-    val getOrders = GetOrdersUseCase(orderRepository)
-    val getSalesSummary = GetSalesSummaryUseCase(orderRepository)
-    val getOrder = GetOrderUseCase(orderRepository)
-    val updateOrder = UpdateOrderUseCase(orderRepository)
-    val addOrderNote = AddOrderNoteUseCase(orderNoteRepository)
-    val getProducts = GetProductsUseCase(productRepository)
-    val getProduct = GetProductUseCase(productRepository)
-    val createProduct = CreateProductUseCase(productRepository)
-    val updateProduct = UpdateProductUseCase(productRepository)
-    val deleteProduct = DeleteProductUseCase(productRepository)
-    val getProductCategories = GetProductCategoriesUseCase(productCategoryRepository)
-    val getMedia = GetMediaUseCase(mediaRepository)
-    val getVariations = GetVariationsUseCase(variationRepository)
-    val getVariation = GetVariationUseCase(variationRepository)
-    val createVariation = CreateVariationUseCase(variationRepository)
-    val updateVariation = UpdateVariationUseCase(variationRepository)
-    val deleteVariation = DeleteVariationUseCase(variationRepository)
-    val getAttributes = GetAttributesUseCase(attributeRepository)
-    val getAttribute = GetAttributeUseCase(attributeRepository)
-    val createAttribute = CreateAttributeUseCase(attributeRepository)
-    val updateAttribute = UpdateAttributeUseCase(attributeRepository)
-    val deleteAttribute = DeleteAttributeUseCase(attributeRepository)
-    val getTerms = GetTermsUseCase(termRepository)
-    val getTerm = GetTermUseCase(termRepository)
-    val createTerm = CreateTermUseCase(termRepository)
-    val updateTerm = UpdateTermUseCase(termRepository)
-    val deleteTerm = DeleteTermUseCase(termRepository)
-    val uploadMedia = UploadMediaUseCase(mediaRepository)
-    val deleteMedia = DeleteMediaUseCase(mediaRepository)
-    val syncPending = SyncPendingOperationsUseCase(syncRepository)
-    val getSyncState = GetSyncStateUseCase(syncRepository)
-    val getPending = GetPendingOperationsUseCase(pending)
-    val getConflicts = GetConflictsUseCase(syncRepository)
-    val resolveConflict = ResolveConflictUseCase(syncRepository)
+    val getStore = GetStoreUseCase(storeRepository); val connectStore = ConnectStoreUseCase(storeRepository); val disconnectStore = DisconnectStoreUseCase(storeRepository); val getConnectionState = GetConnectionStateUseCase(storeRepository)
+    val getOrders = GetOrdersUseCase(orderRepository); val getSalesSummary = GetSalesSummaryUseCase(orderRepository); val getOrder = GetOrderUseCase(orderRepository); val updateOrder = UpdateOrderUseCase(orderRepository); val addOrderNote = AddOrderNoteUseCase(orderNoteRepository)
+    val getProducts = GetProductsUseCase(productRepository); val getProduct = GetProductUseCase(productRepository); val createProduct = CreateProductUseCase(productRepository); val updateProduct = UpdateProductUseCase(productRepository); val deleteProduct = DeleteProductUseCase(productRepository)
+    val getProductCategories = GetProductCategoriesUseCase(productCategoryRepository); val getMedia = GetMediaUseCase(mediaRepository); val getVariations = GetVariationsUseCase(variationRepository); val getVariation = GetVariationUseCase(variationRepository); val createVariation = CreateVariationUseCase(variationRepository); val updateVariation = UpdateVariationUseCase(variationRepository); val deleteVariation = DeleteVariationUseCase(variationRepository)
+    val getAttributes = GetAttributesUseCase(attributeRepository); val getAttribute = GetAttributeUseCase(attributeRepository); val createAttribute = CreateAttributeUseCase(attributeRepository); val updateAttribute = UpdateAttributeUseCase(attributeRepository); val deleteAttribute = DeleteAttributeUseCase(attributeRepository)
+    val getTerms = GetTermsUseCase(termRepository); val getTerm = GetTermUseCase(termRepository); val createTerm = CreateTermUseCase(termRepository); val updateTerm = UpdateTermUseCase(termRepository); val deleteTerm = DeleteTermUseCase(termRepository)
+    val uploadMedia = UploadMediaUseCase(mediaRepository); val deleteMedia = DeleteMediaUseCase(mediaRepository); val syncPending = SyncPendingOperationsUseCase(syncRepository); val getSyncState = GetSyncStateUseCase(syncRepository); val getPending = GetPendingOperationsUseCase(pending); val getConflicts = GetConflictsUseCase(syncRepository); val resolveConflict = ResolveConflictUseCase(syncRepository)
 
-    private fun rememberStore(id: String) {
-        prefs.edit().putString("active_store_id", id).apply()
-        startBackgroundWork(id)
-    }
-
-    private fun forgetStore() {
-        val id = prefs.getString("active_store_id", null)
-        if (id != null) scope.launch { disconnectStore(StoreId(id)) }
-        prefs.edit().remove("active_store_id").apply()
-        if (id != null) cancelBackgroundWork(id)
-    }
-
+    private fun rememberStore(id: String) { prefs.edit().putString("active_store_id", id).apply(); startBackgroundWork(id) }
+    private fun forgetStore() { val id = prefs.getString("active_store_id", null); if (id != null) scope.launch { disconnectStore(StoreId(id)) }; prefs.edit().remove("active_store_id").apply(); if (id != null) cancelBackgroundWork(id) }
     private val getConflictsFn: suspend (StoreId) -> CoreResult<List<Conflict>> = { storeId -> getConflicts(storeId) }
     private val resolveConflictFn: suspend (StoreId, com.samanramezani1377.woogit.core.domain.entity.EntityId, ConflictResolution) -> CoreResult<Unit> = { storeId, conflictId, resolution -> resolveConflict(storeId, conflictId, resolution) }
-
-    val v1Presentation = V1PresentationDependencies(
-        getStore, connectStore, disconnectStore, getOrders, getSalesSummary, getOrder, updateOrder, addOrderNote,
-        getProducts, getProduct, createProduct, updateProduct, deleteProduct, getProductCategories,
-        getMedia, getVariations, getVariation, createVariation, updateVariation, deleteVariation,
-        getAttributes, getAttribute, createAttribute, updateAttribute, deleteAttribute,
-        getTerms, getTerm, createTerm, updateTerm, deleteTerm, uploadMedia, deleteMedia,
-        getConnectionState, getSyncState, getPending, getConflictsFn, resolveConflictFn,
-        syncPending, restoredStoreId, ::rememberStore, ::forgetStore,
-    )
-
-    init {
-        // WorkManager persists independently of the Activity/process. Re-registering here
-        // also repairs the schedule when the app is launched again after a long period.
-        restoredStoreId?.let(::startBackgroundWork)
-    }
-
-    fun startBackgroundWork(storeId: String) {
-        OrderPollingWorker.schedule(appContext, storeId)
-        OrderPollingWorker.scheduleNow(appContext, storeId)
-        ProductCatalogSyncWorker.schedule(appContext, storeId)
-        ProductCatalogSyncWorker.scheduleNow(appContext, storeId)
-    }
-
-    fun cancelBackgroundWork(storeId: String) {
-        OrderPollingWorker.cancel(appContext, storeId)
-        ProductCatalogSyncWorker.cancel(appContext, storeId)
-    }
-
+    val v1Presentation = V1PresentationDependencies(getStore, connectStore, disconnectStore, getOrders, getSalesSummary, getOrder, updateOrder, addOrderNote, getProducts, getProduct, createProduct, updateProduct, deleteProduct, getProductCategories, getMedia, getVariations, getVariation, createVariation, updateVariation, deleteVariation, getAttributes, getAttribute, createAttribute, updateAttribute, deleteAttribute, getTerms, getTerm, createTerm, updateTerm, deleteTerm, uploadMedia, deleteMedia, getConnectionState, getSyncState, getPending, getConflictsFn, resolveConflictFn, syncPending, restoredStoreId, ::rememberStore, ::forgetStore)
+    init { restoredStoreId?.let(::startBackgroundWork) }
+    fun startBackgroundWork(storeId: String) { OrderPollingWorker.schedule(appContext, storeId); OrderPollingWorker.scheduleNow(appContext, storeId); ProductCatalogSyncWorker.schedule(appContext, storeId); ProductCatalogSyncWorker.scheduleNow(appContext, storeId) }
+    fun cancelBackgroundWork(storeId: String) { OrderPollingWorker.cancel(appContext, storeId); ProductCatalogSyncWorker.cancel(appContext, storeId) }
     fun close() { scope.cancel(); network.close() }
 }
