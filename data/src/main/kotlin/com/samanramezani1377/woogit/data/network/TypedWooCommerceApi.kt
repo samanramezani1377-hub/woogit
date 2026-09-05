@@ -40,7 +40,7 @@ private fun JsonElement.asInt(): Int? = (this as? JsonPrimitive)?.intOrNull
 
 class TypedWooCommerceApi(private val raw: WooCommerceApi) {
     private fun <T> decode(r: ApiResponse, decoder: (String) -> T): Result<T> = if (r.statusCode in 200..299) runCatching { decoder(r.body) } else Result.failure(HttpApiException(r.statusCode, r.body))
-    private fun total(r: ApiResponse): Result<Int> = if (r.statusCode in 200..299) r.total?.let(Result::success) ?: Result.failure(IllegalStateException("WooCommerce did not return X-WP-Total.")) else Result.failure(HttpApiException(r.statusCode, r.body))
+    private fun total(r: ApiResponse): Result<Int> = if (r.statusCode in 200..299) r.total?.let { Result.success<Int>(it) } ?: Result.failure<Int>(IllegalStateException("WooCommerce did not return X-WP-Total.")) else Result.failure(HttpApiException(r.statusCode, r.body))
     suspend fun validate(b:String) = decode(raw.validateStore(b)) { typedJson.decodeFromString<WooSystemStatusDto>(it) }
     suspend fun orders(b:String,p:Int,n:Int,s:String?,st:String?) = decode(raw.listOrders(b,p,n,s,st)) { typedJson.decodeFromString<List<WooOrderTypedDto>>(it) }
     suspend fun ordersTotal(b:String,s:String?,st:String?) = total(raw.listOrders(b,1,1,s,st))
