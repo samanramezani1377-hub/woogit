@@ -17,29 +17,33 @@ class SyncEngine(
     suspend fun runOnce(now: Long) {
         db.transaction { db.syncQueries.recoverRunning(now, now - CLAIM_TIMEOUT_MS) }
         db.syncQueries.selectPending(now).executeAsList().forEach { row ->
-            process(row.toPendingOperation(), now)
+            val operation = row.toPendingOperation() ?: run {
+                db.transaction { db.syncQueries.updateState("PERMANENT_FAILURE", 0, null, "Unknown operation type", now, row.id) }
+                return@forEach
+            }
+            process(operation, now)
         }
     }
 
     suspend fun runOnce(storeId: String, now: Long) {
         db.transaction { db.syncQueries.recoverRunningByStore(now, storeId, now - CLAIM_TIMEOUT_MS) }
         db.syncQueries.selectPendingByStore(storeId, now).executeAsList().forEach { row ->
-            process(row.toPendingOperation(), now)
+            val operation = row.toPendingOperation() ?: run {
+                db.transaction { db.syncQueries.updateState("PERMANENT_FAILURE", 0, null, "Unknown operation type", now, row.id) }
+                return@forEach
+            }
+            process(operation, now)
         }
     }
 
-    private fun Any.toPendingOperation(): PendingOperation {
+    private fun Any.toPendingOperation(): PendingOperation? {
         @Suppress("UNCHECKED_CAST")
-        val row = this as com.samanramezani1377.woogit.data.Pending_operation
+        val row = this as? com.samanramezani1377.woogit.data.Pending_operation ?: return null
+        val type = runCatching { OperationType.valueOf(row.operation_type) }.getOrNull() ?: return null
         return PendingOperation(
-            id = EntityId(row.id),
-            storeId = StoreId(row.store_id),
-            entityType = row.entity_type,
-            entityId = EntityId(row.entity_id),
-            type = OperationType.valueOf(row.operation_type),
-            payloadJson = row.payload_json,
-            payloadHash = row.payload_hash,
-            retryCount = row.retry_count.toInt(),
+            id = EntityId(row.id), storeId = StoreId(row.store_id), entityType = row.entity_type,
+            entityId = EntityId(row.entity_id), type = type, payloadJson = row.payload_json,
+            payloadHash = row.payload_hash, retryCount = row.retry_count.toInt(),
             lastAttemptAt = row.claimed_at?.let(Instant::fromEpochMilliseconds),
             nextAttemptAt = row.next_attempt_at?.let(Instant::fromEpochMilliseconds),
         )
