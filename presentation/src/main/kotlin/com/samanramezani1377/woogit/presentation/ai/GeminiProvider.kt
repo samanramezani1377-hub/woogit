@@ -15,7 +15,7 @@ internal class GeminiProvider(context: Context) : AiProvider {
         get() = prefs.getString("gemini_api_key", "") ?: ""
         set(value) { prefs.edit().putString("gemini_api_key", value.trim()).apply() }
 
-    var modelId: String
+    override var modelId: String
         get() = prefs.getString("gemini_model", DEFAULT_MODEL) ?: DEFAULT_MODEL
         set(value) { value.trim().takeIf { it.isNotBlank() }?.let { prefs.edit().putString("gemini_model", it).apply() } }
 
