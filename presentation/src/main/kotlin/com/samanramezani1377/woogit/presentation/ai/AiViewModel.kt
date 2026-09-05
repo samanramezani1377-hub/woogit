@@ -42,6 +42,7 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
     private val _providerId = MutableStateFlow(prefs.getString("provider", "openrouter") ?: "openrouter")
     val providerId: StateFlow<String> = _providerId.asStateFlow()
     val geminiModel: String get() = gemini.modelId
+    val groqModel: String get() = groq.modelId
     private val _history = MutableStateFlow(historyStore.loadSessions())
     val history: StateFlow<List<AiChatSession>> = _history.asStateFlow()
     private val _attachments = MutableStateFlow<List<AiAttachment>>(emptyList())
@@ -55,6 +56,7 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
     fun selectProvider(id: String) { if (id in agents && _providerId.value != id) { prefs.edit().putString("provider", id).apply(); _providerId.value = id } }
     fun saveApiKey(key: String) { currentProvider().apiKey = key }
     fun saveGeminiModel(model: String) { if (model.trim().isNotBlank()) gemini.modelId = model }
+    fun saveGroqModel(model: String) { if (model.trim().isNotBlank()) groq.modelId = model }
 
     fun addImage(uri: Uri): Boolean {
         val resolver = appContext.contentResolver
