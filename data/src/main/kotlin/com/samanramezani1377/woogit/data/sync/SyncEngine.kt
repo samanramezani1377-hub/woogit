@@ -6,13 +6,14 @@ import com.samanramezani1377.woogit.core.domain.model.OperationType
 import com.samanramezani1377.woogit.core.domain.model.PendingOperation
 import com.samanramezani1377.woogit.data.db.WooGitDatabase
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.Instant
+import java.util.concurrent.ConcurrentHashMap
 
-class SyncEngine(
-    private val db: WooGitDatabase,
-    private val executor: OperationExecutor,
-) {
+class SyncEngine(private val db: WooGitDatabase, private val executor: OperationExecutor) {
     companion object { private const val CLAIM_TIMEOUT_MS = 15 * 60 * 1000L }
+    private val storeLocks = ConcurrentHashMap<String, Mutex>()
 
     suspend fun runOnce(now: Long) {
         db.transaction { db.syncQueries.recoverRunning(now, now - CLAIM_TIMEOUT_MS) }
@@ -26,27 +27,24 @@ class SyncEngine(
     }
 
     suspend fun runOnce(storeId: String, now: Long) {
-        db.transaction { db.syncQueries.recoverRunningByStore(now, storeId, now - CLAIM_TIMEOUT_MS) }
-        db.syncQueries.selectPendingByStore(storeId, now).executeAsList().forEach { row ->
-            val operation = row.toPendingOperation() ?: run {
-                db.transaction { db.syncQueries.updateState("PERMANENT_FAILURE", 0, null, "Unknown operation type", now, row.id) }
-                return@forEach
+        storeLocks.getOrPut(storeId) { Mutex() }.withLock {
+            db.transaction { db.syncQueries.recoverRunningByStore(now, storeId, now - CLAIM_TIMEOUT_MS) }
+            db.syncQueries.selectPendingByStore(storeId, now).executeAsList().forEach { row ->
+                val operation = row.toPendingOperation() ?: run {
+                    db.transaction { db.syncQueries.updateState("PERMANENT_FAILURE", 0, null, "Unknown operation type", now, row.id) }
+                    return@forEach
+                }
+                process(operation, now)
             }
-            process(operation, now)
         }
     }
 
     private fun Any.toPendingOperation(): PendingOperation? {
-        @Suppress("UNCHECKED_CAST")
         val row = this as? com.samanramezani1377.woogit.data.Pending_operation ?: return null
         val type = runCatching { OperationType.valueOf(row.operation_type) }.getOrNull() ?: return null
-        return PendingOperation(
-            id = EntityId(row.id), storeId = StoreId(row.store_id), entityType = row.entity_type,
-            entityId = EntityId(row.entity_id), type = type, payloadJson = row.payload_json,
-            payloadHash = row.payload_hash, retryCount = row.retry_count.toInt(),
-            lastAttemptAt = row.claimed_at?.let(Instant::fromEpochMilliseconds),
-            nextAttemptAt = row.next_attempt_at?.let(Instant::fromEpochMilliseconds),
-        )
+        return PendingOperation(EntityId(row.id), StoreId(row.store_id), row.entity_type, EntityId(row.entity_id), type,
+            row.payload_json, row.payload_hash, row.retry_count.toInt(), row.claimed_at?.let(Instant::fromEpochMilliseconds),
+            row.next_attempt_at?.let(Instant::fromEpochMilliseconds))
     }
 
     private suspend fun process(op: PendingOperation, now: Long) {
