@@ -12,29 +12,33 @@ import org.json.JSONObject
 internal class AiContextWindowProvider(private val delegate: AiProvider) : AiProvider {
     override val id: String get() = delegate.id
     override val modelId: String get() = delegate.modelId
+    override fun effectiveModelId(hasAttachments: Boolean): String = delegate.effectiveModelId(hasAttachments)
+    override val requestLimits: AiLimitOverrides get() = delegate.requestLimits
     override var apiKey: String
         get() = delegate.apiKey
         set(value) { delegate.apiKey = value }
     override val capabilities: Set<AiCapability> get() = delegate.capabilities
 
     override suspend fun complete(messages: JSONArray, tools: JSONArray): JSONObject =
-        delegate.complete(select(messages, tools), tools)
+        delegate.complete(select(messages, tools, emptyList()), tools)
 
     override suspend fun stream(messages: JSONArray, tools: JSONArray, onEvent: suspend (AiStreamEvent) -> Unit): JSONObject =
-        delegate.stream(select(messages, tools), tools, onEvent)
+        delegate.stream(select(messages, tools, emptyList()), tools, onEvent)
 
     override suspend fun stream(
         messages: JSONArray,
         tools: JSONArray,
         attachments: List<AiAttachment>,
         onEvent: suspend (AiStreamEvent) -> Unit,
-    ): JSONObject = delegate.stream(select(messages, tools), tools, attachments, onEvent)
+    ): JSONObject = delegate.stream(select(messages, tools, attachments), tools, attachments, onEvent)
 
-    private fun select(messages: JSONArray, tools: JSONArray): JSONArray {
+    private fun select(messages: JSONArray, tools: JSONArray, attachments: List<AiAttachment>): JSONArray {
         if (messages.length() <= 2) return messages
 
-        val capabilities = AiModelCapabilities.forModel(delegate.id, delegate.modelId)
-        val budget = inputBudget(capabilities)
+        val effectiveModel = delegate.effectiveModelId(attachments.isNotEmpty())
+        val capabilities = AiModelCapabilities.forModel(delegate.id, effectiveModel)
+        val limits = AiEffectiveLimits.resolve(capabilities, delegate.requestLimits)
+        val budget = inputBudget(limits)
         val entities = extractEntities(messages)
         val summary = buildRollingSummary(messages)
         val memory = buildWorkingMemory(messages, entities)
@@ -94,8 +98,8 @@ internal class AiContextWindowProvider(private val delegate: AiProvider) : AiPro
         return result
     }
 
-    private fun inputBudget(capabilities: AiModelCapabilities): Int =
-        (capabilities.contextWindowTokens - capabilities.maxOutputTokens - TOOL_HEADROOM_TOKENS)
+    private fun inputBudget(limits: AiEffectiveLimits): Int =
+        (limits.maxInputTokens - limits.maxOutputTokens - TOOL_HEADROOM_TOKENS)
             .coerceAtLeast(MIN_INPUT_BUDGET_TOKENS)
 
     private data class WooEntity(
