@@ -73,7 +73,17 @@ internal fun AiScreen() {
                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Color.White.copy(alpha = .60f)).padding(5.dp), verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { imagePicker.launch("image/*") }, enabled = state !is AiUiState.Working) { Text("+", color = GlassTokens.accent, fontWeight = FontWeight.Bold) }
                     AiField(input, { input = it }, "دستور به AI", Modifier.weight(1f), singleLine = false)
-                    IconButton(onClick = { vm.send(input); input = "" }, enabled = (input.isNotBlank() || attachments.isNotEmpty()) && state !is AiUiState.Working && apiKey.isNotBlank()) { Box(Modifier.size(44.dp).clip(CircleShape).background(GlassTokens.accent), contentAlignment = Alignment.Center) { Text("↑", color = Color.White, fontWeight = FontWeight.Bold) } }
+                    if (state is AiUiState.Working) {
+                        IconButton(onClick = vm::stopGeneration) {
+                            Box(Modifier.size(44.dp).clip(CircleShape).background(GlassTokens.accent), contentAlignment = Alignment.Center) {
+                                Box(Modifier.size(15.dp).clip(RoundedCornerShape(3.dp)).background(Color.White))
+                            }
+                        }
+                    } else {
+                        IconButton(onClick = { vm.send(input); input = "" }, enabled = (input.isNotBlank() || attachments.isNotEmpty()) && apiKey.isNotBlank()) {
+                            Box(Modifier.size(44.dp).clip(CircleShape).background(GlassTokens.accent), contentAlignment = Alignment.Center) { Text("↑", color = Color.White, fontWeight = FontWeight.Bold) }
+                        }
+                    }
                 }
                 Spacer(Modifier.height(6.dp))
             }

@@ -7,7 +7,9 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -55,6 +57,7 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
     private val _state = MutableStateFlow<AiUiState>(if (initialSession != null) AiUiState.Ready(initialSession.messages) else AiUiState.Idle)
     val state: StateFlow<AiUiState> = _state.asStateFlow()
     private var currentSessionId: String = initialSession?.id ?: historyStore.newSessionId()
+    private var generationJob: Job? = null
     val apiKey: String get() = currentProvider().apiKey
 
     fun selectProvider(id: String) { if (id in agents && _providerId.value != id) { prefs.edit().putString("provider", id).apply(); _providerId.value = id } }
@@ -91,6 +94,20 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
         request(currentMessages(), token, _attachments.value)
     }
 
+    fun stopGeneration() {
+        val working = _state.value as? AiUiState.Working ?: return
+        val completedMessages = if (working.streamingText.isBlank()) {
+            working.messages
+        } else {
+            working.messages + AiMessage("assistant", working.streamingText)
+        }
+        generationJob?.cancel()
+        generationJob = null
+        historyStore.saveSession(currentSessionId, completedMessages)
+        refreshHistory()
+        _state.value = AiUiState.Ready(completedMessages)
+    }
+
     fun reject(pending: AgentReply) {
         val token = pending.confirmationToken ?: return
         agents[_providerId.value]?.cancel(token)
@@ -105,7 +122,7 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
 
     private fun request(messages: List<AiMessage>, confirmationToken: String? = null, attachments: List<AiAttachment> = emptyList()) {
         _state.value = AiUiState.Working(messages)
-        viewModelScope.launch(Dispatchers.IO) {
+        generationJob = viewModelScope.launch(Dispatchers.IO) {
             try {
                 historyStore.saveSession(currentSessionId, messages)
                 refreshHistory()
@@ -129,10 +146,14 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
                     refreshHistory()
                     AiUiState.Ready(completedMessages, null)
                 }
+            } catch (error: CancellationException) {
+                // User pressed Stop; preserve the partial response and do not show an error.
             } catch (error: Throwable) {
                 historyStore.saveSession(currentSessionId, messages)
                 refreshHistory()
                 _state.value = AiUiState.Error(messages, error.message ?: "ارتباط با سرویس AI ناموفق بود.")
+            } finally {
+                generationJob = null
             }
         }
     }
