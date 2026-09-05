@@ -34,7 +34,7 @@ internal data class AiEffectiveLimits(
 
             return AiEffectiveLimits(
                 contextWindowTokens = minOf(capabilities.contextWindowTokens, input),
-                maxInputTokens = input.coerceAtLeast(MIN_INPUT_BUDGET_TOKENS),
+                maxInputTokens = input.coerceAtLeast(2_000),
                 maxOutputTokens = output.coerceAtLeast(1),
             )
         }
