@@ -21,6 +21,7 @@ class WooCommerceApi(
     suspend fun listOrders(baseUrl: String, page: Int = 1, perPage: Int = 20, search: String? = null, status: String? = null) = request(baseUrl, "/wp-json/wc/v3/orders", params(page, perPage, search, status))
     suspend fun getOrder(baseUrl: String, id: Long) = request(baseUrl, "/wp-json/wc/v3/orders/$id")
     suspend fun updateOrder(baseUrl: String, id: Long, body: String) = request(baseUrl, "/wp-json/wc/v3/orders/$id", method = "PUT", body = body)
+    suspend fun listOrderNotes(baseUrl: String, id: Long) = request(baseUrl, "/wp-json/wc/v3/orders/$id/notes")
     suspend fun addOrderNote(baseUrl: String, id: Long, body: String) = request(baseUrl, "/wp-json/wc/v3/orders/$id/notes", method = "POST", body = body)
     suspend fun deleteOrder(baseUrl: String, id: Long, force: Boolean = false) = request(baseUrl, "/wp-json/wc/v3/orders/$id", params = params(force), method = "DELETE")
     suspend fun salesReport(baseUrl: String, dateMin: String, dateMax: String) = request(baseUrl, "/wp-json/wc/v3/reports/sales", mapOf("date_min" to dateMin, "date_max" to dateMax))
