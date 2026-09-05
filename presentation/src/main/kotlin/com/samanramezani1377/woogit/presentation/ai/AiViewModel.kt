@@ -56,8 +56,11 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
     private val initialSession = historyStore.activeSessionId()?.let { id -> _history.value.firstOrNull { it.id == id } }
     private val _state = MutableStateFlow<AiUiState>(if (initialSession != null) AiUiState.Ready(initialSession.messages) else AiUiState.Idle)
     val state: StateFlow<AiUiState> = _state.asStateFlow()
+    private val _isGenerating = MutableStateFlow(false)
+    val isGenerating: StateFlow<Boolean> = _isGenerating.asStateFlow()
     private var currentSessionId: String = initialSession?.id ?: historyStore.newSessionId()
     private var generationJob: Job? = null
+    private var generationId = 0L
     val apiKey: String get() = currentProvider().apiKey
 
     fun selectProvider(id: String) { if (id in agents && _providerId.value != id) { prefs.edit().putString("provider", id).apply(); _providerId.value = id } }
@@ -83,7 +86,7 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
 
     fun send(text: String) {
         val value = text.trim()
-        if (value.isBlank() || apiKey.isBlank() || _state.value is AiUiState.Working) return
+        if (value.isBlank() || apiKey.isBlank() || _isGenerating.value) return
         val currentAttachments = _attachments.value
         _attachments.value = emptyList()
         request(currentMessages() + AiMessage("user", value, currentAttachments.firstOrNull()), attachments = currentAttachments)
@@ -95,12 +98,23 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
     }
 
     fun stopGeneration() {
-        val working = _state.value as? AiUiState.Working ?: return
+        if (!_isGenerating.value) return
+        val working = _state.value as? AiUiState.Working ?: run {
+            generationId++
+            _isGenerating.value = false
+            generationJob?.cancel()
+            generationJob = null
+            return
+        }
         val completedMessages = if (working.streamingText.isBlank()) {
             working.messages
         } else {
             working.messages + AiMessage("assistant", working.streamingText)
         }
+        // Invalidate callbacks before cancelling the job. This prevents a late provider
+        // event from switching the UI back to Working after the Stop button was pressed.
+        generationId++
+        _isGenerating.value = false
         generationJob?.cancel()
         generationJob = null
         historyStore.saveSession(currentSessionId, completedMessages)
@@ -114,13 +128,16 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
         _state.value = AiUiState.Ready(currentMessages(), null)
     }
 
-    fun newChat() { if (_state.value !is AiUiState.Working) { currentSessionId = historyStore.newSessionId(); historyStore.setActiveSession(currentSessionId); _attachments.value = emptyList(); _state.value = AiUiState.Idle; refreshHistory() } }
-    fun openChat(sessionId: String) { if (_state.value !is AiUiState.Working) _history.value.firstOrNull { it.id == sessionId }?.let { currentSessionId = it.id; historyStore.setActiveSession(it.id); _state.value = AiUiState.Ready(it.messages); _attachments.value = emptyList() } }
+    fun newChat() { if (!_isGenerating.value) { currentSessionId = historyStore.newSessionId(); historyStore.setActiveSession(currentSessionId); _attachments.value = emptyList(); _state.value = AiUiState.Idle; refreshHistory() } }
+    fun openChat(sessionId: String) { if (!_isGenerating.value) _history.value.firstOrNull { it.id == sessionId }?.let { currentSessionId = it.id; historyStore.setActiveSession(it.id); _state.value = AiUiState.Ready(it.messages); _attachments.value = emptyList() } }
 
     private fun currentMessages() = when (val value = _state.value) { AiUiState.Idle -> emptyList(); is AiUiState.Working -> value.messages; is AiUiState.Ready -> value.messages; is AiUiState.Error -> value.messages }
     private fun currentProvider(): AiProvider = when (_providerId.value) { "deepseek" -> deepSeek; "gemini" -> gemini; "groq" -> groq; "cloudflare" -> cloudflare; else -> openRouter }
 
     private fun request(messages: List<AiMessage>, confirmationToken: String? = null, attachments: List<AiAttachment> = emptyList()) {
+        if (_isGenerating.value) return
+        val requestGenerationId = ++generationId
+        _isGenerating.value = true
         _state.value = AiUiState.Working(messages)
         generationJob = viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -128,8 +145,12 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
                 refreshHistory()
                 val agent = agents[_providerId.value] ?: throw IllegalStateException("سرویس AI انتخاب‌شده پشتیبانی نمی‌شود.")
                 var activities = emptyList<AiActivity>(); var streaming = ""
-                fun publish() { _state.value = AiUiState.Working(messages, activities, streaming) }
+                fun isCurrentGeneration() = generationId == requestGenerationId
+                fun publish() {
+                    if (isCurrentGeneration()) _state.value = AiUiState.Working(messages, activities, streaming)
+                }
                 val reply = agent.run(messages.map { it.role to it.content }, confirmationToken, attachments) { event ->
+                    if (!isCurrentGeneration()) return@run
                     when (event) {
                         is AiStreamEvent.Status -> activities = (activities.map { it.copy(completed = true) } + AiActivity(event.text)).takeLast(5)
                         is AiStreamEvent.Thinking -> activities = (activities.map { it.copy(completed = false) } + AiActivity("در حال فکر کردن...", false)).distinctBy { it.text }.takeLast(5)
@@ -139,6 +160,7 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
                     }
                     publish()
                 }
+                if (!isCurrentGeneration()) return@launch
                 val baseMessages = messages
                 _state.value = if (reply.confirmationToken != null) AiUiState.Ready(baseMessages, reply) else {
                     val completedMessages = baseMessages + AiMessage("assistant", reply.text.ifBlank { streaming })
@@ -147,13 +169,18 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
                     AiUiState.Ready(completedMessages, null)
                 }
             } catch (error: CancellationException) {
-                // User pressed Stop; preserve the partial response and do not show an error.
+                // Stop already finalized the partial response and invalidated this generation.
             } catch (error: Throwable) {
-                historyStore.saveSession(currentSessionId, messages)
-                refreshHistory()
-                _state.value = AiUiState.Error(messages, error.message ?: "ارتباط با سرویس AI ناموفق بود.")
+                if (generationId == requestGenerationId) {
+                    historyStore.saveSession(currentSessionId, messages)
+                    refreshHistory()
+                    _state.value = AiUiState.Error(messages, error.message ?: "ارتباط با سرویس AI ناموفق بود.")
+                }
             } finally {
-                generationJob = null
+                if (generationId == requestGenerationId) {
+                    _isGenerating.value = false
+                    generationJob = null
+                }
             }
         }
     }
