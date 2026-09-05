@@ -9,6 +9,7 @@ import java.net.URL
 /** OpenRouter provider using its free-model router. The API is OpenAI-compatible. */
 internal class OpenRouterProvider(context: Context) : AiProvider {
     override val id: String = "openrouter"
+    override val modelId: String = MODEL
     override val capabilities: Set<AiCapability> = setOf(AiCapability.TEXT, AiCapability.IMAGE_INPUT, AiCapability.TOOL_CALLING)
     private val prefs = context.applicationContext.getSharedPreferences("woogit_ai", Context.MODE_PRIVATE)
     override var apiKey: String
@@ -33,7 +34,7 @@ internal class OpenRouterProvider(context: Context) : AiProvider {
     }
 
     private fun body(messages: JSONArray, tools: JSONArray, stream: Boolean): JSONObject = JSONObject()
-        .put("model", "openrouter/free").put("messages", messages).put("stream", stream).put("tools", tools).put("tool_choice", "auto")
+        .put("model", MODEL).put("messages", messages).put("stream", stream).put("tools", tools).put("tool_choice", "auto")
 
     private fun request(messages: JSONArray, tools: JSONArray, stream: Boolean): JSONObject {
         val key = apiKey.trim()
@@ -96,5 +97,9 @@ internal class OpenRouterProvider(context: Context) : AiProvider {
         val message = JSONObject().put("role", "assistant").put("content", content.toString())
         if (calls.isNotEmpty()) message.put("tool_calls", JSONArray(calls.toSortedMap().values.toList()))
         return JSONObject().put("choices", JSONArray().put(JSONObject().put("message", message)))
+    }
+
+    private companion object {
+        const val MODEL = "openrouter/free"
     }
 }
