@@ -10,6 +10,9 @@ data class WooSystemStatusSettingsDto(
     val thousand_separator: String = ",",
     val decimal_separator: String = ".",
     val number_of_decimals: Int = 2,
+    val weight_unit: String = "",
+    val dimension_unit: String = "",
+    val tax_included: Boolean = false,
 )
 
 @Serializable
