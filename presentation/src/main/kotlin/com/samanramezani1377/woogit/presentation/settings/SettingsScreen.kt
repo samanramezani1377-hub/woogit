@@ -120,7 +120,23 @@ fun SettingsScreen(storeName: String, storeId: StoreId, onBack: () -> Unit, onDi
                         if (showAiSettings) {
                             GlassText("اتصال مستقیم به DeepSeek")
                             GlassText("کلید API فقط روی همین دستگاه ذخیره می‌شود و Backend جداگانه‌ای لازم نیست.")
-                            GlassTextField(value = aiApiKey, onValueChange = { aiApiKey = it }, label = "کلید API دیپ‌سیک")
+                            GlassCard {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
+                                        Column(Modifier.weight(1f)) {
+                                            GlassText("اعتبارنامه DeepSeek")
+                                            GlassText(if (aiApiKey.isBlank()) "تنظیم نشده" else "روی همین دستگاه ذخیره شده")
+                                        }
+                                        GlassText("محرمانه")
+                                    }
+                                    GlassCredentialField(
+                                        value = aiApiKey,
+                                        onValueChange = { aiApiKey = it },
+                                        label = "کلید API دیپ‌سیک",
+                                        supportingText = "کلید محرمانه است؛ مقدار آن فقط برای اتصال مستقیم DeepSeek استفاده می‌شود.",
+                                    )
+                                }
+                            }
                             GlassPrimaryAction("ذخیره کلید DeepSeek", onClick = {
                                 aiPrefs.edit().putString("deepseek_api_key", aiApiKey.trim()).apply()
                                 aiApiKey = aiApiKey.trim()
