@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.samanramezani1377.woogit.presentation.*
+import kotlinx.coroutines.launch
 
 @Composable
 internal fun AiScreen() {
