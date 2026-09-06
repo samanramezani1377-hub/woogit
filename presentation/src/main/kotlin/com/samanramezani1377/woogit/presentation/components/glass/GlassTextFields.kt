@@ -1,12 +1,8 @@
 package com.samanramezani1377.woogit.presentation
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -18,9 +14,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 
 private fun String.stripHtmlForGlass(): String =
     androidx.core.text.HtmlCompat.fromHtml(
@@ -37,7 +35,7 @@ private fun String.toWooHtmlForGlass(): String =
         .split("\n")
         .joinToString("<br />")
 
-private val GlassFieldPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+private val GlassFieldTextStyle = TextStyle(lineHeight = 24.sp)
 
 @Composable
 fun GlassTextField(
@@ -51,7 +49,7 @@ fun GlassTextField(
 ) {
     val rich = label == "توضیحات" || label == "توضیح کوتاه"
     val display = if (rich) value.stripHtmlForGlass() else value
-    val shape = RoundedCornerShape(14.dp)
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp)
 
     Box(
         modifier = modifier
@@ -64,22 +62,21 @@ fun GlassTextField(
                 lensHeight = 14f,
                 lensAmount = 10f,
                 shadowElevation = 4f,
-            )
-            .padding(1.dp),
+            ),
     ) {
         OutlinedTextField(
             value = display,
-            onValueChange = { text ->
+            onValueChange = { text: String ->
                 onValueChange(if (rich) text.toWooHtmlForGlass() else text)
             },
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = if (singleLine) 62.dp else 70.dp),
+                .heightIn(min = if (singleLine) 64.dp else 72.dp),
             enabled = enabled,
             singleLine = singleLine,
             minLines = if (singleLine) 1 else minLines,
+            textStyle = GlassFieldTextStyle,
             label = { Text(label) },
-            contentPadding = GlassFieldPadding,
             shape = shape,
             colors = OutlinedTextFieldDefaults.colors(
                 unfocusedContainerColor = Color.Transparent,
@@ -102,7 +99,7 @@ fun GlassIdentifierField(
     enabled: Boolean = true,
     supportingText: String? = null,
 ) {
-    val shape = RoundedCornerShape(16.dp)
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
 
     Box(
         modifier = modifier
@@ -115,24 +112,21 @@ fun GlassIdentifierField(
                 lensHeight = 16f,
                 lensAmount = 12f,
                 shadowElevation = 5f,
-            )
-            .padding(1.dp),
+            ),
     ) {
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 62.dp),
+                .heightIn(min = 64.dp),
             enabled = enabled,
             singleLine = true,
+            textStyle = GlassFieldTextStyle,
             label = { Text(label) },
-            supportingText = if (supportingText != null) {
-                { Text(supportingText, color = GlassTokens.muted) }
-            } else {
-                null
+            supportingText = supportingText?.let { text ->
+                { Text(text, color = GlassTokens.muted) }
             },
-            contentPadding = GlassFieldPadding,
             shape = shape,
             colors = OutlinedTextFieldDefaults.colors(
                 unfocusedContainerColor = Color.Transparent,
@@ -156,7 +150,7 @@ fun GlassCredentialField(
     supportingText: String? = null,
 ) {
     var visible by rememberSaveable(label) { mutableStateOf(false) }
-    val shape = RoundedCornerShape(16.dp)
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
 
     Box(
         modifier = modifier
@@ -169,17 +163,17 @@ fun GlassCredentialField(
                 lensHeight = 16f,
                 lensAmount = 12f,
                 shadowElevation = 5f,
-            )
-            .padding(1.dp),
+            ),
     ) {
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 62.dp),
+                .heightIn(min = 64.dp),
             enabled = enabled,
             singleLine = true,
+            textStyle = GlassFieldTextStyle,
             label = { Text(label) },
             leadingIcon = { Text("🔐") },
             trailingIcon = {
@@ -193,12 +187,9 @@ fun GlassCredentialField(
                     )
                 }
             },
-            supportingText = if (supportingText != null) {
-                { Text(supportingText, color = GlassTokens.muted) }
-            } else {
-                null
+            supportingText = supportingText?.let { text ->
+                { Text(text, color = GlassTokens.muted) }
             },
-            contentPadding = GlassFieldPadding,
             visualTransformation = if (visible) {
                 VisualTransformation.None
             } else {
@@ -240,7 +231,7 @@ fun GlassSearchField(
     modifier: Modifier = Modifier,
     onClear: (() -> Unit)? = null,
 ) {
-    val shape = RoundedCornerShape(16.dp)
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
 
     Box(
         modifier = modifier
@@ -253,18 +244,17 @@ fun GlassSearchField(
                 lensHeight = 14f,
                 lensAmount = 10f,
                 shadowElevation = 4f,
-            )
-            .padding(1.dp),
+            ),
     ) {
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = 62.dp),
+                .heightIn(min = 64.dp),
             singleLine = true,
+            textStyle = GlassFieldTextStyle,
             label = { Text(label) },
-            contentPadding = GlassFieldPadding,
             trailingIcon = {
                 if (value.isNotEmpty()) {
                     TextButton(
