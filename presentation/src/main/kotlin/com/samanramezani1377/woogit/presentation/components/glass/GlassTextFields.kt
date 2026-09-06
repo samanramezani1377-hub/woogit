@@ -1,6 +1,7 @@
 package com.samanramezani1377.woogit.presentation
 
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -23,7 +24,7 @@ fun GlassTextField(value:String,onValueChange:(String)->Unit,label:String,modifi
     OutlinedTextField(
         display,
         { onValueChange(if(rich)it.toWooHtmlForGlass()else it) },
-        modifier.fillMaxWidth().heightIn(min=56.dp).liquidGlass(shape, surface = Color.White.copy(alpha=.36f), blurRadius = 9f, lensHeight = 14f, lensAmount = 10f, shadowElevation = 4f),
+        modifier.fillMaxWidth().then(if(singleLine) Modifier.height(56.dp) else Modifier.heightIn(min=56.dp)).liquidGlass(shape, surface = Color.White.copy(alpha=.36f), blurRadius = 9f, lensHeight = 14f, lensAmount = 10f, shadowElevation = 4f),
         enabled=enabled,
         singleLine=singleLine,
         label={Text(label)},
@@ -52,7 +53,7 @@ fun GlassIdentifierField(
     OutlinedTextField(
         value=value,
         onValueChange=onValueChange,
-        modifier=modifier.fillMaxWidth().heightIn(min=60.dp).liquidGlass(
+        modifier=modifier.fillMaxWidth().height(60.dp).liquidGlass(
             shape,
             surface=GlassTokens.accent.copy(alpha=.075f),
             blurRadius=10f,
@@ -90,7 +91,7 @@ fun GlassCredentialField(
     OutlinedTextField(
         value=value,
         onValueChange=onValueChange,
-        modifier=modifier.fillMaxWidth().heightIn(min=60.dp).liquidGlass(
+        modifier=modifier.fillMaxWidth().height(60.dp).liquidGlass(
             shape,
             surface=GlassTokens.accent.copy(alpha=.10f),
             blurRadius=10f,
