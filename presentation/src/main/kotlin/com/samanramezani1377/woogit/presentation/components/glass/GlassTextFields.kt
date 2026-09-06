@@ -23,7 +23,7 @@ fun GlassTextField(value:String,onValueChange:(String)->Unit,label:String,modifi
     OutlinedTextField(
         display,
         { onValueChange(if(rich)it.toWooHtmlForGlass()else it) },
-        modifier.fillMaxWidth().heightIn(min=56.dp).liquidGlass(shape, surface = Color.White.copy(alpha=.30f), blurRadius = 9f, lensHeight = 14f, lensAmount = 10f, shadowElevation = 4f),
+        modifier.fillMaxWidth().heightIn(min=56.dp).liquidGlass(shape, surface = Color.White.copy(alpha=.36f), blurRadius = 9f, lensHeight = 14f, lensAmount = 10f, shadowElevation = 4f),
         enabled=enabled,
         singleLine=singleLine,
         label={Text(label)},
@@ -33,6 +33,43 @@ fun GlassTextField(value:String,onValueChange:(String)->Unit,label:String,modifi
             focusedContainerColor=Color.Transparent,
             disabledContainerColor=Color.Transparent,
             unfocusedBorderColor=Color.Transparent,
+            focusedBorderColor=GlassTokens.accent,
+            cursorColor=GlassTokens.accent,
+        ),
+    )
+}
+
+@Composable
+fun GlassIdentifierField(
+    value:String,
+    onValueChange:(String)->Unit,
+    label:String,
+    modifier:Modifier=Modifier,
+    enabled:Boolean=true,
+    supportingText:String?=null,
+){
+    val shape = RoundedCornerShape(16.dp)
+    OutlinedTextField(
+        value=value,
+        onValueChange=onValueChange,
+        modifier=modifier.fillMaxWidth().heightIn(min=60.dp).liquidGlass(
+            shape,
+            surface=GlassTokens.accent.copy(alpha=.075f),
+            blurRadius=10f,
+            lensHeight=16f,
+            lensAmount=12f,
+            shadowElevation=5f,
+        ),
+        enabled=enabled,
+        singleLine=true,
+        label={Text(label)},
+        supportingText=supportingText?.let { { Text(it, color=GlassTokens.muted) } },
+        shape=shape,
+        colors=OutlinedTextFieldDefaults.colors(
+            unfocusedContainerColor=Color.Transparent,
+            focusedContainerColor=Color.Transparent,
+            disabledContainerColor=Color.Transparent,
+            unfocusedBorderColor=GlassTokens.accent.copy(alpha=.30f),
             focusedBorderColor=GlassTokens.accent,
             cursorColor=GlassTokens.accent,
         ),
@@ -55,7 +92,7 @@ fun GlassCredentialField(
         onValueChange=onValueChange,
         modifier=modifier.fillMaxWidth().heightIn(min=60.dp).liquidGlass(
             shape,
-            surface=GlassTokens.accent.copy(alpha=.08f),
+            surface=GlassTokens.accent.copy(alpha=.10f),
             blurRadius=10f,
             lensHeight=16f,
             lensAmount=12f,
@@ -77,7 +114,7 @@ fun GlassCredentialField(
             unfocusedContainerColor=Color.Transparent,
             focusedContainerColor=Color.Transparent,
             disabledContainerColor=Color.Transparent,
-            unfocusedBorderColor=GlassTokens.accent.copy(alpha=.30f),
+            unfocusedBorderColor=GlassTokens.accent.copy(alpha=.38f),
             focusedBorderColor=GlassTokens.accent,
             cursorColor=GlassTokens.accent,
         ),
