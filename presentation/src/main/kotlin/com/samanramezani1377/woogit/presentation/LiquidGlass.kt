@@ -27,7 +27,7 @@ import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 
 val LocalLiquidBackdrop = compositionLocalOf<LayerBackdrop?> { null }
 
-private val LiquidBackground = Color(0xFFF5F8E8)
+private val LiquidBackground = Color(0xFFD7E8D2)
 private val MintBlob = Color(0xFFDFFF9A)
 private val PeachBlob = Color(0xFFFFE9C7)
 private val LavenderBlob = Color(0xFFE7E0FF)
