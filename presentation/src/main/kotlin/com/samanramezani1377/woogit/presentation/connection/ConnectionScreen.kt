@@ -20,19 +20,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.samanramezani1377.woogit.core.domain.model.StoreConnection
-import com.samanramezani1377.woogit.presentation.ConnectionViewModel
-import com.samanramezani1377.woogit.presentation.FeatureUiState
-import com.samanramezani1377.woogit.presentation.GlassErrorState
-import com.samanramezani1377.woogit.presentation.GlassLoading
-import com.samanramezani1377.woogit.presentation.GlassPasswordField
-import com.samanramezani1377.woogit.presentation.GlassPrimaryAction
-import com.samanramezani1377.woogit.presentation.GlassScaffold
-import com.samanramezani1377.woogit.presentation.GlassText
-import com.samanramezani1377.woogit.presentation.GlassTextField
-import com.samanramezani1377.woogit.presentation.GlassTopBar
-import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
-import com.samanramezani1377.woogit.presentation.vmFactory
+import com.samanramezani.woogit.core.domain.model.StoreConnection
+import com.samanramezani.woogit.presentation.ConnectionViewModel
+import com.samanramezani.woogit.presentation.FeatureUiState
+import com.samanramezani.woogit.presentation.GlassErrorState
+import com.samanramezani.woogit.presentation.GlassLoading
+import com.samanramezani.woogit.presentation.GlassPasswordField
+import com.samanramezani.woogit.presentation.GlassPrimaryAction
+import com.samanramezani.woogit.presentation.GlassScaffold
+import com.samanramezani.woogit.presentation.GlassText
+import com.samanramezani.woogit.presentation.GlassTextField
+import com.samanramezani.woogit.presentation.GlassTopBar
+import com.samanramezani.woogit.presentation.V1PresentationDependencies
+import com.samanramezani.woogit.presentation.vmFactory
 
 @Composable
 internal fun ConnectionScreen(dependencies: V1PresentationDependencies, onConnected: (String) -> Unit) {
