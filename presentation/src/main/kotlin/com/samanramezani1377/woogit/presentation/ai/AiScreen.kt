@@ -14,10 +14,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import coil.compose.AsyncImage
 import com.samanramezani1377.woogit.presentation.*
 import kotlinx.coroutines.launch
 
@@ -126,8 +128,35 @@ internal fun AiScreen() {
                     if (state is AiUiState.Error) item { GlassCard { Text("خطا: ${(state as? AiUiState.Error)?.message.orEmpty()}", color = GlassTokens.urgent) } }
                 }
                 if (attachments.isNotEmpty()) {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        GlassOutlinedButton("🖼  ${attachments.first().name}", {}, Modifier.weight(1f))
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Row(
+                            Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(Color.White.copy(alpha = .42f))
+                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            AsyncImage(
+                                model = attachments.first().bytes,
+                                contentDescription = "پیش‌نمایش ${attachments.first().name}",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .size(44.dp)
+                                    .clip(RoundedCornerShape(11.dp)),
+                            )
+                            Text(
+                                attachments.first().name,
+                                modifier = Modifier.weight(1f),
+                                maxLines = 1,
+                                color = GlassTokens.ink,
+                            )
+                        }
                         TextButton(onClick = vm::removeImage) { Text("حذف") }
                     }
                 }
