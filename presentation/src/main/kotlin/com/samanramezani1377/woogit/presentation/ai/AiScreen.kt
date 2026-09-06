@@ -107,7 +107,7 @@ internal fun AiScreen() {
                 if (attachments.isNotEmpty()) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { GlassOutlinedButton("🖼  ${attachments.first().name}", {}, Modifier.weight(1f)); TextButton(onClick = vm::removeImage) { Text("حذف") } }
                 }
-                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Color.White.copy(alpha = .60f)).padding(5.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Color.White.copy(alpha = .60f)).padding(5.dp), verticalAlignment = Alignment.Bottom) {
                     IconButton(onClick = { imagePicker.launch("image/*") }, enabled = !isGenerating) { Text("+", color = GlassTokens.accent, fontWeight = FontWeight.Bold) }
                     AiField(input, { input = it }, "دستور به AI", Modifier.weight(1f), singleLine = false)
                     if (isGenerating) {
@@ -235,4 +235,4 @@ private fun formatToolArguments(raw: String): String = runCatching {
 
 @Composable private fun HistoryItem(session: AiChatSession, onClick: () -> Unit) { GlassOutlinedButton(session.title, onClick, Modifier.fillMaxWidth()) }
 @Composable private fun MessageBubble(message: AiMessage) { val user = message.role == "user"; Row(Modifier.fillMaxWidth(), horizontalArrangement = if (user) Arrangement.End else Arrangement.Start) { Box(Modifier.fillMaxWidth(.88f).clip(RoundedCornerShape(20.dp)).background(if (user) GlassTokens.accent.copy(alpha = .12f) else Color.White.copy(alpha = .54f)).padding(14.dp)) { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { Text(if (user) "شما" else "WooGit AI", color = if (user) GlassTokens.accent else GlassTokens.ink, fontWeight = FontWeight.SemiBold); message.attachment?.let { attachment -> val bitmap = remember(attachment) { BitmapFactory.decodeByteArray(attachment.bytes, 0, attachment.bytes.size)?.asImageBitmap() }; bitmap?.let { Image(it, contentDescription = attachment.name, modifier = Modifier.fillMaxWidth().heightIn(max = 260.dp).clip(RoundedCornerShape(14.dp))) } }; if (message.content.isNotBlank()) Text(message.content, color = GlassTokens.ink) } } } }
-@Composable private fun AiField(value: String, onValueChange: (String) -> Unit, label: String, modifier: Modifier = Modifier, singleLine: Boolean = true) { GlassTextField(value = value, onValueChange = onValueChange, label = label, modifier = modifier, singleLine = singleLine, minLines = if (singleLine) 1 else 3) }
+@Composable private fun AiField(value: String, onValueChange: (String) -> Unit, label: String, modifier: Modifier = Modifier, singleLine: Boolean = true) { GlassTextField(value = value, onValueChange = onValueChange, label = label, modifier = modifier, singleLine = singleLine, minLines = 1) }
