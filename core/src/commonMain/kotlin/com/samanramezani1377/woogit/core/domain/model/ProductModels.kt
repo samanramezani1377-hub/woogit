@@ -24,6 +24,9 @@ data class Product(
     val numberOfDecimals: Int? = null,
     val weightUnit: String? = null,
     val dimensionUnit: String? = null,
+    val slug: String? = null,
+    val permalink: String? = null,
+    val variationCount: Int? = null,
 )
 data class ProductImage(val id: EntityId?, val src: String, val name: String?, val alt: String?)
 data class Pricing(val regular: String?, val sale: String?, val onSale: Boolean)
