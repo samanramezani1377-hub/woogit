@@ -25,12 +25,12 @@ private fun String.toWooHtmlForGlass(): String = replace("&", "&amp;").replace("
 private val GlassFieldTextStyle = TextStyle(lineHeight = 24.sp)
 
 @Composable
-fun GlassTextField(value: String, onValueChange: (String) -> Unit, label: String, modifier: Modifier = Modifier, enabled: Boolean = true, singleLine: Boolean = true, minLines: Int = 1, maxLines: Int = if (singleLine) 1 else Int.MAX_VALUE) {
+fun GlassTextField(value: String, onValueChange: (String) -> Unit, label: String, modifier: Modifier = Modifier, enabled: Boolean = true, singleLine: Boolean = true, minLines: Int = 1, maxLines: Int = if (singleLine) 1 else Int.MAX_VALUE, minHeight: androidx.compose.ui.unit.Dp = if (singleLine) 64.dp else 72.dp) {
     val rich = label == "توضیحات" || label == "توضیح کوتاه"
     val display = if (rich) value.stripHtmlForGlass() else value
     val shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp)
-    Box(modifier = modifier.fillMaxWidth().heightIn(min = if (singleLine) 64.dp else 72.dp).liquidGlass(shape = shape, surface = Color.White.copy(alpha = .36f), blurRadius = 9f, lensHeight = 14f, lensAmount = 10f, shadowElevation = 4f)) {
-        OutlinedTextField(value = display, onValueChange = { text: String -> onValueChange(if (rich) text.toWooHtmlForGlass() else text) }, modifier = Modifier.fillMaxWidth().heightIn(min = if (singleLine) 64.dp else 72.dp), enabled = enabled, singleLine = singleLine, minLines = if (singleLine) 1 else minLines, maxLines = if (singleLine) 1 else maxLines, textStyle = GlassFieldTextStyle, label = { Text(label) }, shape = shape, colors = OutlinedTextFieldDefaults.colors(unfocusedContainerColor = Color.Transparent, focusedContainerColor = Color.Transparent, disabledContainerColor = Color.Transparent, unfocusedBorderColor = Color.Transparent, focusedBorderColor = GlassTokens.accent, cursorColor = GlassTokens.accent))
+    Box(modifier = modifier.fillMaxWidth().heightIn(min = minHeight).liquidGlass(shape = shape, surface = Color.White.copy(alpha = .36f), blurRadius = 9f, lensHeight = 14f, lensAmount = 10f, shadowElevation = 4f)) {
+        OutlinedTextField(value = display, onValueChange = { text: String -> onValueChange(if (rich) text.toWooHtmlForGlass() else text) }, modifier = Modifier.fillMaxWidth().heightIn(min = minHeight), enabled = enabled, singleLine = singleLine, minLines = if (singleLine) 1 else minLines, maxLines = if (singleLine) 1 else maxLines, textStyle = GlassFieldTextStyle, label = { Text(label) }, shape = shape, colors = OutlinedTextFieldDefaults.colors(unfocusedContainerColor = Color.Transparent, focusedContainerColor = Color.Transparent, disabledContainerColor = Color.Transparent, unfocusedBorderColor = Color.Transparent, focusedBorderColor = GlassTokens.accent, cursorColor = GlassTokens.accent))
     }
 }
 
