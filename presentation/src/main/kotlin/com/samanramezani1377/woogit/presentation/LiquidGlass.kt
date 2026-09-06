@@ -27,7 +27,6 @@ import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 
 val LocalLiquidBackdrop = compositionLocalOf<LayerBackdrop?> { null }
 
-private val LiquidBackground = Color(0xFFD7E8D2)
 private val MintBlob = Color(0xFFDFFF9A)
 private val PeachBlob = Color(0xFFFFE9C7)
 private val LavenderBlob = Color(0xFFE7E0FF)
@@ -38,6 +37,10 @@ fun LiquidGlassEnvironment(
     modifier: Modifier = Modifier,
     content: @Composable (BoxScope) -> Unit,
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    androidx.compose.runtime.LaunchedEffect(Unit) {
+        AppBackgroundThemeStore.initialize(context)
+    }
     val liquidBackdrop = rememberLayerBackdrop()
     val transition = rememberInfiniteTransition(label = "liquid-glass-motion")
     val drift = transition.animateFloat(
@@ -46,8 +49,9 @@ fun LiquidGlassEnvironment(
         animationSpec = infiniteRepeatable(tween(22000), RepeatMode.Reverse),
         label = "background-drift",
     )
+    val liquidBackground = AppBackgroundThemeStore.selected.color
 
-    Box(modifier = modifier.fillMaxSize().background(LiquidBackground)) {
+    Box(modifier = modifier.fillMaxSize().background(liquidBackground)) {
         Box(
             Modifier
                 .fillMaxSize()
