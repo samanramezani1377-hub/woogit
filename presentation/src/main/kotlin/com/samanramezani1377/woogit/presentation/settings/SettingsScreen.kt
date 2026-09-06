@@ -1,6 +1,5 @@
 package com.samanramezani1377.woogit.presentation.settings
 
-import android.content.Context
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -25,13 +24,9 @@ fun SettingsScreen(storeName: String, storeId: StoreId, onBack: () -> Unit, onDi
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
-    val aiPrefs = remember { context.applicationContext.getSharedPreferences("woogit_ai", Context.MODE_PRIVATE) }
     val transfer = remember(dependencies) { RobustProductTransferService(dependencies, context.contentResolver) }
     var logs by remember { mutableStateOf(DebugLogStore.read(context)) }
     var showSalesDebug by remember { mutableStateOf(true) }
-    var showAiSettings by remember { mutableStateOf(false) }
-    var aiApiKey by remember { mutableStateOf(aiPrefs.getString("deepseek_api_key", "") ?: "") }
-    var aiSaved by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     var progress by remember { mutableStateOf(ProductTransferProgress("", 0, 0)) }
     var resultText by remember { mutableStateOf<String?>(null) }
@@ -108,44 +103,6 @@ fun SettingsScreen(storeName: String, storeId: StoreId, onBack: () -> Unit, onDi
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 GlassTopBar("تنظیمات", "مدیریت اتصال و حساب فروشگاه") { TextButton(onClick = onBack) { GlassText("بازگشت") } }
                 GlassCard { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { GlassText("فروشگاه متصل"); GlassText(storeName); GlassPrimaryAction("قطع اتصال", onDisconnect) } }
-                GlassCard {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
-                            Column(Modifier.weight(1f)) {
-                                GlassText("WooGit AI")
-                                GlassText(if (aiApiKey.isBlank()) "کلید DeepSeek تنظیم نشده" else "DeepSeek آماده استفاده است")
-                            }
-                            TextButton(onClick = { showAiSettings = !showAiSettings }) { GlassText(if (showAiSettings) "بستن" else "تنظیمات") }
-                        }
-                        if (showAiSettings) {
-                            GlassText("اتصال مستقیم به DeepSeek")
-                            GlassText("کلید API فقط روی همین دستگاه ذخیره می‌شود و Backend جداگانه‌ای لازم نیست.")
-                            GlassCard {
-                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Row(Modifier.fillMaxWidth(), Arrangement.SpaceBetween) {
-                                        Column(Modifier.weight(1f)) {
-                                            GlassText("اعتبارنامه DeepSeek")
-                                            GlassText(if (aiApiKey.isBlank()) "تنظیم نشده" else "روی همین دستگاه ذخیره شده")
-                                        }
-                                        GlassText("محرمانه")
-                                    }
-                                    GlassCredentialField(
-                                        value = aiApiKey,
-                                        onValueChange = { aiApiKey = it },
-                                        label = "کلید API دیپ‌سیک",
-                                        supportingText = "کلید محرمانه است؛ مقدار آن فقط برای اتصال مستقیم DeepSeek استفاده می‌شود.",
-                                    )
-                                }
-                            }
-                            GlassPrimaryAction("ذخیره کلید DeepSeek", onClick = {
-                                aiPrefs.edit().putString("deepseek_api_key", aiApiKey.trim()).apply()
-                                aiApiKey = aiApiKey.trim()
-                                aiSaved = true
-                            })
-                            if (aiSaved) GlassText("کلید DeepSeek ذخیره شد.")
-                        }
-                    }
-                }
                 GlassCard {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         GlassText("انتقال محصولات")
