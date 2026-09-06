@@ -19,5 +19,12 @@ import androidx.compose.ui.unit.dp
 @Composable fun GlassDialog(show:Boolean,title:String,onDismiss:()->Unit,confirmLabel:String="تأیید",onConfirm:()->Unit,content:@Composable ColumnScope.()->Unit){if(show)AlertDialog(onDismissRequest=onDismiss,title={Text(title,fontWeight=androidx.compose.ui.text.font.FontWeight.Bold)},text={Column(content=content)},confirmButton={GlassButton(confirmLabel,onConfirm)},dismissButton={GlassTextButton("انصراف",onDismiss)},containerColor=Color(0xFFF7F8FC).copy(alpha=.96f),shape=RoundedCornerShape(26.dp))}
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Composable fun GlassBottomSheet(show:Boolean,onDismiss:()->Unit,content:@Composable ColumnScope.()->Unit){if(show)ModalBottomSheet(onDismissRequest=onDismiss,containerColor=Color(0xFFF7F8FC).copy(alpha=.94f),shape=RoundedCornerShape(topStart=28.dp,topEnd=28.dp)){Column(Modifier.fillMaxWidth().fillMaxHeight(.9f).imePadding().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(20.dp),content=content)}}
+@Composable fun GlassBottomSheet(show:Boolean,onDismiss:()->Unit,content:@Composable ColumnScope.()->Unit){
+    val background = AppBackgroundThemeStore.selected.color
+    val surface = if (AppBackgroundThemeStore.selected == AppBackgroundTheme.DARK) {
+        Color.White.copy(alpha = .14f)
+    } else {
+        background.copy(alpha = .94f)
+    }
+    if(show)ModalBottomSheet(onDismissRequest=onDismiss,containerColor=surface,shape=RoundedCornerShape(topStart=28.dp,topEnd=28.dp)){Column(Modifier.fillMaxWidth().fillMaxHeight(.9f).imePadding().navigationBarsPadding().verticalScroll(rememberScrollState()).padding(20.dp),content=content)}}
 @Composable fun GlassSnackbar(hostState:SnackbarHostState,modifier:Modifier=Modifier)=SnackbarHost(hostState,modifier)
