@@ -61,7 +61,7 @@ class TypedWooCommerceApi(private val raw: WooCommerceApi) {
     suspend fun attributes(b:String,p:Int,n:Int) = decode(raw.listAttributes(b,p,n)) { typedJson.decodeFromString<List<WooGlobalAttributeDto>>(it) }
     suspend fun attribute(b:String,id:Long) = decode(raw.getAttribute(b,id)) { typedJson.decodeFromString<WooGlobalAttributeDto>(it) }
     suspend fun createAttribute(b:String,v:WooGlobalAttributeDto) = decode(raw.createAttribute(b,typedJson.encodeToString(v))) { typedJson.decodeFromString<WooGlobalAttributeDto>(it) }
-    suspend fun updateAttribute(b:String,id:Long,v:WooGlobalAttributeDto) = decode(raw.updateAttribute(b,id,v)) { typedJson.decodeFromString<WooGlobalAttributeDto>(it) }
+    suspend fun updateAttribute(b:String,id:Long,v:WooGlobalAttributeDto) = decode(raw.updateAttribute(b,id,typedJson.encodeToString(v))) { typedJson.decodeFromString<WooGlobalAttributeDto>(it) }
     suspend fun deleteAttribute(b:String,id:Long) = decode(raw.deleteAttribute(b,id,true)) { Unit }
     suspend fun terms(b:String,a:Long,p:Int,n:Int) = decode(raw.listAttributeTerms(b,a,p,n)) { typedJson.decodeFromString<List<WooAttributeTermDto>>(it) }
     suspend fun term(b:String,a:Long,id:Long) = decode(raw.getAttributeTerm(b,a,id)) { typedJson.decodeFromString<WooAttributeTermDto>(it) }
