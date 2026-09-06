@@ -54,5 +54,8 @@ object ProductRepositoryV1Mapper {
         v.categories.map { IdName(EntityId(it.id.toString()), it.name) },
         v.attributes.map { Attribute(it.id?.let { id -> EntityId(id.toString()) }, it.name, it.visible, it.variation, it.options) },
         v.date_modified_gmt,
+        slug = v.slug,
+        permalink = v.permalink,
+        variationCount = v.variations.size.takeIf { v.type.trim().lowercase() == "variable" || it > 0 },
     )
 }
