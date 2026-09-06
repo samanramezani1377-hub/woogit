@@ -4,10 +4,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 
 private fun String.stripHtmlForGlass(): String = androidx.core.text.HtmlCompat.fromHtml(this, androidx.core.text.HtmlCompat.FROM_HTML_MODE_LEGACY).toString()
@@ -38,12 +39,52 @@ fun GlassTextField(value:String,onValueChange:(String)->Unit,label:String,modifi
 }
 
 @Composable
-fun GlassPasswordField(value:String,onValueChange:(String)->Unit,label:String="Consumer Secret",modifier:Modifier=Modifier,enabled:Boolean=true)=OutlinedTextField(
-    value,onValueChange,
-    modifier.fillMaxWidth().heightIn(min=56.dp).liquidGlass(RoundedCornerShape(14.dp), surface=Color.White.copy(alpha=.30f), blurRadius=9f, lensHeight=14f, lensAmount=10f, shadowElevation=4f),
-    enabled=enabled,singleLine=true,label={Text(label)},visualTransformation=PasswordVisualTransformation(),shape=RoundedCornerShape(14.dp),
-    colors=OutlinedTextFieldDefaults.colors(unfocusedContainerColor=Color.Transparent,focusedContainerColor=Color.Transparent,disabledContainerColor=Color.Transparent,unfocusedBorderColor=Color.Transparent,focusedBorderColor=GlassTokens.accent)
-)
+fun GlassCredentialField(
+    value:String,
+    onValueChange:(String)->Unit,
+    label:String,
+    modifier:Modifier=Modifier,
+    enabled:Boolean=true,
+    supportingText:String?=null,
+){
+    var visible by rememberSaveable(label) { mutableStateOf(false) }
+    val shape = RoundedCornerShape(16.dp)
+    OutlinedTextField(
+        value=value,
+        onValueChange=onValueChange,
+        modifier=modifier.fillMaxWidth().heightIn(min=60.dp).liquidGlass(
+            shape,
+            surface=GlassTokens.accent.copy(alpha=.08f),
+            blurRadius=10f,
+            lensHeight=16f,
+            lensAmount=12f,
+            shadowElevation=5f,
+        ),
+        enabled=enabled,
+        singleLine=true,
+        label={Text(label)},
+        leadingIcon={Text("🔐")},
+        trailingIcon={
+            TextButton(onClick={ visible = !visible }, enabled=enabled) {
+                Text(if (visible) "پنهان" else "نمایش", color=GlassTokens.accent)
+            }
+        },
+        supportingText=supportingText?.let { { Text(it, color=GlassTokens.muted) } },
+        visualTransformation=if (visible) VisualTransformation.None else PasswordVisualTransformation(),
+        shape=shape,
+        colors=OutlinedTextFieldDefaults.colors(
+            unfocusedContainerColor=Color.Transparent,
+            focusedContainerColor=Color.Transparent,
+            disabledContainerColor=Color.Transparent,
+            unfocusedBorderColor=GlassTokens.accent.copy(alpha=.30f),
+            focusedBorderColor=GlassTokens.accent,
+            cursorColor=GlassTokens.accent,
+        ),
+    )
+}
+
+@Composable
+fun GlassPasswordField(value:String,onValueChange:(String)->Unit,label:String="Consumer Secret",modifier:Modifier=Modifier,enabled:Boolean=true)=GlassCredentialField(value,onValueChange,label,modifier,enabled)
 
 @Composable
 fun GlassSearchField(value:String,onValueChange:(String)->Unit,label:String="جستجو",modifier:Modifier=Modifier,onClear:(()->Unit)?=null)=OutlinedTextField(
