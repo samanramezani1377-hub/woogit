@@ -102,7 +102,7 @@ internal fun AiScreen() {
                         if (details.isNotBlank()) Text(details, color = GlassTokens.muted)
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) { GlassButton("تأیید و اجرا", { vm.confirm(pending) }, Modifier.weight(1f)); GlassOutlinedButton("رد کردن", { vm.reject(pending) }, Modifier.weight(1f)) }
                     } }
-                    if (state is AiUiState.Error) item { GlassCard { Text("خطا: ${(state as AiUiState.Error).message}", color = GlassTokens.urgent) } }
+                    if (state is AiUiState.Error) item { GlassCard { Text("خطا: ${(state as? AiUiState.Error)?.message.orEmpty()}", color = GlassTokens.urgent) } }
                 }
                 if (attachments.isNotEmpty()) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { GlassOutlinedButton("🖼  ${attachments.first().name}", {}, Modifier.weight(1f)); TextButton(onClick = vm::removeImage) { Text("حذف") } }
@@ -123,6 +123,13 @@ internal fun AiScreen() {
 
     GlassBottomSheet(show = showSettings, onDismiss = { showSettings = false }) {
         Text("تنظیمات AI", fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(10.dp))
+        GlassCard(Modifier.fillMaxWidth()) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("ارائه‌دهنده و مدل", fontWeight = FontWeight.Bold)
+                Text("ابتدا سرویس را انتخاب کنید، سپس مدل همان سرویس را تنظیم کنید.", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
+            }
+        }
         Spacer(Modifier.height(8.dp))
         Text("سرویس AI", fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(6.dp))
@@ -150,20 +157,43 @@ internal fun AiScreen() {
                 }
             }
         }
-        Text("ارائه‌دهنده را از یک کنترل واحد انتخاب کنید؛ مدل فعال همزمان زیر همین انتخاب مشخص است.", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
+        Text("انتخاب سرویس", color = GlassTokens.muted, style = MaterialTheme.typography.labelSmall)
 
-        if (providerId == "gemini") { Spacer(Modifier.height(10.dp)); Text("مدل Gemini", fontWeight = FontWeight.SemiBold); AiField(geminiModel, { geminiModel = it }, "Model ID (مثلاً gemini-3.8-flash)"); Text("شناسه مدل مستقیماً از تنظیمات خوانده می‌شود؛ با تغییر مدل نیازی به تغییر Agent نیست.", color = GlassTokens.muted); Spacer(Modifier.height(4.dp)) }
+        if (providerId == "gemini") { Spacer(Modifier.height(10.dp)); Text("مدل Gemini", fontWeight = FontWeight.SemiBold); AiField(geminiModel, { geminiModel = it }, "Model ID (مثلاً gemini-3.8-flash)"); Text("شناسه مدل قابل ویرایش است و بخشی از اطلاعات اتصال نیست.", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall); Spacer(Modifier.height(4.dp)) }
         if (providerId == "groq") {
             Spacer(Modifier.height(10.dp)); Text("مدل Groq", fontWeight = FontWeight.SemiBold); Spacer(Modifier.height(4.dp)); Box { GlassOutlinedButton(groqModel, { groqMenuExpanded = true }, Modifier.fillMaxWidth()); DropdownMenu(expanded = groqMenuExpanded, onDismissRequest = { groqMenuExpanded = false }) { GROQ_MODELS.forEach { model -> DropdownMenuItem(text = { Text(model) }, onClick = { groqModel = model; groqMenuExpanded = false }) } } }
-            Text("برای پیام متنی مدل انتخاب‌شده استفاده می‌شود. هنگام ارسال تصویر، Groq به‌صورت خودکار از Qwen3.6-27B Vision استفاده می‌کند.", color = GlassTokens.muted); Spacer(Modifier.height(4.dp))
+            Text("مدل انتخابی یک تنظیم معمولی است، نه اطلاعات محرمانه. هنگام ارسال تصویر، Groq به‌صورت خودکار از Qwen3.6-27B Vision استفاده می‌کند.", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall); Spacer(Modifier.height(4.dp))
         }
         if (providerId == "cloudflare") {
-            Spacer(Modifier.height(10.dp)); Text("Cloudflare Account ID", fontWeight = FontWeight.SemiBold); AiField(cloudflareAccountId, { cloudflareAccountId = it }, "Account ID")
+            Spacer(Modifier.height(10.dp)); Text("Cloudflare", fontWeight = FontWeight.SemiBold)
+            Text("شناسه حساب", color = GlassTokens.muted, style = MaterialTheme.typography.labelSmall)
+            AiField(cloudflareAccountId, { cloudflareAccountId = it }, "Account ID")
+            Text("Account ID شناسه حساب است و Secret نیست.", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(8.dp)); Text("مدل Cloudflare", fontWeight = FontWeight.SemiBold); Spacer(Modifier.height(4.dp)); Box { GlassOutlinedButton(cloudflareModel, { cloudflareMenuExpanded = true }, Modifier.fillMaxWidth()); DropdownMenu(expanded = cloudflareMenuExpanded, onDismissRequest = { cloudflareMenuExpanded = false }) { CLOUDFLARE_MODELS.forEach { model -> DropdownMenuItem(text = { Text(model) }, onClick = { cloudflareModel = model; cloudflareMenuExpanded = false }) } } }
-            Text("مدل انتخاب‌شده برای متن استفاده می‌شود؛ هنگام ارسال تصویر، Agent از مدل Vision مربوط به Cloudflare استفاده می‌کند.", color = GlassTokens.muted); Spacer(Modifier.height(4.dp))
+            Text("مدل انتخاب‌شده برای متن استفاده می‌شود؛ هنگام ارسال تصویر، Agent از مدل Vision مربوط به Cloudflare استفاده می‌کند.", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall); Spacer(Modifier.height(4.dp))
         }
-        Spacer(Modifier.height(8.dp)); Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { Column(Modifier.weight(1f)) { Text("${providerLabel(providerId)} API", fontWeight = FontWeight.SemiBold); Text(if (apiKey.isBlank()) "کلید تنظیم نشده" else "کلید روی دستگاه ذخیره شده است", color = if (apiKey.isBlank()) GlassTokens.faint else GlassTokens.live) }; Text("مستقیم", color = GlassTokens.muted) }
-        Spacer(Modifier.height(4.dp)); AiField(apiKey, { apiKey = it }, if (providerId == "cloudflare") "API Token کلادفلر" else "کلید API ${providerLabel(providerId)}", secret = true); Text(providerDescription(providerId), color = GlassTokens.muted); Spacer(Modifier.height(4.dp)); GlassButton("ذخیره تنظیمات", { vm.saveApiKey(apiKey); if (providerId == "gemini") vm.saveGeminiModel(geminiModel); if (providerId == "groq") vm.saveGroqModel(groqModel); if (providerId == "cloudflare") { vm.saveCloudflareModel(cloudflareModel); vm.saveCloudflareAccountId(cloudflareAccountId) }; showSettings = false })
+        Spacer(Modifier.height(12.dp))
+        GlassCard(Modifier.fillMaxWidth()) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("🔐", modifier = Modifier.padding(end = 8.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("اعتبارنامه ${providerLabel(providerId)}", fontWeight = FontWeight.Bold)
+                        Text(if (apiKey.isBlank()) "تنظیم نشده" else "روی همین دستگاه ذخیره شده", color = if (apiKey.isBlank()) GlassTokens.faint else GlassTokens.live, style = MaterialTheme.typography.bodySmall)
+                    }
+                    Text("محرمانه", color = GlassTokens.accent, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
+                }
+                GlassCredentialField(
+                    value = apiKey,
+                    onValueChange = { apiKey = it },
+                    label = if (providerId == "cloudflare") "API Token کلادفلر" else "کلید API ${providerLabel(providerId)}",
+                    supportingText = "این مقدار محرمانه است و فقط برای اتصال مستقیم ${providerLabel(providerId)} استفاده می‌شود.",
+                )
+                Text(providerDescription(providerId), color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        GlassButton("ذخیره تنظیمات", { vm.saveApiKey(apiKey); if (providerId == "gemini") vm.saveGeminiModel(geminiModel); if (providerId == "groq") vm.saveGroqModel(groqModel); if (providerId == "cloudflare") { vm.saveCloudflareModel(cloudflareModel); vm.saveCloudflareAccountId(cloudflareAccountId) }; showSettings = false })
     }
 
     AgentMemoryDebugSheet(context, showMemory, { showMemory = false })
@@ -235,4 +265,4 @@ private fun formatToolArguments(raw: String): String = runCatching {
 
 @Composable private fun HistoryItem(session: AiChatSession, onClick: () -> Unit) { GlassOutlinedButton(session.title, onClick, Modifier.fillMaxWidth()) }
 @Composable private fun MessageBubble(message: AiMessage) { val user = message.role == "user"; Row(Modifier.fillMaxWidth(), horizontalArrangement = if (user) Arrangement.End else Arrangement.Start) { Box(Modifier.fillMaxWidth(.88f).clip(RoundedCornerShape(20.dp)).background(if (user) GlassTokens.accent.copy(alpha = .12f) else Color.White.copy(alpha = .54f)).padding(14.dp)) { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { Text(if (user) "شما" else "WooGit AI", color = if (user) GlassTokens.accent else GlassTokens.ink, fontWeight = FontWeight.SemiBold); message.attachment?.let { attachment -> val bitmap = remember(attachment) { BitmapFactory.decodeByteArray(attachment.bytes, 0, attachment.bytes.size)?.asImageBitmap() }; bitmap?.let { Image(it, contentDescription = attachment.name, modifier = Modifier.fillMaxWidth().heightIn(max = 260.dp).clip(RoundedCornerShape(14.dp))) } }; if (message.content.isNotBlank()) Text(message.content, color = GlassTokens.ink) } } } }
-@Composable private fun AiField(value: String, onValueChange: (String) -> Unit, label: String, modifier: Modifier = Modifier, secret: Boolean = false, singleLine: Boolean = true) { TextField(value = value, onValueChange = onValueChange, modifier = modifier.fillMaxWidth(), label = { Text(label) }, singleLine = singleLine, visualTransformation = if (secret) androidx.compose.ui.text.input.PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None, colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent, disabledContainerColor = Color.Transparent, focusedIndicatorColor = GlassTokens.accent, unfocusedIndicatorColor = GlassTokens.glassBorder)) }
+@Composable private fun AiField(value: String, onValueChange: (String) -> Unit, label: String, modifier: Modifier = Modifier, singleLine: Boolean = true) { TextField(value = value, onValueChange = onValueChange, modifier = modifier.fillMaxWidth(), label = { Text(label) }, singleLine = singleLine, colors = TextFieldDefaults.colors(focusedContainerColor = Color.Transparent, unfocusedContainerColor = Color.Transparent, disabledContainerColor = Color.Transparent, focusedIndicatorColor = GlassTokens.accent, unfocusedIndicatorColor = GlassTokens.glassBorder)) }
