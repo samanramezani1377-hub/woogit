@@ -3,13 +3,20 @@ package com.samanramezani1377.woogit.presentation.settings
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -104,6 +111,13 @@ fun SettingsScreen(storeName: String, storeId: StoreId, onBack: () -> Unit, onDi
                 GlassTopBar("تنظیمات", "مدیریت اتصال و حساب فروشگاه") { TextButton(onClick = onBack) { GlassText("بازگشت") } }
                 GlassCard { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { GlassText("فروشگاه متصل"); GlassText(storeName); GlassPrimaryAction("قطع اتصال", onDisconnect) } }
                 GlassCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        GlassText("پس‌زمینه برنامه")
+                        GlassText("رنگ پس‌زمینه اصلی برنامه را انتخاب کنید.")
+                        BackgroundThemePicker()
+                    }
+                }
+                GlassCard {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         GlassText("انتقال محصولات")
                         GlassText("پشتیبان کامل محصولات با اطلاعات، دسته‌بندی، ویژگی، Variation و تصاویر داخل یک فایل .woogit")
@@ -135,3 +149,41 @@ fun SettingsScreen(storeName: String, storeId: StoreId, onBack: () -> Unit, onDi
         resultText?.let { message -> AlertDialog(onDismissRequest = { resultText = null }, confirmButton = { TextButton(onClick = { resultText = null }) { GlassText("باشه") } }, text = { GlassText(message) }, title = { GlassText("انتقال محصولات") }) }
     }
 }
+
+@Composable
+private fun BackgroundThemePicker() {
+    val context = LocalContext.current
+    val selected = AppBackgroundThemeStore.selected
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        AppBackgroundTheme.values().forEach { theme ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color.White.copy(alpha = if (selected == theme) .24f else .10f), RoundedCornerShape(16.dp))
+                    .border(1.dp, if (selected == theme) GlassTokens.accent else GlassTokens.glassBorder, RoundedCornerShape(16.dp))
+                    .clickable { AppBackgroundThemeStore.set(context, theme) }
+                    .padding(horizontal = 14.dp, vertical = 11.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Box(
+                    Modifier
+                        .size(36.dp)
+                        .background(theme.color, CircleShape)
+                        .border(1.dp, GlassTokens.glassBorder, CircleShape)
+                )
+                Column(Modifier.weight(1f)) {
+                    GlassText(theme.title)
+                    GlassText(theme.color.toHexString(), style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+                }
+                if (selected == theme) GlassText("✓")
+            }
+        }
+    }
+}
+
+private fun Color.toHexString(): String = "#%02X%02X%02X".format(
+    (red * 255).toInt(),
+    (green * 255).toInt(),
+    (blue * 255).toInt(),
+)
