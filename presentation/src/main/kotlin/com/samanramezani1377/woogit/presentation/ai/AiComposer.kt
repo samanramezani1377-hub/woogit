@@ -19,11 +19,27 @@ import com.samanramezani1377.woogit.presentation.GlassTokens
 @Composable
 internal fun AiComposer(input: String, onInputChange: (String) -> Unit, enabled: Boolean, onPickImage: () -> Unit, onSend: () -> Unit, onStop: () -> Unit, isGenerating: Boolean) {
     Row(
-        Modifier.fillMaxWidth().clip(RoundedCornerShape(32.dp)).background(Color.White.copy(alpha = .60f)).padding(horizontal = 4.dp, vertical = 2.dp),
-        verticalAlignment = Alignment.Bottom,
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(28.dp))
+            .background(Color.White.copy(alpha = .60f))
+            .padding(horizontal = 4.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(onClick = onPickImage, enabled = !isGenerating, modifier = Modifier.size(44.dp)) {
-            Text("+", color = GlassTokens.accent, fontWeight = FontWeight.Bold)
+        IconButton(
+            onClick = onPickImage,
+            enabled = !isGenerating,
+            modifier = Modifier.size(40.dp),
+        ) {
+            Box(
+                Modifier
+                    .size(34.dp)
+                    .clip(CircleShape)
+                    .background(GlassTokens.accent.copy(alpha = .10f)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("+", color = GlassTokens.accent, fontWeight = FontWeight.Bold)
+            }
         }
         GlassTextField(
             value = input,
@@ -33,16 +49,38 @@ internal fun AiComposer(input: String, onInputChange: (String) -> Unit, enabled:
             singleLine = false,
             minLines = 1,
             maxLines = 6,
+            minHeight = 56.dp,
         )
         if (isGenerating) {
-            IconButton(onClick = onStop, modifier = Modifier.size(48.dp)) {
-                Box(Modifier.size(42.dp).clip(RoundedCornerShape(13.dp)).background(GlassTokens.urgent), contentAlignment = Alignment.Center) {
-                    Box(Modifier.size(15.dp).clip(RoundedCornerShape(3.dp)).background(Color.White))
+            IconButton(onClick = onStop, modifier = Modifier.size(40.dp)) {
+                Box(
+                    Modifier
+                        .size(34.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(GlassTokens.urgent),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Box(
+                        Modifier
+                            .size(13.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                            .background(Color.White)
+                    )
                 }
             }
         } else {
-            IconButton(onClick = onSend, enabled = enabled, modifier = Modifier.size(48.dp)) {
-                Box(Modifier.size(42.dp).clip(CircleShape).background(GlassTokens.accent), contentAlignment = Alignment.Center) {
+            IconButton(
+                onClick = onSend,
+                enabled = enabled,
+                modifier = Modifier.size(40.dp),
+            ) {
+                Box(
+                    Modifier
+                        .size(34.dp)
+                        .clip(CircleShape)
+                        .background(GlassTokens.accent),
+                    contentAlignment = Alignment.Center,
+                ) {
                     Text("↑", color = Color.White, fontWeight = FontWeight.Bold)
                 }
             }
