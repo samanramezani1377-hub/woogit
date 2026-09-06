@@ -19,7 +19,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.samanramezani1377.woogit.presentation.*
-import kotlinx.coroutines.launch
 
 @Composable
 internal fun AiScreen() {
@@ -55,28 +54,16 @@ internal fun AiScreen() {
     val streamingText = (state as? AiUiState.Working)?.streamingText.orEmpty()
     val visibleHistory = history.take(if (showMoreHistory) 10 else 5)
 
-    ModalNavigationDrawer(drawerState = drawerState, drawerContent = {
-        ModalDrawerSheet(modifier = Modifier.fillMaxWidth(.86f), drawerShape = RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp), drawerContainerColor = Color.White.copy(alpha = .96f)) {
-            Column(Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-                Spacer(Modifier.height(18.dp))
-                Text("گفتگوها", fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(12.dp))
-                GlassButton("＋  چت جدید", { vm.newChat(); showMoreHistory = false; scope.launch { drawerState.close() } }, Modifier.fillMaxWidth())
-                if (SHOW_AGENT_MEMORY_DEBUG) {
-                    Spacer(Modifier.height(8.dp))
-                    GlassOutlinedButton("🧠  حافظه Agent", { showMemory = true }, Modifier.fillMaxWidth())
-                }
-                Spacer(Modifier.height(16.dp))
-                HorizontalDivider(color = GlassTokens.glassBorder)
-                Spacer(Modifier.height(14.dp))
-                Text("آخرین چت‌ها", fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(8.dp))
-                LazyColumn(modifier = Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) { items(visibleHistory, key = { it.id }) { session -> HistoryItem(session) { vm.openChat(session.id); scope.launch { drawerState.close() } } } }
-                if (history.size > 5) { Spacer(Modifier.height(10.dp)); GlassOutlinedButton(if (showMoreHistory) "نمایش ۵ چت اخیر" else "مشاهده بیشتر", { showMoreHistory = !showMoreHistory }, Modifier.fillMaxWidth()) }
-                Spacer(Modifier.height(18.dp))
-            }
-        }
-    }) {
+    AiDrawer(
+        vm = vm,
+        drawerState = drawerState,
+        scope = scope,
+        visibleHistory = visibleHistory,
+        historySize = history.size,
+        showMoreHistory = showMoreHistory,
+        onShowMoreHistoryChange = { showMoreHistory = it },
+        onShowMemory = { showMemory = true },
+    ) {
         GlassScaffold { padding ->
             Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Spacer(Modifier.height(6.dp))
