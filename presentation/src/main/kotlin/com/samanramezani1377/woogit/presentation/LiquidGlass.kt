@@ -27,11 +27,11 @@ import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 
 val LocalLiquidBackdrop = compositionLocalOf<LayerBackdrop?> { null }
 
-private val LiquidBackground = Color(0xFFEFF1F7)
-private val MintBlob = Color(0xFFBEEFDC)
-private val PeachBlob = Color(0xFFFFE1C2)
-private val LavenderBlob = Color(0xFFD8CEFF)
-private val SkyBlob = Color(0xFFC6E6FF)
+private val LiquidBackground = Color(0xFFF5F8E8)
+private val MintBlob = Color(0xFFDFFF9A)
+private val PeachBlob = Color(0xFFFFE9C7)
+private val LavenderBlob = Color(0xFFE7E0FF)
+private val SkyBlob = Color(0xFFD9F7E8)
 
 @Composable
 fun LiquidGlassEnvironment(
@@ -63,7 +63,7 @@ fun LiquidGlassEnvironment(
                     .fillMaxSize()
                     .background(
                         Brush.radialGradient(
-                            colors = listOf(Color.White.copy(.46f), Color.White.copy(.12f), Color.Transparent),
+                            colors = listOf(Color.White.copy(.54f), Color.White.copy(.16f), Color.Transparent),
                             radius = 1250f,
                         ),
                     ),
@@ -79,7 +79,7 @@ fun LiquidGlassEnvironment(
                 .fillMaxSize()
                 .background(
                     Brush.linearGradient(
-                        colors = listOf(Color.White.copy(.055f), Color.Transparent, Color.White.copy(.03f)),
+                        colors = listOf(Color.White.copy(.07f), Color.Transparent, Color.White.copy(.035f)),
                     ),
                 ),
         )
