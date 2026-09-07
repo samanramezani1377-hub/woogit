@@ -17,7 +17,6 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import java.security.MessageDigest
-import java.util.UUID
 
 class BackendClient(
     private val httpClient: HttpClient,
@@ -30,8 +29,14 @@ class BackendClient(
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
 
     suspend fun verifySite(storeId: String, siteUrl: String, pair: CredentialPair): Result<BackendVerifyResult> = runCatching {
+        // /sites/verify is idempotent on the Backend. Keep the key stable for the
+        // same logical verification inputs so a timeout-after-success retry replays
+        // the original result instead of starting a second verification/session.
+        // Only a SHA-256 digest is sent; credentials never appear in the key.
+        val credentialDigest = sha256("${pair.consumerKey}\u0000${pair.consumerSecret}\u0000${pair.wordpressUsername.orEmpty()}\u0000${pair.wordpressApplicationPassword.orEmpty()}".toByteArray(Charsets.UTF_8))
+        val idempotencyKey = "verify-${sha256("$storeId\u0000$siteUrl\u0000$credentialDigest".toByteArray(Charsets.UTF_8))}"
         val response = httpClient.post(url("/wp-json/woogit/v1/sites/verify")) {
-            header("X-WooGit-App-Version", appVersion); header("Idempotency-Key", "verify-$storeId-${UUID.randomUUID()}")
+            header("X-WooGit-App-Version", appVersion); header("Idempotency-Key", idempotencyKey)
             contentType(ContentType.Application.Json)
             setBody(buildJsonObject {
                 put("url", JsonPrimitive(siteUrl)); put("wordpress_username", JsonPrimitive(pair.wordpressUsername.orEmpty()))
@@ -74,8 +79,6 @@ class BackendClient(
         return try {
             val token = sessions.get(storeId) ?: throw BackendProtocolException("Backend session is unavailable"); val normalizedMethod = method.uppercase()
             require(normalizedMethod in MUTATION_METHODS) { "Binary forwarding is only supported for mutations" }
-            // Binary mutations must remain idempotent across retries. Hash the complete payload,
-            // not merely filename/size, so two different files cannot share a key.
             val payloadDigest = sha256(bytes)
             val key = idempotencyKey ?: stableMutationKey(storeId, normalizedMethod, path, query, "binary:$payloadDigest")
             val response = httpClient.request(URLBuilder(url("/wp-json/woogit/v1/forward")).apply { parameters.append("path", path); query.forEach { (k, v) -> parameters.append(k, v.toString()) } }.build()) {
@@ -114,15 +117,7 @@ class BackendClient(
 
     private fun reportTransport(feature: String, location: String, method: String, endpoint: String, throwable: Throwable) {
         technicalErrorReporter.report(
-            TechnicalErrorContext(
-                feature = feature,
-                location = location,
-                operation = "Backend HTTP request",
-                type = "NetworkError",
-                httpMethod = method,
-                endpoint = endpoint.substringBefore('?'),
-                details = "Backend transport/protocol request failed",
-            ),
+            TechnicalErrorContext(feature = feature, location = location, operation = "Backend HTTP request", type = "NetworkError", httpMethod = method, endpoint = endpoint.substringBefore('?'), details = "Backend transport/protocol request failed"),
             throwable,
         )
     }
