@@ -161,7 +161,7 @@ jobs:
           gradle-version: ${{ env.GRADLE_VERSION }}
           cache-cleanup: on-success
       - name: Unit tests
-        run: gradle test --console=plain --warning-mode=all --stacktrace
+        run: gradle test --continue --console=plain --warning-mode=all --stacktrace
 
   lint:
     name: Android lint
