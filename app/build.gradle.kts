@@ -4,7 +4,19 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
-android { namespace="com.samanramezani1377.woogit"; compileSdk=36; defaultConfig { applicationId="com.samanramezani1377.woogit"; minSdk=26; targetSdk=36; versionCode=1; versionName="1.0.0" }; buildFeatures { compose=true } }
+android {
+    namespace="com.samanramezani1377.woogit"
+    compileSdk=36
+    defaultConfig {
+        applicationId="com.samanramezani1377.woogit"
+        minSdk=26
+        targetSdk=36
+        versionCode=1
+        versionName="1.0.0"
+        buildConfigField("String", "WOOGIT_BACKEND_BASE_URL", "\"${(project.findProperty("woogitBackendBaseUrl") as String?).orEmpty()}\"")
+    }
+    buildFeatures { compose=true; buildConfig=true }
+}
 kotlin { jvmToolchain(17) }
 
 dependencies {
