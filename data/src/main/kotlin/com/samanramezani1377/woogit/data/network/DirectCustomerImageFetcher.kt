@@ -24,9 +24,6 @@ class DirectCustomerImageFetcher(private val db: WooGitDatabase, private val cre
         val sourceHost = source.host
         require(!sourceHost.isNullOrBlank()) { "Image URL host is required" }; require(sourceHost.equals(store.host, true)) { "Image URL is outside the bound Customer Site" }; require(source.port == -1 || source.port == 443) { "Image URL must use HTTPS/443" }
 
-        // The hostname is already bound to the verified Customer Site, but DNS can
-        // still resolve it to a private/local address. Never make the direct image
-        // exception a path into the device's local network.
         val addresses = InetAddress.getAllByName(sourceHost)
         require(addresses.isNotEmpty() && addresses.all(::isPublicAddress)) { "Image URL host resolves to a private or reserved address" }
 
@@ -39,7 +36,7 @@ class DirectCustomerImageFetcher(private val db: WooGitDatabase, private val cre
         require(contentType?.startsWith("image/") == true) { "Customer image response is not an image" }
         val contentLength = response.headers[HttpHeaders.ContentLength]?.toLongOrNull()
         require(contentLength == null || contentLength <= MAX_IMAGE_BYTES) { "Customer image is too large" }
-        val bytes = response.readRawBytes(MAX_IMAGE_BYTES + 1L)
+        val bytes = response.readRawBytes()
         require(bytes.size <= MAX_IMAGE_BYTES) { "Customer image is too large" }
         return bytes
     }
@@ -48,11 +45,11 @@ class DirectCustomerImageFetcher(private val db: WooGitDatabase, private val cre
         if (address.isAnyLocalAddress || address.isLoopbackAddress || address.isLinkLocalAddress || address.isSiteLocalAddress || address.isMulticastAddress) return false
         val bytes = address.address
         if (bytes.size == 16) {
-            // IPv6 unique-local fc00::/7 and IPv4-mapped private/loopback addresses.
             if ((bytes[0].toInt() and 0xfe) == 0xfc) return false
             if (bytes.take(10).all { it == 0.toByte() } && bytes[10] == 0.toByte() && (bytes[11] == 0.toByte() || bytes[11] == 0xff.toByte())) {
                 val v4 = bytes.copyOfRange(12, 16)
-                if (v4[0].toInt() and 0xff == 127 || v4[0].toInt() and 0xff == 10 || (v4[0].toInt() and 0xff == 192 && v4[1].toInt() and 0xff == 168) || (v4[0].toInt() and 0xff == 172 && v4[1].toInt() and 0xff in 16..31)) return false
+                val a = v4[0].toInt() and 0xff; val b = v4[1].toInt() and 0xff
+                if (a == 127 || a == 10 || (a == 192 && b == 168) || (a == 172 && b in 16..31)) return false
             }
         }
         if (bytes.size == 4) {
