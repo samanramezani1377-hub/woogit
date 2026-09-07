@@ -52,19 +52,21 @@ class DomainBehaviorTest {
     }
 
     @Test
-    fun credentialReferenceRejectsBlankValues() {
+    fun identifiersAndCredentialReferencesRejectBlankValues() {
+        assertFailsWith<IllegalArgumentException> { EntityId(" ") }
+        assertFailsWith<IllegalArgumentException> { StoreId("") }
         assertFailsWith<IllegalArgumentException> { CredentialReference(" ") }
         assertEquals("cred-1", CredentialReference("cred-1").value)
     }
 
     @Test
-    fun storeConnectionValidationRequiresHttpsAndId() {
+    fun storeConnectionValidationRequiresHttps() {
         assertTrue(StoreConnection(StoreId("store-1"), "https://shop.example", ConnectionState.CONNECTED, null).validate())
         assertFalse(StoreConnection(StoreId("store-1"), "http://shop.example", ConnectionState.CONNECTED, null).validate())
     }
 
     @Test
-    fun productValidationRequiresIdAndName() {
+    fun productValidationRequiresNonBlankName() {
         val valid = Product(EntityId("p1"), "Phone", null, null, null, ProductStatus.PUBLISHED, ProductType.SIMPLE, Pricing(null, null, false), null, emptyList(), emptyList(), emptyList(), null)
         assertTrue(valid.validate())
         assertFalse(valid.copy(name = "").validate())
@@ -74,17 +76,16 @@ class DomainBehaviorTest {
     fun orderValidationRejectsNegativeQuantities() {
         val validItem = OrderItem(EntityId("item-1"), EntityId("product-1"), null, "Item", 1.0, "10", "10")
         val invalidItem = validItem.copy(quantity = -1.0)
-        fun order(item: OrderItem) = Order(EntityId("order-1"), OrderStatus.PROCESSING, null, null, null, null, emptyList(), emptyList(), emptyList(), listOf(item), EntityTimestamp("2026-01-01T00:00:00Z"))
+        fun order(item: OrderItem) = Order(EntityId("order-1"), OrderStatus.PROCESSING, null, null, null, null, emptyList(), emptyList(), emptyList(), listOf(item), EntityTimestamp.parse("2026-01-01T00:00:00Z"))
         assertTrue(order(validItem).validate())
         assertFalse(order(invalidItem).validate())
     }
 
     @Test
-    fun pendingOperationValidationRejectsNegativeRetryCountAndBlankEntity() {
+    fun pendingOperationValidationRejectsNegativeRetryCount() {
         val valid = PendingOperation(EntityId("op-1"), StoreId("store-1"), "product", EntityId("product-1"), OperationType.UPDATE, "{}", "hash", 0, null)
         assertTrue(valid.validate())
         assertFalse(valid.copy(retryCount = -1).validate())
-        assertFalse(valid.copy(entityId = EntityId("")).validate())
     }
 
     @Test
