@@ -8,6 +8,7 @@ import com.samanramezani1377.woogit.security.AndroidSecureCredentialStore
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.core.domain.usecase.*
 import com.samanramezani1377.woogit.data.db.WooGitDatabaseFactory
+import com.samanramezani1377.woogit.data.network.DirectCustomerImageFetcher
 import com.samanramezani1377.woogit.data.network.NetworkClient
 import com.samanramezani1377.woogit.data.network.WooCommerceClientProvider
 import com.samanramezani1377.woogit.data.repository.*
@@ -39,6 +40,7 @@ class AppComposition(context: Context) {
     private val termLocal = SqlTermDataSource(db)
     private val pending = PendingOperationRepositoryImpl(db)
     private val provider = WooCommerceClientProvider(db, secure, network.httpClient)
+    private val imageFetcher = DirectCustomerImageFetcher(db, secure, network.httpClient)
     private val mutationCoordinator = SqlMutationCoordinator(db)
     private val restoredStoreId: String? = run {
         val savedId = prefs.getString("active_store_id", null)
@@ -54,7 +56,7 @@ class AppComposition(context: Context) {
     val attributeRepository = AttributeRepositoryImpl(attributeLocal, provider, mutationCoordinator, pending)
     val termRepository = TermRepositoryImpl(termLocal, provider, mutationCoordinator, pending)
     val orderNoteRepository = OrderNoteRepositoryImpl(provider, pending)
-    val mediaRepository = MediaRepositoryImpl(provider)
+    val mediaRepository = MediaRepositoryImpl(provider, imageFetcher)
     private val executor = WooCommerceOperationExecutor(db, provider, orderLocal, productLocal, variationLocal, attributeLocal, termLocal)
     private val syncEngine = SyncEngine(db, executor)
     private val syncRepository = SyncRepositoryImpl(db, syncEngine, pending)
