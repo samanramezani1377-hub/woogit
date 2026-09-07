@@ -30,6 +30,7 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
 
     testImplementation(kotlin("test"))
+    testImplementation(libs.ktor.client.mock)
 }
 
 sqldelight {
