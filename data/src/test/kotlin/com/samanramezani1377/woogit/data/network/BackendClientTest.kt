@@ -66,7 +66,7 @@ class BackendClientTest {
         val sessions = FakeSessionStore().also { it.put("store-1", "session-token") }
         val client = BackendClient(HttpClient(engine), "https://woogit.ir", FakeCredentialStore(), sessions, "1.2.3")
         val response = client.forward("store-1", "/wc/v3/products", "post", pair, mapOf("page" to 2), "{\"name\":\"Test\"}")
-        assertEquals(200, response.status)
+        assertEquals(200, response.statusCode)
         assertEquals("POST", captured!!.method.value)
         assertEquals("session-token", captured!!.headers["X-WooGit-Session"])
         assertEquals("1.2.3", captured!!.headers["X-WooGit-App-Version"])
