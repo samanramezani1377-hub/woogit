@@ -6,11 +6,14 @@ import com.samanramezani1377.woogit.core.security.SecureCredentialStore
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.HttpRequestData
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.headersOf
 import io.ktor.http.HttpStatusCode
+import io.ktor.serialization.kotlinx.json.json
+import kotlinx.serialization.json.Json
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -21,21 +24,32 @@ import kotlin.test.assertTrue
 class BackendClientTest {
     private val pair = CredentialPair("ck_test", "cs_test", "wp_user", "wp_app_password")
 
+    private fun client(engine: MockEngine, sessions: BackendSessionStore = FakeSessionStore(), version: String = "1.0.0") =
+        BackendClient(
+            HttpClient(engine) {
+                install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true; explicitNulls = false }) }
+            },
+            "https://woogit.ir",
+            FakeCredentialStore(),
+            sessions,
+            version,
+        )
+
     @Test
     fun verifySiteUsesStableIdempotencyKeyAcrossRetries() = kotlinx.coroutines.test.runTest {
         val keys = mutableListOf<String?>()
         val engine = MockEngine { request: HttpRequestData ->
             keys += request.headers["Idempotency-Key"]
             respond(
-                content = "{\"session\":\"session-1\",\"scope\":\"operational\",\"access_enabled\":\"true\"}",
+                content = "{\"session\":\"session-1\",\"scope\":\"operational\",\"access_enabled\":true}",
                 status = HttpStatusCode.OK,
                 headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
             )
         }
         val sessions = FakeSessionStore()
-        BackendClient(HttpClient(engine), "https://woogit.ir", FakeCredentialStore(), sessions, "1.0.0").let { client ->
-            assertTrue(client.verifySite("store-1", "https://shop.example", pair).isSuccess)
-            assertTrue(client.verifySite("store-1", "https://shop.example", pair).isSuccess)
+        client(engine, sessions).let { backend ->
+            assertTrue(backend.verifySite("store-1", "https://shop.example", pair).isSuccess)
+            assertTrue(backend.verifySite("store-1", "https://shop.example", pair).isSuccess)
         }
         assertEquals(2, keys.size)
         assertEquals(keys[0], keys[1])
@@ -48,11 +62,16 @@ class BackendClientTest {
         val keys = mutableListOf<String?>()
         val engine = MockEngine { request ->
             keys += request.headers["Idempotency-Key"]
-            respond("{\"session\":\"s\",\"scope\":\"operational\"}")
+            respond(
+                "{\"session\":\"s\",\"scope\":\"operational\"}",
+                HttpStatusCode.OK,
+                headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
+            )
         }
-        val client = BackendClient(HttpClient(engine), "https://woogit.ir", FakeCredentialStore(), FakeSessionStore(), "1.0.0")
-        client.verifySite("store-1", "https://shop.example", pair)
-        client.verifySite("store-1", "https://shop.example", pair.copy(consumerSecret = "different"))
+        val backend = client(engine)
+        assertTrue(backend.verifySite("store-1", "https://shop.example", pair).isSuccess)
+        assertTrue(backend.verifySite("store-1", "https://shop.example", pair.copy(consumerSecret = "different")).isSuccess)
+        assertEquals(2, keys.size)
         assertNotEquals(keys[0], keys[1])
     }
 
@@ -64,8 +83,8 @@ class BackendClientTest {
             respond("{\"id\":1}")
         }
         val sessions = FakeSessionStore().also { it.put("store-1", "session-token") }
-        val client = BackendClient(HttpClient(engine), "https://woogit.ir", FakeCredentialStore(), sessions, "1.2.3")
-        val response = client.forward("store-1", "/wc/v3/products", "post", pair, mapOf("page" to 2), "{\"name\":\"Test\"}")
+        val backend = client(engine, sessions, "1.2.3")
+        val response = backend.forward("store-1", "/wc/v3/products", "post", pair, mapOf("page" to 2), "{\"name\":\"Test\"}")
         assertEquals(200, response.statusCode)
         assertEquals("POST", captured!!.method.value)
         assertEquals("session-token", captured!!.headers["X-WooGit-Session"])
@@ -82,8 +101,7 @@ class BackendClientTest {
         var captured: HttpRequestData? = null
         val engine = MockEngine { request -> captured = request; respond("[]") }
         val sessions = FakeSessionStore().also { it.put("store-1", "session-token") }
-        val client = BackendClient(HttpClient(engine), "https://woogit.ir", FakeCredentialStore(), sessions, "1.0.0")
-        client.forward("store-1", "/wc/v3/products", "GET", pair)
+        client(engine, sessions).forward("store-1", "/wc/v3/products", "GET", pair)
         assertNull(captured!!.headers["Idempotency-Key"])
     }
 
@@ -91,8 +109,7 @@ class BackendClientTest {
     fun unauthorizedForwardClearsStoredSession() = kotlinx.coroutines.test.runTest {
         val engine = MockEngine { respond("unauthorized", HttpStatusCode.Unauthorized) }
         val sessions = FakeSessionStore().also { it.put("store-1", "session-token") }
-        val client = BackendClient(HttpClient(engine), "https://woogit.ir", FakeCredentialStore(), sessions, "1.0.0")
-        client.forward("store-1", "/wc/v3/products", "GET", pair)
+        client(engine, sessions).forward("store-1", "/wc/v3/products", "GET", pair)
         assertNull(sessions.get("store-1"))
     }
 
@@ -100,9 +117,9 @@ class BackendClientTest {
     fun binaryForwardRequiresMutationMethod() = kotlinx.coroutines.test.runTest {
         val engine = MockEngine { respond("bad") }
         val sessions = FakeSessionStore().also { it.put("store-1", "session-token") }
-        val client = BackendClient(HttpClient(engine), "https://woogit.ir", FakeCredentialStore(), sessions, "1.0.0")
+        val backend = client(engine, sessions)
         assertFailsWith<IllegalArgumentException> {
-            client.forwardBinary("store-1", "/wp/v2/media", "GET", pair, bytes = byteArrayOf(1, 2), contentType = "image/png", fileName = "x.png")
+            backend.forwardBinary("store-1", "/wp/v2/media", "GET", pair, bytes = byteArrayOf(1, 2), contentType = "image/png", fileName = "x.png")
         }
     }
 
@@ -114,9 +131,10 @@ class BackendClientTest {
             respond("{}")
         }
         val sessions = FakeSessionStore().also { it.put("store-1", "session-token") }
-        val client = BackendClient(HttpClient(engine), "https://woogit.ir", FakeCredentialStore(), sessions, "1.0.0")
-        client.forwardBinary("store-1", "/wp/v2/media", "POST", pair, bytes = byteArrayOf(1), contentType = "image/png", fileName = "x.png")
-        client.forwardBinary("store-1", "/wp/v2/media", "POST", pair, bytes = byteArrayOf(2), contentType = "image/png", fileName = "x.png")
+        val backend = client(engine, sessions)
+        backend.forwardBinary("store-1", "/wp/v2/media", "POST", pair, bytes = byteArrayOf(1), contentType = "image/png", fileName = "x.png")
+        backend.forwardBinary("store-1", "/wp/v2/media", "POST", pair, bytes = byteArrayOf(2), contentType = "image/png", fileName = "x.png")
+        assertEquals(2, keys.size)
         assertNotEquals(keys[0], keys[1])
     }
 
@@ -128,8 +146,8 @@ class BackendClientTest {
             respond("{\"operation_id\":\"op/1\",\"status\":\"unknown\",\"response\":{\"ok\":true}}")
         }
         val sessions = FakeSessionStore().also { it.put("store-1", "session-token") }
-        val client = BackendClient(HttpClient(engine), "https://woogit.ir", FakeCredentialStore(), sessions, "1.0.0")
-        val result = client.getOperation("store-1", "op/1")
+        val backend = client(engine, sessions)
+        val result = backend.getOperation("store-1", "op/1")
         assertEquals("op/1", result.operationId)
         assertEquals("unknown", result.status)
         assertEquals("session-token", captured!!.headers["X-WooGit-Session"])
