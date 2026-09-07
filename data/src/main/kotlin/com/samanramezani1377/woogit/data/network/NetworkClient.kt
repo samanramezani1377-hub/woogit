@@ -1,7 +1,5 @@
 package com.samanramezani1377.woogit.data.network
 
-import com.samanramezani1377.woogit.core.debug.NoOpTechnicalErrorReporter
-import com.samanramezani1377.woogit.core.debug.TechnicalErrorReporter
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.android.Android
 import io.ktor.client.plugins.HttpTimeout
@@ -21,7 +19,6 @@ import kotlin.time.Duration.Companion.seconds
  */
 class NetworkClient(
     private val policy: RequestPolicy = RequestPolicy(),
-    private val technicalErrorReporter: TechnicalErrorReporter = NoOpTechnicalErrorReporter,
 ) {
     val httpClient: HttpClient = HttpClient(Android) {
         install(ContentNegotiation) { json(Json { ignoreUnknownKeys = true; isLenient = true; explicitNulls = false }) }
