@@ -13,7 +13,7 @@ android {
         targetSdk=36
         versionCode=1
         versionName="1.0.0"
-        buildConfigField("String", "WOOGIT_BACKEND_BASE_URL", "\"${(project.findProperty("woogitBackendBaseUrl") as String?).orEmpty()}\"")
+        buildConfigField("String", "WOOGIT_BACKEND_BASE_URL", "\"https://woogit.ir\"")
     }
     buildFeatures { compose=true; buildConfig=true }
 }
