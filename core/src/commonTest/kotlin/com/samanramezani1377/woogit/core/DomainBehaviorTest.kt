@@ -5,6 +5,7 @@ import com.samanramezani1377.woogit.core.domain.entity.EntityTimestamp
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.core.domain.error.CoreResult
 import com.samanramezani1377.woogit.core.domain.error.DomainError
+import com.samanramezani1377.woogit.core.domain.error.fold
 import com.samanramezani1377.woogit.core.domain.error.presentationKey
 import com.samanramezani1377.woogit.core.domain.model.*
 import kotlin.test.Test
@@ -45,8 +46,14 @@ class DomainBehaviorTest {
 
     @Test
     fun coreResultFoldDispatchesExactlyOneBranch() {
-        val success = CoreResult.Success(42).fold({ it + 1 }, { error("failure branch: $it") })
-        val failure = CoreResult.Failure(DomainError.Conflict("x")).fold({ error("success branch") }, { it.presentationKey() })
+        val success = CoreResult.Success(42).fold(
+            onSuccess = { value: Int -> value + 1 },
+            onFailure = { error: DomainError -> error("failure branch: $error") },
+        )
+        val failure = CoreResult.Failure(DomainError.Conflict("x")).fold(
+            onSuccess = { error("success branch") },
+            onFailure = { domainError: DomainError -> domainError.presentationKey() },
+        )
         assertEquals(43, success)
         assertEquals("conflict", failure)
     }
