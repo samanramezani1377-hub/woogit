@@ -4,6 +4,20 @@
 
 WooGit قرار نیست یک پنل شلوغ یا نسخه‌ای دیگر از WordPress باشد. هدف آن این است که کارهای پرتکرار فروشگاه را با کمترین اصطکاک، داخل یک اپ native و سریع انجام دهد و تغییرات را ابتدا محلی ثبت و سپس با WooCommerce همگام کند.
 
+## App Transfer — قرارداد مهاجرت اپ
+
+شاخه `app-transfer` محل آماده‌سازی و اجرای مهاجرت اپ به معماری جدید WooGit است. **قرارداد رسمی تغییرات لازم در اپ** در سند زیر از ریپازیتوری `backend-site` نگهداری می‌شود و مرجع اصلی این مهاجرت است:
+
+- [`backend-site/docs/app-change/APP CHANGE.md`](https://github.com/samanramezani1377-hub/backend-site/blob/main/docs/app-change/APP%20CHANGE.md)
+
+معماری هدف:
+
+`App → WooGit Backend → Backend Plugin → Customer WordPress/WooCommerce`
+
+این لینک به معنی تکمیل مهاجرت نیست؛ بخش‌های لازم باید مرحله‌به‌مرحله روی `app-transfer` پیاده‌سازی و با قرارداد فوق تطبیق داده شوند.
+
+**استثنای V1:** دانلود مستقیم binary تصویر از Customer Site مجاز است؛ این استثنا فقط برای image binary `GET` است و نباید به سایر عملیات Customer API تعمیم داده شود.
+
 ## سه محور اصلی محصول
 
 ### 1. اعلان سفارش جدید
@@ -124,6 +138,11 @@ V1 روی سه محور اصلی تمرکز دارد:
 ## مستندات و Source of Truth
 
 README نمای کلی پروژه و قوانین توسعه را نگه می‌دارد. جزئیات فنی در اسناد تخصصی `docs/` نگهداری می‌شوند.
+
+### App Transfer
+- **Backend App Change Contract:** [`backend-site/docs/app-change/APP CHANGE.md`](https://github.com/samanramezani1377-hub/backend-site/blob/main/docs/app-change/APP%20CHANGE.md)
+
+این سند قرارداد مرجع برای تغییرات لازم در اپ جهت مهاجرت به Backend است. وضعیت اجرای هر بخش ممکن است در شاخه `app-transfer` تدریجی باشد؛ وجود این لینک به معنی تکمیل شدن مهاجرت نیست.
 
 ### Product & Architecture
 - `docs/PRODUCT_VISION.md`
