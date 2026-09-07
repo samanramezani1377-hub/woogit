@@ -81,7 +81,7 @@ class DomainBehaviorTest {
 
     @Test
     fun pendingOperationValidationRejectsNegativeRetryCountAndBlankEntity() {
-        val valid = PendingOperation(EntityId("op-1"), EntityId("product-1"), "POST", "/products", "{}", 0, "pending")
+        val valid = PendingOperation(EntityId("op-1"), StoreId("store-1"), "product", EntityId("product-1"), OperationType.UPDATE, "{}", "hash", 0, null)
         assertTrue(valid.validate())
         assertFalse(valid.copy(retryCount = -1).validate())
         assertFalse(valid.copy(entityId = EntityId("")).validate())
