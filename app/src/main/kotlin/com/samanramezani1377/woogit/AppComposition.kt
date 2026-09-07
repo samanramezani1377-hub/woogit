@@ -64,7 +64,7 @@ class AppComposition(context: Context) {
     val attributeRepository = AttributeRepositoryImpl(attributeLocal, provider, mutationCoordinator, pending)
     val termRepository = TermRepositoryImpl(termLocal, provider, mutationCoordinator, pending)
     val orderNoteRepository = OrderNoteRepositoryImpl(provider, pending)
-    val mediaRepository = MediaRepositoryImpl(provider, imageFetcher)
+    val mediaRepository = MediaRepositoryImpl(provider, imageFetcher, pending)
     private val rawExecutor = WooCommerceOperationExecutor(db, provider, orderLocal, productLocal, variationLocal, attributeLocal, termLocal)
     private val executor = BackendOperationReconciler(rawExecutor, provider)
     private val syncEngine = SyncEngine(db, executor)
