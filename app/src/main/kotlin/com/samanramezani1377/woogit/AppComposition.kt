@@ -45,7 +45,8 @@ class AppComposition(context: Context) {
     val termRepository=TermRepositoryImpl(termLocal,provider,mutationCoordinator,pending)
     val orderNoteRepository=OrderNoteRepositoryImpl(provider,pending)
     val mediaRepository=MediaRepositoryImpl(provider,imageFetcher)
-    private val executor=WooCommerceOperationExecutor(db,provider,orderLocal,productLocal,variationLocal,attributeLocal,termLocal)
+    private val rawExecutor=WooCommerceOperationExecutor(db,provider,orderLocal,productLocal,variationLocal,attributeLocal,termLocal)
+    private val executor=BackendOperationReconciler(rawExecutor,provider)
     private val syncEngine=SyncEngine(db,executor); private val syncRepository=SyncRepositoryImpl(db,syncEngine,pending)
 
     val getStore=GetStoreUseCase(storeRepository); val connectStore=ConnectStoreUseCase(storeRepository); val disconnectStore=DisconnectStoreUseCase(storeRepository); val getConnectionState=GetConnectionStateUseCase(storeRepository)
