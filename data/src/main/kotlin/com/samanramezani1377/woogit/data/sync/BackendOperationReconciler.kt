@@ -11,7 +11,8 @@ class BackendOperationReconciler(
     override suspend fun execute(operation: PendingOperation) = delegate.execute(operation)
 
     override suspend fun reconcile(operation: PendingOperation): ReconciliationResult = runCatching {
-        val backendOperation = provider.reconcileOperation(operation.storeId, operation.id.value)
+        val remoteId = operation.backendOperationId ?: return@runCatching ReconciliationResult.PENDING
+        val backendOperation = provider.reconcileOperation(operation.storeId, remoteId)
         when (backendOperation.status.lowercase()) {
             "succeeded", "completed" -> ReconciliationResult.SUCCEEDED
             "failed", "permanent_failure", "cancelled" -> ReconciliationResult.FAILED
