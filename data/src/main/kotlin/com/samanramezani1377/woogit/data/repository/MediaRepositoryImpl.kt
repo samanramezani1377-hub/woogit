@@ -7,12 +7,16 @@ import com.samanramezani1377.woogit.core.domain.error.DomainError
 import com.samanramezani1377.woogit.core.domain.error.fold
 import com.samanramezani1377.woogit.core.domain.model.MediaContent
 import com.samanramezani1377.woogit.core.domain.model.ProductImage
+import com.samanramezani1377.woogit.core.domain.repository.ImageFetcher
 import com.samanramezani1377.woogit.core.domain.repository.MediaRepository
 import com.samanramezani1377.woogit.data.network.HttpApiException
 import com.samanramezani1377.woogit.data.network.WooCommerceClientProvider
 import com.samanramezani1377.woogit.data.network.WordPressErrorMapper
 
-class MediaRepositoryImpl(private val provider: WooCommerceClientProvider) : MediaRepository {
+class MediaRepositoryImpl(
+    private val provider: WooCommerceClientProvider,
+    private val imageFetcher: ImageFetcher,
+) : MediaRepository {
     override suspend fun list(storeId: StoreId, page: Int, perPage: Int, search: String?): CoreResult<List<ProductImage>> =
         provider.client(storeId).fold(
             { (store, api) ->
@@ -37,24 +41,20 @@ class MediaRepositoryImpl(private val provider: WooCommerceClientProvider) : Med
             { CoreResult.Failure(it) },
         )
 
+    /** V1 exception: only image binary retrieval is direct; Media API operations remain Backend-bound. */
     override suspend fun download(storeId: StoreId, image: ProductImage): CoreResult<MediaContent> =
-        provider.client(storeId).fold(
-            { (store, api) ->
-                runCatching {
-                    val bytes = api.downloadMedia(store.baseUrl, image.src).getOrThrow()
-                    val mime = when (image.src.substringBefore('?').substringAfterLast('.').lowercase()) {
-                        "png" -> "image/png"
-                        "webp" -> "image/webp"
-                        "gif" -> "image/gif"
-                        "heic" -> "image/heic"
-                        "heif" -> "image/heif"
-                        else -> "image/jpeg"
-                    }
-                    MediaContent(bytes, mime, image.name?.ifBlank { "product-image" } ?: "product-image")
-                }.fold({ CoreResult.Success(it) }, { CoreResult.Failure(it.toDomain()) })
-            },
-            { CoreResult.Failure(it) },
-        )
+        runCatching {
+            val bytes = imageFetcher.fetch(storeId, image.src)
+            val mime = when (image.src.substringBefore('?').substringAfterLast('.').lowercase()) {
+                "png" -> "image/png"
+                "webp" -> "image/webp"
+                "gif" -> "image/gif"
+                "heic" -> "image/heic"
+                "heif" -> "image/heif"
+                else -> "image/jpeg"
+            }
+            MediaContent(bytes, mime, image.name?.ifBlank { "product-image" } ?: "product-image")
+        }.fold({ CoreResult.Success(it) }, { CoreResult.Failure(it.toDomain()) })
 
     override suspend fun delete(storeId: StoreId, mediaId: EntityId): CoreResult<Unit> =
         provider.client(storeId).fold(
