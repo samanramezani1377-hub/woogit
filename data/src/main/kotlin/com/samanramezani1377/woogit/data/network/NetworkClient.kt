@@ -1,24 +1,24 @@
 package com.samanramezani1377.woogit.data.network
 
 import com.samanramezani1377.woogit.core.debug.NoOpTechnicalErrorReporter
-import com.samanramezani1377.woogit.core.debug.TechnicalErrorContext
 import com.samanramezani1377.woogit.core.debug.TechnicalErrorReporter
-import com.samanramezani1377.woogit.core.security.CredentialPair
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.android.Android
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.plugins.HttpRequestRetry
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
-import io.ktor.client.request.HttpRequestBuilder
-import io.ktor.client.request.header
-import io.ktor.client.request.request
-import io.ktor.client.statement.HttpResponse
-import io.ktor.http.HttpHeaders
-import io.ktor.http.HttpMethod
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.json.Json
 import kotlin.time.Duration.Companion.seconds
 
+/**
+ * Shared HTTP transport only.
+ *
+ * Customer WooCommerce/WordPress API requests must never use this class directly.
+ * Normal Customer operations are owned by BackendClient and go through the WooGit
+ * Backend /forward endpoint. The only V1 direct Customer exception (binary image
+ * download) is isolated behind ImageFetcher/DirectCustomerImageFetcher.
+ */
 class NetworkClient(
     private val policy: RequestPolicy = RequestPolicy(),
     private val technicalErrorReporter: TechnicalErrorReporter = NoOpTechnicalErrorReporter,
@@ -38,34 +38,5 @@ class NetworkClient(
         }
     }
 
-    suspend fun execute(
-        method: HttpMethod,
-        url: String,
-        credentials: CredentialPair,
-        configure: HttpRequestBuilder.() -> Unit = {},
-    ): Result<HttpResponse> = runCatching {
-        require(url.startsWith("https://", true)) { "HTTPS is required" }
-        httpClient.request(url) {
-            this.method = method
-            header(HttpHeaders.Authorization, WooCommerceRequestBuilder().basicAuthHeader(credentials))
-            configure()
-        }
-    }.onFailure { throwable ->
-        technicalErrorReporter.report(
-            TechnicalErrorContext(
-                feature = "Network",
-                location = "NetworkClient.execute",
-                operation = "HTTP ${method.value}",
-                type = "NetworkException",
-                httpMethod = method.value,
-                endpoint = sanitizeUrl(url),
-                details = "Request execution failed",
-            ),
-            throwable,
-        )
-    }
-
     fun close() = httpClient.close()
-
-    private fun sanitizeUrl(url: String): String = url.substringBefore('?')
 }
