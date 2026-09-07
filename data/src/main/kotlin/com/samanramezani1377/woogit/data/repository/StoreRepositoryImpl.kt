@@ -44,7 +44,13 @@ class StoreRepositoryImpl(
 
     override suspend fun disconnect(id: StoreId): CoreResult<Unit> {
         val current=local.get(id)
-        if(current is CoreResult.Success){ current.value.credentialReference?.let(credentials::remove); backend.clearSession(id.value); local.upsert(current.value.copy(state=ConnectionState.DISCONNECTED,credentialReference=null)) }
+        if(current is CoreResult.Success){
+            val revokeResult = backend.revokeSession(id.value)
+            current.value.credentialReference?.let(credentials::remove)
+            backend.clearSession(id.value)
+            local.upsert(current.value.copy(state=ConnectionState.DISCONNECTED,credentialReference=null))
+            if(revokeResult.isFailure) return CoreResult.Failure(DomainError.Network(revokeResult.exceptionOrNull()?.message ?: "Unable to revoke Backend session"))
+        }
         return CoreResult.Success(Unit)
     }
 
