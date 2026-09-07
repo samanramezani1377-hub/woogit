@@ -54,7 +54,10 @@ class BackendClient(private val httpClient: HttpClient, private val baseUrl: Str
     suspend fun forwardBinary(storeId: String, path: String, method: String, pair: CredentialPair, query: Map<String, Any> = emptyMap(), bytes: ByteArray, contentType: String, fileName: String, idempotencyKey: String? = null): ApiResponse {
         val token = sessions.get(storeId) ?: throw BackendProtocolException("Backend session is unavailable"); val normalizedMethod = method.uppercase()
         require(normalizedMethod in MUTATION_METHODS) { "Binary forwarding is only supported for mutations" }
-        val key = idempotencyKey ?: stableMutationKey(storeId, normalizedMethod, path, query, "binary:$fileName:${bytes.size}")
+        // Binary mutations must remain idempotent across retries. Hash the complete payload,
+        // not merely filename/size, so two different files cannot share a key.
+        val payloadDigest = sha256(bytes)
+        val key = idempotencyKey ?: stableMutationKey(storeId, normalizedMethod, path, query, "binary:$payloadDigest")
         val response = httpClient.request(URLBuilder(url("/wp-json/woogit/v1/forward")).apply { parameters.append("path", path); query.forEach { (k, v) -> parameters.append(k, v.toString()) } }.build()) {
             this.method = HttpMethod.parse(normalizedMethod); header("X-WooGit-App-Version", appVersion); header("X-WooGit-Session", token)
             header("X-WooGit-Consumer-Key", pair.consumerKey); header("X-WooGit-Consumer-Secret", pair.consumerSecret)
@@ -79,7 +82,8 @@ class BackendClient(private val httpClient: HttpClient, private val baseUrl: Str
         val body = response.bodyAsText(); if (response.status.value !in 200..299 && response.status.value != 401) throw BackendHttpException(response.status.value, body); sessions.remove(storeId)
     }
     fun clearSession(storeId: String) = sessions.remove(storeId)
-    private fun stableMutationKey(storeId: String, method: String, path: String, query: Map<String, Any>, body: String?): String { val canonical = "$storeId|$method|$path|${query.toSortedMap().entries.joinToString("&") { "${it.key}=${it.value}" }}|${body.orEmpty()}"; val digest = MessageDigest.getInstance("SHA-256").digest(canonical.toByteArray(Charsets.UTF_8)).joinToString("") { "%02x".format(it) }; return "app-$digest" }
+    private fun stableMutationKey(storeId: String, method: String, path: String, query: Map<String, Any>, body: String?): String { val canonical = "$storeId|$method|$path|${query.toSortedMap().entries.joinToString("&") { "${it.key}=${it.value}" }}|${body.orEmpty()}"; return "app-${sha256(canonical.toByteArray(Charsets.UTF_8))}" }
+    private fun sha256(value: ByteArray): String = MessageDigest.getInstance("SHA-256").digest(value).joinToString("") { "%02x".format(it) }
     private fun String.urlEncode(): String = java.net.URLEncoder.encode(this, Charsets.UTF_8.name()).replace("+", "%20")
     private fun url(path: String) = baseUrl.trimEnd('/') + path
     private companion object { val MUTATION_METHODS = setOf("POST", "PUT", "PATCH", "DELETE") }
