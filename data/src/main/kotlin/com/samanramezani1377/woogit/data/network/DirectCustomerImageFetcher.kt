@@ -9,7 +9,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
-import io.ktor.client.statement.readBytes
+import io.ktor.client.statement.readRawBytes
 import io.ktor.http.HttpHeaders
 import io.ktor.http.Url
 import java.net.URI
@@ -26,6 +26,6 @@ class DirectCustomerImageFetcher(private val db: WooGitDatabase, private val cre
         val auth = if (!pair.wordpressUsername.isNullOrBlank() && !pair.wordpressApplicationPassword.isNullOrBlank()) { val token = Base64.getEncoder().encodeToString("${pair.wordpressUsername}:${pair.wordpressApplicationPassword}".toByteArray(Charsets.UTF_8)); "Basic $token" } else null
         val response = httpClient.get(Url(sourceUrl)) { auth?.let { header(HttpHeaders.Authorization, it) }; header(HttpHeaders.Accept, "image/*") }
         if (response.status.value !in 200..299) throw HttpApiException(response.status.value, response.bodyAsText())
-        return response.readBytes()
+        return response.readRawBytes()
     }
 }
