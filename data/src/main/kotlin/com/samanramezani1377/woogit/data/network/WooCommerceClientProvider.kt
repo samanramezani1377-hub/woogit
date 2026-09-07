@@ -26,4 +26,6 @@ class WooCommerceClientProvider(
         if(sessions.get(storeId.value).isNullOrBlank()) return CoreResult.Failure(DomainError.Authentication("WooGit Backend session is unavailable; reconnect the store"))
         return CoreResult.Success(connection to TypedWooCommerceApi(WooCommerceApi(backend,storeId.value,pair)))
     }
+
+    suspend fun reconcileOperation(storeId: StoreId, operationId: String): BackendOperationStatus = backend.getOperation(storeId.value, operationId)
 }
