@@ -40,38 +40,38 @@ class TypedWooCommerceApi(private val raw: WooCommerceApi) {
     suspend fun orders(b:String,p:Int,n:Int,s:String?,st:String?) = decode(raw.listOrders(b,p,n,s,st)) { typedJson.decodeFromString<List<WooOrderTypedDto>>(it) }
     suspend fun ordersTotal(b:String,s:String?,st:String?) = total(raw.listOrders(b,1,1,s,st))
     suspend fun order(b:String,id:Long) = decode(raw.getOrder(b,id)) { typedJson.decodeFromString<WooOrderTypedDto>(it) }
-    suspend fun updateOrder(b:String,id:Long,o:WooOrderTypedDto) = decode(raw.updateOrder(b,id,typedJson.encodeToString(o))) { typedJson.decodeFromString<WooOrderTypedDto>(it) }
+    suspend fun updateOrder(b:String,id:Long,o:WooOrderTypedDto,idempotencyKey:String?=null) = decode(raw.updateOrder(b,id,typedJson.encodeToString(o),idempotencyKey)) { typedJson.decodeFromString<WooOrderTypedDto>(it) }
     suspend fun orderNotes(b:String,id:Long,page:Int=1,perPage:Int=100) = decode(raw.listOrderNotes(b,id,page,perPage)) { typedJson.decodeFromString<List<WooOrderNoteDto>>(it) }
-    suspend fun addOrderNote(b:String,id:Long,n:WooOrderNoteDto) = decode(raw.addOrderNote(b,id,typedJson.encodeToString(n))) { typedJson.decodeFromString<WooOrderNoteDto>(it) }
+    suspend fun addOrderNote(b:String,id:Long,n:WooOrderNoteDto,idempotencyKey:String?=null) = decode(raw.addOrderNote(b,id,typedJson.encodeToString(n),idempotencyKey)) { typedJson.decodeFromString<WooOrderNoteDto>(it) }
     suspend fun salesReport(b:String,dateMin:String,dateMax:String) = decode(raw.salesReport(b,dateMin,dateMax)) { typedJson.decodeFromString<List<WooSalesReportDto>>(it).firstOrNull() ?: WooSalesReportDto() }
     suspend fun products(b:String,p:Int,n:Int,s:String?,modifiedAfter:String?=null) = decode(raw.listProducts(b,p,n,s,modifiedAfter)) { typedJson.decodeFromString<List<WooProductTypedDto>>(it) }
     suspend fun productsTotal(b:String,s:String?) = total(raw.listProducts(b,1,1,s))
     suspend fun product(b:String,id:Long) = decode(raw.getProduct(b,id)) { typedJson.decodeFromString<WooProductTypedDto>(it) }
-    suspend fun createProduct(b:String,p:WooProductTypedDto) = decode(raw.createProduct(b,typedJson.encodeToString(p))) { typedJson.decodeFromString<WooProductTypedDto>(it) }
-    suspend fun updateProduct(b:String,id:Long,p:WooProductTypedDto) = decode(raw.updateProduct(b,id,typedJson.encodeToString(p))) { typedJson.decodeFromString<WooProductTypedDto>(it) }
-    suspend fun updateProductFields(b:String,id:Long,fields:JsonObject) = decode(raw.updateProduct(b,id,fields.toString())) { typedJson.decodeFromString<WooProductTypedDto>(it) }
-    suspend fun deleteProduct(b:String,id:Long) = decode(raw.deleteProduct(b,id,true)) { Unit }
+    suspend fun createProduct(b:String,p:WooProductTypedDto,idempotencyKey:String?=null) = decode(raw.createProduct(b,typedJson.encodeToString(p),idempotencyKey)) { typedJson.decodeFromString<WooProductTypedDto>(it) }
+    suspend fun updateProduct(b:String,id:Long,p:WooProductTypedDto,idempotencyKey:String?=null) = decode(raw.updateProduct(b,id,typedJson.encodeToString(p),idempotencyKey)) { typedJson.decodeFromString<WooProductTypedDto>(it) }
+    suspend fun updateProductFields(b:String,id:Long,fields:JsonObject,idempotencyKey:String?=null) = decode(raw.updateProduct(b,id,fields.toString(),idempotencyKey)) { typedJson.decodeFromString<WooProductTypedDto>(it) }
+    suspend fun deleteProduct(b:String,id:Long,idempotencyKey:String?=null) = decode(raw.deleteProduct(b,id,true,idempotencyKey)) { Unit }
     suspend fun productCategories(b:String,p:Int,n:Int,s:String?) = decode(raw.listProductCategories(b,p,n,s)) { typedJson.decodeFromString<List<WooCategoryDto>>(it) }
-    suspend fun createProductCategory(b:String,c:WooCategoryDto) = decode(raw.createProductCategory(b,typedJson.encodeToString(c))) { typedJson.decodeFromString<WooCategoryDto>(it) }
+    suspend fun createProductCategory(b:String,c:WooCategoryDto,idempotencyKey:String?=null) = decode(raw.createProductCategory(b,typedJson.encodeToString(c),idempotencyKey)) { typedJson.decodeFromString<WooCategoryDto>(it) }
     suspend fun variations(b:String,p:Long,n:Int,c:Int) = decode(raw.listVariations(b,p,n,c)) { typedJson.decodeFromString<List<WooVariationTypedDto>>(it) }
     suspend fun variation(b:String,p:Long,id:Long) = decode(raw.getVariation(b,p,id)) { typedJson.decodeFromString<WooVariationTypedDto>(it) }
-    suspend fun createVariation(b:String,p:Long,v:WooVariationTypedDto) = decode(raw.createVariation(b,p,typedJson.encodeToString(v))) { typedJson.decodeFromString<WooVariationTypedDto>(it) }
-    suspend fun updateVariation(b:String,p:Long,id:Long,v:WooVariationTypedDto) = decode(raw.updateVariation(b,p,id,typedJson.encodeToString(v))) { typedJson.decodeFromString<WooVariationTypedDto>(it) }
-    suspend fun deleteVariation(b:String,p:Long,id:Long) = decode(raw.deleteVariation(b,p,id,true)) { Unit }
+    suspend fun createVariation(b:String,p:Long,v:WooVariationTypedDto,idempotencyKey:String?=null) = decode(raw.createVariation(b,p,typedJson.encodeToString(v),idempotencyKey)) { typedJson.decodeFromString<WooVariationTypedDto>(it) }
+    suspend fun updateVariation(b:String,p:Long,id:Long,v:WooVariationTypedDto,idempotencyKey:String?=null) = decode(raw.updateVariation(b,p,id,typedJson.encodeToString(v),idempotencyKey)) { typedJson.decodeFromString<WooVariationTypedDto>(it) }
+    suspend fun deleteVariation(b:String,p:Long,id:Long,idempotencyKey:String?=null) = decode(raw.deleteVariation(b,p,id,true,idempotencyKey)) { Unit }
     suspend fun attributes(b:String,p:Int,n:Int) = decode(raw.listAttributes(b,p,n)) { typedJson.decodeFromString<List<WooGlobalAttributeDto>>(it) }
     suspend fun attribute(b:String,id:Long) = decode(raw.getAttribute(b,id)) { typedJson.decodeFromString<WooGlobalAttributeDto>(it) }
-    suspend fun createAttribute(b:String,v:WooGlobalAttributeDto) = decode(raw.createAttribute(b,typedJson.encodeToString(v))) { typedJson.decodeFromString<WooGlobalAttributeDto>(it) }
-    suspend fun updateAttribute(b:String,id:Long,v:WooGlobalAttributeDto) = decode(raw.updateAttribute(b,id,typedJson.encodeToString(v))) { typedJson.decodeFromString<WooGlobalAttributeDto>(it) }
-    suspend fun deleteAttribute(b:String,id:Long) = decode(raw.deleteAttribute(b,id,true)) { Unit }
+    suspend fun createAttribute(b:String,v:WooGlobalAttributeDto,idempotencyKey:String?=null) = decode(raw.createAttribute(b,typedJson.encodeToString(v),idempotencyKey)) { typedJson.decodeFromString<WooGlobalAttributeDto>(it) }
+    suspend fun updateAttribute(b:String,id:Long,v:WooGlobalAttributeDto,idempotencyKey:String?=null) = decode(raw.updateAttribute(b,id,typedJson.encodeToString(v),idempotencyKey)) { typedJson.decodeFromString<WooGlobalAttributeDto>(it) }
+    suspend fun deleteAttribute(b:String,id:Long,idempotencyKey:String?=null) = decode(raw.deleteAttribute(b,id,true,idempotencyKey)) { Unit }
     suspend fun terms(b:String,a:Long,p:Int,n:Int) = decode(raw.listAttributeTerms(b,a,p,n)) { typedJson.decodeFromString<List<WooAttributeTermDto>>(it) }
     suspend fun term(b:String,a:Long,id:Long) = decode(raw.getAttributeTerm(b,a,id)) { typedJson.decodeFromString<WooAttributeTermDto>(it) }
-    suspend fun createTerm(b:String,a:Long,v:WooAttributeTermDto) = decode(raw.createAttributeTerm(b,a,typedJson.encodeToString(v))) { typedJson.decodeFromString<WooAttributeTermDto>(it) }
-    suspend fun updateTerm(b:String,a:Long,id:Long,v:WooAttributeTermDto) = decode(raw.updateAttributeTerm(b,a,id,typedJson.encodeToString(v))) { typedJson.decodeFromString<WooAttributeTermDto>(it) }
-    suspend fun deleteTerm(b:String,a:Long,id:Long) = decode(raw.deleteAttributeTerm(b,a,id,true)) { Unit }
+    suspend fun createTerm(b:String,a:Long,v:WooAttributeTermDto,idempotencyKey:String?=null) = decode(raw.createAttributeTerm(b,a,typedJson.encodeToString(v),idempotencyKey)) { typedJson.decodeFromString<WooAttributeTermDto>(it) }
+    suspend fun updateTerm(b:String,a:Long,id:Long,v:WooAttributeTermDto,idempotencyKey:String?=null) = decode(raw.updateAttributeTerm(b,a,id,typedJson.encodeToString(v),idempotencyKey)) { typedJson.decodeFromString<WooAttributeTermDto>(it) }
+    suspend fun deleteTerm(b:String,a:Long,id:Long,idempotencyKey:String?=null) = decode(raw.deleteAttributeTerm(b,a,id,true,idempotencyKey)) { Unit }
     suspend fun media(b:String,p:Int,n:Int,s:String?) = decode(raw.listMedia(b,p,n,s)) { typedJson.decodeFromString<List<WooMediaDto>>(it) }
     suspend fun downloadMedia(b:String,sourceUrl:String) = runCatching { raw.downloadMedia(b,sourceUrl) }
-    suspend fun uploadMedia(b:String,f:String,bytes:ByteArray,m:String) = decode(raw.uploadMedia(b,f,bytes,m)) { typedJson.decodeFromString<WooMediaDto>(it) }
-    suspend fun deleteMedia(b:String,id:Long) = decode(raw.deleteMedia(b,id,true)) { Unit }
+    suspend fun uploadMedia(b:String,f:String,bytes:ByteArray,m:String,idempotencyKey:String?=null) = decode(raw.uploadMedia(b,f,bytes,m,idempotencyKey)) { typedJson.decodeFromString<WooMediaDto>(it) }
+    suspend fun deleteMedia(b:String,id:Long,idempotencyKey:String?=null) = decode(raw.deleteMedia(b,id,true,idempotencyKey)) { Unit }
 }
 
 data class HttpApiException(val statusCode:Int,val body:String):Exception("WooCommerce HTTP $statusCode")
