@@ -15,6 +15,7 @@ import com.samanramezani1377.woogit.data.network.WordPressErrorMapper
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.security.MessageDigest
+import java.util.Base64
 import java.util.UUID
 
 private fun sha256(bytes: ByteArray) = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
@@ -44,6 +45,7 @@ class MediaRepositoryImpl(
             put("media_type", mediaType)
             put("size", bytes.size)
             put("sha256", sha256(bytes))
+            put("bytes_base64", Base64.getEncoder().encodeToString(bytes))
         }.toString()
         val operation = PendingOperation(
             id = EntityId(operationId),
