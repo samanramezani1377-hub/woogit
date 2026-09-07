@@ -54,15 +54,13 @@ class SyncEngine(private val db: WooGitDatabase, private val executor: Operation
     private fun Any.toPendingOperation(): PendingOperation? {
         val row = this as? com.samanramezani1377.woogit.data.Pending_operation ?: return null
         val type = runCatching { OperationType.valueOf(row.operation_type) }.getOrNull() ?: return null
-        return PendingOperation(EntityId(row.id), StoreId(row.store_id), row.entity_type, EntityId(row.entity_id), type, row.payload_json, row.payload_hash, row.retry_count.toInt(), row.claimed_at?.let(Instant::fromEpochMilliseconds), row.next_attempt_at?.let(Instant::fromEpochMilliseconds))
+        val backendOperationId = Regex("Backend operation ([A-Za-z0-9_-]+)").find(row.last_error.orEmpty())?.groupValues?.getOrNull(1)
+        return PendingOperation(EntityId(row.id), StoreId(row.store_id), row.entity_type, EntityId(row.entity_id), type, row.payload_json, row.payload_hash, row.retry_count.toInt(), row.claimed_at?.let(Instant::fromEpochMilliseconds), row.next_attempt_at?.let(Instant::fromEpochMilliseconds), backendOperationId)
     }
 
     private fun operationCode(error: Throwable): Pair<String, String?>? {
         val body = (error as? com.samanramezani1377.woogit.data.network.HttpApiException)?.body ?: return null
-        return runCatching {
-            val obj = json.parseToJsonElement(body).jsonObject
-            (obj["code"]?.jsonPrimitive?.contentOrNull ?: "") to obj["operation_id"]?.jsonPrimitive?.contentOrNull
-        }.getOrNull()?.takeIf { it.first in setOf("operation_status_unknown", "operation_unknown", "operation_pending", "operation_in_progress") }
+        return runCatching { val obj = json.parseToJsonElement(body).jsonObject; (obj["code"]?.jsonPrimitive?.contentOrNull ?: "") to obj["operation_id"]?.jsonPrimitive?.contentOrNull }.getOrNull()?.takeIf { it.first in setOf("operation_status_unknown", "operation_unknown", "operation_pending", "operation_in_progress") }
     }
 
     private suspend fun process(op: PendingOperation, now: Long) {
@@ -79,7 +77,8 @@ class SyncEngine(private val db: WooGitDatabase, private val executor: Operation
             if (backendOperation != null) {
                 val (code, operationId) = backendOperation
                 if (code == "operation_status_unknown" || code == "operation_unknown") {
-                    db.transaction { db.syncQueries.updateState("UNKNOWN", op.retryCount.toLong(), null, "Backend operation ${operationId ?: op.id.value} requires reconciliation", now, op.id.value); db.syncQueries.upsertMetadata(op.storeId.value, "UNKNOWN", null, null, null, now) }
+                    val remoteId = operationId ?: op.backendOperationId ?: op.id.value
+                    db.transaction { db.syncQueries.updateState("UNKNOWN", op.retryCount.toLong(), null, "Backend operation $remoteId requires reconciliation", now, op.id.value); db.syncQueries.upsertMetadata(op.storeId.value, "UNKNOWN", null, null, null, now) }
                     return
                 }
                 val attempt = op.retryCount + 1
