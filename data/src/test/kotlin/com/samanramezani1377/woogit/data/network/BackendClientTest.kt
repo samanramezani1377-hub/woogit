@@ -10,9 +10,10 @@ import io.ktor.client.request.HttpRequestData
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.headersOf
-import io.ktor.http.isSuccess
+import io.ktor.http.HttpStatusCode
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -27,7 +28,7 @@ class BackendClientTest {
             keys += request.headers["Idempotency-Key"]
             respond(
                 content = "{\"session\":\"session-1\",\"scope\":\"operational\",\"access_enabled\":\"true\"}",
-                status = io.ktor.http.HttpStatusCode.OK,
+                status = HttpStatusCode.OK,
                 headers = headersOf(HttpHeaders.ContentType, ContentType.Application.Json.toString()),
             )
         }
@@ -88,11 +89,51 @@ class BackendClientTest {
 
     @Test
     fun unauthorizedForwardClearsStoredSession() = kotlinx.coroutines.test.runTest {
-        val engine = MockEngine { respond("unauthorized", io.ktor.http.HttpStatusCode.Unauthorized) }
+        val engine = MockEngine { respond("unauthorized", HttpStatusCode.Unauthorized) }
         val sessions = FakeSessionStore().also { it.put("store-1", "session-token") }
         val client = BackendClient(HttpClient(engine), "https://woogit.ir", FakeCredentialStore(), sessions, "1.0.0")
         client.forward("store-1", "/wc/v3/products", "GET", pair)
         assertNull(sessions.get("store-1"))
+    }
+
+    @Test
+    fun binaryForwardRequiresMutationMethod() = kotlinx.coroutines.test.runTest {
+        val engine = MockEngine { respond("bad") }
+        val sessions = FakeSessionStore().also { it.put("store-1", "session-token") }
+        val client = BackendClient(HttpClient(engine), "https://woogit.ir", FakeCredentialStore(), sessions, "1.0.0")
+        assertFailsWith<IllegalArgumentException> {
+            client.forwardBinary("store-1", "/wp/v2/media", "GET", pair, bytes = byteArrayOf(1, 2), contentType = "image/png", fileName = "x.png")
+        }
+    }
+
+    @Test
+    fun binaryForwardIdempotencyChangesWhenPayloadChanges() = kotlinx.coroutines.test.runTest {
+        val keys = mutableListOf<String?>()
+        val engine = MockEngine { request ->
+            keys += request.headers["Idempotency-Key"]
+            respond("{}")
+        }
+        val sessions = FakeSessionStore().also { it.put("store-1", "session-token") }
+        val client = BackendClient(HttpClient(engine), "https://woogit.ir", FakeCredentialStore(), sessions, "1.0.0")
+        client.forwardBinary("store-1", "/wp/v2/media", "POST", pair, bytes = byteArrayOf(1), contentType = "image/png", fileName = "x.png")
+        client.forwardBinary("store-1", "/wp/v2/media", "POST", pair, bytes = byteArrayOf(2), contentType = "image/png", fileName = "x.png")
+        assertNotEquals(keys[0], keys[1])
+    }
+
+    @Test
+    fun operationLookupUsesSessionAndParsesStatus() = kotlinx.coroutines.test.runTest {
+        var captured: HttpRequestData? = null
+        val engine = MockEngine { request ->
+            captured = request
+            respond("{\"operation_id\":\"op/1\",\"status\":\"unknown\",\"response\":{\"ok\":true}}")
+        }
+        val sessions = FakeSessionStore().also { it.put("store-1", "session-token") }
+        val client = BackendClient(HttpClient(engine), "https://woogit.ir", FakeCredentialStore(), sessions, "1.0.0")
+        val result = client.getOperation("store-1", "op/1")
+        assertEquals("op/1", result.operationId)
+        assertEquals("unknown", result.status)
+        assertEquals("session-token", captured!!.headers["X-WooGit-Session"])
+        assertTrue(captured!!.url.toString().contains("op%2F1"))
     }
 
     private class FakeSessionStore : BackendSessionStore {
