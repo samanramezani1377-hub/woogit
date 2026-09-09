@@ -34,7 +34,10 @@ class WooGitNotificationManager(private val context: Context) {
     }
 
     fun showOrder(storeId: String, orderId: Long, title: String, body: String) {
-        if (!canNotify()) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) return
+
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle(localizeNotificationText(title))
@@ -46,7 +49,10 @@ class WooGitNotificationManager(private val context: Context) {
     }
 
     fun showAnnouncement(id: String, title: String, body: String, notificationType: Int, requestedChannel: String): Boolean {
-        if (!canNotify()) return false
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) return false
+
         createChannel()
         val channel = allowedChannel(requestedChannel, notificationType)
         val priority = when (notificationType) {
@@ -64,9 +70,6 @@ class WooGitNotificationManager(private val context: Context) {
         NotificationManagerCompat.from(context).notify("announcement:$id".hashCode(), notification)
         return true
     }
-
-    private fun canNotify(): Boolean = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 
     private fun allowedChannel(requested: String, notificationType: Int): String = when (requested) {
         ANNOUNCEMENTS_CHANNEL, IMPORTANT_CHANNEL, UPDATES_CHANNEL, PROMOTIONS_CHANNEL -> requested
