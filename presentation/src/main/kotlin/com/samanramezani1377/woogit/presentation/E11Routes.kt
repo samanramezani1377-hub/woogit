@@ -23,6 +23,7 @@ internal object E11Routes {
     const val SYNC = "sync"
     const val CONFLICTS = "conflicts"
     const val SETTINGS = "settings"
+    const val DEBUG_LOGS = "debug-logs"
 
     fun order(orderId: String) = "orders/$orderId"
     fun product(productId: String) = "products/$productId"
