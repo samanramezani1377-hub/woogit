@@ -78,6 +78,7 @@ class AnnouncementCenter(private val context: Context) : BackendResponseObserver
                 baseUrl = BuildConfig.WOOGIT_BACKEND_BASE_URL,
                 sessions = AndroidBackendSessionStore(appContext),
                 appVersion = BuildConfig.VERSION_NAME,
+                responseObserver = this@AnnouncementCenter,
             )
             val fetched = client.getAnnouncements(storeId)
             applyAnnouncements(fetched)
