@@ -59,7 +59,7 @@ internal fun DashboardScreen(
     val scrollState = rememberScrollState()
     var pullDistance by remember { mutableFloatStateOf(0f) }
     var refreshing by remember { mutableStateOf(false) }
-    val pullThreshold = 140f
+    val pullThreshold = 400f
     val pullToReloadConnection = remember(context, scrollState) {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
