@@ -1,6 +1,7 @@
 package com.samanramezani1377.woogit
 
 import android.app.Application
+import com.samanramezani1377.woogit.background.AnnouncementNotificationWorker
 import com.samanramezani1377.woogit.debug.DebugConfig
 import com.samanramezani1377.woogit.debug.TechnicalErrorReporter
 
@@ -11,6 +12,7 @@ class WooGitApplication : Application() {
         super.onCreate()
         if (DebugConfig.ENABLED) TechnicalErrorReporter.initialize(this)
         composition = AppComposition(this)
+        AnnouncementNotificationWorker.schedule(this)
         if (DebugConfig.ENABLED) {
             val previous = Thread.getDefaultUncaughtExceptionHandler()
             Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
