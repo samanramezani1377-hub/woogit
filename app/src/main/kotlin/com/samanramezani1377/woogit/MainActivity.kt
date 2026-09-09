@@ -9,6 +9,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.core.app.ActivityCompat
 import androidx.core.view.WindowCompat
+import com.samanramezani1377.woogit.background.ForceUpdateController
 import com.samanramezani1377.woogit.background.WooGitNotificationManager
 import com.samanramezani1377.woogit.data.network.AnnouncementClient
 import com.samanramezani1377.woogit.data.network.NetworkClient
@@ -25,14 +26,14 @@ class MainActivity : ComponentActivity() {
     private val notificationOrderId = androidx.compose.runtime.mutableStateOf<String?>(null)
     private val forceUpdateUrl = androidx.compose.runtime.mutableStateOf<String?>(null)
     private val announcementNotificationPrefs by lazy { getSharedPreferences("woogit_announcement_notifications", MODE_PRIVATE) }
-    private val forceUpdatePrefs by lazy { getSharedPreferences("woogit_force_update", MODE_PRIVATE) }
     private val announcementScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, true)
         notificationOrderId.value = intentOrderId(intent)
-        forceUpdateUrl.value = forceUpdatePrefs.getString(KEY_FORCE_UPDATE_URL, null)
+        forceUpdateUrl.value = getSharedPreferences("woogit_force_update", MODE_PRIVATE)
+            .getString(ForceUpdateController.KEY_UPDATE_URL, null)
         val composition = (application as WooGitApplication).composition
         setContent {
             WooGitTheme {
@@ -45,6 +46,11 @@ class MainActivity : ComponentActivity() {
             }
         }
         requestNotificationPermissionIfNeeded { syncAnnouncementsForNotification() }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (!isFinishing) syncAnnouncementsForNotification()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -91,12 +97,12 @@ class MainActivity : ComponentActivity() {
                 val forceUpdate = announcements.firstOrNull { it.id == FORCE_UPDATE_ID }
                 if (forceUpdate != null) {
                     val url = forceUpdate.actions.firstOrNull { it.type == "update" }?.url.orEmpty()
+                    ForceUpdateController.activate(applicationContext, url.takeIf { it.isNotBlank() })
                     if (url.isNotBlank()) {
-                        forceUpdatePrefs.edit().putString(KEY_FORCE_UPDATE_URL, url).apply()
                         runOnUiThread { forceUpdateUrl.value = url }
                     }
                 } else {
-                    forceUpdatePrefs.edit().remove(KEY_FORCE_UPDATE_URL).apply()
+                    ForceUpdateController.clear(applicationContext)
                     runOnUiThread { forceUpdateUrl.value = null }
                 }
                 val notifications = WooGitNotificationManager(applicationContext)
@@ -122,6 +128,5 @@ class MainActivity : ComponentActivity() {
     private companion object {
         const val REQUEST_NOTIFICATIONS = 1001
         const val FORCE_UPDATE_ID = "system-app-version-deprecated"
-        const val KEY_FORCE_UPDATE_URL = "update_url"
     }
 }
