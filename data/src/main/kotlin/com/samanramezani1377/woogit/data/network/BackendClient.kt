@@ -31,7 +31,8 @@ class BackendClient(
     suspend fun verifySite(storeId: String, siteUrl: String, pair: CredentialPair): Result<BackendVerifyResult> = runCatching {
         val credentialDigest = sha256("${pair.consumerKey}\u0000${pair.consumerSecret}\u0000${pair.wordpressUsername.orEmpty()}\u0000${pair.wordpressApplicationPassword.orEmpty()}".toByteArray(Charsets.UTF_8))
         val idempotencyKey = "verify-${sha256("$storeId\u0000$siteUrl\u0000$credentialDigest".toByteArray(Charsets.UTF_8))}"
-        val response = httpClient.post(url("/wp-json/woogit/v1/sites/verify")) {
+        val endpoint = "/wp-json/woogit/v1/sites/verify"
+        val response = httpClient.post(url(endpoint)) {
             header("X-WooGit-App-Version", appVersion)
             header("Idempotency-Key", idempotencyKey)
             contentType(ContentType.Application.Json)
@@ -45,7 +46,22 @@ class BackendClient(
         }
         val body = response.bodyAsText()
         if (response.status.value !in 200..299) {
-            throw BackendHttpException(response.status.value, body, extractBackendReason(body))
+            val exception = BackendHttpException(response.status.value, body, extractBackendReason(body))
+            technicalErrorReporter.report(
+                TechnicalErrorContext(
+                    feature = "Store",
+                    location = "BackendClient.verifySite",
+                    operation = "Verify site",
+                    type = "BackendHttpError",
+                    httpMethod = "POST",
+                    endpoint = endpoint,
+                    httpStatus = response.status.value.toString(),
+                    responseBody = body,
+                    details = "WooGit Backend returned a non-success HTTP response",
+                ),
+                exception,
+            )
+            throw exception
         }
         val obj = json.parseToJsonElement(body).jsonObject
         val token = obj["session"]?.jsonPrimitive?.contentOrNull ?: throw BackendProtocolException("Missing Backend session")
@@ -53,7 +69,9 @@ class BackendClient(
         sessions.put(storeId, token)
         BackendVerifyResult(token, scope, obj["access_enabled"]?.jsonPrimitive?.contentOrNull?.toBoolean() ?: false)
     }.onFailure { throwable ->
-        reportTransport("Store", "BackendClient.verifySite", "POST", "/wp-json/woogit/v1/sites/verify", throwable)
+        if (throwable !is BackendHttpException) {
+            reportTransport("Store", "BackendClient.verifySite", "POST", "/wp-json/woogit/v1/sites/verify", throwable)
+        }
     }
 
     suspend fun forward(storeId: String, path: String, method: String, pair: CredentialPair, query: Map<String, Any> = emptyMap(), body: String? = null, idempotencyKey: String? = null): ApiResponse {
