@@ -30,8 +30,9 @@ class AppComposition(context: Context) {
     private val sessions = AndroidBackendSessionStore(appContext)
     private val technicalErrorReporter = AppTechnicalErrorReporter(appContext)
     private val network = NetworkClient()
-    private val backend = BackendClient(network.httpClient, BuildConfig.WOOGIT_BACKEND_BASE_URL, secure, sessions, BuildConfig.VERSION_NAME, technicalErrorReporter)
-    private val accountSetupClient = AccountSetupClient(network.httpClient, BuildConfig.WOOGIT_BACKEND_BASE_URL, sessions, BuildConfig.VERSION_NAME)
+    val announcementCenter = AnnouncementCenter(appContext)
+    private val backend = BackendClient(network.httpClient, BuildConfig.WOOGIT_BACKEND_BASE_URL, secure, sessions, BuildConfig.VERSION_NAME, technicalErrorReporter, announcementCenter)
+    private val accountSetupClient = AccountSetupClient(network.httpClient, BuildConfig.WOOGIT_BACKEND_BASE_URL, sessions, BuildConfig.VERSION_NAME, announcementCenter)
     private val orderLocal = SqlOrderDataSource(db)
     private val productLocal = SqlProductDataSource(db)
     private val storeLocal = SqlStoreDataSource(db)
@@ -98,9 +99,9 @@ class AppComposition(context: Context) {
     val deleteAttribute = DeleteAttributeUseCase(attributeRepository)
     val getTerms = GetTermsUseCase(termRepository)
     val getTerm = GetTermUseCase(termRepository)
-    val createTerm = CreateTermUseCase(termRepository)
-    val updateTerm = UpdateTermUseCase(termRepository)
-    val deleteTerm = DeleteTermUseCase(termRepository)
+    val createTerm = CreateTermUseCase(createTerm)
+    val updateTerm = UpdateTermUseCase(updateTerm)
+    val deleteTerm = DeleteTermUseCase(deleteTerm)
     val uploadMedia = UploadMediaUseCase(mediaRepository)
     val deleteMedia = DeleteMediaUseCase(mediaRepository)
     val syncPending = SyncPendingOperationsUseCase(syncRepository)
@@ -132,5 +133,5 @@ class AppComposition(context: Context) {
     }
 
     fun cancelBackgroundWork(storeId: String) { OrderPollingWorker.cancel(appContext, storeId); ProductCatalogSyncWorker.cancel(appContext, storeId) }
-    fun close() { scope.cancel(); network.close() }
+    fun close() { announcementCenter.dispose(); scope.cancel(); network.close() }
 }
