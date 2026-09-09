@@ -45,7 +45,7 @@ class AnnouncementClient(
             val image = item["image"]?.jsonObject?.let {
                 BackendAnnouncementImage(
                     url = it["url"]?.jsonPrimitive?.contentOrNull,
-                    alt = it["alt"]?.jsonPrimitive?.contentOrEmpty(),
+                    alt = it["alt"]?.jsonPrimitive?.contentOrNull.orEmpty(),
                 )
             }
             BackendAnnouncement(
