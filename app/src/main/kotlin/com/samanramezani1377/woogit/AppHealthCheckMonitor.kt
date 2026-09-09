@@ -10,6 +10,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -55,7 +56,13 @@ class AppHealthCheckMonitor(private val context: Context) {
             )
             val announcements = client.getAnnouncements(storeId)
             val forceUpdate = announcements.firstOrNull { it.id == FORCE_UPDATE_ID }
-                ?: return false
+            if (forceUpdate == null) {
+                // A successful check proves that the current client is no longer deprecated.
+                // Clear the persisted gate so an updated installation cannot remain locked.
+                ForceUpdateController.clear(context.applicationContext)
+                return false
+            }
+
             val updateUrl = forceUpdate.actions.firstOrNull { it.type == "update" }?.url
                 ?.takeIf { it.isNotBlank() }
                 ?: DEFAULT_UPDATE_URL
