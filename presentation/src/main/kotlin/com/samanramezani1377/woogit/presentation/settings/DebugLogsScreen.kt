@@ -16,6 +16,7 @@ import com.samanramezani1377.woogit.debug.DebugLogStore
 import com.samanramezani1377.woogit.presentation.GlassCard
 import com.samanramezani1377.woogit.presentation.GlassScaffold
 import com.samanramezani1377.woogit.presentation.GlassText
+import com.samanramezani1377.woogit.presentation.GlassTopBar
 
 @Composable
 internal fun DebugLogsScreen(onBack: () -> Unit) {
@@ -28,9 +29,13 @@ internal fun DebugLogsScreen(onBack: () -> Unit) {
             Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            GlassTopBar("لاگ خطاهای فنی", "تشخیص خطای اتصال و Backend") {
-                TextButton(onClick = onBack) { GlassText("بازگشت") }
-            }
+            GlassTopBar(
+                title = "لاگ خطاهای فنی",
+                subtitle = "تشخیص خطای اتصال و Backend",
+                navigation = {
+                    TextButton(onClick = onBack) { GlassText("بازگشت") }
+                },
+            )
             GlassCard {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     GlassText("لاگ‌های ثبت‌شده")
