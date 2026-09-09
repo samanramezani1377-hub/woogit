@@ -98,7 +98,6 @@ internal class DashboardViewModel(private val dependencies: V1PresentationDepend
             } ?: ConnectionState.ERROR.also {
                 PresentationTechnicalErrorReporter.report("Dashboard", "DashboardViewModel.checkConnection", "Connection timeout", "وضعیت اتصال قابل بررسی نبود.", "Connection check timed out after 5000ms")
             }
-            runCatching { HealthCheckVersionGate.check() }
             _uiState.value = _uiState.value.copy(connectionState = state, lastConnectionCheckAtMillis = System.currentTimeMillis())
             state
         } catch (e: CancellationException) {
