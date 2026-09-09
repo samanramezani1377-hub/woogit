@@ -1,6 +1,7 @@
 package com.samanramezani1377.woogit
 
 import android.content.Context
+import com.samanramezani1377.woogit.background.ForceUpdateController
 import com.samanramezani1377.woogit.background.OrderPollingWorker
 import com.samanramezani1377.woogit.background.ProductCatalogSyncWorker
 import com.samanramezani1377.woogit.debug.AppTechnicalErrorReporter
@@ -52,19 +53,14 @@ class AppComposition(context: Context) {
         }
         when {
             savedStore?.credentialReference != null -> savedId
-            else -> storeLocal.findConnectedStoreId()?.also {
-                prefs.edit().putString("active_store_id", it).apply()
-            }
+            else -> storeLocal.findConnectedStoreId()?.also { prefs.edit().putString("active_store_id", it).apply() }
         }
     }
 
     val storeRepository = StoreRepositoryImpl(storeLocal, secure, backend)
     val accountSetupGateway: AccountSetupGateway = object : AccountSetupGateway {
         override suspend fun requiresWebPassword(storeId: String) = accountSetupClient.requiresWebPassword(storeId)
-
-        override suspend fun setupWebPassword(storeId: String, password: String, confirmation: String): CoreResult<Unit> {
-            return accountSetupClient.setupWebPassword(storeId, password, confirmation)
-        }
+        override suspend fun setupWebPassword(storeId: String, password: String, confirmation: String): CoreResult<Unit> = accountSetupClient.setupWebPassword(storeId, password, confirmation)
     }
     val orderRepository = OrderRepositoryV1Impl(orderLocal, provider, mutationCoordinator, pending, scope)
     val productRepository = ProductRepositoryV1Impl(productLocal, provider, mutationCoordinator, pending)
@@ -142,11 +138,10 @@ class AppComposition(context: Context) {
         syncPending, restoredStoreId, ::rememberStore, ::forgetStore
     )
 
-    init {
-        restoredStoreId?.let(::startBackgroundWork)
-    }
+    init { restoredStoreId?.let(::startBackgroundWork) }
 
     fun startBackgroundWork(storeId: String) {
+        if (ForceUpdateController.isActive(appContext)) return
         OrderPollingWorker.schedule(appContext, storeId)
         OrderPollingWorker.scheduleNow(appContext, storeId)
         ProductCatalogSyncWorker.schedule(appContext, storeId)
