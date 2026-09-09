@@ -62,7 +62,7 @@ class AppComposition(context: Context) {
         override suspend fun requiresWebPassword(storeId: String) = accountSetupClient.requiresWebPassword(storeId)
         override suspend fun setupWebPassword(storeId: String, password: String, confirmation: String): CoreResult<Unit> = accountSetupClient.setupWebPassword(storeId, password, confirmation)
     }
-    val orderRepository = OrderRepositoryV1Impl(orderLocal, provider, mutationCoordinator, pending)
+    val orderRepository = OrderRepositoryV1Impl(orderLocal, provider, mutationCoordinator, pending, scope)
     val productRepository = ProductRepositoryV1Impl(productLocal, provider, mutationCoordinator, pending)
     val productCategoryRepository = ProductCategoryRepositoryImpl(provider)
     val variationRepository = VariationRepositoryImpl(variationLocal, provider, mutationCoordinator, pending)
@@ -142,7 +142,7 @@ class AppComposition(context: Context) {
 
     fun startBackgroundWork(storeId: String) {
         if (ForceUpdateController.isActive(appContext)) return
-        // Do not force network work during app construction/startup. Dashboard owns its initial refresh.
+        // Schedule periodic work only. Immediate sync is owned by explicit user actions.
         OrderPollingWorker.schedule(appContext, storeId)
         ProductCatalogSyncWorker.schedule(appContext, storeId)
     }
