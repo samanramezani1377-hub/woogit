@@ -7,7 +7,10 @@ import com.samanramezani1377.woogit.debug.AppTechnicalErrorReporter
 import com.samanramezani1377.woogit.security.AndroidBackendSessionStore
 import com.samanramezani1377.woogit.security.AndroidSecureCredentialStore
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
+import com.samanramezani1377.woogit.core.domain.error.CoreResult
 import com.samanramezani1377.woogit.core.domain.usecase.*
+import com.samanramezani1377.woogit.core.domain.model.Conflict
+import com.samanramezani1377.woogit.core.domain.model.ConflictResolution
 import com.samanramezani1377.woogit.data.db.WooGitDatabaseFactory
 import com.samanramezani1377.woogit.data.network.*
 import com.samanramezani1377.woogit.data.repository.*
@@ -15,9 +18,6 @@ import com.samanramezani1377.woogit.data.local.*
 import com.samanramezani1377.woogit.data.sync.*
 import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
 import com.samanramezani1377.woogit.presentation.account.AccountSetupGateway
-import com.samanramezani1377.woogit.core.domain.error.CoreResult
-import com.samanramezani1377.woogit.core.domain.model.Conflict
-import com.samanramezani1377.woogit.core.domain.model.ConflictResolution
 import kotlinx.coroutines.*
 
 class AppComposition(context: Context) {
@@ -31,11 +31,6 @@ class AppComposition(context: Context) {
     private val network = NetworkClient()
     private val backend = BackendClient(network.httpClient, BuildConfig.WOOGIT_BACKEND_BASE_URL, secure, sessions, BuildConfig.VERSION_NAME, technicalErrorReporter)
     private val accountSetupClient = AccountSetupClient(network.httpClient, BuildConfig.WOOGIT_BACKEND_BASE_URL, sessions, BuildConfig.VERSION_NAME)
-    val accountSetupGateway: AccountSetupGateway = object : AccountSetupGateway {
-        override suspend fun requiresWebPassword(storeId: String) = accountSetupClient.requiresWebPassword(storeId)
-        override suspend fun setupWebPassword(storeId: String, password: String, confirmation: String) =
-            accountSetupClient.setupWebPassword(storeId, password, confirmation)
-    }
     private val orderLocal = SqlOrderDataSource(db)
     private val productLocal = SqlProductDataSource(db)
     private val storeLocal = SqlStoreDataSource(db)
@@ -64,6 +59,23 @@ class AppComposition(context: Context) {
     }
 
     val storeRepository = StoreRepositoryImpl(storeLocal, secure, backend)
+    val accountSetupGateway: AccountSetupGateway = object : AccountSetupGateway {
+        override suspend fun requiresWebPassword(storeId: String) = accountSetupClient.requiresWebPassword(storeId)
+
+        override suspend fun setupWebPassword(storeId: String, password: String, confirmation: String) {
+            when (val storeResult = storeRepository.get(StoreId(storeId))) {
+                is CoreResult.Failure -> storeResult
+                is CoreResult.Success -> {
+                    val store = storeResult.value
+                    val reference = store.credentialReference
+                        ?: return CoreResult.Failure(com.samanramezani1377.woogit.core.domain.error.DomainError.Authentication("Store credentials are unavailable"))
+                    val credentials = secure.get(reference)
+                        ?: return CoreResult.Failure(com.samanramezani1377.woogit.core.domain.error.DomainError.Authentication("Store credentials are unavailable"))
+                    accountSetupClient.setupWebPassword(storeId, store.baseUrl, credentials, password, confirmation)
+                }
+            }
+        }
+    }
     val orderRepository = OrderRepositoryV1Impl(orderLocal, provider, mutationCoordinator, pending, scope)
     val productRepository = ProductRepositoryV1Impl(productLocal, provider, mutationCoordinator, pending)
     val productCategoryRepository = ProductCategoryRepositoryImpl(provider)
