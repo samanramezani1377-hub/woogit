@@ -18,6 +18,7 @@ import com.samanramezani1377.woogit.presentation.E11ReleaseApp
 import com.samanramezani1377.woogit.presentation.WooGitTheme
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
@@ -27,13 +28,13 @@ class MainActivity : ComponentActivity() {
     private val forceUpdateUrl = androidx.compose.runtime.mutableStateOf<String?>(null)
     private val announcementNotificationPrefs by lazy { getSharedPreferences("woogit_announcement_notifications", MODE_PRIVATE) }
     private val announcementScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var announcementSyncJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, true)
         notificationOrderId.value = intentOrderId(intent)
-        forceUpdateUrl.value = getSharedPreferences("woogit_force_update", MODE_PRIVATE)
-            .getString(ForceUpdateController.KEY_UPDATE_URL, null)
+        forceUpdateUrl.value = persistedForceUpdateUrl()
         val composition = (application as WooGitApplication).composition
         setContent {
             WooGitTheme {
@@ -65,6 +66,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        announcementSyncJob?.cancel()
         announcementScope.cancel()
         super.onDestroy()
     }
@@ -81,8 +83,17 @@ class MainActivity : ComponentActivity() {
         afterPermissionCheck()
     }
 
+    private fun persistedForceUpdateUrl(): String? {
+        if (!ForceUpdateController.isActive(applicationContext)) return null
+        return getSharedPreferences("woogit_force_update", MODE_PRIVATE)
+            .getString(ForceUpdateController.KEY_UPDATE_URL, null)
+            ?.takeIf { it.isNotBlank() }
+            ?: DEFAULT_UPDATE_URL
+    }
+
     private fun syncAnnouncementsForNotification() {
-        announcementScope.launch {
+        announcementSyncJob?.cancel()
+        announcementSyncJob = announcementScope.launch {
             val transport = NetworkClient()
             try {
                 val sessionStore = AndroidBackendSessionStore(applicationContext)
@@ -96,11 +107,11 @@ class MainActivity : ComponentActivity() {
                 val announcements = client.getAnnouncements(storeId)
                 val forceUpdate = announcements.firstOrNull { it.id == FORCE_UPDATE_ID }
                 if (forceUpdate != null) {
-                    val url = forceUpdate.actions.firstOrNull { it.type == "update" }?.url.orEmpty()
-                    ForceUpdateController.activate(applicationContext, url.takeIf { it.isNotBlank() })
-                    if (url.isNotBlank()) {
-                        runOnUiThread { forceUpdateUrl.value = url }
-                    }
+                    val url = forceUpdate.actions.firstOrNull { it.type == "update" }?.url
+                        ?.takeIf { it.isNotBlank() }
+                        ?: DEFAULT_UPDATE_URL
+                    ForceUpdateController.activate(applicationContext, url)
+                    runOnUiThread { forceUpdateUrl.value = url }
                 } else {
                     ForceUpdateController.clear(applicationContext)
                     runOnUiThread { forceUpdateUrl.value = null }
@@ -118,7 +129,7 @@ class MainActivity : ComponentActivity() {
                     if (posted) announcementNotificationPrefs.edit().putBoolean(announcement.id, true).apply()
                 }
             } catch (_: Throwable) {
-                // Announcement delivery is best-effort and must never block app startup.
+                // Never clear an already-active mandatory update gate because of a transient fetch failure.
             } finally {
                 transport.close()
             }
@@ -128,5 +139,6 @@ class MainActivity : ComponentActivity() {
     private companion object {
         const val REQUEST_NOTIFICATIONS = 1001
         const val FORCE_UPDATE_ID = "system-app-version-deprecated"
+        const val DEFAULT_UPDATE_URL = "https://woogit.ir/download-app/"
     }
 }
