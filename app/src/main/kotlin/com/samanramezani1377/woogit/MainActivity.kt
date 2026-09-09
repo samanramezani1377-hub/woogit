@@ -9,19 +9,22 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.core.app.ActivityCompat
 import androidx.core.view.WindowCompat
-import androidx.lifecycle.lifecycleScope
 import com.samanramezani1377.woogit.background.WooGitNotificationManager
 import com.samanramezani1377.woogit.data.network.AnnouncementClient
 import com.samanramezani1377.woogit.data.network.NetworkClient
 import com.samanramezani1377.woogit.security.AndroidBackendSessionStore
 import com.samanramezani1377.woogit.presentation.E11ReleaseApp
 import com.samanramezani1377.woogit.presentation.WooGitTheme
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private val notificationOrderId = androidx.compose.runtime.mutableStateOf<String?>(null)
     private val announcementNotificationPrefs by lazy { getSharedPreferences("woogit_announcement_notifications", MODE_PRIVATE) }
+    private val announcementScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -51,6 +54,11 @@ class MainActivity : ComponentActivity() {
         if (requestCode == REQUEST_NOTIFICATIONS) syncAnnouncementsForNotification()
     }
 
+    override fun onDestroy() {
+        announcementScope.cancel()
+        super.onDestroy()
+    }
+
     private fun intentOrderId(intent: Intent?): String? = intent?.let {
         it.getStringExtra("order_id") ?: it.getLongExtra("order_id", -1L).takeIf { id -> id > 0L }?.toString()
     }
@@ -64,7 +72,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun syncAnnouncementsForNotification() {
-        lifecycleScope.launch(Dispatchers.IO) {
+        announcementScope.launch {
             val transport = NetworkClient()
             try {
                 val sessionStore = AndroidBackendSessionStore(applicationContext)
