@@ -34,6 +34,9 @@ internal fun CreatePasswordScreen(
     var password by rememberSaveable { mutableStateOf("") }
     var confirmation by rememberSaveable { mutableStateOf("") }
     val busy = state is AccountSetupUiState.Loading
+    val meetsMinimumLength = password.length >= 8
+    val passwordsMatch = password.isNotEmpty() && password == confirmation
+    val canSubmit = !busy && meetsMinimumLength && passwordsMatch
 
     LaunchedEffect(state) {
         if (state is AccountSetupUiState.Success) onCompleted()
@@ -47,26 +50,37 @@ internal fun CreatePasswordScreen(
                 .padding(horizontal = 20.dp, vertical = 16.dp)
                 .verticalScroll(rememberScrollState())
                 .imePadding(),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             GlassTopBar(
                 title = "ساخت رمز عبور",
-                subtitle = "حساب WooGit شما آماده است",
+                subtitle = "ورود امن به حساب WooGit",
             )
-            GlassText("برای تکمیل راه‌اندازی حساب، یک رمز عبور برای ورود وب WooGit انتخاب کنید.")
-            GlassText("این رمز فقط برای حساب WooGit است و جایگزین اطلاعات ورود فروشگاه شما نمی‌شود.")
+
+            GlassText("برای تکمیل راه‌اندازی، یک رمز عبور امن برای حساب WooGit انتخاب کنید.")
+            GlassText("این رمز مربوط به حساب WooGit است و با اطلاعات ورود فروشگاه شما تفاوت دارد.")
 
             GlassPasswordField(
                 value = password,
                 onValueChange = { password = it },
                 label = "رمز عبور جدید",
             )
+
             GlassPasswordField(
                 value = confirmation,
                 onValueChange = { confirmation = it },
                 label = "تکرار رمز عبور",
             )
-            GlassText("حداقل ۸ کاراکتر")
+
+            GlassText(
+                when {
+                    password.isEmpty() -> "رمز عبور باید حداقل ۸ کاراکتر باشد."
+                    !meetsMinimumLength -> "هنوز ۸ کاراکتر کامل نشده است."
+                    confirmation.isEmpty() -> "رمز عبور را دوباره وارد کنید."
+                    !passwordsMatch -> "دو رمز عبور با هم مطابقت ندارند."
+                    else -> "رمز عبور آماده ثبت است."
+                },
+            )
 
             when (state) {
                 AccountSetupUiState.Loading -> GlassLoading("در حال ذخیره رمز عبور…")
@@ -75,10 +89,12 @@ internal fun CreatePasswordScreen(
             }
 
             GlassPrimaryAction(
-                label = "تکمیل راه‌اندازی",
+                label = if (busy) "در حال ذخیره…" else "تکمیل راه‌اندازی",
                 onClick = { onSubmit(password, confirmation) },
-                modifier = Modifier.fillMaxWidth().padding(bottom = 20.dp),
-                enabled = !busy && password.isNotBlank() && confirmation.isNotBlank(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp, bottom = 20.dp),
+                enabled = canSubmit,
             )
         }
     }
