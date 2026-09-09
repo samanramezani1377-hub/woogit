@@ -68,8 +68,8 @@ class AppHealthCheckMonitor(private val context: Context) {
                 ?: DEFAULT_UPDATE_URL
             ForceUpdateController.activate(context.applicationContext, updateUrl)
             true
-        } catch (_: CancellationException) {
-            throw _
+        } catch (e: CancellationException) {
+            throw e
         } catch (_: Throwable) {
             false
         } finally {
