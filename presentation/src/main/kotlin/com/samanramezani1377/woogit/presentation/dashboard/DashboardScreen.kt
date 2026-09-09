@@ -10,6 +10,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.samanramezani1377.woogit.core.domain.model.OrderStatus
+import com.samanramezani1377.woogit.debug.DebugConfig
+import com.samanramezani1377.woogit.presentation.GlassPrimaryAction
 
 @Composable
 internal fun DashboardScreen(
@@ -32,12 +34,20 @@ internal fun DashboardScreen(
     selectedDestination: DashboardDestination = DashboardDestination.DASHBOARD,
     onDestinationSelected: (DashboardDestination) -> Unit,
     onAiClick: () -> Unit,
+    onDebugLogsClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxSize(), verticalArrangement = Arrangement.Bottom) {
         Column(Modifier.weight(1f).fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 8.dp)) {
             DashboardContent(storeName, connected, orders, products, revenue, pending, recentOrderId, recentCustomer, recentTotal, recentStatus, onRecentOrderClick)
             DashboardActions(onOrdersClick, onProductsClick, onSettingsClick, onSyncClick, onConflictsClick, Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+            if (DebugConfig.ENABLED) {
+                GlassPrimaryAction(
+                    "🔧 لاگ خطاهای فنی",
+                    onClick = onDebugLogsClick,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+            }
         }
         DashboardFloatingNavigation(
             selected = selectedDestination,
