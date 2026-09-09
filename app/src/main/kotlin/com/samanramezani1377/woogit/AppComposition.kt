@@ -124,7 +124,12 @@ class AppComposition(context: Context) {
     )
 
     init { restoredStoreId?.let(::startBackgroundWork) }
-    fun startBackgroundWork(storeId: String) { if (ForceUpdateController.isActive(appContext)) return; OrderPollingWorker.schedule(appContext, storeId); ProductCatalogSyncWorker.schedule(appContext, storeId) }
+    fun startBackgroundWork(storeId: String) {
+        if (ForceUpdateController.isActive(appContext)) return
+        OrderPollingWorker.schedule(appContext, storeId)
+        OrderPollingWorker.scheduleDelayed(appContext, storeId)
+        ProductCatalogSyncWorker.schedule(appContext, storeId)
+    }
     fun cancelBackgroundWork(storeId: String) { OrderPollingWorker.cancel(appContext, storeId); ProductCatalogSyncWorker.cancel(appContext, storeId) }
     fun close() { scope.cancel(); network.close() }
 }
