@@ -14,6 +14,8 @@ import com.samanramezani1377.woogit.presentation.debug.DashboardSalesDebugSnapsh
 import com.samanramezani1377.woogit.presentation.debug.PresentationTechnicalErrorReporter
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -111,64 +113,80 @@ internal class DashboardViewModel(private val dependencies: V1PresentationDepend
     private suspend fun refreshInternal() {
         _uiState.value = _uiState.value.copy(loading = true, error = null)
         try {
-            val connection = checkConnection()
+            // Connection state is useful for the UI but must not block the dashboard's
+            // first render. Run it together with the two visible dashboard lists.
+            val connectionDeferred = viewModelScope.async { checkConnection() }
+            val ordersDeferred = viewModelScope.async { loadLatestOrders() }
+            val productsDeferred = viewModelScope.async { loadLatestProducts() }
 
-            val ordersResult = loadLatestOrders()
-            val orders = when (ordersResult) {
-                is CoreResult.Success -> ordersResult.value
+            val (connection, ordersResult, productsResult) = awaitAll(
+                connectionDeferred,
+                ordersDeferred,
+                productsDeferred,
+            )
+
+            val connectionState = connection as ConnectionState
+            val orders = when (val result = ordersResult as CoreResult<List<Order>>) {
+                is CoreResult.Success -> result.value
                 is CoreResult.Failure -> {
-                    val message = PresentationErrorMapper.message(ordersResult.error)
-                    PresentationTechnicalErrorReporter.report("Dashboard", "DashboardViewModel.refreshInternal", "Load orders", message, ordersResult.error.toString())
-                    _uiState.value = _uiState.value.copy(connectionState = connection, loading = false, error = message)
+                    val message = PresentationErrorMapper.message(result.error)
+                    PresentationTechnicalErrorReporter.report("Dashboard", "DashboardViewModel.refreshInternal", "Load orders", message, result.error.toString())
+                    _uiState.value = _uiState.value.copy(connectionState = connectionState, loading = false, error = message)
+                    return
+                }
+            }
+            val products = when (val result = productsResult as CoreResult<List<Product>>) {
+                is CoreResult.Success -> result.value
+                is CoreResult.Failure -> {
+                    val message = PresentationErrorMapper.message(result.error)
+                    PresentationTechnicalErrorReporter.report("Dashboard", "DashboardViewModel.refreshInternal", "Load products", message, result.error.toString())
+                    _uiState.value = _uiState.value.copy(connectionState = connectionState, loading = false, error = message)
                     return
                 }
             }
 
-            val ordersTotal = when (val result = dependencies.getOrders.count(storeId, null, null)) {
-                is CoreResult.Success -> result.value
-                is CoreResult.Failure -> null
-            }
-            val processingTotal = when (val result = dependencies.getOrders.count(storeId, null, "processing")) {
-                is CoreResult.Success -> result.value
-                is CoreResult.Failure -> null
-            }
-
-            val salesSummary = when (val result = dependencies.getSalesSummary(storeId)) {
-                is CoreResult.Success -> result.value
-                is CoreResult.Failure -> {
-                    PresentationTechnicalErrorReporter.report("Dashboard", "DashboardViewModel.refreshInternal", "Load sales summary", PresentationErrorMapper.message(result.error), result.error.toString())
-                    _uiState.value.salesSummary
-                }
-            }
-
-            val productsResult = loadLatestProducts()
-            val products = when (productsResult) {
-                is CoreResult.Success -> productsResult.value
-                is CoreResult.Failure -> {
-                    val message = PresentationErrorMapper.message(productsResult.error)
-                    PresentationTechnicalErrorReporter.report("Dashboard", "DashboardViewModel.refreshInternal", "Load products", message, productsResult.error.toString())
-                    _uiState.value = _uiState.value.copy(connectionState = connection, loading = false, error = message)
-                    return
-                }
-            }
-            val productsTotal = when (val result = dependencies.getProducts.count(storeId, null)) {
-                is CoreResult.Success -> result.value
-                is CoreResult.Failure -> null
-            }
-
-            val newState = _uiState.value.copy(
+            // Render the dashboard as soon as the visible lists are ready. Totals and
+            // sales are secondary metrics and must never hold the first screen hostage.
+            _uiState.value = _uiState.value.copy(
                 orders = orders,
                 products = products,
-                salesSummary = salesSummary,
-                ordersTotal = ordersTotal,
-                processingTotal = processingTotal,
-                productsTotal = productsTotal,
-                connectionState = connection,
+                connectionState = connectionState,
                 loading = false,
                 error = null,
             )
-            _uiState.value = newState
-            DashboardSalesDebugSnapshot.update(orders, salesSummary, newState.revenue)
+
+            // All secondary metrics run concurrently. This removes the previous
+            // sequential chain of total-orders -> processing -> sales -> total-products.
+            viewModelScope.launch {
+                val metrics = awaitAll(
+                    async { dependencies.getOrders.count(storeId, null, null) },
+                    async { dependencies.getOrders.count(storeId, null, "processing") },
+                    async { dependencies.getSalesSummary(storeId) },
+                    async { dependencies.getProducts.count(storeId, null) },
+                )
+
+                val ordersTotal = (metrics[0] as CoreResult<Int>).getOrNull()
+                val processingTotal = (metrics[1] as CoreResult<Int>).getOrNull()
+                val salesSummaryResult = metrics[2] as CoreResult<SalesSummary>
+                val productsTotal = (metrics[3] as CoreResult<Int>).getOrNull()
+                val salesSummary = when (salesSummaryResult) {
+                    is CoreResult.Success -> salesSummaryResult.value
+                    is CoreResult.Failure -> {
+                        PresentationTechnicalErrorReporter.report("Dashboard", "DashboardViewModel.refreshInternal", "Load sales summary", PresentationErrorMapper.message(salesSummaryResult.error), salesSummaryResult.error.toString())
+                        _uiState.value.salesSummary
+                    }
+                }
+
+                val current = _uiState.value
+                val newState = current.copy(
+                    ordersTotal = ordersTotal,
+                    processingTotal = processingTotal,
+                    productsTotal = productsTotal,
+                    salesSummary = salesSummary,
+                )
+                _uiState.value = newState
+                DashboardSalesDebugSnapshot.update(newState.orders, salesSummary, newState.revenue)
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
@@ -176,4 +194,9 @@ internal class DashboardViewModel(private val dependencies: V1PresentationDepend
             _uiState.value = _uiState.value.copy(loading = false, error = "بارگذاری داشبورد با خطا مواجه شد.")
         }
     }
+}
+
+private fun <T> CoreResult<T>.getOrNull(): T? = when (this) {
+    is CoreResult.Success -> value
+    is CoreResult.Failure -> null
 }
