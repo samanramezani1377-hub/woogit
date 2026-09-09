@@ -132,12 +132,12 @@ internal fun DashboardScreen(
                         .padding(top = 12.dp)
                         .size(42.dp)
                         .clip(CircleShape)
-                        .background(Color.White.copy(alpha = 0.10f)),
+                        .background(Color.White.copy(alpha = 0.07f)),
                     contentAlignment = Alignment.Center,
                 ) {
                     DashboardRefreshArrow(
-                        rotation = if (refreshing) loadingRotation else indicatorProgress * 360f,
-                        alpha = if (refreshing) 1f else indicatorProgress.coerceAtLeast(0.25f),
+                        rotation = if (refreshing) loadingRotation else -indicatorProgress * 360f,
+                        alpha = if (refreshing) 0.92f else indicatorProgress.coerceAtLeast(0.25f),
                     )
                 }
             }
@@ -156,7 +156,7 @@ private fun DashboardRefreshArrow(rotation: Float, alpha: Float) {
         imageVector = DashboardRefreshIcon,
         contentDescription = "در حال تازه‌سازی",
         modifier = Modifier
-            .size(23.dp)
+            .size(36.dp)
             .rotate(rotation),
         tint = Color.White.copy(alpha = alpha),
     )
