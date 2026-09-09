@@ -21,6 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -35,6 +36,7 @@ class MainActivity : ComponentActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, true)
         notificationOrderId.value = intentOrderId(intent)
         forceUpdateUrl.value = persistedForceUpdateUrl()
+        observeForceUpdateGate()
         val composition = (application as WooGitApplication).composition
         setContent {
             WooGitTheme {
@@ -91,6 +93,14 @@ class MainActivity : ComponentActivity() {
             ?: DEFAULT_UPDATE_URL
     }
 
+    private fun observeForceUpdateGate() {
+        announcementScope.launch {
+            ForceUpdateController.updateUrl.filterNotNull().collect { url ->
+                runOnUiThread { forceUpdateUrl.value = url }
+            }
+        }
+    }
+
     private fun syncAnnouncementsForNotification() {
         announcementSyncJob?.cancel()
         announcementSyncJob = announcementScope.launch {
@@ -112,9 +122,10 @@ class MainActivity : ComponentActivity() {
                         ?: DEFAULT_UPDATE_URL
                     ForceUpdateController.activate(applicationContext, url)
                     runOnUiThread { forceUpdateUrl.value = url }
-                } else {
-                    ForceUpdateController.clear(applicationContext)
+                } else if (!ForceUpdateController.isActive(applicationContext)) {
                     runOnUiThread { forceUpdateUrl.value = null }
+                } else {
+                    runOnUiThread { forceUpdateUrl.value = persistedForceUpdateUrl() }
                 }
                 val notifications = WooGitNotificationManager(applicationContext)
                 announcements.filter { it.notificationEnabled }.forEach { announcement ->
