@@ -3,6 +3,7 @@ package com.samanramezani1377.woogit.presentation
 /** Central route definitions for the E11 application. */
 internal object E11Routes {
     const val CONNECTION = "connection"
+    const val CREATE_PASSWORD = "create-password"
     const val DASHBOARD = "dashboard"
     const val AI = "ai"
     const val ORDERS = "orders"
