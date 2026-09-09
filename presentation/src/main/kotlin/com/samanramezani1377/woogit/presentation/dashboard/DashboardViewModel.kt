@@ -2,12 +2,10 @@ package com.samanramezani1377.woogit.presentation.dashboard
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.samanramezani1377.woogit.core.domain.CacheOnlyRead
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.core.domain.error.CoreResult
 import com.samanramezani1377.woogit.core.domain.model.ConnectionState
 import com.samanramezani1377.woogit.core.domain.model.Order
-import com.samanramezani1377.woogit.core.domain.model.OrderStatus
 import com.samanramezani1377.woogit.core.domain.model.Product
 import com.samanramezani1377.woogit.core.domain.model.SalesSummary
 import com.samanramezani1377.woogit.presentation.PresentationErrorMapper
@@ -26,7 +24,6 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.math.BigDecimal
 
@@ -108,35 +105,25 @@ internal class DashboardViewModel(private val dependencies: V1PresentationDepend
         }
     }
 
-    private suspend fun loadLatestOrders(cacheOnly: Boolean): CoreResult<List<Order>> =
-        if (cacheOnly) withContext(CacheOnlyRead) { dependencies.getOrders(storeId, 1, 30, null, null) }
-        else dependencies.getOrders(storeId, 1, 30, null, null)
+    private suspend fun loadLatestOrders(): CoreResult<List<Order>> =
+        dependencies.getOrders(storeId, 1, 30, null, null)
 
-    private suspend fun loadLatestProducts(cacheOnly: Boolean): CoreResult<List<Product>> =
-        if (cacheOnly) withContext(CacheOnlyRead) { dependencies.getProducts(storeId, 1, 30, null) }
-        else dependencies.getProducts(storeId, 1, 30, null)
+    private suspend fun loadLatestProducts(): CoreResult<List<Product>> =
+        dependencies.getProducts(storeId, 1, 30, null)
 
     private suspend fun refreshInternal() {
         _uiState.value = _uiState.value.copy(loading = true, error = null)
         try {
-            val cached = awaitAll(
-                async { loadLatestOrders(cacheOnly = true) },
-                async { loadLatestProducts(cacheOnly = true) },
-            )
-            val cachedOrders = cached[0] as CoreResult<List<Order>>
-            val cachedProducts = cached[1] as CoreResult<List<Product>>
-            val hasCache = (cachedOrders as? CoreResult.Success)?.value?.isNotEmpty() == true ||
-                (cachedProducts as? CoreResult.Success)?.value?.isNotEmpty() == true
-
             val connectionDeferred = viewModelScope.async { checkConnection() }
-            val ordersDeferred = viewModelScope.async {
-                if (hasCache) cachedOrders else loadLatestOrders(cacheOnly = false)
-            }
-            val productsDeferred = viewModelScope.async {
-                if (hasCache) cachedProducts else loadLatestProducts(cacheOnly = false)
-            }
+            val ordersDeferred = viewModelScope.async { loadLatestOrders() }
+            val productsDeferred = viewModelScope.async { loadLatestProducts() }
 
-            val (connection, ordersResult, productsResult) = awaitAll(connectionDeferred, ordersDeferred, productsDeferred)
+            val (connection, ordersResult, productsResult) = awaitAll(
+                connectionDeferred,
+                ordersDeferred,
+                productsDeferred,
+            )
+
             val connectionState = connection as ConnectionState
             val orders = when (val result = ordersResult as CoreResult<List<Order>>) {
                 is CoreResult.Success -> result.value
@@ -157,24 +144,21 @@ internal class DashboardViewModel(private val dependencies: V1PresentationDepend
                 }
             }
 
-            _uiState.value = _uiState.value.copy(orders = orders, products = products, connectionState = connectionState, loading = false, error = null)
+            _uiState.value = _uiState.value.copy(
+                orders = orders,
+                products = products,
+                connectionState = connectionState,
+                loading = false,
+                error = null,
+            )
 
             viewModelScope.launch {
-                val metrics = if (hasCache) withContext(CacheOnlyRead) {
-                    awaitAll(
-                        async { dependencies.getOrders.count(storeId, null, null) },
-                        async { dependencies.getOrders.count(storeId, null, "processing") },
-                        async { dependencies.getSalesSummary(storeId) },
-                        async { dependencies.getProducts.count(storeId, null) },
-                    )
-                } else {
-                    awaitAll(
-                        async { dependencies.getOrders.count(storeId, null, null) },
-                        async { dependencies.getOrders.count(storeId, null, "processing") },
-                        async { dependencies.getSalesSummary(storeId) },
-                        async { dependencies.getProducts.count(storeId, null) },
-                    )
-                }
+                val metrics = awaitAll(
+                    async { dependencies.getOrders.count(storeId, null, null) },
+                    async { dependencies.getOrders.count(storeId, null, "processing") },
+                    async { dependencies.getSalesSummary(storeId) },
+                    async { dependencies.getProducts.count(storeId, null) },
+                )
 
                 val ordersTotal = (metrics[0] as CoreResult<Int>).getOrNull()
                 val processingTotal = (metrics[1] as CoreResult<Int>).getOrNull()
@@ -187,13 +171,31 @@ internal class DashboardViewModel(private val dependencies: V1PresentationDepend
                         _uiState.value.salesSummary
                     }
                 }
-                val completedOrderSum = orders.asSequence().filter { it.status == OrderStatus.COMPLETED }.mapNotNull { it.total?.toBigDecimalOrNull() }.fold(BigDecimal.ZERO, BigDecimal::add)
+
+                // WooCommerce can return a zero sales-report total even when the
+                // completed orders themselves contain valid totals. Prefer that
+                // concrete order data instead of showing a misleading zero.
+                val completedOrderSum = orders
+                    .asSequence()
+                    .filter { it.status.name == "COMPLETED" }
+                    .mapNotNull { it.total?.toBigDecimalOrNull() }
+                    .fold(BigDecimal.ZERO, BigDecimal::add)
                 val salesSummary = rawSalesSummary?.let { summary ->
                     val reported = summary.netSales.toBigDecimalOrNull()
-                    if (reported != null && reported.compareTo(BigDecimal.ZERO) == 0 && completedOrderSum > BigDecimal.ZERO) summary.copy(netSales = completedOrderSum.toPlainString()) else summary
+                    if (reported != null && reported.compareTo(BigDecimal.ZERO) == 0 && completedOrderSum > BigDecimal.ZERO) {
+                        summary.copy(netSales = completedOrderSum.toPlainString())
+                    } else {
+                        summary
+                    }
                 }
+
                 val current = _uiState.value
-                val newState = current.copy(ordersTotal = ordersTotal, processingTotal = processingTotal, productsTotal = productsTotal, salesSummary = salesSummary)
+                val newState = current.copy(
+                    ordersTotal = ordersTotal,
+                    processingTotal = processingTotal,
+                    productsTotal = productsTotal,
+                    salesSummary = salesSummary,
+                )
                 _uiState.value = newState
                 DashboardSalesDebugSnapshot.update(newState.orders, salesSummary, newState.revenue)
             }
