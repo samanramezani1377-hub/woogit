@@ -45,12 +45,7 @@ class AppComposition(context: Context) {
 
     private val restoredStoreId: String? = run {
         val savedId = prefs.getString("active_store_id", null)
-        val savedStore = savedId?.let {
-            when (val r = storeLocal.get(StoreId(it))) {
-                is CoreResult.Success -> r.value
-                is CoreResult.Failure -> null
-            }
-        }
+        val savedStore = savedId?.let { when (val r = storeLocal.get(StoreId(it))) { is CoreResult.Success -> r.value; is CoreResult.Failure -> null } }
         when {
             savedStore?.credentialReference != null -> savedId
             else -> storeLocal.findConnectedStoreId()?.also { prefs.edit().putString("active_store_id", it).apply() }
@@ -62,7 +57,7 @@ class AppComposition(context: Context) {
         override suspend fun requiresWebPassword(storeId: String) = accountSetupClient.requiresWebPassword(storeId)
         override suspend fun setupWebPassword(storeId: String, password: String, confirmation: String): CoreResult<Unit> = accountSetupClient.setupWebPassword(storeId, password, confirmation)
     }
-    val orderRepository = OrderRepositoryV1Impl(orderLocal, provider, mutationCoordinator, pending)
+    val orderRepository = OrderRepositoryV1Impl(orderLocal, provider, mutationCoordinator, pending, scope)
     val productRepository = ProductRepositoryV1Impl(productLocal, provider, mutationCoordinator, pending)
     val productCategoryRepository = ProductCategoryRepositoryImpl(provider)
     val variationRepository = VariationRepositoryImpl(variationLocal, provider, mutationCoordinator, pending)
@@ -114,18 +109,8 @@ class AppComposition(context: Context) {
     val getConflicts = GetConflictsUseCase(syncRepository)
     val resolveConflict = ResolveConflictUseCase(syncRepository)
 
-    private fun rememberStore(id: String) {
-        prefs.edit().putString("active_store_id", id).apply()
-        startBackgroundWork(id)
-    }
-
-    private fun forgetStore() {
-        val id = prefs.getString("active_store_id", null)
-        if (id != null) scope.launch { disconnectStore(StoreId(id)) }
-        prefs.edit().remove("active_store_id").apply()
-        if (id != null) cancelBackgroundWork(id)
-    }
-
+    private fun rememberStore(id: String) { prefs.edit().putString("active_store_id", id).apply(); startBackgroundWork(id) }
+    private fun forgetStore() { val id = prefs.getString("active_store_id", null); if (id != null) scope.launch { disconnectStore(StoreId(id)) }; prefs.edit().remove("active_store_id").apply(); if (id != null) cancelBackgroundWork(id) }
     private val getConflictsFn: suspend (StoreId) -> CoreResult<List<Conflict>> = { id -> getConflicts(id) }
     private val resolveConflictFn: suspend (StoreId, com.samanramezani1377.woogit.core.domain.entity.EntityId, ConflictResolution) -> CoreResult<Unit> = { id, c, r -> resolveConflict(id, c, r) }
 
@@ -139,20 +124,7 @@ class AppComposition(context: Context) {
     )
 
     init { restoredStoreId?.let(::startBackgroundWork) }
-
-    fun startBackgroundWork(storeId: String) {
-        if (ForceUpdateController.isActive(appContext)) return
-        OrderPollingWorker.schedule(appContext, storeId)
-        ProductCatalogSyncWorker.schedule(appContext, storeId)
-    }
-
-    fun cancelBackgroundWork(storeId: String) {
-        OrderPollingWorker.cancel(appContext, storeId)
-        ProductCatalogSyncWorker.cancel(appContext, storeId)
-    }
-
-    fun close() {
-        scope.cancel()
-        network.close()
-    }
+    fun startBackgroundWork(storeId: String) { if (ForceUpdateController.isActive(appContext)) return; OrderPollingWorker.schedule(appContext, storeId); ProductCatalogSyncWorker.schedule(appContext, storeId) }
+    fun cancelBackgroundWork(storeId: String) { OrderPollingWorker.cancel(appContext, storeId); ProductCatalogSyncWorker.cancel(appContext, storeId) }
+    fun close() { scope.cancel(); network.close() }
 }
