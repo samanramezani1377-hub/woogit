@@ -67,7 +67,10 @@ internal fun DashboardScreen(
                     pullDistance = (pullDistance + available.y).coerceAtMost(pullThreshold)
                     return Offset.Zero
                 }
-                if (available.y < 0f) pullDistance = 0f
+                if (scrollState.value == 0 && available.y < 0f && pullDistance > 0f) {
+                    pullDistance = (pullDistance + available.y).coerceAtLeast(0f)
+                    return Offset.Zero
+                }
                 return Offset.Zero
             }
 
