@@ -22,6 +22,7 @@ class AccountSetupClient(
     private val baseUrl: String,
     private val sessions: BackendSessionStore,
     private val appVersion: String,
+    private val responseObserver: BackendResponseObserver? = null,
 ) {
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
 
@@ -34,6 +35,7 @@ class AccountSetupClient(
             header("X-WooGit-Session", token)
         }
         val body = response.bodyAsText()
+        responseObserver?.onResponse(response.status.value, body)
         if (response.status.value !in 200..299) {
             return@runCatching CoreResult.Failure(
                 DomainError.Network("WooGit account requirements HTTP ${response.status.value}")
@@ -74,6 +76,7 @@ class AccountSetupClient(
             })
         }
         val body = response.bodyAsText()
+        responseObserver?.onResponse(response.status.value, body)
         if (response.status.value !in 200..299) {
             return@runCatching CoreResult.Failure(
                 DomainError.Network(extractMessage(body) ?: "WooGit account password setup failed")
