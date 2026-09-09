@@ -3,6 +3,7 @@ package com.samanramezani1377.woogit.data.network
 import com.samanramezani1377.woogit.core.domain.error.CoreResult
 import com.samanramezani1377.woogit.core.domain.error.DomainError
 import com.samanramezani1377.woogit.core.security.BackendSessionStore
+import com.samanramezani1377.woogit.core.security.CredentialPair
 import io.ktor.client.HttpClient
 import io.ktor.client.request.*
 import io.ktor.client.statement.bodyAsText
@@ -51,17 +52,32 @@ class AccountSetupClient(
         CoreResult.Failure(DomainError.Network("${throwable::class.simpleName}:${throwable.message.orEmpty()}"))
     }
 
-    suspend fun setupWebPassword(storeId: String, password: String, confirmation: String): CoreResult<Unit> = runCatching {
+    suspend fun setupWebPassword(
+        storeId: String,
+        siteUrl: String,
+        credentials: CredentialPair,
+        password: String,
+        confirmation: String,
+    ): CoreResult<Unit> = runCatching {
         val token = sessions.get(storeId) ?: return@runCatching CoreResult.Failure(
             DomainError.Network("Backend session is unavailable")
         )
+        val wpUsername = credentials.wordpressUsername
+            ?: return@runCatching CoreResult.Failure(DomainError.Validation("WordPress username is unavailable"))
+        val wpApplicationPassword = credentials.wordpressApplicationPassword
+            ?: return@runCatching CoreResult.Failure(DomainError.Validation("WordPress application password is unavailable"))
         val response = httpClient.post(url("/wp-json/woogit/v1/account/setup-web-credentials")) {
             header("X-WooGit-App-Version", appVersion)
             header("X-WooGit-Session", token)
             contentType(ContentType.Application.Json)
             setBody(buildJsonObject {
-                put("password", password)
-                put("password_confirmation", confirmation)
+                put("site_url", siteUrl)
+                put("wp_username", wpUsername)
+                put("wp_application_password", wpApplicationPassword)
+                put("consumer_key", credentials.consumerKey)
+                put("consumer_secret", credentials.consumerSecret)
+                put("web_password", password)
+                put("web_password_confirmation", confirmation)
             })
         }
         val body = response.bodyAsText()
