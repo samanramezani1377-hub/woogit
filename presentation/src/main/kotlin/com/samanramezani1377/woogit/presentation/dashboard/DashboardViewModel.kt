@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withTimeoutOrNull
 
 internal data class DashboardUiState(
@@ -36,10 +37,19 @@ internal data class DashboardUiState(
 internal class DashboardViewModel(private val dependencies: V1PresentationDependencies, private val storeId: StoreId) : ViewModel() {
     private val _uiState = MutableStateFlow(DashboardUiState())
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
+    private val refreshMutex = Mutex()
     private var healthMonitorJob: Job? = null
     private var healthCheckInFlight = false
 
-    fun refresh() { if (_uiState.value.loading) return; viewModelScope.launch { refreshInternal() } }
+    fun refresh() {
+        viewModelScope.launch {
+            refreshMutex.withLock {
+                if (_uiState.value.loading) return@withLock
+                refreshInternal()
+            }
+        }
+    }
+
     fun startConnectionHealthMonitor() {
         if (healthMonitorJob?.isActive == true) return
         healthMonitorJob = viewModelScope.launch { var interval = 10_000L; while (isActive) { val state = checkConnection(); interval = if (state == ConnectionState.CONNECTED) 10_000L else (interval * 2).coerceAtMost(60_000L); delay(interval) } }
@@ -73,13 +83,43 @@ internal class DashboardViewModel(private val dependencies: V1PresentationDepend
 
     private suspend fun refreshInternal() {
         _uiState.value = _uiState.value.copy(loading = true, error = null)
-        val connection = checkConnection(); val ordersResult = loadAllOrders()
-        val orders = when (ordersResult) { is CoreResult.Success -> ordersResult.value; is CoreResult.Failure -> { val message = PresentationErrorMapper.message(ordersResult.error); PresentationTechnicalErrorReporter.report("Dashboard", "DashboardViewModel.refreshInternal", "Load orders", message, ordersResult.error.toString()); _uiState.value = _uiState.value.copy(connectionState = connection, loading = false, error = message); return } }
-        val salesSummary = when (val result = dependencies.getSalesSummary(storeId)) { is CoreResult.Success -> result.value.copy(netSales = DashboardStateMapper.netSales(orders).toPlainString()); is CoreResult.Failure -> { PresentationTechnicalErrorReporter.report("Dashboard", "DashboardViewModel.refreshInternal", "Load sales summary", PresentationErrorMapper.message(result.error), result.error.toString()); _uiState.value.salesSummary } }
-        val productsResult = dependencies.getProducts(storeId, 1, 30, null)
-        val products = when (productsResult) { is CoreResult.Success -> productsResult.value; is CoreResult.Failure -> { val message = PresentationErrorMapper.message(productsResult.error); PresentationTechnicalErrorReporter.report("Dashboard", "DashboardViewModel.refreshInternal", "Load products", message, resultErrorText(productsResult.error)); _uiState.value = _uiState.value.copy(connectionState = connection, loading = false, error = message); return } }
-        val newState = _uiState.value.copy(orders = orders, products = products, salesSummary = salesSummary, connectionState = connection, loading = false, error = null)
-        _uiState.value = newState; DashboardSalesDebugSnapshot.update(orders, salesSummary, newState.revenue)
+        try {
+            val connection = checkConnection()
+            val ordersResult = loadAllOrders()
+            val orders = when (ordersResult) {
+                is CoreResult.Success -> ordersResult.value
+                is CoreResult.Failure -> {
+                    val message = PresentationErrorMapper.message(ordersResult.error)
+                    PresentationTechnicalErrorReporter.report("Dashboard", "DashboardViewModel.refreshInternal", "Load orders", message, ordersResult.error.toString())
+                    _uiState.value = _uiState.value.copy(connectionState = connection, loading = false, error = message)
+                    return
+                }
+            }
+            val salesSummary = when (val result = dependencies.getSalesSummary(storeId)) {
+                is CoreResult.Success -> result.value.copy(netSales = DashboardStateMapper.netSales(orders).toPlainString())
+                is CoreResult.Failure -> {
+                    PresentationTechnicalErrorReporter.report("Dashboard", "DashboardViewModel.refreshInternal", "Load sales summary", PresentationErrorMapper.message(result.error), result.error.toString())
+                    _uiState.value.salesSummary
+                }
+            }
+            val productsResult = dependencies.getProducts(storeId, 1, 30, null)
+            val products = when (productsResult) {
+                is CoreResult.Success -> productsResult.value
+                is CoreResult.Failure -> {
+                    val message = PresentationErrorMapper.message(productsResult.error)
+                    PresentationTechnicalErrorReporter.report("Dashboard", "DashboardViewModel.refreshInternal", "Load products", message, productsResult.error.toString())
+                    _uiState.value = _uiState.value.copy(connectionState = connection, loading = false, error = message)
+                    return
+                }
+            }
+            val newState = _uiState.value.copy(orders = orders, products = products, salesSummary = salesSummary, connectionState = connection, loading = false, error = null)
+            _uiState.value = newState
+            DashboardSalesDebugSnapshot.update(orders, salesSummary, newState.revenue)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            PresentationTechnicalErrorReporter.report("Dashboard", "DashboardViewModel.refreshInternal", "Unexpected dashboard refresh failure", "بارگذاری داشبورد با خطا مواجه شد.", e.toString())
+            _uiState.value = _uiState.value.copy(loading = false, error = "بارگذاری داشبورد با خطا مواجه شد.")
+        }
     }
-    private fun resultErrorText(error: Any): String = error.toString()
 }
