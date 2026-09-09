@@ -29,22 +29,24 @@ class BackendClient(
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
 
     suspend fun verifySite(storeId: String, siteUrl: String, pair: CredentialPair): Result<BackendVerifyResult> = runCatching {
-        // /sites/verify is idempotent on the Backend. Keep the key stable for the
-        // same logical verification inputs so a timeout-after-success retry replays
-        // the original result instead of starting a second verification/session.
-        // Only a SHA-256 digest is sent; credentials never appear in the key.
         val credentialDigest = sha256("${pair.consumerKey}\u0000${pair.consumerSecret}\u0000${pair.wordpressUsername.orEmpty()}\u0000${pair.wordpressApplicationPassword.orEmpty()}".toByteArray(Charsets.UTF_8))
         val idempotencyKey = "verify-${sha256("$storeId\u0000$siteUrl\u0000$credentialDigest".toByteArray(Charsets.UTF_8))}"
         val response = httpClient.post(url("/wp-json/woogit/v1/sites/verify")) {
-            header("X-WooGit-App-Version", appVersion); header("Idempotency-Key", idempotencyKey)
+            header("X-WooGit-App-Version", appVersion)
+            header("Idempotency-Key", idempotencyKey)
             contentType(ContentType.Application.Json)
             setBody(buildJsonObject {
-                put("url", JsonPrimitive(siteUrl)); put("wordpress_username", JsonPrimitive(pair.wordpressUsername.orEmpty()))
+                put("url", JsonPrimitive(siteUrl))
+                put("wordpress_username", JsonPrimitive(pair.wordpressUsername.orEmpty()))
                 put("wordpress_application_password", JsonPrimitive(pair.wordpressApplicationPassword.orEmpty()))
-                put("consumer_key", JsonPrimitive(pair.consumerKey)); put("consumer_secret", JsonPrimitive(pair.consumerSecret))
+                put("consumer_key", JsonPrimitive(pair.consumerKey))
+                put("consumer_secret", JsonPrimitive(pair.consumerSecret))
             })
         }
-        val body = response.bodyAsText(); if (response.status.value !in 200..299) throw BackendHttpException(response.status.value, body)
+        val body = response.bodyAsText()
+        if (response.status.value !in 200..299) {
+            throw BackendHttpException(response.status.value, body, extractBackendReason(body))
+        }
         val obj = json.parseToJsonElement(body).jsonObject
         val token = obj["session"]?.jsonPrimitive?.contentOrNull ?: throw BackendProtocolException("Missing Backend session")
         val scope = obj["scope"]?.jsonPrimitive?.contentOrNull ?: ""
@@ -98,7 +100,7 @@ class BackendClient(
     suspend fun getOperation(storeId: String, operationId: String): BackendOperationStatus = runCatching {
         val token = sessions.get(storeId) ?: throw BackendProtocolException("Backend session is unavailable")
         val response = httpClient.get(url("/wp-json/woogit/v1/operations/${operationId.urlEncode()}")) { header("X-WooGit-App-Version", appVersion); header("X-WooGit-Session", token) }
-        val body = response.bodyAsText(); if (response.status.value == 401) sessions.remove(storeId); if (response.status.value !in 200..299) throw BackendHttpException(response.status.value, body)
+        val body = response.bodyAsText(); if (response.status.value == 401) sessions.remove(storeId); if (response.status.value !in 200..299) throw BackendHttpException(response.status.value, body, extractBackendReason(body))
         val obj = json.parseToJsonElement(body).jsonObject
         BackendOperationStatus(obj["operation_id"]?.jsonPrimitive?.contentOrNull ?: operationId, obj["status"]?.jsonPrimitive?.contentOrNull ?: "unknown", obj["response"]?.toString())
     }.onFailure { throwable ->
@@ -108,18 +110,22 @@ class BackendClient(
     suspend fun revokeSession(storeId: String): Result<Unit> = runCatching {
         val token = sessions.get(storeId) ?: return@runCatching Unit
         val response = httpClient.post(url("/wp-json/woogit/v1/sessions/revoke")) { header("X-WooGit-App-Version", appVersion); header("X-WooGit-Session", token) }
-        val body = response.bodyAsText(); if (response.status.value !in 200..299 && response.status.value != 401) throw BackendHttpException(response.status.value, body); sessions.remove(storeId)
+        val body = response.bodyAsText(); if (response.status.value !in 200..299 && response.status.value != 401) throw BackendHttpException(response.status.value, body, extractBackendReason(body)); sessions.remove(storeId)
     }.onFailure { throwable ->
         reportTransport("Session", "BackendClient.revokeSession", "POST", "/wp-json/woogit/v1/sessions/revoke", throwable)
     }
 
     fun clearSession(storeId: String) = sessions.remove(storeId)
 
+    private fun extractBackendReason(body: String): String? = runCatching {
+        val obj = json.parseToJsonElement(body).jsonObject
+        obj["reason"]?.jsonPrimitive?.contentOrNull
+            ?: obj["code"]?.jsonPrimitive?.contentOrNull
+            ?: obj["message"]?.jsonPrimitive?.contentOrNull
+    }.getOrNull()
+
     private fun reportTransport(feature: String, location: String, method: String, endpoint: String, throwable: Throwable) {
-        technicalErrorReporter.report(
-            TechnicalErrorContext(feature = feature, location = location, operation = "Backend HTTP request", type = "NetworkError", httpMethod = method, endpoint = endpoint.substringBefore('?'), details = "Backend transport/protocol request failed"),
-            throwable,
-        )
+        technicalErrorReporter.report(TechnicalErrorContext(feature = feature, location = location, operation = "Backend HTTP request", type = "NetworkError", httpMethod = method, endpoint = endpoint.substringBefore('?'), details = "Backend transport/protocol request failed"), throwable)
     }
 
     private fun stableMutationKey(storeId: String, method: String, path: String, query: Map<String, Any>, body: String?): String { val canonical = "$storeId|$method|$path|${query.toSortedMap().entries.joinToString("&") { "${it.key}=${it.value}" }}|${body.orEmpty()}"; return "app-${sha256(canonical.toByteArray(Charsets.UTF_8))}" }
@@ -131,5 +137,5 @@ class BackendClient(
 
 data class BackendVerifyResult(val session: String, val scope: String, val accessEnabled: Boolean)
 data class BackendOperationStatus(val operationId: String, val status: String, val responseBody: String?)
-class BackendHttpException(val statusCode: Int, val responseBody: String) : RuntimeException("WooGit Backend HTTP $statusCode")
+class BackendHttpException(val statusCode: Int, val responseBody: String, val backendReason: String? = null) : RuntimeException("WooGit Backend HTTP $statusCode${backendReason?.let { ": $it" } ?: ""}")
 class BackendProtocolException(message: String) : RuntimeException(message)
