@@ -34,7 +34,7 @@ internal fun CreatePasswordScreen(
     var password by rememberSaveable { mutableStateOf("") }
     var confirmation by rememberSaveable { mutableStateOf("") }
     val busy = state is AccountSetupUiState.Loading
-    val meetsMinimumLength = password.length >= 8
+    val meetsMinimumLength = password.length >= WEB_PASSWORD_MIN_LENGTH
     val passwordsMatch = password.isNotEmpty() && password == confirmation
     val canSubmit = !busy && meetsMinimumLength && passwordsMatch
 
@@ -74,8 +74,8 @@ internal fun CreatePasswordScreen(
 
             GlassText(
                 when {
-                    password.isEmpty() -> "رمز عبور باید حداقل ۸ کاراکتر باشد."
-                    !meetsMinimumLength -> "هنوز ۸ کاراکتر کامل نشده است."
+                    password.isEmpty() -> "رمز عبور باید حداقل ۱۲ کاراکتر باشد."
+                    !meetsMinimumLength -> "هنوز ۱۲ کاراکتر کامل نشده است."
                     confirmation.isEmpty() -> "رمز عبور را دوباره وارد کنید."
                     !passwordsMatch -> "دو رمز عبور با هم مطابقت ندارند."
                     else -> "رمز عبور آماده ثبت است."
