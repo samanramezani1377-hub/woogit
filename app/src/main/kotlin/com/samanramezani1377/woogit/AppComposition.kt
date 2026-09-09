@@ -62,8 +62,8 @@ class AppComposition(context: Context) {
     val accountSetupGateway: AccountSetupGateway = object : AccountSetupGateway {
         override suspend fun requiresWebPassword(storeId: String) = accountSetupClient.requiresWebPassword(storeId)
 
-        override suspend fun setupWebPassword(storeId: String, password: String, confirmation: String) {
-            when (val storeResult = storeRepository.get(StoreId(storeId))) {
+        override suspend fun setupWebPassword(storeId: String, password: String, confirmation: String): CoreResult<Unit> {
+            return when (val storeResult = storeRepository.get(StoreId(storeId))) {
                 is CoreResult.Failure -> storeResult
                 is CoreResult.Success -> {
                     val store = storeResult.value
