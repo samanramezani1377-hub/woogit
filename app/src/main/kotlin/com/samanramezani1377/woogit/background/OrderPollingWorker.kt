@@ -61,6 +61,7 @@ class OrderPollingWorker(appContext: Context, params: WorkerParameters) : Corout
         private const val WORK_PREFIX = "woogit-order-polling-"
         private const val IMMEDIATE_PREFIX = "woogit-sync-now-"
         private const val POLL_INTERVAL_MINUTES = 15L
+        private const val INITIAL_DELAY_SECONDS = 30L
         private fun constraints() = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
         fun schedule(context: Context, storeId: String) {
             if (ForceUpdateController.isActive(context)) return
@@ -68,8 +69,15 @@ class OrderPollingWorker(appContext: Context, params: WorkerParameters) : Corout
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(WORK_PREFIX + storeId, ExistingPeriodicWorkPolicy.UPDATE, request)
         }
         fun scheduleNow(context: Context, storeId: String) {
+            scheduleDelayed(context, storeId, 0L)
+        }
+        fun scheduleDelayed(context: Context, storeId: String, delaySeconds: Long = INITIAL_DELAY_SECONDS) {
             if (ForceUpdateController.isActive(context)) return
-            val request = OneTimeWorkRequestBuilder<OrderPollingWorker>().setConstraints(constraints()).setInputData(workDataOf(KEY_STORE_ID to storeId)).build()
+            val request = OneTimeWorkRequestBuilder<OrderPollingWorker>()
+                .setInitialDelay(delaySeconds, TimeUnit.SECONDS)
+                .setConstraints(constraints())
+                .setInputData(workDataOf(KEY_STORE_ID to storeId))
+                .build()
             WorkManager.getInstance(context).enqueueUniqueWork(IMMEDIATE_PREFIX + storeId, ExistingWorkPolicy.KEEP, request)
         }
         fun cancel(context: Context, storeId: String) {
