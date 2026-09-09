@@ -1,7 +1,6 @@
 package com.samanramezani1377.woogit.presentation.dashboard
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,6 +19,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.samanramezani1377.woogit.presentation.GlassTokens
 
@@ -87,12 +88,20 @@ private fun DashboardNavItem(
         onClick = onClick,
         modifier = modifier.heightIn(min = 48.dp).padding(horizontal = 1.dp),
         shape = RoundedCornerShape(14.dp),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp, vertical = 10.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 4.dp, vertical = 10.dp),
         colors = ButtonDefaults.textButtonColors(
             contentColor = if (selected) GlassTokens.accent else GlassTokens.muted,
             containerColor = if (selected) GlassTokens.accent.copy(alpha = .16f) else Color.Transparent,
         ),
     ) {
-        Text(label, fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold)
+        Text(
+            text = label,
+            modifier = Modifier.fillMaxWidth(),
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.SemiBold,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Clip,
+            textAlign = TextAlign.Center,
+        )
     }
 }
