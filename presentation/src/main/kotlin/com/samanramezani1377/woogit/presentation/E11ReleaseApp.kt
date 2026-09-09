@@ -3,7 +3,6 @@ package com.samanramezani1377.woogit.presentation
 import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
 import com.samanramezani1377.woogit.data.network.BackendAnnouncement
 import kotlinx.coroutines.flow.StateFlow
 import com.samanramezani1377.woogit.presentation.account.AccountSetupGateway
@@ -24,7 +23,7 @@ fun E11ReleaseApp(
     if (!forceUpdateUrl.isNullOrBlank()) {
         ForceUpdateScreen(forceUpdateUrl)
     } else {
-        val banners by (bannerAnnouncements?.collectAsState() ?: androidx.compose.runtime.mutableStateOf(emptyList()))
+        val banners = bannerAnnouncements?.collectAsState()?.value.orEmpty()
         Column {
             AnnouncementBannerHost(announcements = banners, onDismiss = onDismissBanner)
             E11AppNavigation(
