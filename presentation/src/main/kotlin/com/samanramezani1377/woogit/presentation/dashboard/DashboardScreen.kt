@@ -139,7 +139,7 @@ internal fun DashboardScreen(
                     contentAlignment = Alignment.Center,
                 ) {
                     DashboardRefreshArrow(
-                        rotation = if (refreshing) loadingRotation else -indicatorProgress * 360f,
+                        rotation = if (refreshing) -loadingRotation else -indicatorProgress * 360f,
                         alpha = if (refreshing) 0.92f else indicatorProgress.coerceAtLeast(0.25f),
                     )
                 }
