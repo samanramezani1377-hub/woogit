@@ -25,6 +25,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
+import java.math.BigDecimal
 
 internal data class DashboardUiState(
     val orders: List<Order> = emptyList(),
@@ -113,8 +114,6 @@ internal class DashboardViewModel(private val dependencies: V1PresentationDepend
     private suspend fun refreshInternal() {
         _uiState.value = _uiState.value.copy(loading = true, error = null)
         try {
-            // Connection state is useful for the UI but must not block the dashboard's
-            // first render. Run it together with the two visible dashboard lists.
             val connectionDeferred = viewModelScope.async { checkConnection() }
             val ordersDeferred = viewModelScope.async { loadLatestOrders() }
             val productsDeferred = viewModelScope.async { loadLatestProducts() }
@@ -145,8 +144,6 @@ internal class DashboardViewModel(private val dependencies: V1PresentationDepend
                 }
             }
 
-            // Render the dashboard as soon as the visible lists are ready. Totals and
-            // sales are secondary metrics and must never hold the first screen hostage.
             _uiState.value = _uiState.value.copy(
                 orders = orders,
                 products = products,
@@ -155,8 +152,6 @@ internal class DashboardViewModel(private val dependencies: V1PresentationDepend
                 error = null,
             )
 
-            // All secondary metrics run concurrently. This removes the previous
-            // sequential chain of total-orders -> processing -> sales -> total-products.
             viewModelScope.launch {
                 val metrics = awaitAll(
                     async { dependencies.getOrders.count(storeId, null, null) },
@@ -169,11 +164,28 @@ internal class DashboardViewModel(private val dependencies: V1PresentationDepend
                 val processingTotal = (metrics[1] as CoreResult<Int>).getOrNull()
                 val salesSummaryResult = metrics[2] as CoreResult<SalesSummary>
                 val productsTotal = (metrics[3] as CoreResult<Int>).getOrNull()
-                val salesSummary = when (salesSummaryResult) {
+                val rawSalesSummary = when (salesSummaryResult) {
                     is CoreResult.Success -> salesSummaryResult.value
                     is CoreResult.Failure -> {
                         PresentationTechnicalErrorReporter.report("Dashboard", "DashboardViewModel.refreshInternal", "Load sales summary", PresentationErrorMapper.message(salesSummaryResult.error), salesSummaryResult.error.toString())
                         _uiState.value.salesSummary
+                    }
+                }
+
+                // WooCommerce can return a zero sales-report total even when the
+                // completed orders themselves contain valid totals. Prefer that
+                // concrete order data instead of showing a misleading zero.
+                val completedOrderSum = orders
+                    .asSequence()
+                    .filter { it.status.name == "COMPLETED" }
+                    .mapNotNull { it.total?.toBigDecimalOrNull() }
+                    .fold(BigDecimal.ZERO, BigDecimal::add)
+                val salesSummary = rawSalesSummary?.let { summary ->
+                    val reported = summary.netSales.toBigDecimalOrNull()
+                    if (reported != null && reported.compareTo(BigDecimal.ZERO) == 0 && completedOrderSum > BigDecimal.ZERO) {
+                        summary.copy(netSales = completedOrderSum.toPlainString())
+                    } else {
+                        summary
                     }
                 }
 
