@@ -23,11 +23,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -130,7 +132,7 @@ internal fun DashboardScreen(
                         .padding(top = 12.dp)
                         .size(42.dp)
                         .clip(CircleShape)
-                        .background(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.10f)),
+                        .background(Color.White.copy(alpha = 0.10f)),
                     contentAlignment = Alignment.Center,
                 ) {
                     DashboardRefreshArrow(
@@ -151,11 +153,39 @@ internal fun DashboardScreen(
 @Composable
 private fun DashboardRefreshArrow(rotation: Float, alpha: Float) {
     androidx.compose.material3.Icon(
-        imageVector = androidx.compose.material.icons.Icons.Default.Refresh,
+        imageVector = DashboardRefreshIcon,
         contentDescription = "در حال تازه‌سازی",
         modifier = Modifier
             .size(23.dp)
-            .rotate(rotation)
-            .graphicsLayer { this.alpha = alpha },
+            .rotate(rotation),
+        tint = Color.White.copy(alpha = alpha),
     )
+}
+
+private val DashboardRefreshIcon: ImageVector by lazy {
+    ImageVector.Builder(
+        name = "DashboardRefresh",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+    ).apply {
+        path(fill = SolidColor(Color.White)) {
+            moveTo(17.65f, 6.35f)
+            cubicTo(16.2f, 4.9f, 14.21f, 4f, 12f, 4f)
+            cubicTo(7.58f, 4f, 4.01f, 7.58f, 4.01f, 12f)
+            cubicTo(4.01f, 16.42f, 7.58f, 20f, 12f, 20f)
+            cubicTo(15.73f, 20f, 18.84f, 17.45f, 19.73f, 14f)
+            lineTo(17.65f, 14f)
+            cubicTo(16.82f, 16.33f, 14.61f, 18f, 12f, 18f)
+            cubicTo(8.69f, 18f, 6f, 15.31f, 6f, 12f)
+            cubicTo(6f, 8.69f, 8.69f, 6f, 12f, 6f)
+            cubicTo(13.66f, 6f, 15.14f, 6.69f, 16.22f, 7.78f)
+            lineTo(13f, 11f)
+            lineTo(20f, 11f)
+            lineTo(20f, 4f)
+            lineTo(17.65f, 6.35f)
+            close()
+        }
+    }.build()
 }
