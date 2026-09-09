@@ -11,6 +11,8 @@ import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -39,8 +41,12 @@ class AccountSetupClient(
                 DomainError.Network("WooGit account requirements HTTP ${response.status.value}")
             )
         }
-        val root = json.parseToJsonElement(body).jsonObject
-        val requirements = root["requirements"]?.jsonArray ?: JsonArray(emptyList())
+        val root = json.parseToJsonElement(body)
+        val requirements = when (root) {
+            is JsonArray -> root
+            is JsonObject -> root["requirements"]?.jsonArray ?: JsonArray(emptyList())
+            else -> JsonArray(emptyList())
+        }
         val required = requirements.any { item ->
             val obj = item.jsonObject
             val type = obj["type"]?.jsonPrimitive?.content ?: ""
