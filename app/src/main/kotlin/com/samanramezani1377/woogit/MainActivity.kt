@@ -23,7 +23,13 @@ class MainActivity : ComponentActivity() {
         requestNotificationPermissionIfNeeded()
         val composition = (application as WooGitApplication).composition
         setContent {
-            WooGitTheme { E11ReleaseApp(composition.v1Presentation, notificationOrderId.value) }
+            WooGitTheme {
+                E11ReleaseApp(
+                    dependencies = composition.v1Presentation,
+                    accountSetupGateway = composition.accountSetupGateway,
+                    initialOrderId = notificationOrderId.value,
+                )
+            }
         }
     }
 
