@@ -12,6 +12,7 @@ import androidx.core.view.WindowCompat
 import androidx.lifecycle.lifecycleScope
 import com.samanramezani1377.woogit.background.WooGitNotificationManager
 import com.samanramezani1377.woogit.data.network.AnnouncementClient
+import com.samanramezani1377.woogit.data.network.NetworkClient
 import com.samanramezani1377.woogit.security.AndroidBackendSessionStore
 import com.samanramezani1377.woogit.presentation.E11ReleaseApp
 import com.samanramezani1377.woogit.presentation.WooGitTheme
@@ -64,11 +65,12 @@ class MainActivity : ComponentActivity() {
 
     private fun syncAnnouncementsForNotification() {
         lifecycleScope.launch(Dispatchers.IO) {
-            runCatching {
+            val transport = NetworkClient()
+            try {
                 val sessionStore = AndroidBackendSessionStore(applicationContext)
                 val storeId = getSharedPreferences("woogit_session", MODE_PRIVATE).getString("active_store_id", null)
                 val client = AnnouncementClient(
-                    httpClient = (application as WooGitApplication).compositionNetworkClient,
+                    httpClient = transport.httpClient,
                     baseUrl = BuildConfig.WOOGIT_BACKEND_BASE_URL,
                     sessions = sessionStore,
                     appVersion = BuildConfig.VERSION_NAME,
@@ -86,6 +88,10 @@ class MainActivity : ComponentActivity() {
                     )
                     if (posted) announcementNotificationPrefs.edit().putBoolean(announcement.id, true).apply()
                 }
+            } catch (_: Throwable) {
+                // Announcement delivery is best-effort and must never block app startup.
+            } finally {
+                transport.close()
             }
         }
     }
