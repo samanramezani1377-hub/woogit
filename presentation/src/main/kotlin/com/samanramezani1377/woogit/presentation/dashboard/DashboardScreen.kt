@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -138,7 +139,7 @@ internal fun DashboardScreen(
                     contentAlignment = Alignment.Center,
                 ) {
                     DashboardRefreshArrow(
-                        rotation = if (refreshing) -loadingRotation else indicatorProgress * 360f,
+                        rotation = if (refreshing) loadingRotation else -indicatorProgress * 360f,
                         alpha = if (refreshing) 0.92f else indicatorProgress.coerceAtLeast(0.25f),
                     )
                 }
@@ -159,6 +160,7 @@ private fun DashboardRefreshArrow(rotation: Float, alpha: Float) {
         contentDescription = "در حال تازه‌سازی",
         modifier = Modifier
             .size(36.dp)
+            .scale(scaleX = -1f, scaleY = 1f)
             .rotate(rotation),
         tint = DashboardRefreshAccent.copy(alpha = alpha),
     )
