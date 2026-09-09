@@ -25,7 +25,7 @@ private fun String.toWooHtmlForGlass(): String = replace("&", "&amp;").replace("
 private val GlassFieldTextStyle = TextStyle(lineHeight = 24.sp)
 
 @Composable
-fun GlassTextField(value: String, onValueChange: (String) -> Unit, label: String, modifier: Modifier = Modifier, enabled: Boolean = true, singleLine: Boolean = true, minLines: Int = 1, maxLines: Int = if (singleLine) 1 else Int.MAX_VALUE, minHeight: androidx.compose.ui.unit.Dp = if (singleLine) 64.dp else 56.dp) {
+fun GlassTextField(value: String, onValueChange: (String) -> Unit, label: String, modifier: Modifier = Modifier, enabled: Boolean = true, singleLine: Boolean = true, minLines: Int = 1, maxLines: Int = if (singleLine) 1 else Int.MAX_VALUE, minHeight: androidx.compose.ui.unit.Dp = if (singleLine) 64.dp else 24.dp) {
     val rich = label == "توضیحات" || label == "توضیح کوتاه"
     val display = if (rich) value.stripHtmlForGlass() else value
     val shape = androidx.compose.foundation.shape.RoundedCornerShape(14.dp)
