@@ -28,6 +28,28 @@ class AnnouncementClient(
         }
         val body = response.bodyAsText()
         if (response.status != HttpStatusCode.OK) {
+            val versionGate = runCatching { json.parseToJsonElement(body).jsonObject }.getOrNull()
+            val code = versionGate?.get("code")?.jsonPrimitive?.contentOrNull
+            if (code == "APP_VERSION_DEPRECATED") {
+                val updateUrl = versionGate["update_url"]?.jsonPrimitive?.contentOrNull
+                    ?.takeIf { it.isNotBlank() }
+                    ?: DEFAULT_UPDATE_URL
+                return listOf(
+                    BackendAnnouncement(
+                        id = FORCE_UPDATE_ID,
+                        type = "critical",
+                        title = "نسخه شما منسوخ شده است",
+                        message = "برای ادامه استفاده از WooGit باید اپ را به آخرین نسخه بروزرسانی کنید.",
+                        image = null,
+                        displayType = 1,
+                        actions = listOf(BackendAnnouncementAction("update", "بروزرسانی", updateUrl)),
+                        dismissible = false,
+                        notificationEnabled = true,
+                        notificationType = 3,
+                        notificationChannel = "updates",
+                    )
+                )
+            }
             throw BackendHttpException(response.status.value, body)
         }
         val root = json.parseToJsonElement(body).jsonObject
@@ -62,6 +84,11 @@ class AnnouncementClient(
                 notificationChannel = item["notification_channel"]?.jsonPrimitive?.contentOrNull ?: "announcements",
             )
         }.orEmpty()
+    }
+
+    private companion object {
+        const val FORCE_UPDATE_ID = "system-app-version-deprecated"
+        const val DEFAULT_UPDATE_URL = "https://woogit.ir/download-app/"
     }
 }
 
