@@ -17,6 +17,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
@@ -65,6 +66,11 @@ internal fun DashboardScreen(
     val scrollState = rememberScrollState()
     var pullDistance by remember { mutableFloatStateOf(0f) }
     val pullThreshold = 400f
+
+    LaunchedEffect(refreshing) {
+        if (!refreshing) pullDistance = 0f
+    }
+
     val pullToReloadConnection = remember(scrollState, refreshing) {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
