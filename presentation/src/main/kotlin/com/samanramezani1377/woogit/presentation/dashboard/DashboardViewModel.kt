@@ -114,9 +114,9 @@ internal class DashboardViewModel(private val dependencies: V1PresentationDepend
     private suspend fun refreshInternal() {
         _uiState.value = _uiState.value.copy(loading = true, error = null)
         try {
-            val connectionDeferred = viewModelScope.async { checkConnection() }
-            val ordersDeferred = viewModelScope.async { loadLatestOrders() }
-            val productsDeferred = viewModelScope.async { loadLatestProducts() }
+            val connectionDeferred = async { checkConnection() }
+            val ordersDeferred = async { loadLatestOrders() }
+            val productsDeferred = async { loadLatestProducts() }
 
             val (connection, ordersResult, productsResult) = awaitAll(
                 connectionDeferred,
@@ -170,9 +170,6 @@ internal class DashboardViewModel(private val dependencies: V1PresentationDepend
                 }
             }
 
-            // WooCommerce can return a zero sales-report total even when the
-            // completed orders themselves contain valid totals. Prefer that
-            // concrete order data instead of showing a misleading zero.
             val completedOrderSum = orders
                 .asSequence()
                 .filter { it.status.name == "COMPLETED" }
