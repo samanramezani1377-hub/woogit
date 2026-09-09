@@ -32,7 +32,6 @@ internal fun DashboardScreen(
     selectedDestination: DashboardDestination = DashboardDestination.DASHBOARD,
     onDestinationSelected: (DashboardDestination) -> Unit,
     onAiClick: () -> Unit,
-    onDebugLogsClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxSize(), verticalArrangement = Arrangement.Bottom) {
