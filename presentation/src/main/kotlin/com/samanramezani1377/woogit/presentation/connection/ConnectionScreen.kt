@@ -70,12 +70,12 @@ internal fun ConnectionScreen(dependencies: V1PresentationDependencies, onConnec
             GlassPasswordField(value = consumerSecret, onValueChange = { consumerSecret = it })
             GlassText("دسترسی WordPress برای تصاویر")
             GlassTextField(value = wordpressUser, onValueChange = { wordpressUser = it }, label = "نام کاربری WordPress")
-            GlassPasswordField(value = wordpressPassword, onValueChange = { wordpressPassword = it }, label = "رمز عبور WordPress")
+            GlassPasswordField(value = wordpressPassword, onValueChange = { wordpressPassword = it }, label = "Application Password وردپرس")
 
             when (val currentState = state) {
                 FeatureUiState.Loading -> GlassLoading("در حال اتصال…")
                 is FeatureUiState.Error -> GlassErrorState(currentState.message)
-                FeatureUiState.Offline -> GlassErrorState("اتصال به فروشگاه برقرار نشد. اینترنت و اطلاعات اتصال را بررسی کنید.")
+                FeatureUiState.Offline -> GlassErrorState("خطای ارتباطی در فرایند اتصال رخ داد. دوباره تلاش کنید.")
                 else -> Unit
             }
 
