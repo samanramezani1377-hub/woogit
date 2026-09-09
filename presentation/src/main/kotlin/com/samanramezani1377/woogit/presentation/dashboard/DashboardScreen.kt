@@ -37,6 +37,8 @@ import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import com.samanramezani1377.woogit.core.domain.model.OrderStatus
 
+private val DashboardRefreshAccent = Color(0xFF6C5CE7)
+
 @Composable
 internal fun DashboardScreen(
     storeName: String,
@@ -158,7 +160,7 @@ private fun DashboardRefreshArrow(rotation: Float, alpha: Float) {
         modifier = Modifier
             .size(36.dp)
             .rotate(rotation),
-        tint = Color.White.copy(alpha = alpha),
+        tint = DashboardRefreshAccent.copy(alpha = alpha),
     )
 }
 
