@@ -25,6 +25,7 @@ class BackendClient(
     private val sessions: BackendSessionStore,
     private val appVersion: String,
     private val technicalErrorReporter: TechnicalErrorReporter = NoOpTechnicalErrorReporter,
+    private val responseObserver: BackendResponseObserver? = null,
 ) {
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
 
@@ -45,6 +46,7 @@ class BackendClient(
             })
         }
         val body = response.bodyAsText()
+        responseObserver?.onResponse(response.status.value, body)
         if (response.status.value !in 200..299) {
             val exception = BackendHttpException(response.status.value, body, extractBackendReason(body))
             technicalErrorReporter.report(
@@ -86,7 +88,7 @@ class BackendClient(
                 pair.wordpressApplicationPassword?.takeIf { it.isNotBlank() }?.let { header("X-WooGit-Wordpress-Application-Password", it) }
                 key?.let { header("Idempotency-Key", it) }; if (body != null) { contentType(ContentType.Application.Json); setBody(body) }
             }
-            val text = response.bodyAsText(); if (response.status.value == 401) sessions.remove(storeId)
+            val text = response.bodyAsText(); responseObserver?.onResponse(response.status.value, text); if (response.status.value == 401) sessions.remove(storeId)
             ApiResponse(response.status.value, text, normalizedMethod, path, response.headers.entries().associate { it.key.lowercase() to it.value.joinToString(",") })
         } catch (throwable: Throwable) {
             reportTransport("WooCommerce", "BackendClient.forward", method.uppercase(), endpoint, throwable)
@@ -107,7 +109,7 @@ class BackendClient(
                 pair.wordpressUsername?.takeIf { it.isNotBlank() }?.let { header("X-WooGit-Wordpress-Username", it) }; pair.wordpressApplicationPassword?.takeIf { it.isNotBlank() }?.let { header("X-WooGit-Wordpress-Application-Password", it) }
                 header("Idempotency-Key", key); header(HttpHeaders.ContentDisposition, "attachment; filename=\"${fileName.substringAfterLast('/').substringAfterLast('\\')}\""); this.contentType(ContentType.parse(contentType)); setBody(bytes)
             }
-            val text = response.bodyAsText(); if (response.status.value == 401) sessions.remove(storeId)
+            val text = response.bodyAsText(); responseObserver?.onResponse(response.status.value, text); if (response.status.value == 401) sessions.remove(storeId)
             ApiResponse(response.status.value, text, normalizedMethod, path, response.headers.entries().associate { it.key.lowercase() to it.value.joinToString(",") })
         } catch (throwable: Throwable) {
             reportTransport("Media", "BackendClient.forwardBinary", method.uppercase(), endpoint, throwable)
@@ -118,7 +120,7 @@ class BackendClient(
     suspend fun getOperation(storeId: String, operationId: String): BackendOperationStatus = runCatching {
         val token = sessions.get(storeId) ?: throw BackendProtocolException("Backend session is unavailable")
         val response = httpClient.get(url("/wp-json/woogit/v1/operations/${operationId.urlEncode()}")) { header("X-WooGit-App-Version", appVersion); header("X-WooGit-Session", token) }
-        val body = response.bodyAsText(); if (response.status.value == 401) sessions.remove(storeId); if (response.status.value !in 200..299) throw BackendHttpException(response.status.value, body, extractBackendReason(body))
+        val body = response.bodyAsText(); responseObserver?.onResponse(response.status.value, body); if (response.status.value == 401) sessions.remove(storeId); if (response.status.value !in 200..299) throw BackendHttpException(response.status.value, body, extractBackendReason(body))
         val obj = json.parseToJsonElement(body).jsonObject
         BackendOperationStatus(obj["operation_id"]?.jsonPrimitive?.contentOrNull ?: operationId, obj["status"]?.jsonPrimitive?.contentOrNull ?: "unknown", obj["response"]?.toString())
     }.onFailure { throwable ->
@@ -128,7 +130,7 @@ class BackendClient(
     suspend fun revokeSession(storeId: String): Result<Unit> = runCatching {
         val token = sessions.get(storeId) ?: return@runCatching Unit
         val response = httpClient.post(url("/wp-json/woogit/v1/sessions/revoke")) { header("X-WooGit-App-Version", appVersion); header("X-WooGit-Session", token) }
-        val body = response.bodyAsText(); if (response.status.value !in 200..299 && response.status.value != 401) throw BackendHttpException(response.status.value, body, extractBackendReason(body)); sessions.remove(storeId)
+        val body = response.bodyAsText(); responseObserver?.onResponse(response.status.value, body); if (response.status.value !in 200..299 && response.status.value != 401) throw BackendHttpException(response.status.value, body, extractBackendReason(body)); sessions.remove(storeId)
     }.onFailure { throwable ->
         reportTransport("Session", "BackendClient.revokeSession", "POST", "/wp-json/woogit/v1/sessions/revoke", throwable)
     }
