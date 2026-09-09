@@ -14,6 +14,7 @@ import com.samanramezani1377.woogit.data.repository.*
 import com.samanramezani1377.woogit.data.local.*
 import com.samanramezani1377.woogit.data.sync.*
 import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
+import com.samanramezani1377.woogit.presentation.account.AccountSetupGateway
 import com.samanramezani1377.woogit.core.domain.error.CoreResult
 import com.samanramezani1377.woogit.core.domain.model.Conflict
 import com.samanramezani1377.woogit.core.domain.model.ConflictResolution
@@ -29,6 +30,12 @@ class AppComposition(context: Context) {
     private val technicalErrorReporter = AppTechnicalErrorReporter(appContext)
     private val network = NetworkClient()
     private val backend = BackendClient(network.httpClient, BuildConfig.WOOGIT_BACKEND_BASE_URL, secure, sessions, BuildConfig.VERSION_NAME, technicalErrorReporter)
+    private val accountSetupClient = AccountSetupClient(network.httpClient, BuildConfig.WOOGIT_BACKEND_BASE_URL, sessions, BuildConfig.VERSION_NAME)
+    val accountSetupGateway: AccountSetupGateway = object : AccountSetupGateway {
+        override suspend fun requiresWebPassword(storeId: String) = accountSetupClient.requiresWebPassword(storeId)
+        override suspend fun setupWebPassword(storeId: String, password: String, confirmation: String) =
+            accountSetupClient.setupWebPassword(storeId, password, confirmation)
+    }
     private val orderLocal = SqlOrderDataSource(db)
     private val productLocal = SqlProductDataSource(db)
     private val storeLocal = SqlStoreDataSource(db)
