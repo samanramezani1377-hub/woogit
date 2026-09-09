@@ -27,6 +27,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import java.math.BigDecimal
+import java.util.concurrent.atomic.AtomicBoolean
 
 internal data class DashboardUiState(
     val orders: List<Order> = emptyList(),
@@ -50,14 +51,20 @@ internal class DashboardViewModel(private val dependencies: V1PresentationDepend
     private val _uiState = MutableStateFlow(DashboardUiState())
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
     private val refreshMutex = Mutex()
+    private val refreshInFlight = AtomicBoolean(false)
     private var healthMonitorJob: Job? = null
     private var healthCheckInFlight = false
 
     fun refresh() {
+        if (!refreshInFlight.compareAndSet(false, true)) return
+        _uiState.value = _uiState.value.copy(loading = true, error = null)
         viewModelScope.launch {
-            refreshMutex.withLock {
-                if (_uiState.value.loading) return@withLock
-                refreshInternal()
+            try {
+                refreshMutex.withLock {
+                    refreshInternal()
+                }
+            } finally {
+                refreshInFlight.set(false)
             }
         }
     }
@@ -113,7 +120,6 @@ internal class DashboardViewModel(private val dependencies: V1PresentationDepend
         dependencies.getProducts(storeId, 1, 30, null)
 
     private suspend fun refreshInternal() {
-        _uiState.value = _uiState.value.copy(loading = true, error = null)
         try {
             val (connection, ordersResult, productsResult) = coroutineScope {
                 val connectionDeferred = async { checkConnection() }
