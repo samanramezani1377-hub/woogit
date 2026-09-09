@@ -1,6 +1,11 @@
 package com.samanramezani1377.woogit.presentation.dashboard
 
-import android.app.Activity
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,22 +16,21 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import com.samanramezani1377.woogit.core.domain.model.OrderStatus
@@ -56,11 +60,10 @@ internal fun DashboardScreen(
     refreshing: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
     val scrollState = rememberScrollState()
     var pullDistance by remember { mutableFloatStateOf(0f) }
     val pullThreshold = 400f
-    val pullToReloadConnection = remember(context, scrollState, refreshing) {
+    val pullToReloadConnection = remember(scrollState, refreshing) {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
                 if (refreshing) return Offset.Zero
@@ -86,6 +89,17 @@ internal fun DashboardScreen(
             }
         }
     }
+
+    val infiniteTransition = rememberInfiniteTransition(label = "dashboardRefresh")
+    val loadingRotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "dashboardRefreshRotation",
+    )
 
     Column(
         modifier
@@ -119,12 +133,9 @@ internal fun DashboardScreen(
                         .background(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.10f)),
                     contentAlignment = Alignment.Center,
                 ) {
-                    CircularProgressIndicator(
-                        progress = { if (refreshing) 1f else indicatorProgress },
-                        modifier = Modifier
-                            .size(24.dp)
-                            .alpha(if (refreshing) 1f else indicatorProgress.coerceAtLeast(0.25f)),
-                        strokeWidth = 2.dp,
+                    DashboardRefreshArrow(
+                        rotation = if (refreshing) loadingRotation else indicatorProgress * 360f,
+                        alpha = if (refreshing) 1f else indicatorProgress.coerceAtLeast(0.25f),
                     )
                 }
             }
@@ -135,4 +146,16 @@ internal fun DashboardScreen(
             onAiClick = onAiClick,
         )
     }
+}
+
+@Composable
+private fun DashboardRefreshArrow(rotation: Float, alpha: Float) {
+    androidx.compose.material3.Icon(
+        imageVector = androidx.compose.material.icons.Icons.Default.Refresh,
+        contentDescription = "در حال تازه‌سازی",
+        modifier = Modifier
+            .size(23.dp)
+            .rotate(rotation)
+            .graphicsLayer { this.alpha = alpha },
+    )
 }
