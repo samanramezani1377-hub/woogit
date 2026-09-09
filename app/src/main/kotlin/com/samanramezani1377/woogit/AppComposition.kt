@@ -63,17 +63,7 @@ class AppComposition(context: Context) {
         override suspend fun requiresWebPassword(storeId: String) = accountSetupClient.requiresWebPassword(storeId)
 
         override suspend fun setupWebPassword(storeId: String, password: String, confirmation: String): CoreResult<Unit> {
-            return when (val storeResult = storeRepository.get(StoreId(storeId))) {
-                is CoreResult.Failure -> storeResult
-                is CoreResult.Success -> {
-                    val store = storeResult.value
-                    val reference = store.credentialReference
-                        ?: return CoreResult.Failure(com.samanramezani1377.woogit.core.domain.error.DomainError.Authentication("Store credentials are unavailable"))
-                    val credentials = secure.get(reference)
-                        ?: return CoreResult.Failure(com.samanramezani1377.woogit.core.domain.error.DomainError.Authentication("Store credentials are unavailable"))
-                    accountSetupClient.setupWebPassword(storeId, store.baseUrl, credentials, password, confirmation)
-                }
-            }
+            return accountSetupClient.setupWebPassword(storeId, password, confirmation)
         }
     }
     val orderRepository = OrderRepositoryV1Impl(orderLocal, provider, mutationCoordinator, pending, scope)
