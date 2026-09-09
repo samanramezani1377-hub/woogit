@@ -9,6 +9,7 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -38,9 +39,7 @@ class AccountSetupClient(
             )
         }
         val root = json.parseToJsonElement(body).jsonObject
-        val requirements = root["requirements"]?.jsonArray ?: emptyList<JsonPrimitive>().let {
-            kotlinx.serialization.json.JsonArray(it)
-        }
+        val requirements = root["requirements"]?.jsonArray ?: JsonArray(emptyList())
         val required = requirements.any { item ->
             val obj = item.jsonObject
             val type = obj["type"]?.jsonPrimitive?.content ?: ""
