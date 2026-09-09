@@ -44,8 +44,8 @@ class AccountSetupViewModel(
     }
 
     fun setupPassword(storeId: String, password: String, confirmation: String) = viewModelScope.launch {
-        if (password.length < 8) {
-            _state.value = AccountSetupUiState.Error("رمز عبور باید حداقل ۸ کاراکتر باشد.")
+        if (password.length < 12) {
+            _state.value = AccountSetupUiState.Error("رمز عبور باید حداقل ۱۲ کاراکتر باشد.")
             return@launch
         }
         if (password != confirmation) {
