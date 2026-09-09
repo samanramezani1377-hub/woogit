@@ -99,7 +99,7 @@ class AppComposition(context: Context) {
     val deleteAttribute = DeleteAttributeUseCase(attributeRepository)
     val getTerms = GetTermsUseCase(termRepository)
     val getTerm = GetTermUseCase(termRepository)
-    val createTerm = CreateTermUseCase(createTerm)
+    val createTerm = CreateTermUseCase(termRepository)
     val updateTerm = UpdateTermUseCase(updateTerm)
     val deleteTerm = DeleteTermUseCase(deleteTerm)
     val uploadMedia = UploadMediaUseCase(mediaRepository)
