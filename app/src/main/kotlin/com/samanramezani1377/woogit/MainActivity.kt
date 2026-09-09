@@ -16,7 +16,6 @@ import com.samanramezani1377.woogit.data.network.NetworkClient
 import com.samanramezani1377.woogit.security.AndroidBackendSessionStore
 import com.samanramezani1377.woogit.presentation.E11ReleaseApp
 import com.samanramezani1377.woogit.presentation.WooGitTheme
-import com.samanramezani1377.woogit.presentation.dashboard.HealthCheckVersionGate
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -31,13 +30,14 @@ class MainActivity : ComponentActivity() {
     private val announcementNotificationPrefs by lazy { getSharedPreferences("woogit_announcement_notifications", MODE_PRIVATE) }
     private val announcementScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var announcementSyncJob: Job? = null
+    private lateinit var appHealthCheckMonitor: AppHealthCheckMonitor
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, true)
         notificationOrderId.value = intentOrderId(intent)
         forceUpdateUrl.value = persistedForceUpdateUrl()
-        HealthCheckVersionGate.configure { checkVersionGateFromHealth() }
+        appHealthCheckMonitor = AppHealthCheckMonitor(applicationContext)
         observeForceUpdateGate()
         val composition = (application as WooGitApplication).composition
         setContent {
@@ -51,6 +51,16 @@ class MainActivity : ComponentActivity() {
             }
         }
         requestNotificationPermissionIfNeeded { syncAnnouncementsForNotification() }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        appHealthCheckMonitor.start()
+    }
+
+    override fun onStop() {
+        appHealthCheckMonitor.stop()
+        super.onStop()
     }
 
     override fun onResume() {
@@ -70,6 +80,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        appHealthCheckMonitor.dispose()
         announcementSyncJob?.cancel()
         announcementScope.cancel()
         super.onDestroy()
@@ -100,32 +111,6 @@ class MainActivity : ComponentActivity() {
             ForceUpdateController.updateUrl.filterNotNull().collect { url ->
                 runOnUiThread { forceUpdateUrl.value = url }
             }
-        }
-    }
-
-    private suspend fun checkVersionGateFromHealth(): String? {
-        val transport = NetworkClient()
-        return try {
-            val sessionStore = AndroidBackendSessionStore(applicationContext)
-            val storeId = getSharedPreferences("woogit_session", MODE_PRIVATE).getString("active_store_id", null)
-            val client = AnnouncementClient(
-                httpClient = transport.httpClient,
-                baseUrl = BuildConfig.WOOGIT_BACKEND_BASE_URL,
-                sessions = sessionStore,
-                appVersion = BuildConfig.VERSION_NAME,
-            )
-            val announcements = client.getAnnouncements(storeId)
-            val forceUpdate = announcements.firstOrNull { it.id == FORCE_UPDATE_ID } ?: return null
-            val url = forceUpdate.actions.firstOrNull { it.type == "update" }?.url
-                ?.takeIf { it.isNotBlank() }
-                ?: DEFAULT_UPDATE_URL
-            ForceUpdateController.activate(applicationContext, url)
-            runOnUiThread { forceUpdateUrl.value = url }
-            url
-        } catch (_: Throwable) {
-            null
-        } finally {
-            transport.close()
         }
     }
 
