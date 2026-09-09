@@ -9,6 +9,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
+const val WEB_PASSWORD_MIN_LENGTH = 12
+
 interface AccountSetupGateway {
     suspend fun requiresWebPassword(storeId: String): CoreResult<Boolean>
     suspend fun setupWebPassword(storeId: String, password: String, confirmation: String): CoreResult<Unit>
@@ -44,7 +46,7 @@ class AccountSetupViewModel(
     }
 
     fun setupPassword(storeId: String, password: String, confirmation: String) = viewModelScope.launch {
-        if (password.length < 12) {
+        if (password.length < WEB_PASSWORD_MIN_LENGTH) {
             _state.value = AccountSetupUiState.Error("رمز عبور باید حداقل ۱۲ کاراکتر باشد.")
             return@launch
         }
