@@ -1,12 +1,15 @@
 package com.samanramezani1377.woogit.presentation.dashboard
 
 import android.app.Activity
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
@@ -18,6 +21,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -25,7 +30,6 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.draw.alpha
 import com.samanramezani1377.woogit.core.domain.model.OrderStatus
 
 @Composable
@@ -106,14 +110,24 @@ internal fun DashboardScreen(
             }
 
             val indicatorProgress = (pullDistance / pullThreshold).coerceIn(0f, 1f)
-            if (pullDistance > 0f) {
-                CircularProgressIndicator(
-                    progress = { indicatorProgress },
-                    modifier
+            if (pullDistance > 0f || refreshing) {
+                Box(
+                    Modifier
                         .align(Alignment.TopCenter)
                         .padding(top = 12.dp)
-                        .alpha(indicatorProgress.coerceAtLeast(0.15f)),
-                )
+                        .size(42.dp)
+                        .clip(CircleShape)
+                        .background(androidx.compose.ui.graphics.Color.White.copy(alpha = 0.10f)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator(
+                        progress = { if (refreshing) 1f else indicatorProgress },
+                        modifier = Modifier
+                            .size(24.dp)
+                            .alpha(indicatorProgress.coerceAtLeast(0.25f)),
+                        strokeWidth = 2.dp,
+                    )
+                }
             }
         }
         DashboardFloatingNavigation(
