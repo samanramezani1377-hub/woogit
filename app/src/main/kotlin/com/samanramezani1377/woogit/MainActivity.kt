@@ -21,7 +21,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -108,7 +107,7 @@ class MainActivity : ComponentActivity() {
 
     private fun observeForceUpdateGate() {
         announcementScope.launch {
-            ForceUpdateController.updateUrl.filterNotNull().collect { url ->
+            ForceUpdateController.updateUrl.collect { url ->
                 runOnUiThread { forceUpdateUrl.value = url }
             }
         }
@@ -135,10 +134,11 @@ class MainActivity : ComponentActivity() {
                         ?: DEFAULT_UPDATE_URL
                     ForceUpdateController.activate(applicationContext, url)
                     runOnUiThread { forceUpdateUrl.value = url }
-                } else if (!ForceUpdateController.isActive(applicationContext)) {
-                    runOnUiThread { forceUpdateUrl.value = null }
                 } else {
-                    runOnUiThread { forceUpdateUrl.value = persistedForceUpdateUrl() }
+                    // A successful announcement sync means the backend accepted this app version.
+                    // Clear any stale mandatory-update gate left by an older installation.
+                    ForceUpdateController.clear(applicationContext)
+                    runOnUiThread { forceUpdateUrl.value = null }
                 }
                 val notifications = WooGitNotificationManager(applicationContext)
                 announcements.filter { it.notificationEnabled }.forEach { announcement ->
