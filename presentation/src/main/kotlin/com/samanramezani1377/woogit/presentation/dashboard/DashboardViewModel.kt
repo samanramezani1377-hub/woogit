@@ -60,9 +60,7 @@ internal class DashboardViewModel(private val dependencies: V1PresentationDepend
         _uiState.value = _uiState.value.copy(loading = true, error = null)
         viewModelScope.launch {
             try {
-                refreshMutex.withLock {
-                    refreshInternal()
-                }
+                refreshMutex.withLock { refreshInternal() }
             } finally {
                 refreshInFlight.set(false)
             }
@@ -100,6 +98,7 @@ internal class DashboardViewModel(private val dependencies: V1PresentationDepend
             } ?: ConnectionState.ERROR.also {
                 PresentationTechnicalErrorReporter.report("Dashboard", "DashboardViewModel.checkConnection", "Connection timeout", "وضعیت اتصال قابل بررسی نبود.", "Connection check timed out after 5000ms")
             }
+            runCatching { HealthCheckVersionGate.check() }
             _uiState.value = _uiState.value.copy(connectionState = state, lastConnectionCheckAtMillis = System.currentTimeMillis())
             state
         } catch (e: CancellationException) {
@@ -113,11 +112,8 @@ internal class DashboardViewModel(private val dependencies: V1PresentationDepend
         }
     }
 
-    private suspend fun loadLatestOrders(): CoreResult<List<Order>> =
-        dependencies.getOrders(storeId, 1, 30, null, null)
-
-    private suspend fun loadLatestProducts(): CoreResult<List<Product>> =
-        dependencies.getProducts(storeId, 1, 30, null)
+    private suspend fun loadLatestOrders(): CoreResult<List<Order>> = dependencies.getOrders(storeId, 1, 30, null, null)
+    private suspend fun loadLatestProducts(): CoreResult<List<Product>> = dependencies.getProducts(storeId, 1, 30, null)
 
     private suspend fun refreshInternal() {
         try {
@@ -148,12 +144,7 @@ internal class DashboardViewModel(private val dependencies: V1PresentationDepend
                 }
             }
 
-            _uiState.value = _uiState.value.copy(
-                orders = orders,
-                products = products,
-                connectionState = connectionState,
-                error = null,
-            )
+            _uiState.value = _uiState.value.copy(orders = orders, products = products, connectionState = connectionState, error = null)
 
             val metrics = coroutineScope {
                 awaitAll(
@@ -176,28 +167,14 @@ internal class DashboardViewModel(private val dependencies: V1PresentationDepend
                 }
             }
 
-            val completedOrderSum = orders
-                .asSequence()
-                .filter { it.status.name == "COMPLETED" }
-                .mapNotNull { it.total?.toBigDecimalOrNull() }
-                .fold(BigDecimal.ZERO, BigDecimal::add)
+            val completedOrderSum = orders.asSequence().filter { it.status.name == "COMPLETED" }.mapNotNull { it.total?.toBigDecimalOrNull() }.fold(BigDecimal.ZERO, BigDecimal::add)
             val salesSummary = rawSalesSummary?.let { summary ->
                 val reported = summary.netSales.toBigDecimalOrNull()
-                if (reported != null && reported.compareTo(BigDecimal.ZERO) == 0 && completedOrderSum > BigDecimal.ZERO) {
-                    summary.copy(netSales = completedOrderSum.toPlainString())
-                } else {
-                    summary
-                }
+                if (reported != null && reported.compareTo(BigDecimal.ZERO) == 0 && completedOrderSum > BigDecimal.ZERO) summary.copy(netSales = completedOrderSum.toPlainString()) else summary
             }
 
             val current = _uiState.value
-            val newState = current.copy(
-                ordersTotal = ordersTotal,
-                processingTotal = processingTotal,
-                productsTotal = productsTotal,
-                salesSummary = salesSummary,
-                loading = false,
-            )
+            val newState = current.copy(ordersTotal = ordersTotal, processingTotal = processingTotal, productsTotal = productsTotal, salesSummary = salesSummary, loading = false)
             _uiState.value = newState
             DashboardSalesDebugSnapshot.update(newState.orders, salesSummary, newState.revenue)
         } catch (e: CancellationException) {
