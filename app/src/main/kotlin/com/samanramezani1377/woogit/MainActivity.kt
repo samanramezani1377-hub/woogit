@@ -21,6 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 
@@ -30,6 +31,7 @@ class MainActivity : ComponentActivity() {
     private val announcementNotificationPrefs by lazy { getSharedPreferences("woogit_announcement_notifications", MODE_PRIVATE) }
     private val announcementScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var announcementSyncJob: Job? = null
+    private var announcementRefreshJob: Job? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -53,7 +55,16 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        if (!isFinishing) syncAnnouncementsForNotification()
+        if (!isFinishing) {
+            syncAnnouncementsForNotification()
+            startForegroundAnnouncementRefresh()
+        }
+    }
+
+    override fun onPause() {
+        announcementRefreshJob?.cancel()
+        announcementRefreshJob = null
+        super.onPause()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -69,6 +80,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onDestroy() {
         announcementSyncJob?.cancel()
+        announcementRefreshJob?.cancel()
         announcementScope.cancel()
         super.onDestroy()
     }
@@ -97,6 +109,16 @@ class MainActivity : ComponentActivity() {
         announcementScope.launch {
             ForceUpdateController.updateUrl.filterNotNull().collect { url ->
                 runOnUiThread { forceUpdateUrl.value = url }
+            }
+        }
+    }
+
+    private fun startForegroundAnnouncementRefresh() {
+        announcementRefreshJob?.cancel()
+        announcementRefreshJob = announcementScope.launch {
+            while (true) {
+                delay(5 * 60 * 1000L)
+                if (!isFinishing) syncAnnouncementsForNotification()
             }
         }
     }
