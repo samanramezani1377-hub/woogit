@@ -148,57 +148,55 @@ internal class DashboardViewModel(private val dependencies: V1PresentationDepend
                 orders = orders,
                 products = products,
                 connectionState = connectionState,
-                loading = false,
                 error = null,
             )
 
-            viewModelScope.launch {
-                val metrics = awaitAll(
-                    async { dependencies.getOrders.count(storeId, null, null) },
-                    async { dependencies.getOrders.count(storeId, null, "processing") },
-                    async { dependencies.getSalesSummary(storeId) },
-                    async { dependencies.getProducts.count(storeId, null) },
-                )
+            val metrics = awaitAll(
+                async { dependencies.getOrders.count(storeId, null, null) },
+                async { dependencies.getOrders.count(storeId, null, "processing") },
+                async { dependencies.getSalesSummary(storeId) },
+                async { dependencies.getProducts.count(storeId, null) },
+            )
 
-                val ordersTotal = (metrics[0] as CoreResult<Int>).getOrNull()
-                val processingTotal = (metrics[1] as CoreResult<Int>).getOrNull()
-                val salesSummaryResult = metrics[2] as CoreResult<SalesSummary>
-                val productsTotal = (metrics[3] as CoreResult<Int>).getOrNull()
-                val rawSalesSummary = when (salesSummaryResult) {
-                    is CoreResult.Success -> salesSummaryResult.value
-                    is CoreResult.Failure -> {
-                        PresentationTechnicalErrorReporter.report("Dashboard", "DashboardViewModel.refreshInternal", "Load sales summary", PresentationErrorMapper.message(salesSummaryResult.error), salesSummaryResult.error.toString())
-                        _uiState.value.salesSummary
-                    }
+            val ordersTotal = (metrics[0] as CoreResult<Int>).getOrNull()
+            val processingTotal = (metrics[1] as CoreResult<Int>).getOrNull()
+            val salesSummaryResult = metrics[2] as CoreResult<SalesSummary>
+            val productsTotal = (metrics[3] as CoreResult<Int>).getOrNull()
+            val rawSalesSummary = when (salesSummaryResult) {
+                is CoreResult.Success -> salesSummaryResult.value
+                is CoreResult.Failure -> {
+                    PresentationTechnicalErrorReporter.report("Dashboard", "DashboardViewModel.refreshInternal", "Load sales summary", PresentationErrorMapper.message(salesSummaryResult.error), salesSummaryResult.error.toString())
+                    _uiState.value.salesSummary
                 }
-
-                // WooCommerce can return a zero sales-report total even when the
-                // completed orders themselves contain valid totals. Prefer that
-                // concrete order data instead of showing a misleading zero.
-                val completedOrderSum = orders
-                    .asSequence()
-                    .filter { it.status.name == "COMPLETED" }
-                    .mapNotNull { it.total?.toBigDecimalOrNull() }
-                    .fold(BigDecimal.ZERO, BigDecimal::add)
-                val salesSummary = rawSalesSummary?.let { summary ->
-                    val reported = summary.netSales.toBigDecimalOrNull()
-                    if (reported != null && reported.compareTo(BigDecimal.ZERO) == 0 && completedOrderSum > BigDecimal.ZERO) {
-                        summary.copy(netSales = completedOrderSum.toPlainString())
-                    } else {
-                        summary
-                    }
-                }
-
-                val current = _uiState.value
-                val newState = current.copy(
-                    ordersTotal = ordersTotal,
-                    processingTotal = processingTotal,
-                    productsTotal = productsTotal,
-                    salesSummary = salesSummary,
-                )
-                _uiState.value = newState
-                DashboardSalesDebugSnapshot.update(newState.orders, salesSummary, newState.revenue)
             }
+
+            // WooCommerce can return a zero sales-report total even when the
+            // completed orders themselves contain valid totals. Prefer that
+            // concrete order data instead of showing a misleading zero.
+            val completedOrderSum = orders
+                .asSequence()
+                .filter { it.status.name == "COMPLETED" }
+                .mapNotNull { it.total?.toBigDecimalOrNull() }
+                .fold(BigDecimal.ZERO, BigDecimal::add)
+            val salesSummary = rawSalesSummary?.let { summary ->
+                val reported = summary.netSales.toBigDecimalOrNull()
+                if (reported != null && reported.compareTo(BigDecimal.ZERO) == 0 && completedOrderSum > BigDecimal.ZERO) {
+                    summary.copy(netSales = completedOrderSum.toPlainString())
+                } else {
+                    summary
+                }
+            }
+
+            val current = _uiState.value
+            val newState = current.copy(
+                ordersTotal = ordersTotal,
+                processingTotal = processingTotal,
+                productsTotal = productsTotal,
+                salesSummary = salesSummary,
+                loading = false,
+            )
+            _uiState.value = newState
+            DashboardSalesDebugSnapshot.update(newState.orders, salesSummary, newState.revenue)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
