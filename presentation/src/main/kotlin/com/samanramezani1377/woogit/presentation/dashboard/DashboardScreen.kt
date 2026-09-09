@@ -1,7 +1,6 @@
 package com.samanramezani1377.woogit.presentation.dashboard
 
 import android.app.Activity
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -9,8 +8,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.samanramezani1377.woogit.core.domain.model.OrderStatus
@@ -40,28 +43,44 @@ internal fun DashboardScreen(
 ) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
-    Column(modifier.fillMaxSize(), verticalArrangement = Arrangement.Bottom) {
+    val pullToReloadConnection = remember(context, scrollState) {
+        object : NestedScrollConnection {
+            var pullDistance = 0f
+            var triggered = false
+
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (scrollState.value == 0 && available.y > 0f) {
+                    pullDistance += available.y
+                    if (!triggered && pullDistance >= 140f) {
+                        triggered = true
+                        (context as? Activity)?.recreate()
+                    }
+                } else if (available.y < 0f) {
+                    pullDistance = 0f
+                    triggered = false
+                }
+                return Offset.Zero
+            }
+
+            override suspend fun onPreFling(available: androidx.compose.ui.unit.Velocity): androidx.compose.ui.unit.Velocity {
+                pullDistance = 0f
+                triggered = false
+                return androidx.compose.ui.unit.Velocity.Zero
+            }
+        }
+    }
+
+    Column(
+        modifier
+            .fillMaxSize()
+            .nestedScroll(pullToReloadConnection),
+        verticalArrangement = Arrangement.Bottom,
+    ) {
         Column(
             Modifier
                 .weight(1f)
                 .fillMaxSize()
                 .verticalScroll(scrollState)
-                .pointerInput(scrollState) {
-                    var dragDistance = 0f
-                    detectVerticalDragGestures(
-                        onDragStart = { dragDistance = 0f },
-                        onVerticalDrag = { _, dragAmount ->
-                            if (scrollState.value == 0) dragDistance += dragAmount
-                        },
-                        onDragEnd = {
-                            if (scrollState.value == 0 && dragDistance >= 140f) {
-                                (context as? Activity)?.recreate()
-                            }
-                            dragDistance = 0f
-                        },
-                        onDragCancel = { dragDistance = 0f },
-                    )
-                }
                 .padding(bottom = 8.dp),
         ) {
             DashboardContent(storeName, connected, orders, products, revenue, pending, recentOrderId, recentCustomer, recentTotal, recentStatus, onRecentOrderClick)
