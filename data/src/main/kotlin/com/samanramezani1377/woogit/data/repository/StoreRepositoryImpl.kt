@@ -31,15 +31,21 @@ class StoreRepositoryImpl(
         val normalized=runCatching{normalizeBaseUrl(store.baseUrl)}.getOrElse{return CoreResult.Failure(DomainError.Validation(it.message?:"Invalid store URL"))}
         val reference=store.credentialReference?:CredentialReference("store-${store.storeId.value}")
         val pair=CredentialPair(consumerKey,actualSecret,actualWpUser,actualWpPassword)
-        return backend.verifySite(store.storeId.value,normalized,pair).fold(
-            onSuccess={
-                credentials.put(reference,consumerKey,actualSecret,actualWpUser,actualWpPassword)
-                val connected=store.copy(baseUrl=normalized,state=ConnectionState.CONNECTED,credentialReference=reference)
-                local.upsert(connected)
-                CoreResult.Success(connected)
-            },
-            onFailure={CoreResult.Failure(DomainError.Network(it.message?:"Unable to verify store through WooGit Backend"))}
-        )
+        return try {
+            backend.verifySite(store.storeId.value,normalized,pair).fold(
+                onSuccess={
+                    credentials.put(reference,consumerKey,actualSecret,actualWpUser,actualWpPassword)
+                    val connected=store.copy(baseUrl=normalized,state=ConnectionState.CONNECTED,credentialReference=reference)
+                    local.upsert(connected)
+                    CoreResult.Success(connected)
+                },
+                onFailure={CoreResult.Failure(DomainError.Network(it.message?:"Unable to verify store through WooGit Backend"))}
+            )
+        } catch (error: Throwable) {
+            CoreResult.Failure(
+                DomainError.Network(error.message ?: "Unable to verify store through WooGit Backend")
+            )
+        }
     }
 
     override suspend fun disconnect(id: StoreId): CoreResult<Unit> {
