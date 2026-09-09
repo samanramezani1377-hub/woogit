@@ -63,14 +63,25 @@ class OrderPollingWorker(appContext: Context, params: WorkerParameters) : Corout
         private const val POLL_INTERVAL_MINUTES = 15L
         private const val INITIAL_DELAY_SECONDS = 30L
         private fun constraints() = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
+
         fun schedule(context: Context, storeId: String) {
             if (ForceUpdateController.isActive(context)) return
-            val request = PeriodicWorkRequestBuilder<OrderPollingWorker>(POLL_INTERVAL_MINUTES, TimeUnit.MINUTES).setConstraints(constraints()).setInputData(workDataOf(KEY_STORE_ID to storeId)).build()
-            WorkManager.getInstance(context).enqueueUniquePeriodicWork(WORK_PREFIX + storeId, ExistingPeriodicWorkPolicy.UPDATE, request)
+            val request = PeriodicWorkRequestBuilder<OrderPollingWorker>(POLL_INTERVAL_MINUTES, TimeUnit.MINUTES)
+                .setInitialDelay(INITIAL_DELAY_SECONDS, TimeUnit.SECONDS)
+                .setConstraints(constraints())
+                .setInputData(workDataOf(KEY_STORE_ID to storeId))
+                .build()
+            WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+                WORK_PREFIX + storeId,
+                ExistingPeriodicWorkPolicy.UPDATE,
+                request,
+            )
         }
+
         fun scheduleNow(context: Context, storeId: String) {
             scheduleDelayed(context, storeId, 0L)
         }
+
         fun scheduleDelayed(context: Context, storeId: String, delaySeconds: Long = INITIAL_DELAY_SECONDS) {
             if (ForceUpdateController.isActive(context)) return
             val request = OneTimeWorkRequestBuilder<OrderPollingWorker>()
@@ -80,6 +91,7 @@ class OrderPollingWorker(appContext: Context, params: WorkerParameters) : Corout
                 .build()
             WorkManager.getInstance(context).enqueueUniqueWork(IMMEDIATE_PREFIX + storeId, ExistingWorkPolicy.KEEP, request)
         }
+
         fun cancel(context: Context, storeId: String) {
             val manager = WorkManager.getInstance(context)
             manager.cancelUniqueWork(WORK_PREFIX + storeId)
