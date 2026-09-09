@@ -16,6 +16,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -114,15 +115,12 @@ internal class DashboardViewModel(private val dependencies: V1PresentationDepend
     private suspend fun refreshInternal() {
         _uiState.value = _uiState.value.copy(loading = true, error = null)
         try {
-            val connectionDeferred = async { checkConnection() }
-            val ordersDeferred = async { loadLatestOrders() }
-            val productsDeferred = async { loadLatestProducts() }
-
-            val (connection, ordersResult, productsResult) = awaitAll(
-                connectionDeferred,
-                ordersDeferred,
-                productsDeferred,
-            )
+            val (connection, ordersResult, productsResult) = coroutineScope {
+                val connectionDeferred = async { checkConnection() }
+                val ordersDeferred = async { loadLatestOrders() }
+                val productsDeferred = async { loadLatestProducts() }
+                awaitAll(connectionDeferred, ordersDeferred, productsDeferred)
+            }
 
             val connectionState = connection as ConnectionState
             val orders = when (val result = ordersResult as CoreResult<List<Order>>) {
@@ -151,12 +149,14 @@ internal class DashboardViewModel(private val dependencies: V1PresentationDepend
                 error = null,
             )
 
-            val metrics = awaitAll(
-                async { dependencies.getOrders.count(storeId, null, null) },
-                async { dependencies.getOrders.count(storeId, null, "processing") },
-                async { dependencies.getSalesSummary(storeId) },
-                async { dependencies.getProducts.count(storeId, null) },
-            )
+            val metrics = coroutineScope {
+                awaitAll(
+                    async { dependencies.getOrders.count(storeId, null, null) },
+                    async { dependencies.getOrders.count(storeId, null, "processing") },
+                    async { dependencies.getSalesSummary(storeId) },
+                    async { dependencies.getProducts.count(storeId, null) },
+                )
+            }
 
             val ordersTotal = (metrics[0] as CoreResult<Int>).getOrNull()
             val processingTotal = (metrics[1] as CoreResult<Int>).getOrNull()
