@@ -49,9 +49,8 @@ class AnnouncementCenter(private val context: Context) : BackendResponseObserver
         healthJob = scope.launch {
             var interval = INITIAL_INTERVAL_MS
             while (isActive) {
-                val forceUpdateDetected = runCatching { refresh() }
-                    .getOrNull()
-                    ?.any { it.id == FORCE_UPDATE_ID } == true
+                runCatching { refresh() }
+                val forceUpdateDetected = _forceUpdateUrl.value != null
                 interval = if (forceUpdateDetected) INITIAL_INTERVAL_MS else (interval * 2).coerceAtMost(MAX_INTERVAL_MS)
                 delay(interval)
             }
