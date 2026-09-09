@@ -13,7 +13,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -53,16 +52,18 @@ internal fun DashboardScreen(
     selectedDestination: DashboardDestination = DashboardDestination.DASHBOARD,
     onDestinationSelected: (DashboardDestination) -> Unit,
     onAiClick: () -> Unit,
+    onRefresh: () -> Unit,
+    refreshing: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
     var pullDistance by remember { mutableFloatStateOf(0f) }
-    var refreshing by remember { mutableStateOf(false) }
     val pullThreshold = 400f
-    val pullToReloadConnection = remember(context, scrollState) {
+    val pullToReloadConnection = remember(context, scrollState, refreshing) {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (refreshing) return Offset.Zero
                 if (scrollState.value == 0 && available.y > 0f) {
                     pullDistance = (pullDistance + available.y).coerceAtMost(pullThreshold)
                     return Offset.Zero
@@ -75,20 +76,15 @@ internal fun DashboardScreen(
             }
 
             override suspend fun onPreFling(available: Velocity): Velocity {
-                if (pullDistance >= pullThreshold) {
-                    refreshing = true
+                if (!refreshing && pullDistance >= pullThreshold) {
                     pullDistance = 0f
-                    (context as? Activity)?.recreate()
+                    onRefresh()
                 } else {
                     pullDistance = 0f
                 }
                 return Velocity.Zero
             }
         }
-    }
-
-    LaunchedEffect(refreshing) {
-        if (refreshing) refreshing = false
     }
 
     Column(
@@ -127,7 +123,7 @@ internal fun DashboardScreen(
                         progress = { if (refreshing) 1f else indicatorProgress },
                         modifier = Modifier
                             .size(24.dp)
-                            .alpha(indicatorProgress.coerceAtLeast(0.25f)),
+                            .alpha(if (refreshing) 1f else indicatorProgress.coerceAtLeast(0.25f)),
                         strokeWidth = 2.dp,
                     )
                 }
