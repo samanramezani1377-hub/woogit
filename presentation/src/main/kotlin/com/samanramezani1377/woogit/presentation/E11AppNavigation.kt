@@ -108,7 +108,51 @@ internal fun E11AppNavigation(
                 )
             }
         }
-        composable(E11Routes.DASHBOARD) { val store = activeStore; if (store != null) { val storeId = StoreId(store); val vm = viewModel<DashboardViewModel>(key = "dashboard-${storeId.value}", factory = DashboardViewModelFactory(dependencies, storeId)); val state by vm.uiState.collectAsState(); LaunchedEffect(storeId) { vm.refresh() }; DisposableEffect(vm, storeId) { vm.startConnectionHealthMonitor(); onDispose { vm.stopConnectionHealthMonitor() } }; LiquidGlassEnvironment { DashboardScreen(storeId.value, state.connectionState == ConnectionState.CONNECTED, state.ordersCount, state.productsCount, state.revenue, state.processingCount, state.orders.firstOrNull()?.number, state.orders.firstOrNull()?.customer?.name.orEmpty(), formatMoney(state.orders.firstOrNull()?.total), state.orders.firstOrNull()?.status, { state.orders.firstOrNull()?.number?.let { navController.navigate(E11Routes.order(it)) } }, { navController.navigate(E11Routes.ORDERS) }, { navController.navigate(E11Routes.PRODUCTS) }, { navController.navigate(E11Routes.SETTINGS) }, { navController.navigate(E11Routes.SYNC) }, { navController.navigate(E11Routes.CONFLICTS) }, DashboardDestination.DASHBOARD, { destination -> when (destination) { DashboardDestination.DASHBOARD -> Unit; DashboardDestination.ORDERS -> navController.navigate(E11Routes.ORDERS); DashboardDestination.PRODUCTS -> navController.navigate(E11Routes.PRODUCTS); DashboardDestination.SETTINGS -> navController.navigate(E11Routes.SETTINGS) } }, { navController.navigate(E11Routes.AI) }) } } }
+        composable(E11Routes.DASHBOARD) {
+            val store = activeStore
+            if (store != null) {
+                val storeId = StoreId(store)
+                val vm = viewModel<DashboardViewModel>(key = "dashboard-${storeId.value}", factory = DashboardViewModelFactory(dependencies, storeId))
+                val state by vm.uiState.collectAsState()
+                LaunchedEffect(storeId) { vm.refresh() }
+                DisposableEffect(vm, storeId) {
+                    vm.startConnectionHealthMonitor()
+                    onDispose { vm.stopConnectionHealthMonitor() }
+                }
+                LiquidGlassEnvironment {
+                    DashboardScreen(
+                        storeId.value,
+                        state.connectionState == ConnectionState.CONNECTED,
+                        state.ordersCount,
+                        state.productsCount,
+                        state.revenue,
+                        state.processingCount,
+                        state.orders.firstOrNull()?.number,
+                        state.orders.firstOrNull()?.customer?.name.orEmpty(),
+                        formatMoney(state.orders.firstOrNull()?.total),
+                        state.orders.firstOrNull()?.status,
+                        { state.orders.firstOrNull()?.number?.let { navController.navigate(E11Routes.order(it)) } },
+                        { navController.navigate(E11Routes.ORDERS) },
+                        { navController.navigate(E11Routes.PRODUCTS) },
+                        { navController.navigate(E11Routes.SETTINGS) },
+                        { navController.navigate(E11Routes.SYNC) },
+                        { navController.navigate(E11Routes.CONFLICTS) },
+                        DashboardDestination.DASHBOARD,
+                        { destination ->
+                            when (destination) {
+                                DashboardDestination.DASHBOARD -> Unit
+                                DashboardDestination.ORDERS -> navController.navigate(E11Routes.ORDERS)
+                                DashboardDestination.PRODUCTS -> navController.navigate(E11Routes.PRODUCTS)
+                                DashboardDestination.SETTINGS -> navController.navigate(E11Routes.SETTINGS)
+                            }
+                        },
+                        { navController.navigate(E11Routes.AI) },
+                        { vm.refresh() },
+                        state.loading,
+                    )
+                }
+            }
+        }
         composable(E11Routes.DEBUG_LOGS) { DebugLogsScreen { navController.popBackStack() } }
         composable(E11Routes.AI) { AiScreen() }
         composable(E11Routes.ORDERS) { val store = activeStore; if (store != null) { val storeId = StoreId(store); val vm = viewModel<OrdersViewModel>(key = "orders-${storeId.value}", factory = vmFactory { OrdersViewModel(dependencies) }); val state by vm.state.collectAsState(); LaunchedEffect(storeId) { vm.load(storeId) }; LiquidGlassEnvironment { OrdersScreen(mapOrdersState(state, vm.hasMore()), { id -> navController.navigate(E11Routes.order(id)) }, { vm.load(storeId) }, { vm.nextPage(storeId) }, { vm.load(storeId, it, true) }) } } }
@@ -126,7 +170,7 @@ internal fun E11AppNavigation(
     }
 }
 
-private fun mapOrdersState(state: FeatureUiState<List<Order>>, hasMore: Boolean): OrdersUiState = when (state) { FeatureUiState.Loading, FeatureUiState.Pending -> OrdersUiState.Loading; FeatureUiState.Empty -> OrdersUiState.Empty; is FeatureUiState.Error -> OrdersUiState.Error(state.message, state.retryable); FeatureUiState.Offline -> OrdersUiState.Offline(); is FeatureUiState.Conflict -> OrdersUiState.Error("تعارض در داده‌های سفارش وجود دارد.", false); is FeatureUiState.Success -> OrdersUiState.Content(state.value.map { order -> OrderRowUiModel(order.number, order.customer?.name.orEmpty(), order.customer?.email.orEmpty(), order.status.name, formatMoney(order.total), order.payment?.methodTitle.orEmpty(), order.modifiedAt?.toString().orEmpty()) }, hasMore) }
+private fun mapOrdersState(state: FeatureUiState<List<Order>>, hasMore: Boolean): OrdersUiState = when (state) { FeatureUiState.Loading, FeatureUiState.Pending -> OrdersUiState.Loading; FeatureUiState.Empty -> OrdersUiState.Empty; is FeatureUiState.Error -> OrdersUiState.Error(state.message, state.retryable); FeatureUiState.Offline -> OrdersUiState.Offline(); is FeatureUiState.Success -> OrdersUiState.Content(state.value.map { order -> OrderRowUiModel(order.number, order.customer?.name.orEmpty(), order.customer?.email.orEmpty(), order.status.name, formatMoney(order.total), order.payment?.methodTitle.orEmpty(), order.modifiedAt?.toString().orEmpty()) }, hasMore) }
 private fun mapOrderDetailState(state: FeatureUiState<Order>): OrderDetailUiState = when (state) { FeatureUiState.Loading, FeatureUiState.Pending -> OrderDetailUiState.Loading; FeatureUiState.Empty -> OrderDetailUiState.NotFound; is FeatureUiState.Error -> OrderDetailUiState.Error(state.message); FeatureUiState.Offline -> OrderDetailUiState.Error("سفارش در حالت آفلاین در دسترس نیست."); is FeatureUiState.Conflict -> OrderDetailUiState.Error("تعارض در داده‌های سفارش."); is FeatureUiState.Success -> OrderDetailUiState.Content(state.value) }
 private fun mapSyncState(state: FeatureUiState<SyncMetadata>): SyncUiState = when (state) { FeatureUiState.Loading, FeatureUiState.Pending -> SyncUiState.Running; FeatureUiState.Empty -> SyncUiState.Idle; is FeatureUiState.Success -> SyncUiState.Success("وضعیت همگام‌سازی فروشگاه با موفقیت دریافت شد."); is FeatureUiState.Error -> SyncUiState.Error(state.message); FeatureUiState.Offline -> SyncUiState.Error("فروشگاه در حالت آفلاین در دسترس نیست"); is FeatureUiState.Conflict -> SyncUiState.Error("تعارض در داده‌های همگام‌سازی وجود دارد") }
 private fun formatMoney(value: String?): String { val amount = value?.toDoubleOrNull() ?: return "—"; return "${java.text.NumberFormat.getNumberInstance(java.util.Locale.US).apply { maximumFractionDigits = 0; minimumFractionDigits = 0 }.format(amount)} تومان" }
