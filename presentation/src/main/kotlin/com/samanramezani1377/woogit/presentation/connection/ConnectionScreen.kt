@@ -10,6 +10,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -21,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.samanramezani1377.woogit.core.domain.model.StoreConnection
+import com.samanramezani1377.woogit.debug.DebugConfig
 import com.samanramezani1377.woogit.presentation.ConnectionViewModel
 import com.samanramezani1377.woogit.presentation.FeatureUiState
 import com.samanramezani1377.woogit.presentation.GlassErrorState
@@ -35,7 +37,11 @@ import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
 import com.samanramezani1377.woogit.presentation.vmFactory
 
 @Composable
-internal fun ConnectionScreen(dependencies: V1PresentationDependencies, onConnected: (String) -> Unit) {
+internal fun ConnectionScreen(
+    dependencies: V1PresentationDependencies,
+    onConnected: (String) -> Unit,
+    onDebugLogs: () -> Unit,
+) {
     val connectionViewModel = viewModel<ConnectionViewModel>(factory = vmFactory { ConnectionViewModel(dependencies) })
     val state by connectionViewModel.state.collectAsState()
     var storeHost by rememberSaveable { mutableStateOf("") }
@@ -77,6 +83,14 @@ internal fun ConnectionScreen(dependencies: V1PresentationDependencies, onConnec
                 is FeatureUiState.Error -> GlassErrorState(currentState.message)
                 FeatureUiState.Offline -> GlassErrorState("خطای ارتباطی در فرایند اتصال رخ داد. دوباره تلاش کنید.")
                 else -> Unit
+            }
+
+            if (DebugConfig.ENABLED) {
+                TextButton(
+                    onClick = onDebugLogs,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !isConnecting,
+                ) { GlassText("ورود به لاگ خطاهای فنی") }
             }
 
             if (!isConnecting) {
