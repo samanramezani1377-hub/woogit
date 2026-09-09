@@ -8,7 +8,6 @@ import com.samanramezani1377.woogit.data.network.BackendAnnouncement
 import com.samanramezani1377.woogit.data.network.BackendResponseObserver
 import com.samanramezani1377.woogit.data.network.NetworkClient
 import com.samanramezani1377.woogit.security.AndroidBackendSessionStore
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -20,12 +19,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
-import kotlinx.serialization.json.contentOrNull
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * Single owner of app announcements and the mandatory-update gate.
@@ -38,10 +37,11 @@ class AnnouncementCenter(private val context: Context) : BackendResponseObserver
     private val refreshMutex = Mutex()
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
     private val _announcements = MutableStateFlow<List<BackendAnnouncement>>(emptyList())
+    private val _bannerAnnouncements = MutableStateFlow<List<BackendAnnouncement>>(emptyList())
     private val _forceUpdateUrl = MutableStateFlow(persistedForceUpdateUrl())
     val announcements: StateFlow<List<BackendAnnouncement>> = _announcements.asStateFlow()
+    val bannerAnnouncements: StateFlow<List<BackendAnnouncement>> = _bannerAnnouncements.asStateFlow()
     val forceUpdateUrl: StateFlow<String?> = _forceUpdateUrl.asStateFlow()
-    val bannerAnnouncements: StateFlow<List<BackendAnnouncement>> = _announcements
     private var healthJob: Job? = null
 
     fun start() {
@@ -108,7 +108,7 @@ class AnnouncementCenter(private val context: Context) : BackendResponseObserver
     fun dismissBanner(id: String) {
         appContext.getSharedPreferences(BANNER_PREFS, Context.MODE_PRIVATE)
             .edit().putBoolean(id, true).apply()
-        _announcements.value = _announcements.value.filterNot { it.id == id }
+        _bannerAnnouncements.value = _bannerAnnouncements.value.filterNot { it.id == id }
     }
 
     override fun onResponse(statusCode: Int, body: String) {
@@ -134,7 +134,9 @@ class AnnouncementCenter(private val context: Context) : BackendResponseObserver
         } else {
             clearForceUpdate()
         }
-        _announcements.value = items.filter { it.id != FORCE_UPDATE_ID && !isDismissed(it.id) }
+        val visible = items.filter { it.id != FORCE_UPDATE_ID && !isDismissed(it.id) }
+        _announcements.value = visible
+        _bannerAnnouncements.value = visible.filter { it.displayType == BANNER_DISPLAY_TYPE }
     }
 
     private fun activateForceUpdate(updateUrl: String) {
@@ -168,5 +170,6 @@ class AnnouncementCenter(private val context: Context) : BackendResponseObserver
         const val ACTIVE_STORE_ID = "active_store_id"
         const val BANNER_PREFS = "woogit_announcement_banners"
         const val NOTIFICATION_PREFS = "woogit_announcement_notifications"
+        const val BANNER_DISPLAY_TYPE = 1
     }
 }
