@@ -2,20 +2,30 @@ package com.samanramezani1377.woogit.presentation.dashboard
 
 import android.app.Activity
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.draw.alpha
 import com.samanramezani1377.woogit.core.domain.model.OrderStatus
 
 @Composable
@@ -43,31 +53,35 @@ internal fun DashboardScreen(
 ) {
     val context = LocalContext.current
     val scrollState = rememberScrollState()
+    var pullDistance by remember { mutableFloatStateOf(0f) }
+    var refreshing by remember { mutableStateOf(false) }
+    val pullThreshold = 140f
     val pullToReloadConnection = remember(context, scrollState) {
         object : NestedScrollConnection {
-            var pullDistance = 0f
-            var triggered = false
-
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
                 if (scrollState.value == 0 && available.y > 0f) {
-                    pullDistance += available.y
-                    if (!triggered && pullDistance >= 140f) {
-                        triggered = true
-                        (context as? Activity)?.recreate()
-                    }
-                } else if (available.y < 0f) {
-                    pullDistance = 0f
-                    triggered = false
+                    pullDistance = (pullDistance + available.y).coerceAtMost(pullThreshold)
+                    return Offset.Zero
                 }
+                if (available.y < 0f) pullDistance = 0f
                 return Offset.Zero
             }
 
-            override suspend fun onPreFling(available: androidx.compose.ui.unit.Velocity): androidx.compose.ui.unit.Velocity {
-                pullDistance = 0f
-                triggered = false
-                return androidx.compose.ui.unit.Velocity.Zero
+            override suspend fun onPreFling(available: Velocity): Velocity {
+                if (pullDistance >= pullThreshold) {
+                    refreshing = true
+                    pullDistance = 0f
+                    (context as? Activity)?.recreate()
+                } else {
+                    pullDistance = 0f
+                }
+                return Velocity.Zero
             }
         }
+    }
+
+    LaunchedEffect(refreshing) {
+        if (refreshing) refreshing = false
     }
 
     Column(
@@ -76,15 +90,31 @@ internal fun DashboardScreen(
             .nestedScroll(pullToReloadConnection),
         verticalArrangement = Arrangement.Bottom,
     ) {
-        Column(
+        Box(
             Modifier
                 .weight(1f)
-                .fillMaxSize()
-                .verticalScroll(scrollState)
-                .padding(bottom = 8.dp),
+                .fillMaxSize(),
         ) {
-            DashboardContent(storeName, connected, orders, products, revenue, pending, recentOrderId, recentCustomer, recentTotal, recentStatus, onRecentOrderClick)
-            DashboardActions(onOrdersClick, onProductsClick, onSettingsClick, onSyncClick, onConflictsClick, Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+            Column(
+                Modifier
+                    .fillMaxSize()
+                    .verticalScroll(scrollState)
+                    .padding(bottom = 8.dp),
+            ) {
+                DashboardContent(storeName, connected, orders, products, revenue, pending, recentOrderId, recentCustomer, recentTotal, recentStatus, onRecentOrderClick)
+                DashboardActions(onOrdersClick, onProductsClick, onSettingsClick, onSyncClick, onConflictsClick, Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+            }
+
+            val indicatorProgress = (pullDistance / pullThreshold).coerceIn(0f, 1f)
+            if (pullDistance > 0f) {
+                CircularProgressIndicator(
+                    progress = { indicatorProgress },
+                    modifier
+                        .align(Alignment.TopCenter)
+                        .padding(top = 12.dp)
+                        .alpha(indicatorProgress.coerceAtLeast(0.15f)),
+                )
+            }
         }
         DashboardFloatingNavigation(
             selected = selectedDestination,
