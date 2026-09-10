@@ -1,0 +1,37 @@
+name: Agent Map Guard
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'docs/agent/**'
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - 'docs/agent/**'
+
+permissions:
+  contents: read
+
+jobs:
+  verify-map-sync:
+    name: Verify App code → agent map
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify synchronization
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            bash .github/agent-map-guard.sh "$BASE_SHA" "$GITHUB_SHA"
+          else
+            BASE=$(git rev-parse "$GITHUB_SHA^" 2>/dev/null || true)
+            if [[ -n "$BASE" ]]; then bash .github/agent-map-guard.sh "$BASE" "$GITHUB_SHA"; else echo 'Initial commit: no previous tree to compare.'; fi
+          fi
