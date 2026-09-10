@@ -103,11 +103,11 @@ class BackendClient(
         val token=sessions.get(storeId)?:throw BackendProtocolException("Backend session is unavailable");val response=httpClient.get(url("/wp-json/woogit/v1/operations/${operationId.urlEncode()}")){header("X-WooGit-App-Version",appVersion);header("X-WooGit-Session",token)};val body=response.bodyAsText();responseObserver?.onResponse(response.status.value,body);if(response.status.value==401)sessions.remove(storeId);if(response.status.value !in 200..299)throw BackendHttpException(response.status.value,body,extractBackendReason(body));val obj=json.parseToJsonElement(body).jsonObject;BackendOperationStatus(obj["operation_id"]?.jsonPrimitive?.contentOrNull?:operationId,obj["status"]?.jsonPrimitive?.contentOrNull?:"unknown",obj["response"]?.toString())
     }.onFailure{throwable->reportTransport("Sync","BackendClient.getOperation","GET","/wp-json/woogit/v1/operations/$operationId",throwable)}.getOrThrow()
 
-    suspend fun revokeSession(storeId:String):Result<Unit> = revokeToken(sessions.get(storeId)).also{ if(it.isSuccess)sessions.remove(storeId) }
+    suspend fun revokeSession(storeId:String): Result<Unit> = revokeToken(sessions.get(storeId)).also{ if(it.isSuccess)sessions.remove(storeId) }
 
-    suspend fun revokeBillingSession(storeId:String):Result<Unit> = revokeToken(sessions.getBilling(storeId)).also{ if(it.isSuccess)sessions.removeBilling(storeId) }
+    suspend fun revokeBillingSession(storeId:String): Result<Unit> = revokeToken(sessions.getBilling(storeId)).also{ if(it.isSuccess)sessions.removeBilling(storeId) }
 
-    private suspend fun revokeToken(token:String?):Result<Unit>=runCatching{
+    private suspend fun revokeToken(token: String?): Result<Unit> = runCatching {
         if(token==null)return@runCatching Unit
         val response=httpClient.post(url("/wp-json/woogit/v1/sessions/revoke")){header("X-WooGit-App-Version",appVersion);header("X-WooGit-Session",token)}
         val body=response.bodyAsText();responseObserver?.onResponse(response.status.value,body);if(response.status.value !in 200..299&&response.status.value!=401)throw BackendHttpException(response.status.value,body,extractBackendReason(body))
