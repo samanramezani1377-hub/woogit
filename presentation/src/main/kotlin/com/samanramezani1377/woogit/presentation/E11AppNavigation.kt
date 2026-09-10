@@ -20,14 +20,14 @@ import com.samanramezani1377.woogit.presentation.orders.*
 import com.samanramezani1377.woogit.presentation.product.*
 import com.samanramezani1377.woogit.presentation.settings.*
 import com.samanramezani1377.woogit.presentation.sync.*
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 
 @Composable
 internal fun E11AppNavigation(
     dependencies: V1PresentationDependencies,
     accountSetupGateway: AccountSetupGateway,
     initialOrderId: String?,
-    billingRequiredStoreId: String? = null,
-    onBillingRequiredConsumed: () -> Unit = {},
 ) {
     val navController = rememberNavController()
     var activeStore by remember { mutableStateOf(dependencies.initialStoreId) }
@@ -67,18 +67,17 @@ internal fun E11AppNavigation(
         }
     }
 
-    LaunchedEffect(billingRequiredStoreId, activeStore) {
-        val store = activeStore ?: return@LaunchedEffect
-        if (billingRequiredStoreId == store) {
-            billingLocked = true
-            onBillingRequiredConsumed()
-        }
-    }
-
     LaunchedEffect(activeStore, BillingRuntime.gateway) {
-        val store = activeStore ?: return@LaunchedEffect
-        BillingRuntime.gateway?.status(StoreId(store))?.onSuccess { status ->
-            billingLocked = status.status == "expired"
+        while (isActive) {
+            val store = activeStore
+            if (store == null) {
+                billingLocked = false
+                break
+            }
+            BillingRuntime.gateway?.status(StoreId(store))?.onSuccess { status ->
+                billingLocked = status.status == "expired"
+            }
+            delay(BILLING_STATUS_REFRESH_MS)
         }
     }
 
@@ -167,6 +166,8 @@ internal fun E11AppNavigation(
     }
 }
 
+private const val BILLING_STATUS_REFRESH_MS = 30_000L
+
 private fun mapOrdersState(state: FeatureUiState<List<Order>>, hasMore: Boolean): OrdersUiState = when (state) { FeatureUiState.Loading, FeatureUiState.Pending -> OrdersUiState.Loading; FeatureUiState.Empty -> OrdersUiState.Empty; is FeatureUiState.Error -> OrdersUiState.Error(state.message, state.retryable); FeatureUiState.Offline -> OrdersUiState.Offline(); is FeatureUiState.Conflict -> OrdersUiState.Error("تعارض در داده‌های سفارش وجود دارد.", false); is FeatureUiState.Success -> OrdersUiState.Content(state.value.map { order -> OrderRowUiModel(order.number, order.customer?.name.orEmpty(), order.customer?.email.orEmpty(), order.status.name, formatMoney(order.total), order.payment?.methodTitle.orEmpty(), order.modifiedAt?.toString().orEmpty()) }, hasMore) }
-private fun mapOrderDetailState(state: FeatureUiState<Order>): OrderDetailUiState = when (state) { FeatureUiState.Loading, FeatureUiState.Pending -> OrderDetailUiState.Loading; FeatureUiState.Empty -> OrderDetailUiState.NotFound; is FeatureUiState.Error -> OrderDetailUiState.Error(state.message); FeatureUiState.Offline -> OrderDetailUiState.Error("سفارش در حالت آفلاین در دسترس نیست."); is FeatureUiState.Conflict -> OrderDetailUiState.Error("تعارض در داده‌های سفارش."); is FeatureUiState.Success -> OrderDetailUiState.Content(state.value) }
+private fun mapOrderDetailState(state: FeatureUiState<Order>): OrderDetailUiState = when (state) { FeatureUiState.Loading, FeatureUiState.Pending -> OrderDetailUiState.Loading; FeatureUiState.Empty -> OrderDetailUiState.NotFound; is FeatureUiState.Error -> OrderDetailUiState.Error(state.message); FeatureUiState.Offline -> OrderDetailUiState.Error("سفارش در حالت آفلاین در دسترس نیست."); is FeatureUiState.Conflict -> OrderDetailUiState.Error("تعارض در وضعیت سفارش."); is FeatureUiState.Success -> OrderDetailUiState.Content(state.value) }
 private fun mapSyncState(state: FeatureUiState<SyncMetadata>): SyncUiState = when (state) { FeatureUiState.Loading, FeatureUiState.Pending -> SyncUiState.Running; FeatureUiState.Empty -> SyncUiState.Idle; is FeatureUiState.Success -> SyncUiState.Success("وضعیت همگام‌سازی فروشگاه با موفقیت دریافت شد."); is FeatureUiState.Error -> SyncUiState.Error(state.message); FeatureUiState.Offline -> SyncUiState.Error("فروشگاه در حالت آفلاین در دسترس نیست"); is FeatureUiState.Conflict -> SyncUiState.Error("تعارض در وضعیت همگام‌سازی.") }
