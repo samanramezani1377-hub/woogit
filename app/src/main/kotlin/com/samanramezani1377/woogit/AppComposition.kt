@@ -19,6 +19,7 @@ import com.samanramezani1377.woogit.data.local.*
 import com.samanramezani1377.woogit.data.sync.*
 import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
 import com.samanramezani1377.woogit.presentation.account.AccountSetupGateway
+import com.samanramezani1377.woogit.presentation.settings.BillingRuntime
 import kotlinx.coroutines.*
 
 class AppComposition(context: Context) {
@@ -33,6 +34,7 @@ class AppComposition(context: Context) {
     val announcementCenter = AnnouncementCenter(appContext)
     private val backend = BackendClient(network.httpClient, BuildConfig.WOOGIT_BACKEND_BASE_URL, secure, sessions, BuildConfig.VERSION_NAME, technicalErrorReporter, announcementCenter)
     private val accountSetupClient = AccountSetupClient(network.httpClient, BuildConfig.WOOGIT_BACKEND_BASE_URL, sessions, BuildConfig.VERSION_NAME, announcementCenter)
+    private val billingClient = BillingClient(network.httpClient, BuildConfig.WOOGIT_BACKEND_BASE_URL, sessions, BuildConfig.VERSION_NAME)
     private val orderLocal = SqlOrderDataSource(db)
     private val productLocal = SqlProductDataSource(db)
     private val storeLocal = SqlStoreDataSource(db)
@@ -124,7 +126,10 @@ class AppComposition(context: Context) {
         syncPending, restoredStoreId, ::rememberStore, ::forgetStore
     )
 
-    init { restoredStoreId?.let(::startBackgroundWork) }
+    init {
+        BillingRuntime.gateway = billingClient
+        restoredStoreId?.let(::startBackgroundWork)
+    }
 
     fun startBackgroundWork(storeId: String) {
         if (ForceUpdateController.isActive(appContext)) return
@@ -133,5 +138,5 @@ class AppComposition(context: Context) {
     }
 
     fun cancelBackgroundWork(storeId: String) { OrderPollingWorker.cancel(appContext, storeId); ProductCatalogSyncWorker.cancel(appContext, storeId) }
-    fun close() { announcementCenter.dispose(); scope.cancel(); network.close() }
+    fun close() { BillingRuntime.gateway = null; announcementCenter.dispose(); scope.cancel(); network.close() }
 }
