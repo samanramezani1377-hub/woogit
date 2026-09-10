@@ -27,9 +27,8 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 /**
- * Single owner of app announcements and the mandatory-update gate.
- * Backend clients report version-gate responses here; this center also refreshes
- * the announcement feed and exposes banner announcements to the UI.
+ * Single owner of app announcements, mandatory-update state, and backend
+ * entitlement/billing navigation signals.
  */
 class AnnouncementCenter(private val context: Context) : BackendResponseObserver {
     private val appContext = context.applicationContext
@@ -39,9 +38,11 @@ class AnnouncementCenter(private val context: Context) : BackendResponseObserver
     private val _announcements = MutableStateFlow<List<BackendAnnouncement>>(emptyList())
     private val _bannerAnnouncements = MutableStateFlow<List<BackendAnnouncement>>(emptyList())
     private val _forceUpdateUrl = MutableStateFlow(persistedForceUpdateUrl())
+    private val _billingRequiredStoreId = MutableStateFlow<String?>(null)
     val announcements: StateFlow<List<BackendAnnouncement>> = _announcements.asStateFlow()
     val bannerAnnouncements: StateFlow<List<BackendAnnouncement>> = _bannerAnnouncements.asStateFlow()
     val forceUpdateUrl: StateFlow<String?> = _forceUpdateUrl.asStateFlow()
+    val billingRequiredStoreId: StateFlow<String?> = _billingRequiredStoreId.asStateFlow()
     private var healthJob: Job? = null
 
     fun start() {
@@ -111,6 +112,10 @@ class AnnouncementCenter(private val context: Context) : BackendResponseObserver
         _bannerAnnouncements.value = _bannerAnnouncements.value.filterNot { it.id == id }
     }
 
+    fun clearBillingRequired() {
+        _billingRequiredStoreId.value = null
+    }
+
     override fun onResponse(statusCode: Int, body: String) {
         val root = runCatching { json.parseToJsonElement(body).jsonObject }.getOrNull() ?: return
         val code = root["code"]?.jsonPrimitive?.contentOrNull
@@ -119,6 +124,11 @@ class AnnouncementCenter(private val context: Context) : BackendResponseObserver
                 ?.takeIf { it.isNotBlank() }
                 ?: DEFAULT_UPDATE_URL
             activateForceUpdate(updateUrl)
+        } else if (statusCode == 403 && code in ENTITLEMENT_BILLING_CODES) {
+            appContext.getSharedPreferences(SESSION_PREFS, Context.MODE_PRIVATE)
+                .getString(ACTIVE_STORE_ID, null)
+                ?.takeIf { it.isNotBlank() }
+                ?.let { _billingRequiredStoreId.value = it }
         } else if (statusCode in 200..299) {
             clearForceUpdate()
         }
@@ -171,5 +181,12 @@ class AnnouncementCenter(private val context: Context) : BackendResponseObserver
         const val BANNER_PREFS = "woogit_announcement_banners"
         const val NOTIFICATION_PREFS = "woogit_announcement_notifications"
         const val BANNER_DISPLAY_TYPE = 1
+        val ENTITLEMENT_BILLING_CODES = setOf(
+            "not_entitled",
+            "billing_required",
+            "PLAN_EXPIRED",
+            "PLAN_RENEWAL_REQUIRED",
+            "PAYMENT_REQUIRED",
+        )
     }
 }
