@@ -124,7 +124,7 @@ class AppComposition(context: Context) {
         }
         val reference = store.credentialReference ?: return false
         val pair = secure.get(reference) ?: return false
-        return backend.verifySite(storeId.value, store.baseUrl, pair).isSuccess
+        return backend.verifySite(storeId.value, "${store.baseUrl}?woogit_session_refresh=${System.currentTimeMillis()}", pair).isSuccess
     }
 
     val v1Presentation = V1PresentationDependencies(
