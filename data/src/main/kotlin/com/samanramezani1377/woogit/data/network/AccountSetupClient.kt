@@ -1,5 +1,6 @@
 package com.samanramezani1377.woogit.data.network
 
+import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.core.domain.error.CoreResult
 import com.samanramezani1377.woogit.core.domain.error.DomainError
 import com.samanramezani1377.woogit.core.security.BackendSessionStore
@@ -23,10 +24,17 @@ class AccountSetupClient(
     private val sessions: BackendSessionStore,
     private val appVersion: String,
     private val responseObserver: BackendResponseObserver? = null,
+    private val reauthenticate: suspend (StoreId) -> Boolean = { false },
 ) {
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
 
-    suspend fun requiresWebPassword(storeId: String): CoreResult<Boolean> = runCatching {
+    suspend fun requiresWebPassword(storeId: String): CoreResult<Boolean> =
+        requestRequirements(storeId, allowReauthentication = true)
+
+    private suspend fun requestRequirements(
+        storeId: String,
+        allowReauthentication: Boolean,
+    ): CoreResult<Boolean> = runCatching {
         val token = sessions.get(storeId) ?: return@runCatching CoreResult.Failure(
             DomainError.Network("Backend session is unavailable")
         )
@@ -36,6 +44,12 @@ class AccountSetupClient(
         }
         val body = response.bodyAsText()
         responseObserver?.onResponse(response.status.value, body)
+        if (response.status.value == 401 && allowReauthentication) {
+            sessions.remove(storeId)
+            if (reauthenticate(StoreId(storeId))) {
+                return@runCatching requestRequirements(storeId, allowReauthentication = false)
+            }
+        }
         if (response.status.value !in 200..299) {
             return@runCatching CoreResult.Failure(
                 DomainError.Network("WooGit account requirements HTTP ${response.status.value}")
@@ -62,6 +76,13 @@ class AccountSetupClient(
         storeId: String,
         password: String,
         confirmation: String,
+    ): CoreResult<Unit> = setupWebPasswordInternal(storeId, password, confirmation, allowReauthentication = true)
+
+    private suspend fun setupWebPasswordInternal(
+        storeId: String,
+        password: String,
+        confirmation: String,
+        allowReauthentication: Boolean,
     ): CoreResult<Unit> = runCatching {
         val token = sessions.get(storeId) ?: return@runCatching CoreResult.Failure(
             DomainError.Network("Backend session is unavailable")
@@ -77,6 +98,17 @@ class AccountSetupClient(
         }
         val body = response.bodyAsText()
         responseObserver?.onResponse(response.status.value, body)
+        if (response.status.value == 401 && allowReauthentication) {
+            sessions.remove(storeId)
+            if (reauthenticate(StoreId(storeId))) {
+                return@runCatching setupWebPasswordInternal(
+                    storeId,
+                    password,
+                    confirmation,
+                    allowReauthentication = false,
+                )
+            }
+        }
         if (response.status.value !in 200..299) {
             return@runCatching CoreResult.Failure(
                 DomainError.Network(extractMessage(body) ?: "WooGit account password setup failed")
