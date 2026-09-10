@@ -1,10 +1,14 @@
 package com.samanramezani1377.woogit.presentation.settings
 
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import com.samanramezani1377.woogit.core.billing.BillingPlan
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.presentation.*
@@ -42,20 +46,18 @@ fun SubscriptionExpiredScreen(storeId: StoreId, onSubscriptionRestored: () -> Un
     }
 
     LaunchedEffect(storeId) { refresh() }
-
     paymentUrl?.let { url ->
         BillingPaymentWebView(url, onClose = { paymentUrl = null; scope.launch { refresh() } })
         return
     }
-
     BackHandler(enabled = true) { }
     LockedBillingContent(
         title = "اعتبار اشتراک شما به پایان رسیده است",
-        message = "برای ادامه استفاده از WooGit، یکی از طرح‌های موجود را انتخاب و پرداخت را تکمیل کنید.",
+        baseMessage = "برای ادامه استفاده از WooGit، یکی از طرح‌های موجود را انتخاب و پرداخت را تکمیل کنید.",
         loading = loading,
         plans = plans,
         busyPlanId = busyPlanId,
-        message = message,
+        statusMessage = message,
         onPlanSelected = { plan ->
             if (busyPlanId == null) {
                 busyPlanId = plan.id
@@ -74,17 +76,17 @@ fun SubscriptionExpiredScreen(storeId: StoreId, onSubscriptionRestored: () -> Un
 @Composable
 private fun LockedBillingContent(
     title: String,
-    message: String,
+    baseMessage: String,
     loading: Boolean = false,
     plans: List<BillingPlan> = emptyList(),
     busyPlanId: Int? = null,
-    message: String? = null,
+    statusMessage: String? = null,
     onPlanSelected: (BillingPlan) -> Unit = {},
     onVerifyPayment: () -> Unit = {},
 ) {
     GlassScaffold {
         Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            GlassCard { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { GlassText("اشتراک"); GlassText(title); GlassText(message) } }
+            GlassCard { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { GlassText("اشتراک"); GlassText(title); GlassText(baseMessage) } }
             if (loading && plans.isEmpty()) GlassCard { GlassText("در حال دریافت طرح‌های فعال…") }
             plans.forEach { plan ->
                 GlassCard {
@@ -98,8 +100,37 @@ private fun LockedBillingContent(
                 }
             }
             GlassPrimaryAction("بررسی پرداخت", onClick = onVerifyPayment)
-            message?.let { GlassText(it) }
+            statusMessage?.let { GlassText(it) }
         }
+    }
+}
+
+@Composable
+private fun BillingPaymentWebView(url: String, onClose: () -> Unit) {
+    val context = LocalContext.current
+    var webView by remember { mutableStateOf<WebView?>(null) }
+    BackHandler { val view = webView; if (view?.canGoBack() == true) view.goBack() else onClose() }
+    Column(Modifier.fillMaxSize()) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.End) {
+            GlassPrimaryAction("بازگشت به WooGit", onClick = onClose)
+        }
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
+            factory = { WebView(context).apply {
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = true
+                settings.javaScriptCanOpenWindowsAutomatically = true
+                settings.setSupportMultipleWindows(false)
+                settings.loadsImagesAutomatically = true
+                settings.allowFileAccess = false
+                settings.allowContentAccess = false
+                webViewClient = WebViewClient()
+                loadUrl(url)
+                webView = this
+            } },
+            update = { webView = it },
+            onRelease = { it.stopLoading(); it.destroy(); webView = null },
+        )
     }
 }
 
