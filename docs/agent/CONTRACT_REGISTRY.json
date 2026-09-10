@@ -1,0 +1,14 @@
+{
+  "schema": "woogit-agent-contract-registry-v1",
+  "authority": "source-code",
+  "surfaces": ["app", "data", "domain", "presentation"],
+  "records": [
+    {"id":"APP-HTTP","map":["API_MAP.md","JSON_CONTRACTS.md"],"source":"data/src/main/kotlin/com/samanramezani1377/woogit/data/network/BackendClient.kt"},
+    {"id":"APP-WC","map":["API_MAP.md","ERROR_MAP.md"],"source":"data/src/main/kotlin/com/samanramezani1377/woogit/data/network/WooCommerceApi.kt"},
+    {"id":"APP-SESSION","map":["SESSION_MAP.md"],"source":"app/src/main/kotlin/com/samanramezani1377/woogit/security/AndroidBackendSessionStore.kt"},
+    {"id":"APP-BILLING","map":["API_MAP.md","SESSION_MAP.md"],"source":"data/src/main/kotlin/com/samanramezani1377/woogit/data/"},
+    {"id":"APP-NAV","map":["ARCHITECTURE.md"],"source":"presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/"},
+    {"id":"APP-BG","map":["ARCHITECTURE.md","ERROR_MAP.md"],"source":"app/src/main/kotlin/com/samanramezani1377/woogit/background/"}
+  ],
+  "required_record": ["id","source","symbol","line_start","line_end","request","response","errors","consumers"]
+}
