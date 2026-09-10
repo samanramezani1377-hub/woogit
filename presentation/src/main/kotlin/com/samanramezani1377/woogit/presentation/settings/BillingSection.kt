@@ -1,14 +1,17 @@
 package com.samanramezani1377.woogit.presentation.settings
 
-import android.content.Intent
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import com.samanramezani1377.woogit.core.billing.BillingPlan
 import com.samanramezani1377.woogit.core.billing.BillingStatus
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
@@ -20,7 +23,6 @@ import java.util.Locale
 @Composable
 fun BillingSection(storeId: StoreId) {
     val gateway = BillingRuntime.gateway ?: return
-    val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
     var plans by remember { mutableStateOf<List<BillingPlan>>(emptyList()) }
@@ -28,6 +30,7 @@ fun BillingSection(storeId: StoreId) {
     var loading by remember { mutableStateOf(true) }
     var busyPlanId by remember { mutableStateOf<Int?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
+    var paymentUrl by remember { mutableStateOf<String?>(null) }
 
     suspend fun refreshBilling() {
         loading = true
@@ -52,12 +55,26 @@ fun BillingSection(storeId: StoreId) {
     }
 
     LaunchedEffect(storeId) { refreshBilling() }
-    DisposableEffect(lifecycleOwner, storeId) {
+    DisposableEffect(lifecycleOwner, storeId, paymentUrl) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) scope.launch { reconcileAfterPayment() }
+            if (event == Lifecycle.Event.ON_RESUME && paymentUrl == null) scope.launch { reconcileAfterPayment() }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    paymentUrl?.let { url ->
+        PaymentWebView(
+            url = url,
+            onClose = {
+                paymentUrl = null
+                scope.launch {
+                    reconcileAfterPayment()
+                    refreshBilling()
+                }
+            },
+        )
+        return
     }
 
     GlassCard {
@@ -88,8 +105,8 @@ fun BillingSection(storeId: StoreId) {
                                         scope.launch {
                                             gateway.checkout(storeId, plan.id, plan.variations.firstOrNull()?.id ?: 0)
                                                 .onSuccess { checkout ->
-                                                    message = "صفحه پرداخت باز شد. پس از پرداخت به WooGit برگردید."
-                                                    context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(checkout.paymentUrl)))
+                                                    message = "درگاه پرداخت داخل WooGit باز شد."
+                                                    paymentUrl = checkout.paymentUrl
                                                 }
                                                 .onFailure { message = billingMessage(it) }
                                             busyPlanId = null
@@ -104,6 +121,51 @@ fun BillingSection(storeId: StoreId) {
             }
             message?.let { GlassText(it) }
         }
+    }
+}
+
+@Composable
+private fun PaymentWebView(url: String, onClose: () -> Unit) {
+    val context = LocalContext.current
+    var webView by remember { mutableStateOf<WebView?>(null) }
+
+    BackHandler {
+        val view = webView
+        if (view?.canGoBack() == true) view.goBack() else onClose()
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.End,
+        ) {
+            GlassPrimaryAction("بازگشت به WooGit", onClick = onClose)
+        }
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
+            factory = {
+                WebView(context).apply {
+                    settings.javaScriptEnabled = true
+                    settings.domStorageEnabled = true
+                    settings.javaScriptCanOpenWindowsAutomatically = true
+                    settings.setSupportMultipleWindows(false)
+                    settings.loadsImagesAutomatically = true
+                    settings.allowFileAccess = false
+                    settings.allowContentAccess = false
+                    webViewClient = WebViewClient()
+                    loadUrl(url)
+                    webView = this
+                }
+            },
+            update = { view -> webView = view },
+            onRelease = { view ->
+                view.stopLoading()
+                view.destroy()
+                webView = null
+            },
+        )
     }
 }
 
