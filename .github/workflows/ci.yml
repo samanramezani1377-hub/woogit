@@ -3,8 +3,12 @@ name: WooGit V1 CI
 on:
   push:
     branches: [main, app-transfer]
+    paths-ignore:
+      - 'docs/agent/**'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - 'docs/agent/**'
   workflow_dispatch:
 
 permissions:
