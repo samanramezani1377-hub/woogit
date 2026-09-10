@@ -103,7 +103,8 @@ class BillingClient(
     override suspend fun activateOperationalSession(storeId: StoreId): Result<BillingActivation> = runCatching { requestActivate(storeId, true) }
 
     private suspend fun requestActivate(storeId: StoreId, retry: Boolean): BillingActivation {
-        val token = sessions.get(storeId.value) ?: return requestActivateWithoutOperationalSession(storeId)
+        val token = sessions.get(storeId.value)
+        if (token == null) return requestActivateWithoutOperationalSession(storeId)
         val response = httpClient.post(url("/wp-json/woogit/v1/billing/activate-session")) {
             header("X-WooGit-App-Version", appVersion); header("X-WooGit-Session", token)
         }
@@ -113,7 +114,7 @@ class BillingClient(
             return requestActivateWithoutOperationalSession(storeId)
         }
         if (response.status.value !in 200..299) throw BackendHttpException(response.status.value, body, extractMessage(body))
-        return parseActivation(body)
+        return parseActivation(storeId, body)
     }
 
     private suspend fun requestActivateWithoutOperationalSession(storeId: StoreId): BillingActivation {
@@ -122,15 +123,15 @@ class BillingClient(
         }
         val body = response.bodyAsText()
         if (response.status.value !in 200..299) throw BackendHttpException(response.status.value, body, extractMessage(body))
-        return parseActivation(body)
+        return parseActivation(storeId, body)
     }
 
-    private fun parseActivation(body: String): BillingActivation {
+    private fun parseActivation(storeId: StoreId, body: String): BillingActivation {
         val root = json.parseToJsonElement(body).jsonObject
         val session = root["session"]?.jsonPrimitive?.contentOrNull ?: error("Missing operational session")
         val scope = root["scope"]?.jsonPrimitive?.contentOrNull ?: "operational"
         return BillingActivation(session, scope, root["expires_at"]?.jsonPrimitive?.contentOrNull).also { activation ->
-            sessions.put(activation.session, activation.session)
+            sessions.put(storeId.value, activation.session)
         }
     }
 
