@@ -83,11 +83,11 @@ internal class DashboardViewModel(private val dependencies: V1PresentationDepend
     fun onNetworkAvailable() { viewModelScope.launch { checkConnection() } }
     override fun onCleared() { healthMonitorJob?.cancel(); super.onCleared() }
 
-    private suspend fun checkConnection(): ConnectionState {
+    private suspend fun checkConnection(allowDuringRefresh: Boolean = false): ConnectionState {
         // The initial dashboard refresh is responsible for establishing readiness.
-        // Do not let the background health monitor start another backend request while
-        // login/navigation is still bringing the store session into the runtime store.
-        if (refreshInFlight.get()) return _uiState.value.connectionState
+        // Background health checks must not race it while login/navigation is bringing
+        // the store session into the runtime session store.
+        if (!allowDuringRefresh && refreshInFlight.get()) return _uiState.value.connectionState
         if (healthCheckInFlight) return _uiState.value.connectionState
         healthCheckInFlight = true
         return try {
@@ -120,11 +120,9 @@ internal class DashboardViewModel(private val dependencies: V1PresentationDepend
 
     private suspend fun refreshInternal() {
         try {
-            // Login/connect must finish verifySite and persist the backend session before
-            // dashboard feature calls are allowed to fan out. Previously these three
-            // requests ran concurrently, so salesReport could reach BackendClient.forward
-            // while the session was still unavailable, producing transient login errors.
-            val connectionState = checkConnection()
+            // Do the connection/readiness check first. BackendClient.forward remains strict:
+            // dashboard data is never allowed to run before the backend session is ready.
+            val connectionState = checkConnection(allowDuringRefresh = true)
             if (connectionState != ConnectionState.CONNECTED) {
                 _uiState.value = _uiState.value.copy(connectionState = connectionState, loading = false)
                 return
