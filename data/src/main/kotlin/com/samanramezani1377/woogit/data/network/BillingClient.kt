@@ -37,17 +37,15 @@ class BillingClient(
     override suspend fun status(storeId: StoreId): Result<BillingStatus> = runCatching { requestStatus(storeId, true) }
 
     private suspend fun requestStatus(storeId: StoreId, retry: Boolean): BillingStatus {
-        val token = sessions.get(storeId.value)
-        val response = if (token != null) {
-            httpClient.get(url("/wp-json/woogit/v1/billing/status")) {
-                header("X-WooGit-App-Version", appVersion); header("X-WooGit-Session", token)
-            }
-        } else {
-            httpClient.get(url("/wp-json/woogit/v1/billing/status")) { header("X-WooGit-App-Version", appVersion) }
+        var token = sessions.getBilling(storeId.value)
+        if (token == null && reauthenticate(storeId)) token = sessions.getBilling(storeId.value)
+        val response = httpClient.get(url("/wp-json/woogit/v1/billing/status")) {
+            header("X-WooGit-App-Version", appVersion)
+            if (token != null) header("X-WooGit-Session", token)
         }
         val body = response.bodyAsText()
-        if (response.status.value == 401 && retry && token != null) {
-            sessions.remove(storeId.value)
+        if (response.status.value == 401 && retry) {
+            sessions.removeBilling(storeId.value)
             if (reauthenticate(storeId)) return requestStatus(storeId, false)
         }
         if (response.status.value !in 200..299) throw BackendHttpException(response.status.value, body, extractMessage(body))
@@ -62,8 +60,9 @@ class BillingClient(
     override suspend fun checkout(storeId: StoreId, planId: Int, variationId: Int): Result<BillingCheckout> = runCatching { requestCheckout(storeId, planId, variationId, true) }
 
     private suspend fun requestCheckout(storeId: StoreId, planId: Int, variationId: Int, retry: Boolean): BillingCheckout {
-        val token = sessions.get(storeId.value)
-        if (token == null) return requestCheckoutWithoutOperationalSession(storeId, planId, variationId)
+        var token = sessions.getBilling(storeId.value)
+        if (token == null && reauthenticate(storeId)) token = sessions.getBilling(storeId.value)
+        if (token == null) throw BackendProtocolException("Billing session is unavailable")
         val operationKey = "${storeId.value}|$planId|$variationId"
         val key = checkoutKeys.computeIfAbsent(operationKey) { "app-billing-${UUID.randomUUID()}" }
         val response = httpClient.post(url("/wp-json/woogit/v1/billing/checkout")) {
@@ -73,22 +72,9 @@ class BillingClient(
         }
         val body = response.bodyAsText()
         if (response.status.value == 401 && retry) {
-            sessions.remove(storeId.value)
-            return requestCheckoutWithoutOperationalSession(storeId, planId, variationId)
+            sessions.removeBilling(storeId.value)
+            if (reauthenticate(storeId)) return requestCheckout(storeId, planId, variationId, false)
         }
-        if (response.status.value !in 200..299) throw BackendHttpException(response.status.value, body, extractMessage(body))
-        return parseCheckout(body, operationKey, key)
-    }
-
-    private suspend fun requestCheckoutWithoutOperationalSession(storeId: StoreId, planId: Int, variationId: Int): BillingCheckout {
-        val operationKey = "${storeId.value}|$planId|$variationId"
-        val key = checkoutKeys.computeIfAbsent(operationKey) { "app-billing-${UUID.randomUUID()}" }
-        val response = httpClient.post(url("/wp-json/woogit/v1/billing/checkout")) {
-            header("X-WooGit-App-Version", appVersion); header("Idempotency-Key", key)
-            contentType(ContentType.Application.Json)
-            setBody(buildJsonObject { put("plan_id", planId); if (variationId > 0) put("variation_id", variationId) })
-        }
-        val body = response.bodyAsText()
         if (response.status.value !in 200..299) throw BackendHttpException(response.status.value, body, extractMessage(body))
         return parseCheckout(body, operationKey, key)
     }
@@ -103,25 +89,17 @@ class BillingClient(
     override suspend fun activateOperationalSession(storeId: StoreId): Result<BillingActivation> = runCatching { requestActivate(storeId, true) }
 
     private suspend fun requestActivate(storeId: StoreId, retry: Boolean): BillingActivation {
-        val token = sessions.get(storeId.value)
-        if (token == null) return requestActivateWithoutOperationalSession(storeId)
+        var token = sessions.getBilling(storeId.value)
+        if (token == null && reauthenticate(storeId)) token = sessions.getBilling(storeId.value)
+        if (token == null) throw BackendProtocolException("Billing session is unavailable")
         val response = httpClient.post(url("/wp-json/woogit/v1/billing/activate-session")) {
             header("X-WooGit-App-Version", appVersion); header("X-WooGit-Session", token)
         }
         val body = response.bodyAsText()
         if (response.status.value == 401 && retry) {
-            sessions.remove(storeId.value)
-            return requestActivateWithoutOperationalSession(storeId)
+            sessions.removeBilling(storeId.value)
+            if (reauthenticate(storeId)) return requestActivate(storeId, false)
         }
-        if (response.status.value !in 200..299) throw BackendHttpException(response.status.value, body, extractMessage(body))
-        return parseActivation(storeId, body)
-    }
-
-    private suspend fun requestActivateWithoutOperationalSession(storeId: StoreId): BillingActivation {
-        val response = httpClient.post(url("/wp-json/woogit/v1/billing/activate-session")) {
-            header("X-WooGit-App-Version", appVersion)
-        }
-        val body = response.bodyAsText()
         if (response.status.value !in 200..299) throw BackendHttpException(response.status.value, body, extractMessage(body))
         return parseActivation(storeId, body)
     }
@@ -130,8 +108,9 @@ class BillingClient(
         val root = json.parseToJsonElement(body).jsonObject
         val session = root["session"]?.jsonPrimitive?.contentOrNull ?: error("Missing operational session")
         val scope = root["scope"]?.jsonPrimitive?.contentOrNull ?: "operational"
-        return BillingActivation(session, scope, root["expires_at"]?.jsonPrimitive?.contentOrNull).also { activation ->
-            sessions.put(storeId.value, activation.session)
+        return BillingActivation(session, scope, root["expires_at"]?.jsonPrimitive?.contentOrNull).also {
+            sessions.put(storeId.value, it.session)
+            sessions.removeBilling(storeId.value)
         }
     }
 
