@@ -16,5 +16,16 @@ class AndroidBackendSessionStore(context: Context) : BackendSessionStore {
         prefs.edit().remove(key(storeId)).apply()
     }
 
+    override fun getBilling(storeId: String): String? = prefs.getString(billingKey(storeId), null)
+
+    override fun putBilling(storeId: String, token: String) {
+        prefs.edit().putString(billingKey(storeId), token).apply()
+    }
+
+    override fun removeBilling(storeId: String) {
+        prefs.edit().remove(billingKey(storeId)).apply()
+    }
+
     private fun key(storeId: String) = "session_$storeId"
+    private fun billingKey(storeId: String) = "billing_session_$storeId"
 }
