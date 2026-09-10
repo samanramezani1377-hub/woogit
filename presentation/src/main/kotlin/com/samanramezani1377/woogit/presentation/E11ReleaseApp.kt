@@ -17,24 +17,19 @@ fun E11ReleaseApp(
     initialOrderId: String? = null,
     forceUpdateUrl: String? = null,
     bannerAnnouncements: StateFlow<List<BackendAnnouncement>>? = null,
-    billingRequiredStoreId: StateFlow<String?>? = null,
     onDismissBanner: (String) -> Unit = {},
-    onBillingRequiredConsumed: () -> Unit = {},
 ) {
     AiRuntime.dependencies = dependencies
     if (!forceUpdateUrl.isNullOrBlank()) {
         ForceUpdateScreen(forceUpdateUrl)
     } else {
         val banners = bannerAnnouncements?.collectAsState()?.value.orEmpty()
-        val billingStoreId = billingRequiredStoreId?.collectAsState()?.value
         Column {
             AnnouncementBannerHost(announcements = banners, onDismiss = onDismissBanner)
             E11AppNavigation(
                 dependencies = dependencies,
                 accountSetupGateway = accountSetupGateway,
                 initialOrderId = initialOrderId,
-                billingRequiredStoreId = billingStoreId,
-                onBillingRequiredConsumed = onBillingRequiredConsumed,
             )
         }
     }
