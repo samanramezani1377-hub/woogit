@@ -11,18 +11,14 @@ import androidx.navigation.navArgument
 import com.samanramezani1377.woogit.core.domain.entity.EntityId
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.core.domain.model.*
-import com.samanramezani1377.woogit.presentation.account.AccountSetupGateway
-import com.samanramezani1377.woogit.presentation.account.AccountSetupUiState
-import com.samanramezani1377.woogit.presentation.account.AccountSetupViewModel
-import com.samanramezani1377.woogit.presentation.account.CreatePasswordScreen
+import com.samanramezani1377.woogit.presentation.account.*
 import com.samanramezani1377.woogit.presentation.ai.AiScreen
 import com.samanramezani1377.woogit.presentation.connection.ConnectionScreen
 import com.samanramezani1377.woogit.presentation.dashboard.*
 import com.samanramezani1377.woogit.presentation.order.*
 import com.samanramezani1377.woogit.presentation.orders.*
 import com.samanramezani1377.woogit.presentation.product.*
-import com.samanramezani1377.woogit.presentation.settings.DebugLogsScreen
-import com.samanramezani1377.woogit.presentation.settings.SettingsScreen
+import com.samanramezani1377.woogit.presentation.settings.*
 import com.samanramezani1377.woogit.presentation.sync.*
 
 @Composable
@@ -35,6 +31,7 @@ internal fun E11AppNavigation(
 ) {
     val navController = rememberNavController()
     var activeStore by remember { mutableStateOf(dependencies.initialStoreId) }
+    var billingLocked by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val currentRoute by navController.currentBackStackEntryAsState()
     val route = currentRoute?.destination?.route
@@ -55,12 +52,12 @@ internal fun E11AppNavigation(
         val store = activeStore ?: return@LaunchedEffect
         when (accountSetupState) {
             AccountSetupUiState.PasswordRequired -> {
-                if (route != E11Routes.CREATE_PASSWORD) {
+                if (route != E11Routes.CREATE_PASSWORD && !billingLocked) {
                     navController.navigate(E11Routes.CREATE_PASSWORD) { launchSingleTop = true }
                 }
             }
             AccountSetupUiState.Ready -> {
-                if (route == E11Routes.CONNECTION) {
+                if (route == E11Routes.CONNECTION && !billingLocked) {
                     navController.navigate(E11Routes.DASHBOARD) {
                         popUpTo(E11Routes.CONNECTION) { inclusive = true }
                     }
@@ -72,18 +69,21 @@ internal fun E11AppNavigation(
 
     LaunchedEffect(billingRequiredStoreId, activeStore) {
         val store = activeStore ?: return@LaunchedEffect
-        if (billingRequiredStoreId == store && route != E11Routes.SETTINGS) {
-            navController.navigate(E11Routes.SETTINGS) {
-                launchSingleTop = true
-                popUpTo(E11Routes.DASHBOARD) { inclusive = false }
-            }
-            onBillingRequiredConsumed()
-        } else if (billingRequiredStoreId == store && route == E11Routes.SETTINGS) {
+        if (billingRequiredStoreId == store) {
+            billingLocked = true
             onBillingRequiredConsumed()
         }
     }
 
-    BackHandler(enabled = route != E11Routes.CONNECTION && route != E11Routes.CREATE_PASSWORD) {
+    LaunchedEffect(activeStore, BillingRuntime.gateway) {
+        val store = activeStore ?: return@LaunchedEffect
+        BillingRuntime.gateway?.status(StoreId(store))?.onSuccess { status ->
+            billingLocked = status.status == "expired"
+        }
+    }
+
+    BackHandler(enabled = billingLocked) { }
+    BackHandler(enabled = !billingLocked && route != E11Routes.CONNECTION && route != E11Routes.CREATE_PASSWORD) {
         if (navController.previousBackStackEntry != null) navController.popBackStack()
         else (context as? Activity)?.moveTaskToBack(true)
     }
@@ -92,6 +92,22 @@ internal fun E11AppNavigation(
         activeStore == null -> E11Routes.CONNECTION
         initialOrderId != null -> E11Routes.order(initialOrderId)
         else -> E11Routes.DASHBOARD
+    }
+
+    val restoreSubscription = {
+        billingLocked = false
+        navController.navigate(E11Routes.DASHBOARD) {
+            popUpTo(E11Routes.DASHBOARD) { inclusive = false }
+            launchSingleTop = true
+        }
+    }
+
+    if (billingLocked && activeStore != null) {
+        SubscriptionExpiredScreen(
+            storeId = StoreId(activeStore!!),
+            onSubscriptionRestored = restoreSubscription,
+        )
+        return
     }
 
     NavHost(navController, startDestination) {
@@ -110,9 +126,7 @@ internal fun E11AppNavigation(
             if (store != null) {
                 CreatePasswordScreen(
                     state = accountSetupState,
-                    onSubmit = { password, confirmation ->
-                        accountSetupViewModel.setupPassword(store, password, confirmation)
-                    },
+                    onSubmit = { password, confirmation -> accountSetupViewModel.setupPassword(store, password, confirmation) },
                     onCompleted = {
                         accountSetupViewModel.resetReady()
                         navController.navigate(E11Routes.DASHBOARD) {
@@ -130,41 +144,9 @@ internal fun E11AppNavigation(
                 val vm = viewModel<DashboardViewModel>(key = "dashboard-${storeId.value}", factory = DashboardViewModelFactory(dependencies, storeId))
                 val state by vm.uiState.collectAsState()
                 LaunchedEffect(storeId) { vm.refresh() }
-                DisposableEffect(vm, storeId) {
-                    vm.startConnectionHealthMonitor()
-                    onDispose { vm.stopConnectionHealthMonitor() }
-                }
+                DisposableEffect(vm, storeId) { vm.startConnectionHealthMonitor(); onDispose { vm.stopConnectionHealthMonitor() } }
                 LiquidGlassEnvironment {
-                    DashboardScreen(
-                        storeId.value,
-                        state.connectionState == ConnectionState.CONNECTED,
-                        state.ordersCount,
-                        state.productsCount,
-                        state.revenue,
-                        state.processingCount,
-                        state.orders.firstOrNull()?.number,
-                        state.orders.firstOrNull()?.customer?.name.orEmpty(),
-                        formatMoney(state.orders.firstOrNull()?.total),
-                        state.orders.firstOrNull()?.status,
-                        { state.orders.firstOrNull()?.number?.let { navController.navigate(E11Routes.order(it)) } },
-                        { navController.navigate(E11Routes.ORDERS) },
-                        { navController.navigate(E11Routes.PRODUCTS) },
-                        { navController.navigate(E11Routes.SETTINGS) },
-                        { navController.navigate(E11Routes.SYNC) },
-                        { navController.navigate(E11Routes.CONFLICTS) },
-                        DashboardDestination.DASHBOARD,
-                        { destination ->
-                            when (destination) {
-                                DashboardDestination.DASHBOARD -> Unit
-                                DashboardDestination.ORDERS -> navController.navigate(E11Routes.ORDERS)
-                                DashboardDestination.PRODUCTS -> navController.navigate(E11Routes.PRODUCTS)
-                                DashboardDestination.SETTINGS -> navController.navigate(E11Routes.SETTINGS)
-                            }
-                        },
-                        { navController.navigate(E11Routes.AI) },
-                        { vm.refresh() },
-                        state.loading,
-                    )
+                    DashboardScreen(storeId.value, state.connectionState == ConnectionState.CONNECTED, state.ordersCount, state.productsCount, state.revenue, state.processingCount, state.orders.firstOrNull()?.number, state.orders.firstOrNull()?.customer?.name.orEmpty(), formatMoney(state.orders.firstOrNull()?.total), state.orders.firstOrNull()?.status, { state.orders.firstOrNull()?.number?.let { navController.navigate(E11Routes.order(it)) } }, { navController.navigate(E11Routes.ORDERS) }, { navController.navigate(E11Routes.PRODUCTS) }, { navController.navigate(E11Routes.SETTINGS) }, { navController.navigate(E11Routes.SYNC) }, { navController.navigate(E11Routes.CONFLICTS) }, DashboardDestination.DASHBOARD, { destination -> when (destination) { DashboardDestination.DASHBOARD -> Unit; DashboardDestination.ORDERS -> navController.navigate(E11Routes.ORDERS); DashboardDestination.PRODUCTS -> navController.navigate(E11Routes.PRODUCTS); DashboardDestination.SETTINGS -> navController.navigate(E11Routes.SETTINGS) } }, { navController.navigate(E11Routes.AI) }, { vm.refresh() }, state.loading)
                 }
             }
         }
@@ -187,5 +169,4 @@ internal fun E11AppNavigation(
 
 private fun mapOrdersState(state: FeatureUiState<List<Order>>, hasMore: Boolean): OrdersUiState = when (state) { FeatureUiState.Loading, FeatureUiState.Pending -> OrdersUiState.Loading; FeatureUiState.Empty -> OrdersUiState.Empty; is FeatureUiState.Error -> OrdersUiState.Error(state.message, state.retryable); FeatureUiState.Offline -> OrdersUiState.Offline(); is FeatureUiState.Conflict -> OrdersUiState.Error("تعارض در داده‌های سفارش وجود دارد.", false); is FeatureUiState.Success -> OrdersUiState.Content(state.value.map { order -> OrderRowUiModel(order.number, order.customer?.name.orEmpty(), order.customer?.email.orEmpty(), order.status.name, formatMoney(order.total), order.payment?.methodTitle.orEmpty(), order.modifiedAt?.toString().orEmpty()) }, hasMore) }
 private fun mapOrderDetailState(state: FeatureUiState<Order>): OrderDetailUiState = when (state) { FeatureUiState.Loading, FeatureUiState.Pending -> OrderDetailUiState.Loading; FeatureUiState.Empty -> OrderDetailUiState.NotFound; is FeatureUiState.Error -> OrderDetailUiState.Error(state.message); FeatureUiState.Offline -> OrderDetailUiState.Error("سفارش در حالت آفلاین در دسترس نیست."); is FeatureUiState.Conflict -> OrderDetailUiState.Error("تعارض در داده‌های سفارش."); is FeatureUiState.Success -> OrderDetailUiState.Content(state.value) }
-private fun mapSyncState(state: FeatureUiState<SyncMetadata>): SyncUiState = when (state) { FeatureUiState.Loading, FeatureUiState.Pending -> SyncUiState.Running; FeatureUiState.Empty -> SyncUiState.Idle; is FeatureUiState.Success -> SyncUiState.Success("وضعیت همگام‌سازی فروشگاه با موفقیت دریافت شد."); is FeatureUiState.Error -> SyncUiState.Error(state.message); FeatureUiState.Offline -> SyncUiState.Error("فروشگاه در حالت آفلاین در دسترس نیست"); is FeatureUiState.Conflict -> SyncUiState.Error("تعارض در داده‌های همگام‌سازی وجود دارد") }
-private fun formatMoney(value: String?): String { val amount = value?.toDoubleOrNull() ?: return "—"; return "${java.text.NumberFormat.getNumberInstance(java.util.Locale.US).apply { maximumFractionDigits = 0; minimumFractionDigits = 0 }.format(amount)} تومان" }
+private fun mapSyncState(state: FeatureUiState<SyncMetadata>): SyncUiState = when (state) { FeatureUiState.Loading, FeatureUiState.Pending -> SyncUiState.Running; FeatureUiState.Empty -> SyncUiState.Idle; is FeatureUiState.Success -> SyncUiState.Success("وضعیت همگام‌سازی فروشگاه با موفقیت دریافت شد."); is FeatureUiState.Error -> SyncUiState.Error(state.message); FeatureUiState.Offline -> SyncUiState.Error("فروشگاه در حالت آفلاین در دسترس نیست"); is FeatureUiState.Conflict -> SyncUiState.Error("تعارض در وضعیت همگام‌سازی.") }
