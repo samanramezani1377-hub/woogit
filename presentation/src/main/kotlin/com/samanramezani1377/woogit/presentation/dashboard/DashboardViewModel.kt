@@ -84,6 +84,10 @@ internal class DashboardViewModel(private val dependencies: V1PresentationDepend
     override fun onCleared() { healthMonitorJob?.cancel(); super.onCleared() }
 
     private suspend fun checkConnection(): ConnectionState {
+        // The initial dashboard refresh is responsible for establishing readiness.
+        // Do not let the background health monitor start another backend request while
+        // login/navigation is still bringing the store session into the runtime store.
+        if (refreshInFlight.get()) return _uiState.value.connectionState
         if (healthCheckInFlight) return _uiState.value.connectionState
         healthCheckInFlight = true
         return try {
@@ -116,15 +120,25 @@ internal class DashboardViewModel(private val dependencies: V1PresentationDepend
 
     private suspend fun refreshInternal() {
         try {
-            val (connection, ordersResult, productsResult) = coroutineScope {
-                val connectionDeferred = async { checkConnection() }
-                val ordersDeferred = async { loadLatestOrders() }
-                val productsDeferred = async { loadLatestProducts() }
-                awaitAll(connectionDeferred, ordersDeferred, productsDeferred)
+            // Login/connect must finish verifySite and persist the backend session before
+            // dashboard feature calls are allowed to fan out. Previously these three
+            // requests ran concurrently, so salesReport could reach BackendClient.forward
+            // while the session was still unavailable, producing transient login errors.
+            val connectionState = checkConnection()
+            if (connectionState != ConnectionState.CONNECTED) {
+                _uiState.value = _uiState.value.copy(connectionState = connectionState, loading = false)
+                return
             }
 
-            val connectionState = connection as ConnectionState
-            val orders = when (val result = ordersResult as CoreResult<List<Order>>) {
+            val (ordersResult, productsResult) = coroutineScope {
+                val ordersDeferred = async { loadLatestOrders() }
+                val productsDeferred = async { loadLatestProducts() }
+                awaitAll(ordersDeferred, productsDeferred)
+            }.let { results ->
+                results[0] as CoreResult<List<Order>> to results[1] as CoreResult<List<Product>>
+            }
+
+            val orders = when (val result = ordersResult) {
                 is CoreResult.Success -> result.value
                 is CoreResult.Failure -> {
                     val message = PresentationErrorMapper.message(result.error)
@@ -133,7 +147,7 @@ internal class DashboardViewModel(private val dependencies: V1PresentationDepend
                     return
                 }
             }
-            val products = when (val result = productsResult as CoreResult<List<Product>>) {
+            val products = when (val result = productsResult) {
                 is CoreResult.Success -> result.value
                 is CoreResult.Failure -> {
                     val message = PresentationErrorMapper.message(result.error)
