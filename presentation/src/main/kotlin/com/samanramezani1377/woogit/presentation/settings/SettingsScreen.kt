@@ -110,6 +110,7 @@ fun SettingsScreen(storeName: String, storeId: StoreId, onBack: () -> Unit, onDi
             Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 GlassTopBar("تنظیمات", "مدیریت اتصال و حساب فروشگاه") { TextButton(onClick = onBack) { GlassText("بازگشت") } }
                 GlassCard { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { GlassText("فروشگاه متصل"); GlassText(storeName); GlassPrimaryAction("قطع اتصال", onDisconnect) } }
+                BillingSection(storeId)
                 GlassCard {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         GlassText("پس‌زمینه برنامه")
