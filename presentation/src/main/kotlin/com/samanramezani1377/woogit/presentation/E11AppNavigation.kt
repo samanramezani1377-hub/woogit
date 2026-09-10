@@ -30,6 +30,8 @@ internal fun E11AppNavigation(
     dependencies: V1PresentationDependencies,
     accountSetupGateway: AccountSetupGateway,
     initialOrderId: String?,
+    billingRequiredStoreId: String? = null,
+    onBillingRequiredConsumed: () -> Unit = {},
 ) {
     val navController = rememberNavController()
     var activeStore by remember { mutableStateOf(dependencies.initialStoreId) }
@@ -65,6 +67,19 @@ internal fun E11AppNavigation(
                 }
             }
             else -> Unit
+        }
+    }
+
+    LaunchedEffect(billingRequiredStoreId, activeStore) {
+        val store = activeStore ?: return@LaunchedEffect
+        if (billingRequiredStoreId == store && route != E11Routes.SETTINGS) {
+            navController.navigate(E11Routes.SETTINGS) {
+                launchSingleTop = true
+                popUpTo(E11Routes.DASHBOARD) { inclusive = false }
+            }
+            onBillingRequiredConsumed()
+        } else if (billingRequiredStoreId == store && route == E11Routes.SETTINGS) {
+            onBillingRequiredConsumed()
         }
     }
 
