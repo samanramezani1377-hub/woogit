@@ -5,6 +5,7 @@ internal object E11Routes {
     const val CONNECTION = "connection"
     const val CREATE_PASSWORD = "create-password"
     const val DASHBOARD = "dashboard"
+    const val SUBSCRIPTION_EXPIRED = "subscription-expired"
     const val AI = "ai"
     const val ORDERS = "orders"
     const val ORDER_ID = "orderId"
