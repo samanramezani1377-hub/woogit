@@ -39,9 +39,7 @@ class MainActivity : ComponentActivity() {
                     initialOrderId = notificationOrderId.value,
                     forceUpdateUrl = forceUpdateUrl.value,
                     bannerAnnouncements = announcementCenter.bannerAnnouncements,
-                    billingRequiredStoreId = announcementCenter.billingRequiredStoreId,
                     onDismissBanner = announcementCenter::dismissBanner,
-                    onBillingRequiredConsumed = announcementCenter::clearBillingRequired,
                 )
             }
         }
