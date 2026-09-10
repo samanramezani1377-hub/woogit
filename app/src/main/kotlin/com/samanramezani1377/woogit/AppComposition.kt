@@ -34,7 +34,6 @@ class AppComposition(context: Context) {
     val announcementCenter = AnnouncementCenter(appContext)
     private val backend = BackendClient(network.httpClient, BuildConfig.WOOGIT_BACKEND_BASE_URL, secure, sessions, BuildConfig.VERSION_NAME, technicalErrorReporter, announcementCenter)
     private val accountSetupClient = AccountSetupClient(network.httpClient, BuildConfig.WOOGIT_BACKEND_BASE_URL, sessions, BuildConfig.VERSION_NAME, announcementCenter)
-    private val billingClient = BillingClient(network.httpClient, BuildConfig.WOOGIT_BACKEND_BASE_URL, sessions, BuildConfig.VERSION_NAME)
     private val orderLocal = SqlOrderDataSource(db)
     private val productLocal = SqlProductDataSource(db)
     private val storeLocal = SqlStoreDataSource(db)
@@ -56,6 +55,7 @@ class AppComposition(context: Context) {
     }
 
     val storeRepository = StoreRepositoryImpl(storeLocal, secure, backend)
+    private val billingClient = BillingClient(network.httpClient, BuildConfig.WOOGIT_BACKEND_BASE_URL, sessions, BuildConfig.VERSION_NAME) { storeId -> reauthenticateBilling(storeId) }
     val accountSetupGateway: AccountSetupGateway = object : AccountSetupGateway {
         override suspend fun requiresWebPassword(storeId: String) = accountSetupClient.requiresWebPassword(storeId)
         override suspend fun setupWebPassword(storeId: String, password: String, confirmation: String): CoreResult<Unit> = accountSetupClient.setupWebPassword(storeId, password, confirmation)
@@ -116,6 +116,16 @@ class AppComposition(context: Context) {
     private fun forgetStore() { val id = prefs.getString("active_store_id", null); if (id != null) scope.launch { disconnectStore(StoreId(id)) }; prefs.edit().remove("active_store_id").apply(); if (id != null) cancelBackgroundWork(id) }
     private val getConflictsFn: suspend (StoreId) -> CoreResult<List<Conflict>> = { id -> getConflicts(id) }
     private val resolveConflictFn: suspend (StoreId, com.samanramezani1377.woogit.core.domain.entity.EntityId, ConflictResolution) -> CoreResult<Unit> = { id, c, r -> resolveConflict(id, c, r) }
+
+    private suspend fun reauthenticateBilling(storeId: StoreId): Boolean {
+        val store = when (val result = storeRepository.get(storeId)) {
+            is CoreResult.Success -> result.value
+            is CoreResult.Failure -> return false
+        }
+        val reference = store.credentialReference ?: return false
+        val pair = secure.get(reference) ?: return false
+        return backend.verifySite(storeId.value, store.baseUrl, pair).isSuccess
+    }
 
     val v1Presentation = V1PresentationDependencies(
         getStore, connectStore, disconnectStore, getOrders, getSalesSummary, getOrder, updateOrder, addOrderNote,
