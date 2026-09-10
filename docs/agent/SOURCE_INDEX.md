@@ -17,7 +17,7 @@ This is the source-of-truth locator for agent work. The contract maps in this di
 | App composition / dependency graph | `app/src/main/kotlin/com/samanramezani1377/woogit/AppComposition.kt` |
 | Activity entry | `app/src/main/kotlin/com/samanramezani1377/woogit/MainActivity.kt` |
 | Application entry | `app/src/main/kotlin/com/samanramezani1377/woogit/WooGitApplication.kt` |
-| Backend HTTP contract | `data/src/main/kotlin/com/samanramezani1377/woogit/data/network/BackendClient.kt` |
+| Backend HTTP contract | `data/src/main/kotlin/com/samanramezani1377/woogit/data/network/BackendClient.kt` — `verifySite`, `forward`, `forwardBinary`, `getOperation`, `revokeSession`, `revokeBillingSession`, `revokeToken`, `clearSession`, `clearBillingSession` |
 | Shared HTTP transport | `data/src/main/kotlin/com/samanramezani1377/woogit/data/network/NetworkClient.kt` |
 | WooCommerce transport facade | `data/src/main/kotlin/com/samanramezani1377/woogit/data/network/WooCommerceApi.kt` |
 | WooCommerce provider/session boundary | `data/src/main/kotlin/com/samanramezani1377/woogit/data/network/WooCommerceClientProvider.kt` |
@@ -31,8 +31,13 @@ This is the source-of-truth locator for agent work. The contract maps in this di
 | Notifications | `app/src/main/kotlin/com/samanramezani1377/woogit/background/OrderNotificationManager.kt` |
 | Technical error reporting | `app/src/main/kotlin/com/samanramezani1377/woogit/debug/AppTechnicalErrorReporter.kt` |
 
+## Line-addressable contract entries
+- `BackendClient.kt` → `revokeSession(storeId)` delegates to `revokeToken(sessions.get(storeId))` and clears the operational session after a successful revoke.
+- `BackendClient.kt` → `revokeBillingSession(storeId)` delegates to `revokeToken(sessions.getBilling(storeId))` and clears the billing session after a successful revoke.
+- `BackendClient.kt` → `revokeToken(token)` is a private suspend function returning `Result<Unit>` and POSTs `/wp-json/woogit/v1/sessions/revoke`; a missing token is a successful no-op; HTTP 401 is treated as an already-invalid/revoked session, while other non-2xx responses produce `BackendHttpException`.
+
 ## Line-addressable rule
-Agents must cite the exact file and line range when making a source-level claim. If a source file changes, refresh the relevant line ranges in the contract map. Do not copy entire source files into documentation.
+Agents must cite the exact file and current line range when making a source-level claim. If a source file changes, refresh the relevant line ranges in the contract map. Do not copy entire source files into documentation.
 
 ## Completeness rule
 When a new runtime source file is added, add it to the appropriate section of this index in the same change. A source file may be omitted from the index only when it is generated/vendor/build output and is explicitly documented as such.
