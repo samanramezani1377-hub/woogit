@@ -1,12 +1,12 @@
 package com.samanramezani1377.woogit.data.network
 
+import com.samanramezani1377.woogit.core.billing.BillingActivation
+import com.samanramezani1377.woogit.core.billing.BillingCheckout
+import com.samanramezani1377.woogit.core.billing.BillingGateway
+import com.samanramezani1377.woogit.core.billing.BillingPlan
+import com.samanramezani1377.woogit.core.billing.BillingStatus
+import com.samanramezani1377.woogit.core.billing.BillingVariation
 import com.samanramezani1377.woogit.core.security.BackendSessionStore
-import com.samanramezani1377.woogit.presentation.settings.BillingActivation
-import com.samanramezani1377.woogit.presentation.settings.BillingCheckout
-import com.samanramezani1377.woogit.presentation.settings.BillingGateway
-import com.samanramezani1377.woogit.presentation.settings.BillingPlan
-import com.samanramezani1377.woogit.presentation.settings.BillingStatus
-import com.samanramezani1377.woogit.presentation.settings.BillingVariation
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import io.ktor.client.HttpClient
 import io.ktor.client.request.*
@@ -25,9 +25,7 @@ class BillingClient(
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
 
     override suspend fun plans(storeId: StoreId): Result<List<BillingPlan>> = runCatching {
-        val response = httpClient.get(url("/wp-json/woogit/v1/billing/plans")) {
-            header("X-WooGit-App-Version", appVersion)
-        }
+        val response = httpClient.get(url("/wp-json/woogit/v1/billing/plans")) { header("X-WooGit-App-Version", appVersion) }
         val body = response.bodyAsText()
         if (response.status.value !in 200..299) throw BackendHttpException(response.status.value, body, extractMessage(body))
         val root = json.parseToJsonElement(body).jsonObject
@@ -61,10 +59,7 @@ class BillingClient(
             header("X-WooGit-Session", token)
             header("Idempotency-Key", key)
             contentType(ContentType.Application.Json)
-            setBody(buildJsonObject {
-                put("plan_id", planId)
-                if (variationId > 0) put("variation_id", variationId)
-            })
+            setBody(buildJsonObject { put("plan_id", planId); if (variationId > 0) put("variation_id", variationId) })
         }
         val body = response.bodyAsText()
         if (response.status.value !in 200..299) throw BackendHttpException(response.status.value, body, extractMessage(body))
@@ -91,39 +86,24 @@ class BillingClient(
         BillingActivation(session, scope, root["expires_at"]?.jsonPrimitive?.contentOrNull)
     }
 
-    private suspend fun requireSession(storeId: StoreId): String = sessions.get(storeId.value)
-        ?: throw BackendProtocolException("Backend session is unavailable")
-
+    private suspend fun requireSession(storeId: StoreId): String = sessions.get(storeId.value) ?: throw BackendProtocolException("Backend session is unavailable")
     private fun JsonElement.toPlan(): BillingPlan {
         val obj = jsonObject
         return BillingPlan(
             id = obj["id"]?.jsonPrimitive?.intOrNull ?: 0,
-            key = obj.string("key").orEmpty(),
-            name = obj.string("name").orEmpty(),
-            price = obj.string("price").orEmpty(),
-            regularPrice = obj.string("regular_price").orEmpty(),
-            currency = obj.string("currency").orEmpty(),
-            billingPeriod = obj.string("billing_period").orEmpty(),
-            billingInterval = obj["billing_interval"]?.jsonPrimitive?.intOrNull ?: 1,
-            description = obj.string("description").orEmpty(),
-            type = obj.string("type").orEmpty(),
+            key = obj.string("key").orEmpty(), name = obj.string("name").orEmpty(), price = obj.string("price").orEmpty(),
+            regularPrice = obj.string("regular_price").orEmpty(), currency = obj.string("currency").orEmpty(),
+            billingPeriod = obj.string("billing_period").orEmpty(), billingInterval = obj["billing_interval"]?.jsonPrimitive?.intOrNull ?: 1,
+            description = obj.string("description").orEmpty(), type = obj.string("type").orEmpty(),
             requiresVariation = obj["requires_variation"]?.jsonPrimitive?.booleanOrNull ?: false,
             variations = obj["variations"]?.jsonArray?.map { variation ->
                 val v = variation.jsonObject
-                BillingVariation(
-                    id = v["id"]?.jsonPrimitive?.intOrNull ?: 0,
-                    name = v.string("name").orEmpty(),
-                    price = v.string("price").orEmpty(),
-                    regularPrice = v.string("regular_price").orEmpty(),
-                )
+                BillingVariation(v["id"]?.jsonPrimitive?.intOrNull ?: 0, v.string("name").orEmpty(), v.string("price").orEmpty(), v.string("regular_price").orEmpty())
             } ?: emptyList(),
         )
     }
-
     private fun JsonObject.string(name: String): String? = this[name]?.jsonPrimitive?.contentOrNull
-    private fun extractMessage(body: String): String? = runCatching {
-        json.parseToJsonElement(body).jsonObject.let { it["message"]?.jsonPrimitive?.contentOrNull ?: it["reason"]?.jsonPrimitive?.contentOrNull ?: it["code"]?.jsonPrimitive?.contentOrNull }
-    }.getOrNull()
+    private fun extractMessage(body: String): String? = runCatching { json.parseToJsonElement(body).jsonObject.let { it["message"]?.jsonPrimitive?.contentOrNull ?: it["reason"]?.jsonPrimitive?.contentOrNull ?: it["code"]?.jsonPrimitive?.contentOrNull } }.getOrNull()
     private fun sha256(value: ByteArray): String = MessageDigest.getInstance("SHA-256").digest(value).joinToString("") { "%02x".format(it) }
     private fun url(path: String) = baseUrl.trimEnd('/') + path
 }
