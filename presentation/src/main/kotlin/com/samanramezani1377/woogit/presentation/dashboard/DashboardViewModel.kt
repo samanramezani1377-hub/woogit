@@ -84,11 +84,13 @@ internal class DashboardViewModel(private val dependencies: V1PresentationDepend
     override fun onCleared() { healthMonitorJob?.cancel(); super.onCleared() }
 
     private suspend fun checkConnection(allowDuringRefresh: Boolean = false): ConnectionState {
-        // The initial dashboard refresh is responsible for establishing readiness.
-        // Background health checks must not race it while login/navigation is bringing
-        // the store session into the runtime session store.
+        // The initial dashboard refresh owns the readiness check. Background health checks
+        // must not race login/navigation while the store session is being established.
         if (!allowDuringRefresh && refreshInFlight.get()) return _uiState.value.connectionState
-        if (healthCheckInFlight) return _uiState.value.connectionState
+        if (healthCheckInFlight) {
+            if (!allowDuringRefresh) return _uiState.value.connectionState
+            while (healthCheckInFlight) delay(10L)
+        }
         healthCheckInFlight = true
         return try {
             val state = withTimeoutOrNull(5_000L) {
@@ -128,28 +130,29 @@ internal class DashboardViewModel(private val dependencies: V1PresentationDepend
                 return
             }
 
-            val (ordersResult, productsResult) = coroutineScope {
-                val ordersDeferred = async { loadLatestOrders() }
-                val productsDeferred = async { loadLatestProducts() }
-                awaitAll(ordersDeferred, productsDeferred)
-            }.let { results ->
-                results[0] as CoreResult<List<Order>> to results[1] as CoreResult<List<Product>>
+            val results = coroutineScope {
+                awaitAll(
+                    async { loadLatestOrders() },
+                    async { loadLatestProducts() },
+                )
             }
+            val ordersResult = results[0] as CoreResult<List<Order>>
+            val productsResult = results[1] as CoreResult<List<Product>>
 
-            val orders = when (val result = ordersResult) {
-                is CoreResult.Success -> result.value
+            val orders = when (ordersResult) {
+                is CoreResult.Success -> ordersResult.value
                 is CoreResult.Failure -> {
-                    val message = PresentationErrorMapper.message(result.error)
-                    PresentationTechnicalErrorReporter.report("Dashboard", "DashboardViewModel.refreshInternal", "Load orders", message, result.error.toString())
+                    val message = PresentationErrorMapper.message(ordersResult.error)
+                    PresentationTechnicalErrorReporter.report("Dashboard", "DashboardViewModel.refreshInternal", "Load orders", message, ordersResult.error.toString())
                     _uiState.value = _uiState.value.copy(connectionState = connectionState, loading = false, error = message)
                     return
                 }
             }
-            val products = when (val result = productsResult) {
-                is CoreResult.Success -> result.value
+            val products = when (productsResult) {
+                is CoreResult.Success -> productsResult.value
                 is CoreResult.Failure -> {
-                    val message = PresentationErrorMapper.message(result.error)
-                    PresentationTechnicalErrorReporter.report("Dashboard", "DashboardViewModel.refreshInternal", "Load products", message, result.error.toString())
+                    val message = PresentationErrorMapper.message(productsResult.error)
+                    PresentationTechnicalErrorReporter.report("Dashboard", "DashboardViewModel.refreshInternal", "Load products", message, productsResult.error.toString())
                     _uiState.value = _uiState.value.copy(connectionState = connectionState, loading = false, error = message)
                     return
                 }
