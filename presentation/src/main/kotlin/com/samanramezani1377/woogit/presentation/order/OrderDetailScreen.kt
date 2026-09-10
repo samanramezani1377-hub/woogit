@@ -112,7 +112,7 @@ private fun OrderDetailContent(order: Order, onStatusChange: (OrderStatus) -> Un
     }
 }
 
-private fun formatMoney(value: String?): String {
+internal fun formatMoney(value: String?): String {
     val amount = value?.toDoubleOrNull() ?: return "—"
     return "${java.text.NumberFormat.getNumberInstance(java.util.Locale.US).apply { maximumFractionDigits = 0; minimumFractionDigits = 0 }.format(amount)} تومان"
 }
