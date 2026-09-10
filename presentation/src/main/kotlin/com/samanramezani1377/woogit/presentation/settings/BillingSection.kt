@@ -9,6 +9,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.samanramezani1377.woogit.core.billing.BillingPlan
+import com.samanramezani1377.woogit.core.billing.BillingStatus
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
@@ -36,8 +38,7 @@ fun BillingSection(storeId: StoreId) {
     }
 
     suspend fun reconcileAfterPayment() {
-        val statusResult = gateway.status(storeId)
-        statusResult.onSuccess { current ->
+        gateway.status(storeId).onSuccess { current ->
             status = current
             if (current.status == "active" || current.status == "trial") {
                 gateway.activateOperationalSession(storeId).onSuccess {
