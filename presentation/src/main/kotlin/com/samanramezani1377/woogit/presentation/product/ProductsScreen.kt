@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.samanramezani1377.woogit.core.domain.model.Product
 import com.samanramezani1377.woogit.core.domain.model.ProductStatus
+import com.samanramezani1377.woogit.core.domain.sync.ProductSyncEvents
 import com.samanramezani1377.woogit.presentation.FeatureUiState
 import com.samanramezani1377.woogit.presentation.GlassCard
 import com.samanramezani1377.woogit.presentation.GlassEmptyState
@@ -62,6 +63,24 @@ internal fun ProductsScreen(
     modifier: Modifier = Modifier,
 ) {
     var query by remember { mutableStateOf("") }
+    var liveProducts by remember { mutableStateOf<List<Product>>(emptyList()) }
+
+    LaunchedEffect(state) {
+        liveProducts = (state as? FeatureUiState.Success)?.value.orEmpty()
+    }
+
+    LaunchedEffect(Unit) {
+        ProductSyncEvents.updates.collect { update ->
+            val currentById = liveProducts.associateBy { it.id }
+            if (currentById.isNotEmpty()) {
+                val changedById = update.products.associateBy { it.id }
+                if (changedById.keys.any(currentById::containsKey)) {
+                    liveProducts = liveProducts.map { changedById[it.id] ?: it }
+                }
+            }
+        }
+    }
+
     GlassScaffold(modifier) { paddingValues ->
         Column(Modifier.fillMaxSize().padding(paddingValues).padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             GlassTopBar(title = "محصولات", subtitle = "مدیریت محصولات فروشگاه")
@@ -72,7 +91,7 @@ internal fun ProductsScreen(
                 FeatureUiState.Pending -> ProductSyncLoading("در حال به‌روزرسانی محصولات…")
                 FeatureUiState.Empty -> GlassEmptyState("محصولی برای نمایش وجود ندارد.")
                 is FeatureUiState.Error -> { GlassErrorState(state.message); if (state.retryable) GlassPrimaryAction("تلاش مجدد", onRetry) }
-                is FeatureUiState.Success -> ProductList(state.value, onProductClick, onLoadMore, Modifier.weight(1f))
+                is FeatureUiState.Success -> ProductList(liveProducts, onProductClick, onLoadMore, Modifier.weight(1f))
                 FeatureUiState.Offline -> GlassErrorState("اتصال فروشگاه در دسترس نیست.")
                 is FeatureUiState.Conflict -> GlassErrorState("تعارضی در داده‌های محصولات وجود دارد.")
             }
