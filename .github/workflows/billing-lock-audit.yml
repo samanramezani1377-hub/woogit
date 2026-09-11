@@ -33,14 +33,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          f="data/src/main/kotlin/com/samanramezani1377/woogit/data/billing/BillingClient.kt"
-          test -f "$f"
+          f="$(find data -type f -name 'BillingClient.kt' -print -quit)"
+          test -n "$f" && test -f "$f"
           grep -q 'sessions.getBilling' "$f"
           grep -q 'X-WooGit-Session' "$f"
           grep -q 'response.status.value == 401' "$f"
           grep -q 'reauthenticate(storeId)' "$f"
           grep -q 'sessions.removeBilling' "$f"
-          echo '[PASS] BillingClient uses Billing Session and reauth/retry on 401.'
+          echo "[PASS] BillingClient contract: $f"
+          echo '[PASS] Billing Session + 401 reauth/retry are present.'
 
   navigation-lock-audit:
     name: Navigation billing-lock audit
@@ -53,12 +54,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          f="presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/navigation/E11AppNavigation.kt"
-          test -f "$f"
+          f="$(find presentation -type f -name 'E11AppNavigation.kt' -print -quit)"
+          test -n "$f" && test -f "$f"
           grep -q 'billingLocked' "$f"
           grep -q 'status == "expired"' "$f"
           grep -q 'SubscriptionExpiredScreen' "$f"
-          echo '[PASS] Navigation exposes SubscriptionExpiredScreen when billing is expired.'
+          echo "[PASS] Navigation billing-lock contract: $f"
 
   subscription-screen-audit:
     name: Subscription screen flow audit
@@ -71,13 +72,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          f="presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/subscription/SubscriptionExpiredScreen.kt"
-          test -f "$f"
+          f="$(find presentation -type f -name 'SubscriptionExpiredScreen.kt' -print -quit)"
+          test -n "$f" && test -f "$f"
           grep -q 'BillingRuntime.gateway' "$f"
           grep -q 'activateOperationalSession' "$f"
           grep -q 'checkout' "$f"
           grep -q 'status' "$f"
-          echo '[PASS] Subscription screen contains status, activation and checkout flow.'
+          echo "[PASS] Subscription flow contract: $f"
 
   session-separation-audit:
     name: Session separation audit
@@ -90,13 +91,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          client="data/src/main/kotlin/com/samanramezani1377/woogit/data/billing/BillingClient.kt"
-          session="data/src/main/kotlin/com/samanramezani1377/woogit/data/session/BackendSessionStore.kt"
-          test -f "$client"
-          test -f "$session"
-          grep -Rqs 'SCOPE_BILLING\|billing' data/src/main/kotlin presentation/src/main/kotlin
-          grep -Rqs 'activateOperationalSession' data/src/main/kotlin presentation/src/main/kotlin
-          echo '[PASS] Billing and operational session paths are represented and separated.'
+          billing="$(find data -type f -name 'BillingClient.kt' -print -quit)"
+          store="$(find app data core -type f -name '*BackendSessionStore*.kt' -print -quit)"
+          test -n "$billing" && test -f "$billing"
+          test -n "$store" && test -f "$store"
+          grep -Rqs 'billing' docs/agent/SESSION_MAP.md
+          grep -Rqs 'activateOperationalSession' data presentation
+          grep -Rqs 'getBilling' data presentation
+          echo "[PASS] Billing client: $billing"
+          echo "[PASS] Session store implementation: $store"
+          echo '[PASS] Billing and operational session paths are represented.'
 
   account-setup-expiry-audit:
     name: Account setup after expiry audit
@@ -109,12 +113,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          f="data/src/main/kotlin/com/samanramezani1377/woogit/data/account/AccountSetupClient.kt"
-          test -f "$f"
+          f="$(find data -type f -name 'AccountSetupClient.kt' -print -quit)"
+          test -n "$f" && test -f "$f"
           grep -q 'sessions.getBilling(storeId)' "$f"
           grep -q 'sessions.removeBilling(storeId)' "$f"
           grep -q 'reauthenticate' "$f"
-          echo '[PASS] Account setup can fall back to Billing Session after operational expiry.'
+          echo "[PASS] Account setup Billing Session fallback: $f"
 
   backend-contract-audit:
     name: Backend billing contract audit
@@ -132,7 +136,10 @@ jobs:
           for route in '/billing/status' '/billing/checkout' '/billing/activate-session'; do
             grep -q "$route" "$f"
           done
-          echo '[PASS] App-side contract map contains all billing endpoints.'
+          grep -Rqs 'billing/status' docs/agent/API_MAP.md docs/agent/api-index.json
+          grep -Rqs 'billing/checkout' docs/agent/API_MAP.md docs/agent/api-index.json
+          grep -Rqs 'billing/activate-session' docs/agent/API_MAP.md docs/agent/api-index.json
+          echo '[PASS] Billing endpoint contract is present in the app agent maps.'
 
   unit-billing-lock:
     name: Billing/session unit tests
