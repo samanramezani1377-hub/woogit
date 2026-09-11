@@ -2,5 +2,5 @@ package com.samanramezani1377.woogit.debug
 
 /** Temporary developer diagnostics switch. Set to false before release to hide debug UI. */
 object DebugConfig {
-    const val ENABLED = true
+    const val ENABLED = false
 }
