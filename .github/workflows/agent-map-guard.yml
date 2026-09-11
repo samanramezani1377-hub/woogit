@@ -3,12 +3,8 @@ name: Agent Map Guard
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - 'docs/agent/**'
   pull_request:
     branches: [main]
-    paths-ignore:
-      - 'docs/agent/**'
 
 permissions:
   contents: read
