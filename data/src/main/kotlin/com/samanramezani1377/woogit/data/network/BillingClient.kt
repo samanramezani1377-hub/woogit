@@ -50,8 +50,10 @@ class BillingClient(
         }
         if (response.status.value !in 200..299) throw BackendHttpException(response.status.value, body, extractMessage(body))
         val billing = json.parseToJsonElement(body).jsonObject["billing"]?.jsonObject ?: JsonObject(emptyMap())
+        val rawStatus = billing.string("status") ?: "none"
+        val effectiveStatus = if (rawStatus == "none") "expired" else rawStatus
         return BillingStatus(
-            status = billing.string("status") ?: "none", startsAt = billing.string("starts_at"), expiresAt = billing.string("expires_at"),
+            status = effectiveStatus, startsAt = billing.string("starts_at"), expiresAt = billing.string("expires_at"),
             capabilities = billing["capabilities"]?.jsonArray?.mapNotNull { it.jsonPrimitive.contentOrNull } ?: emptyList(),
             trialUsed = billing["trial_used"]?.jsonPrimitive?.booleanOrNull ?: false,
         )
