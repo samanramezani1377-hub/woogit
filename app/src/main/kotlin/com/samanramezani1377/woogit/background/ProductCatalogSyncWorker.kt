@@ -14,6 +14,8 @@ import androidx.work.workDataOf
 import com.samanramezani1377.woogit.WooGitApplication
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.core.domain.error.CoreResult
+import com.samanramezani1377.woogit.core.domain.sync.ProductSyncEvents
+import com.samanramezani1377.woogit.core.domain.sync.ProductSyncUpdate
 import com.samanramezani1377.woogit.data.network.HttpApiException
 import java.io.IOException
 import java.util.concurrent.TimeUnit
@@ -28,19 +30,30 @@ class ProductCatalogSyncWorker(appContext: Context, params: WorkerParameters) : 
             val now = System.currentTimeMillis()
             val last = prefs.getLong("last_product_sync_$storeId", 0L)
             val fullReconcile = last == 0L || now - last >= FULL_RECONCILE_MS
+            val id = StoreId(storeId)
             if (fullReconcile) {
                 var page = 1
                 while (true) {
-                    when (val result = app.composition.productRepository.refresh(StoreId(storeId), page, PAGE_SIZE, null)) {
+                    when (val result = app.composition.productRepository.refresh(id, page, PAGE_SIZE, null)) {
                         is CoreResult.Failure -> return if (result.error.recoverable) Result.retry() else Result.failure()
-                        is CoreResult.Success -> { if (result.value.size < PAGE_SIZE) break; page++ }
+                        is CoreResult.Success -> {
+                            if (result.value.isNotEmpty()) {
+                                ProductSyncEvents.publish(ProductSyncUpdate(id, result.value))
+                            }
+                            if (result.value.size < PAGE_SIZE) break
+                            page++
+                        }
                     }
                 }
             } else {
                 val cursor = java.time.Instant.ofEpochMilli(last.minus(CURSOR_OVERLAP_MS).coerceAtLeast(0L)).toString()
-                when (val result = app.composition.productRepository.refresh(StoreId(storeId), 1, PAGE_SIZE, cursor)) {
+                when (val result = app.composition.productRepository.refresh(id, 1, PAGE_SIZE, cursor)) {
                     is CoreResult.Failure -> return if (result.error.recoverable) Result.retry() else Result.failure()
-                    is CoreResult.Success -> Unit
+                    is CoreResult.Success -> {
+                        if (result.value.isNotEmpty()) {
+                            ProductSyncEvents.publish(ProductSyncUpdate(id, result.value))
+                        }
+                    }
                 }
             }
             prefs.edit().putLong("last_product_sync_$storeId", now).apply()
