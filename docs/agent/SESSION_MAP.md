@@ -31,6 +31,10 @@ Do not send operational WooCommerce calls without an operational token.
 
 The payment page must not depend on an already-expired operational session.
 
+## Global runtime billing lock
+
+`E11AppNavigation` owns the billing-status monitor above the destination `NavHost`. It polls the backend billing status independently of the current route; when the backend returns `expired`, the global UI switches to `SubscriptionExpiredScreen` and blocks Back navigation. The instrumentation suite also renders the actual subscription screen on an Android test device to verify the locked UI is visible.
+
 ## Billing session exchange
 
 `Billing Session -> /billing/activate-session -> backend validates billing scope + entitlement -> Operational Session -> App stores operational token`
