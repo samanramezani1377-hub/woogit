@@ -70,7 +70,7 @@ jobs:
           retention-days: 7
 
   release-build:
-    name: Release build and APK verification
+    name: Signed release build and AAB verification
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -102,18 +102,49 @@ jobs:
         with:
           gradle-version: ${{ env.GRADLE_VERSION }}
           cache-cleanup: on-success
-      - name: Build release
-        run: gradle assembleRelease --console=plain --warning-mode=all --stacktrace
-      - name: Verify release APK
+      - name: Restore release keystore
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          test -n "${ANDROID_KEYSTORE_BASE64}"
+          printf '%s' "${ANDROID_KEYSTORE_BASE64}" | base64 --decode > "${RUNNER_TEMP}/woogit-release.jks"
+          chmod 600 "${RUNNER_TEMP}/woogit-release.jks"
+      - name: Build signed release APK and AAB
+        shell: bash
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          test -n "${ANDROID_KEYSTORE_PASSWORD}"
+          test -n "${ANDROID_KEY_ALIAS}"
+          test -n "${ANDROID_KEY_PASSWORD}"
+          gradle \
+            -Pwoogit.release.keystore="${RUNNER_TEMP}/woogit-release.jks" \
+            -Pwoogit.release.keystorePassword="${ANDROID_KEYSTORE_PASSWORD}" \
+            -Pwoogit.release.keyAlias="${ANDROID_KEY_ALIAS}" \
+            -Pwoogit.release.keyPassword="${ANDROID_KEY_PASSWORD}" \
+            assembleRelease bundleRelease \
+            --console=plain --warning-mode=all --stacktrace
+      - name: Verify release APK and AAB
         shell: bash
         run: |
           set -euo pipefail
           mapfile -t apks < <(find . -type f -path '*/build/outputs/apk/**/*.apk' -size +0c | sort)
+          mapfile -t aabs < <(find . -type f -path '*/build/outputs/bundle/**/*.aab' -size +0c | sort)
           if (( ${#apks[@]} == 0 )); then
-            echo "No non-empty APK was produced by the release build."
+            echo "No non-empty APK was produced by the signed release build."
+            exit 1
+          fi
+          if (( ${#aabs[@]} == 0 )); then
+            echo "No non-empty AAB was produced by the signed release build."
             exit 1
           fi
           printf 'Produced APKs:\n%s\n' "${apks[@]}"
+          printf 'Produced AABs:\n%s\n' "${aabs[@]}"
           for apk in "${apks[@]}"; do
             echo "APK: $apk"
             ls -lh "$apk"
@@ -129,13 +160,31 @@ jobs:
               exit 1
             fi
           done
-      - name: Upload release APK
+          for aab in "${aabs[@]}"; do
+            echo "AAB: $aab"
+            ls -lh "$aab"
+            sha256sum "$aab"
+            jarsigner -verify -verbose -certs "$aab" >/dev/null
+            echo "AAB signature verification passed."
+          done
+      - name: Upload signed release APK
         uses: actions/upload-artifact@v6
         with:
           name: woogit-release-apk-${{ github.sha }}
           path: '**/build/outputs/apk/**/*.apk'
           if-no-files-found: error
           retention-days: 7
+      - name: Upload signed release AAB
+        uses: actions/upload-artifact@v6
+        with:
+          name: woogit-release-aab-${{ github.sha }}
+          path: '**/build/outputs/bundle/**/*.aab'
+          if-no-files-found: error
+          retention-days: 7
+      - name: Remove temporary keystore
+        if: always()
+        shell: bash
+        run: rm -f "${RUNNER_TEMP}/woogit-release.jks"
 
   unit-tests:
     name: Unit tests
@@ -213,11 +262,11 @@ jobs:
         run: |
           set -euo pipefail
           echo "Debug build : ${DEBUG_RESULT}"
-          echo "Release APK : ${RELEASE_RESULT}"
+          echo "Release AAB : ${RELEASE_RESULT}"
           echo "Unit tests  : ${TEST_RESULT}"
           echo "Lint        : ${LINT_RESULT}"
           if [[ "${DEBUG_RESULT}" != "success" || "${RELEASE_RESULT}" != "success" || "${TEST_RESULT}" != "success" || "${LINT_RESULT}" != "success" ]]; then
             echo "CI FAILED: one or more required validation jobs failed or were cancelled."
             exit 1
           fi
-          echo "CI PASSED: debug/release builds, tests, lint and APK verification are green."
+          echo "CI PASSED: debug/release builds, tests, lint and AAB verification are green."
