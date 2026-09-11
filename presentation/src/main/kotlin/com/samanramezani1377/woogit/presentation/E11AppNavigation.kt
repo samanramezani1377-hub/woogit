@@ -75,7 +75,7 @@ internal fun E11AppNavigation(
                 break
             }
             BillingRuntime.gateway?.status(StoreId(store))?.onSuccess { status ->
-                billingLocked = status.status == "expired"
+                billingLocked = status.status !in setOf("active", "trial")
             }
             delay(BILLING_STATUS_REFRESH_MS)
         }
