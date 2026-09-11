@@ -131,15 +131,29 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          f="docs/agent/CROSS_REPO_MAP.md"
-          test -f "$f"
-          for route in '/billing/status' '/billing/checkout' '/billing/activate-session'; do
-            grep -q "$route" "$f"
+          cross="docs/agent/CROSS_REPO_MAP.md"
+          api="docs/agent/API_MAP.md"
+          index="docs/agent/api-index.json"
+          test -f "$cross"
+          test -f "$api"
+          test -f "$index"
+
+          # CROSS_REPO_MAP is the cross-repository ownership/relationship map;
+          # endpoint paths are authoritative in API_MAP/api-index.
+          grep -q 'Billing status' "$cross"
+          grep -q 'Checkout' "$cross"
+          grep -q 'Billing plans' "$cross"
+
+          for route in \
+            '/wp-json/woogit/v1/billing/status' \
+            '/wp-json/woogit/v1/billing/checkout' \
+            '/wp-json/woogit/v1/billing/activate-session'; do
+            grep -Fq "$route" "$api"
+            grep -Fq "${route#/wp-json/woogit/v1/}" "$index"
           done
-          grep -Rqs 'billing/status' docs/agent/API_MAP.md docs/agent/api-index.json
-          grep -Rqs 'billing/checkout' docs/agent/API_MAP.md docs/agent/api-index.json
-          grep -Rqs 'billing/activate-session' docs/agent/API_MAP.md docs/agent/api-index.json
-          echo '[PASS] Billing endpoint contract is present in the app agent maps.'
+
+          echo '[PASS] Cross-repository billing ownership is present.'
+          echo '[PASS] Billing endpoint paths are present in API_MAP and api-index.'
 
   unit-billing-lock:
     name: Billing/session unit tests
