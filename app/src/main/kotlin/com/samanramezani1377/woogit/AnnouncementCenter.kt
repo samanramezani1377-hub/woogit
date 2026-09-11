@@ -121,8 +121,6 @@ class AnnouncementCenter(private val context: Context) : BackendResponseObserver
                 ?.takeIf { it.isNotBlank() }
                 ?: DEFAULT_UPDATE_URL
             activateForceUpdate(updateUrl)
-        } else if (statusCode in 200..299) {
-            clearForceUpdate()
         }
     }
 
