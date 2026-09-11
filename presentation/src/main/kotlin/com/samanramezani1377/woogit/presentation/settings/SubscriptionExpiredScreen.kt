@@ -10,6 +10,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.samanramezani1377.woogit.core.billing.BillingPlan
+import com.samanramezani1377.woogit.core.billing.BillingStatus
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.presentation.*
 import kotlinx.coroutines.launch
@@ -25,29 +26,48 @@ fun SubscriptionExpiredScreen(storeId: StoreId, onSubscriptionRestored: () -> Un
     }
     val scope = rememberCoroutineScope()
     var plans by remember { mutableStateOf<List<BillingPlan>>(emptyList()) }
+    var status by remember { mutableStateOf<BillingStatus?>(null) }
     var loading by remember { mutableStateOf(true) }
     var busyPlanId by remember { mutableStateOf<Int?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
     var paymentUrl by remember { mutableStateOf<String?>(null) }
 
-    suspend fun refresh() {
+    suspend fun refreshBilling() {
         loading = true
-        gateway.plans(storeId).onSuccess { plans = it }.onFailure { message = billingMessage(it) }
-        gateway.status(storeId).onSuccess { status ->
-            if (status.status == "active" || status.status == "trial") {
-                gateway.activateOperationalSession(storeId).onSuccess { onSubscriptionRestored() }
-                    .onFailure { error ->
-                        if (error.message.orEmpty().contains("session_already_operational")) onSubscriptionRestored()
-                        else message = billingMessage(error)
-                    }
-            }
-        }.onFailure { message = billingMessage(it) }
+        val planResult = gateway.plans(storeId)
+        val statusResult = gateway.status(storeId)
+        planResult.onSuccess { plans = it }.onFailure { message = billingMessage(it) }
+        statusResult.onSuccess { status = it }.onFailure { message = billingMessage(it) }
         loading = false
     }
 
-    LaunchedEffect(storeId) { refresh() }
+    suspend fun reconcileAfterPayment() {
+        gateway.status(storeId).onSuccess { current ->
+            status = current
+            if (current.status == "active" || current.status == "trial") {
+                gateway.activateOperationalSession(storeId).onSuccess {
+                    onSubscriptionRestored()
+                }.onFailure { error ->
+                    if (!error.message.orEmpty().contains("session_already_operational")) {
+                        message = billingMessage(error)
+                    }
+                }
+            }
+        }.onFailure { message = billingMessage(it) }
+    }
+
+    LaunchedEffect(storeId) { refreshBilling() }
     paymentUrl?.let { url ->
-        BillingPaymentWebView(url, onClose = { paymentUrl = null; scope.launch { refresh() } })
+        BillingPaymentWebView(
+            url = url,
+            onClose = {
+                paymentUrl = null
+                scope.launch {
+                    reconcileAfterPayment()
+                    refreshBilling()
+                }
+            },
+        )
         return
     }
     BackHandler(enabled = true) { }
@@ -56,6 +76,7 @@ fun SubscriptionExpiredScreen(storeId: StoreId, onSubscriptionRestored: () -> Un
         baseMessage = "برای ادامه استفاده از WooGit، یکی از طرح‌های موجود را انتخاب و پرداخت را تکمیل کنید.",
         loading = loading,
         plans = plans,
+        status = status,
         busyPlanId = busyPlanId,
         statusMessage = message,
         onPlanSelected = { plan ->
@@ -63,13 +84,23 @@ fun SubscriptionExpiredScreen(storeId: StoreId, onSubscriptionRestored: () -> Un
                 busyPlanId = plan.id
                 scope.launch {
                     gateway.checkout(storeId, plan.id, plan.variations.firstOrNull()?.id ?: 0)
-                        .onSuccess { checkout -> paymentUrl = checkout.paymentUrl; message = "درگاه پرداخت داخل WooGit باز شد." }
+                        .onSuccess { checkout ->
+                            paymentUrl = checkout.paymentUrl
+                            message = "درگاه پرداخت داخل WooGit باز شد."
+                        }
                         .onFailure { message = billingMessage(it) }
                     busyPlanId = null
                 }
             }
         },
-        onVerifyPayment = { if (busyPlanId == null) scope.launch { refresh() } },
+        onVerifyPayment = {
+            if (busyPlanId == null) {
+                scope.launch {
+                    reconcileAfterPayment()
+                    refreshBilling()
+                }
+            }
+        },
     )
 }
 
@@ -79,6 +110,7 @@ private fun LockedBillingContent(
     baseMessage: String,
     loading: Boolean = false,
     plans: List<BillingPlan> = emptyList(),
+    status: BillingStatus? = null,
     busyPlanId: Int? = null,
     statusMessage: String? = null,
     onPlanSelected: (BillingPlan) -> Unit = {},
@@ -86,16 +118,39 @@ private fun LockedBillingContent(
 ) {
     GlassScaffold {
         Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            GlassCard { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { GlassText("اشتراک"); GlassText(title); GlassText(baseMessage) } }
+            GlassCard {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    GlassText("اشتراک")
+                    GlassText(title)
+                    GlassText(baseMessage)
+                    status?.let { current ->
+                        if (current.status == "expired") GlassText("اشتراک منقضی شده است")
+                    }
+                }
+            }
             if (loading && plans.isEmpty()) GlassCard { GlassText("در حال دریافت طرح‌های فعال…") }
             plans.forEach { plan ->
+                val isTrial = plan.price.toDoubleOrNull() == 0.0 ||
+                    plan.name.contains("آزمایشی") ||
+                    plan.name.contains("trial", true)
+                val trialDisabled = isTrial && status?.trialUsed == true
                 GlassCard {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         GlassText(plan.name)
                         GlassText(planPrice(plan))
                         if (plan.description.isNotBlank()) GlassText(plan.description)
-                        if (plan.billingPeriod.isNotBlank()) GlassText("دوره: ${plan.billingInterval.coerceAtLeast(1)} ${periodTitle(plan.billingPeriod)}")
-                        GlassPrimaryAction(if (busyPlanId == plan.id) "در حال آماده‌سازی…" else "ادامه به پرداخت", onClick = { onPlanSelected(plan) })
+                        if (plan.billingPeriod.isNotBlank()) {
+                            GlassText("دوره: ${plan.billingInterval.coerceAtLeast(1)} ${periodTitle(plan.billingPeriod)}")
+                        }
+                        GlassPrimaryAction(
+                            when {
+                                busyPlanId == plan.id -> "در حال آماده‌سازی…"
+                                trialDisabled -> "آزمایشی استفاده شده"
+                                isTrial -> "شروع دوره آزمایشی"
+                                else -> "ادامه به پرداخت"
+                            },
+                            onClick = { if (!trialDisabled) onPlanSelected(plan) },
+                        )
                     }
                 }
             }
