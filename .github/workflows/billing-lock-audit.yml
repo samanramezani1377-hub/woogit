@@ -61,6 +61,43 @@ jobs:
           grep -q 'SubscriptionExpiredScreen' "$f"
           echo "[PASS] Navigation billing-lock contract: $f"
 
+  global-runtime-lock-audit:
+    name: Global runtime billing-lock audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Audit global expiry interception and polling
+        shell: bash
+        run: |
+          set -euo pipefail
+          f="$(find presentation -type f -name 'E11AppNavigation.kt' -print -quit)"
+          test -n "$f" && test -f "$f"
+
+          # The billing monitor must run from the top-level navigation host,
+          # independently of the currently displayed destination.
+          grep -q 'LaunchedEffect(activeStore, BillingRuntime.gateway)' "$f"
+          grep -q 'while (isActive)' "$f"
+          grep -q 'BillingRuntime.gateway?.status(StoreId(store))' "$f"
+          grep -q 'billingLocked = status.status == "expired"' "$f"
+          grep -q 'delay(BILLING_STATUS_REFRESH_MS)' "$f"
+          grep -q 'private const val BILLING_STATUS_REFRESH_MS = 30_000L' "$f"
+
+          # Once locked, the subscription screen is rendered above NavHost,
+          # so the current route cannot remain visible/usable underneath it.
+          grep -q 'if (billingLocked && activeStore != null)' "$f"
+          grep -q 'SubscriptionExpiredScreen(' "$f"
+          grep -q 'return' "$f"
+
+          # Back navigation is blocked while the global billing lock is active.
+          grep -q 'BackHandler(enabled = billingLocked)' "$f"
+
+          echo "[PASS] Global runtime billing-lock monitor: $f"
+          echo '[PASS] Expiration is polled independently of the current destination.'
+          echo '[PASS] expired state switches rendering to SubscriptionExpiredScreen globally.'
+          echo '[PASS] Back navigation is blocked while the billing lock is active.'
+
   subscription-screen-audit:
     name: Subscription screen flow audit
     runs-on: ubuntu-latest
@@ -191,6 +228,7 @@ jobs:
     needs:
       - billing-client-audit
       - navigation-lock-audit
+      - global-runtime-lock-audit
       - subscription-screen-audit
       - session-separation-audit
       - account-setup-expiry-audit
@@ -203,6 +241,7 @@ jobs:
         env:
           BILLING_CLIENT: ${{ needs.billing-client-audit.result }}
           NAVIGATION: ${{ needs.navigation-lock-audit.result }}
+          GLOBAL_RUNTIME: ${{ needs.global-runtime-lock-audit.result }}
           SUBSCRIPTION: ${{ needs.subscription-screen-audit.result }}
           SESSIONS: ${{ needs.session-separation-audit.result }}
           ACCOUNT_SETUP: ${{ needs.account-setup-expiry-audit.result }}
@@ -213,12 +252,13 @@ jobs:
           printf '%s\n' \
             "BillingClient      : ${BILLING_CLIENT}" \
             "Navigation         : ${NAVIGATION}" \
+            "Global runtime     : ${GLOBAL_RUNTIME}" \
             "Subscription       : ${SUBSCRIPTION}" \
             "Session separation : ${SESSIONS}" \
             "Account setup      : ${ACCOUNT_SETUP}" \
             "Backend contract   : ${BACKEND}" \
             "Unit tests         : ${TESTS}"
-          for result in "$BILLING_CLIENT" "$NAVIGATION" "$SUBSCRIPTION" "$SESSIONS" "$ACCOUNT_SETUP" "$BACKEND" "$TESTS"; do
+          for result in "$BILLING_CLIENT" "$NAVIGATION" "$GLOBAL_RUNTIME" "$SUBSCRIPTION" "$SESSIONS" "$ACCOUNT_SETUP" "$BACKEND" "$TESTS"; do
             [[ "$result" == success ]] || { echo 'Billing Lock Audit FAILED.'; exit 1; }
           done
           echo 'Billing Lock Audit PASSED.'
