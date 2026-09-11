@@ -5,7 +5,7 @@
 | Scope | Stored by | Used by | Expiry relationship |
 |---|---|---|---|
 | `operational` | `BackendSessionStore` / `AndroidBackendSessionStore` | WooCommerce proxy/operational data | tied to entitlement |
-| `billing` | separate Billing Session storage | billing status/checkout/activation | independent short-lived billing access |
+| `billing` | separate Billing Session storage | billing status/checkout/activation and account bootstrap/setup after operational expiry | independent short-lived billing access |
 
 ## Verify
 
@@ -21,7 +21,9 @@ Reauthentication must use real credentials/verification and the backend must re-
 
 ## Operational expiry
 
-`operational session invalid/expired -> remove operational token -> reauthenticate or billing lock -> do not send operational calls without token`
+`operational session invalid/expired -> remove operational token -> reauthenticate -> verifySite may return billing-only session -> billing session becomes the available authenticated context for billing/account bootstrap endpoints`
+
+Do not send operational WooCommerce calls without an operational token.
 
 ## Subscription expiry
 
@@ -34,6 +36,12 @@ The payment page must not depend on an already-expired operational session.
 `Billing Session -> /billing/activate-session -> backend validates billing scope + entitlement -> Operational Session -> App stores operational token`
 
 The consumed Billing Session may be removed after successful exchange according to the current backend contract.
+
+## Account setup after operational expiry
+
+`account/requirements or setup-web-credentials -> operational 401 -> reauthenticate via verifySite -> billing session stored -> retry account endpoint with billing session`
+
+The billing session is used only for authenticated account/bootstrap work here; it does not restore operational access or bypass entitlement checks.
 
 ## Logout/disconnect
 
@@ -48,6 +56,8 @@ Dashboard and background consumers must not start operational calls before sessi
 - `BackendSessionStore`
 - `AndroidBackendSessionStore`
 - `BackendClient.verifySite`
+- `AccountSetupClient.requiresWebPassword`
+- `AccountSetupClient.setupWebPassword`
 - `BackendClient.forward`
 - `BillingClient.status`
 - `BillingClient.checkout`

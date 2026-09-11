@@ -35,7 +35,7 @@ class AccountSetupClient(
         storeId: String,
         allowReauthentication: Boolean,
     ): CoreResult<Boolean> = runCatching {
-        val token = sessions.get(storeId) ?: return@runCatching CoreResult.Failure(
+        val token = sessions.get(storeId) ?: sessions.getBilling(storeId) ?: return@runCatching CoreResult.Failure(
             DomainError.Network("Backend session is unavailable")
         )
         val response = httpClient.get(url("/wp-json/woogit/v1/account/requirements")) {
@@ -46,6 +46,7 @@ class AccountSetupClient(
         responseObserver?.onResponse(response.status.value, body)
         if (response.status.value == 401 && allowReauthentication) {
             sessions.remove(storeId)
+            sessions.removeBilling(storeId)
             if (reauthenticate(StoreId(storeId))) {
                 return@runCatching requestRequirements(storeId, allowReauthentication = false)
             }
@@ -84,7 +85,7 @@ class AccountSetupClient(
         confirmation: String,
         allowReauthentication: Boolean,
     ): CoreResult<Unit> = runCatching {
-        val token = sessions.get(storeId) ?: return@runCatching CoreResult.Failure(
+        val token = sessions.get(storeId) ?: sessions.getBilling(storeId) ?: return@runCatching CoreResult.Failure(
             DomainError.Network("Backend session is unavailable")
         )
         val response = httpClient.post(url("/wp-json/woogit/v1/account/setup-web-credentials")) {
@@ -100,6 +101,7 @@ class AccountSetupClient(
         responseObserver?.onResponse(response.status.value, body)
         if (response.status.value == 401 && allowReauthentication) {
             sessions.remove(storeId)
+            sessions.removeBilling(storeId)
             if (reauthenticate(StoreId(storeId))) {
                 return@runCatching setupWebPasswordInternal(
                     storeId,
