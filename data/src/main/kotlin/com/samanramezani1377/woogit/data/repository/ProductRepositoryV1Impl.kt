@@ -45,7 +45,7 @@ private fun WooProductTypedDto.toDomain(settings: WooSystemStatusSettingsDto? = 
 private fun Product.toDto(operationId: String? = null) = WooProductTypedDto(
     id = id.value.toLongOrNull() ?: 0L, name = name, sku = sku, description = description, short_description = shortDescription,
     status = when (status) { ProductStatus.PUBLISHED -> "publish"; ProductStatus.PENDING -> "pending"; ProductStatus.PRIVATE -> "private"; ProductStatus.DRAFT -> "draft"; ProductStatus.OTHER -> "draft" },
-    type = when (type) { ProductType.SIMPLE -> "simple"; ProductType.GROUPED -> "grouped"; ProductType.EXTERNAL -> "external"; ProductType.VARIABLE -> "variable"; ProductType.SIMPLE -> "simple"; ProductType.OTHER -> "simple" },
+    type = when (type) { ProductType.SIMPLE -> "simple"; ProductType.GROUPED -> "grouped"; ProductType.EXTERNAL -> "external"; ProductType.VARIABLE -> "variable"; ProductType.OTHER -> "simple" },
     regular_price = pricing.regular, sale_price = pricing.sale, on_sale = pricing.onSale, stock_quantity = stock?.quantity,
     stock_status = when (stock?.status) { StockStatus.OUT_OF_STOCK -> "outofstock"; StockStatus.ON_BACKORDER -> "onbackorder"; StockStatus.IN_STOCK, null -> "instock" },
     manage_stock = stock?.manageStock ?: false,
