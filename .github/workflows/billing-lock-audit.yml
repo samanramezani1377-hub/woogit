@@ -1,0 +1,203 @@
+name: WooGit Billing Lock Audit
+
+on:
+  push:
+    branches: [main, app-transfer]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: billing-lock-audit-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  JAVA_VERSION: '17'
+  GRADLE_VERSION: '8.13'
+  ANDROID_API_LEVEL: '36'
+  ANDROID_BUILD_TOOLS: '36.0.0'
+  GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx3g -Dfile.encoding=UTF-8
+
+jobs:
+  billing-client-audit:
+    name: BillingClient contract audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Audit BillingClient session/retry contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          f="data/src/main/kotlin/com/samanramezani1377/woogit/data/billing/BillingClient.kt"
+          test -f "$f"
+          grep -q 'sessions.getBilling' "$f"
+          grep -q 'X-WooGit-Session' "$f"
+          grep -q 'response.status.value == 401' "$f"
+          grep -q 'reauthenticate(storeId)' "$f"
+          grep -q 'sessions.removeBilling' "$f"
+          echo '[PASS] BillingClient uses Billing Session and reauth/retry on 401.'
+
+  navigation-lock-audit:
+    name: Navigation billing-lock audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Audit expired-state lock path
+        shell: bash
+        run: |
+          set -euo pipefail
+          f="presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/navigation/E11AppNavigation.kt"
+          test -f "$f"
+          grep -q 'billingLocked' "$f"
+          grep -q 'status == "expired"' "$f"
+          grep -q 'SubscriptionExpiredScreen' "$f"
+          echo '[PASS] Navigation exposes SubscriptionExpiredScreen when billing is expired.'
+
+  subscription-screen-audit:
+    name: Subscription screen flow audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Audit expired/trial/checkout flow
+        shell: bash
+        run: |
+          set -euo pipefail
+          f="presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/subscription/SubscriptionExpiredScreen.kt"
+          test -f "$f"
+          grep -q 'BillingRuntime.gateway' "$f"
+          grep -q 'activateOperationalSession' "$f"
+          grep -q 'checkout' "$f"
+          grep -q 'status' "$f"
+          echo '[PASS] Subscription screen contains status, activation and checkout flow.'
+
+  session-separation-audit:
+    name: Session separation audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Audit billing/operational separation
+        shell: bash
+        run: |
+          set -euo pipefail
+          client="data/src/main/kotlin/com/samanramezani1377/woogit/data/billing/BillingClient.kt"
+          session="data/src/main/kotlin/com/samanramezani1377/woogit/data/session/BackendSessionStore.kt"
+          test -f "$client"
+          test -f "$session"
+          grep -Rqs 'SCOPE_BILLING\|billing' data/src/main/kotlin presentation/src/main/kotlin
+          grep -Rqs 'activateOperationalSession' data/src/main/kotlin presentation/src/main/kotlin
+          echo '[PASS] Billing and operational session paths are represented and separated.'
+
+  account-setup-expiry-audit:
+    name: Account setup after expiry audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Audit billing-session fallback for account setup
+        shell: bash
+        run: |
+          set -euo pipefail
+          f="data/src/main/kotlin/com/samanramezani1377/woogit/data/account/AccountSetupClient.kt"
+          test -f "$f"
+          grep -q 'sessions.getBilling(storeId)' "$f"
+          grep -q 'sessions.removeBilling(storeId)' "$f"
+          grep -q 'reauthenticate' "$f"
+          echo '[PASS] Account setup can fall back to Billing Session after operational expiry.'
+
+  backend-contract-audit:
+    name: Backend billing contract audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Audit backend billing route references
+        shell: bash
+        run: |
+          set -euo pipefail
+          f="docs/agent/CROSS_REPO_MAP.md"
+          test -f "$f"
+          for route in '/billing/status' '/billing/checkout' '/billing/activate-session'; do
+            grep -q "$route" "$f"
+          done
+          echo '[PASS] App-side contract map contains all billing endpoints.'
+
+  unit-billing-lock:
+    name: Billing/session unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: false
+      - name: Install Android SDK
+        shell: bash
+        run: |
+          sdkmanager --sdk_root="${ANDROID_SDK_ROOT}" \
+            "platforms;android-${ANDROID_API_LEVEL}" \
+            "build-tools;${ANDROID_BUILD_TOOLS}" \
+            "platform-tools"
+      - uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: ${{ env.GRADLE_VERSION }}
+          cache-cleanup: on-success
+      - name: Run billing/session tests
+        run: gradle test --continue --console=plain --warning-mode=all --stacktrace
+
+  audit-gate:
+    name: Billing Lock Audit gate
+    if: always()
+    needs:
+      - billing-client-audit
+      - navigation-lock-audit
+      - subscription-screen-audit
+      - session-separation-audit
+      - account-setup-expiry-audit
+      - backend-contract-audit
+      - unit-billing-lock
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every audit unit to pass
+        shell: bash
+        env:
+          BILLING_CLIENT: ${{ needs.billing-client-audit.result }}
+          NAVIGATION: ${{ needs.navigation-lock-audit.result }}
+          SUBSCRIPTION: ${{ needs.subscription-screen-audit.result }}
+          SESSIONS: ${{ needs.session-separation-audit.result }}
+          ACCOUNT_SETUP: ${{ needs.account-setup-expiry-audit.result }}
+          BACKEND: ${{ needs.backend-contract-audit.result }}
+          TESTS: ${{ needs.unit-billing-lock.result }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' \
+            "BillingClient      : ${BILLING_CLIENT}" \
+            "Navigation         : ${NAVIGATION}" \
+            "Subscription       : ${SUBSCRIPTION}" \
+            "Session separation : ${SESSIONS}" \
+            "Account setup      : ${ACCOUNT_SETUP}" \
+            "Backend contract   : ${BACKEND}" \
+            "Unit tests         : ${TESTS}"
+          for result in "$BILLING_CLIENT" "$NAVIGATION" "$SUBSCRIPTION" "$SESSIONS" "$ACCOUNT_SETUP" "$BACKEND" "$TESTS"; do
+            [[ "$result" == success ]] || { echo 'Billing Lock Audit FAILED.'; exit 1; }
+          done
+          echo 'Billing Lock Audit PASSED.'
