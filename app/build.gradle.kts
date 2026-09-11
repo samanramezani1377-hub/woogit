@@ -4,6 +4,11 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val releaseKeystorePath = providers.gradleProperty("woogit.release.keystore")
+val releaseKeystorePassword = providers.gradleProperty("woogit.release.keystorePassword")
+val releaseKeyAlias = providers.gradleProperty("woogit.release.keyAlias")
+val releaseKeyPassword = providers.gradleProperty("woogit.release.keyPassword")
+
 android {
     namespace="com.samanramezani1377.woogit"
     compileSdk=36
@@ -15,6 +20,24 @@ android {
         versionName="1.0.0"
         buildConfigField("String", "WOOGIT_BACKEND_BASE_URL", "\"https://woogit.ir\"")
     }
+
+    signingConfigs {
+        create("release") {
+            if (releaseKeystorePath.isPresent && releaseKeystorePassword.isPresent && releaseKeyAlias.isPresent && releaseKeyPassword.isPresent) {
+                storeFile = file(releaseKeystorePath.get())
+                storePassword = releaseKeystorePassword.get()
+                keyAlias = releaseKeyAlias.get()
+                keyPassword = releaseKeyPassword.get()
+            }
+        }
+    }
+
+    buildTypes {
+        getByName("release") {
+            signingConfig = signingConfigs.getByName("release")
+        }
+    }
+
     buildFeatures { compose=true; buildConfig=true }
 }
 kotlin { jvmToolchain(17) }
