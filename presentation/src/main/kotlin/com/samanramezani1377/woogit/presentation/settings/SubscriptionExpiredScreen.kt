@@ -1,14 +1,10 @@
 package com.samanramezani1377.woogit.presentation.settings
 
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import com.samanramezani1377.woogit.core.billing.BillingPlan
 import com.samanramezani1377.woogit.core.billing.BillingStatus
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
@@ -30,14 +26,11 @@ fun SubscriptionExpiredScreen(storeId: StoreId, onSubscriptionRestored: () -> Un
     var loading by remember { mutableStateOf(true) }
     var busyPlanId by remember { mutableStateOf<Int?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
-    var paymentUrl by remember { mutableStateOf<String?>(null) }
 
     suspend fun refreshBilling() {
         loading = true
-        val planResult = gateway.plans(storeId)
-        val statusResult = gateway.status(storeId)
-        planResult.onSuccess { plans = it }.onFailure { message = billingMessage(it) }
-        statusResult.onSuccess { status = it }.onFailure { message = billingMessage(it) }
+        gateway.plans(storeId).onSuccess { plans = it }.onFailure { message = billingMessage(it) }
+        gateway.status(storeId).onSuccess { status = it }.onFailure { message = billingMessage(it) }
         loading = false
     }
 
@@ -57,19 +50,15 @@ fun SubscriptionExpiredScreen(storeId: StoreId, onSubscriptionRestored: () -> Un
     }
 
     LaunchedEffect(storeId) { refreshBilling() }
-    paymentUrl?.let { url ->
-        BillingPaymentWebView(
-            url = url,
-            onClose = {
-                paymentUrl = null
-                scope.launch {
-                    reconcileAfterPayment()
-                    refreshBilling()
-                }
-            },
-        )
-        return
+
+    val paymentUrl = BillingPaymentRuntime.paymentUrl
+    LaunchedEffect(storeId, paymentUrl) {
+        if (paymentUrl == null) {
+            reconcileAfterPayment()
+            refreshBilling()
+        }
     }
+
     BackHandler(enabled = true) { }
     LockedBillingContent(
         title = "اعتبار اشتراک شما به پایان رسیده است",
@@ -85,7 +74,7 @@ fun SubscriptionExpiredScreen(storeId: StoreId, onSubscriptionRestored: () -> Un
                 scope.launch {
                     gateway.checkout(storeId, plan.id, plan.variations.firstOrNull()?.id ?: 0)
                         .onSuccess { checkout ->
-                            paymentUrl = checkout.paymentUrl
+                            BillingPaymentRuntime.open(checkout.paymentUrl)
                             message = "درگاه پرداخت داخل WooGit باز شد."
                         }
                         .onFailure { message = billingMessage(it) }
@@ -160,35 +149,6 @@ private fun LockedBillingContent(
     }
 }
 
-@Composable
-private fun BillingPaymentWebView(url: String, onClose: () -> Unit) {
-    val context = LocalContext.current
-    var webView by remember { mutableStateOf<WebView?>(null) }
-    BackHandler { val view = webView; if (view?.canGoBack() == true) view.goBack() else onClose() }
-    Column(Modifier.fillMaxSize()) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), horizontalArrangement = Arrangement.End) {
-            GlassPrimaryAction("بازگشت به WooGit", onClick = onClose)
-        }
-        AndroidView(
-            modifier = Modifier.fillMaxSize(),
-            factory = { WebView(context).apply {
-                settings.javaScriptEnabled = true
-                settings.domStorageEnabled = true
-                settings.javaScriptCanOpenWindowsAutomatically = true
-                settings.setSupportMultipleWindows(false)
-                settings.loadsImagesAutomatically = true
-                settings.allowFileAccess = false
-                settings.allowContentAccess = false
-                webViewClient = WebViewClient()
-                loadUrl(url)
-                webView = this
-            } },
-            update = { webView = it },
-            onRelease = { it.stopLoading(); it.destroy(); webView = null },
-        )
-    }
-}
-
 private fun planPrice(plan: BillingPlan): String {
     val numeric = plan.price.toDoubleOrNull()
     if (numeric != null && numeric == 0.0) return "رایگان"
@@ -197,7 +157,11 @@ private fun planPrice(plan: BillingPlan): String {
 }
 
 private fun periodTitle(value: String): String = when (value.lowercase(Locale.ROOT)) {
-    "day" -> "روز"; "week" -> "هفته"; "month" -> "ماه"; "year" -> "سال"; else -> value
+    "day" -> "روز"
+    "week" -> "هفته"
+    "month" -> "ماه"
+    "year" -> "سال"
+    else -> value
 }
 
 private fun billingMessage(error: Throwable): String {
