@@ -68,7 +68,6 @@ class StoreRepositoryImpl(
             backend.verifySite(store.storeId.value,normalized,pair).fold(
                 onSuccess={
                     credentials.put(reference,consumerKey,actualSecret,actualWpUser,actualWpPassword)
-                    sessionRestoreMutex.withLock { }
                     val connected=store.copy(baseUrl=normalized,state=ConnectionState.CONNECTED,credentialReference=reference); local.upsert(connected); CoreResult.Success(connected)
                 },
                 onFailure={CoreResult.Failure(DomainError.Network(it.message?:"Unable to verify store through WooGit Backend"))}
