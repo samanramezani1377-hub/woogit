@@ -9,6 +9,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
@@ -57,7 +60,13 @@ fun E11ReleaseApp(
 @Composable
 private fun BillingPaymentScreen(url: String, onClose: () -> Unit) {
     val context = LocalContext.current
-    varWebViewBackHandler(url, onClose)
+    var webView by remember { mutableStateOf<WebView?>(null) }
+
+    BackHandler {
+        val view = webView
+        if (view?.canGoBack() == true) view.goBack() else onClose()
+    }
+
     AndroidView(
         modifier = Modifier.fillMaxSize(),
         factory = {
@@ -70,22 +79,15 @@ private fun BillingPaymentScreen(url: String, onClose: () -> Unit) {
                 settings.allowFileAccess = false
                 settings.allowContentAccess = false
                 webViewClient = WebViewClient()
+                webView = this
                 loadUrl(url)
             }
         },
+        update = { webView = it },
         onRelease = { view ->
             view.stopLoading()
             view.destroy()
+            webView = null
         },
     )
-}
-
-@Composable
-private fun varWebViewBackHandler(url: String, onClose: () -> Unit) {
-    // The actual WebView is owned by AndroidView; keep the system Back action on the
-    // payment surface and let the browser history consume Back before closing checkout.
-    // A small holder is created by the composable so the handler remains lifecycle-safe.
-    val context = LocalContext.current
-    androidx.compose.runtime.remember(url, context)
-    BackHandler { onClose() }
 }
