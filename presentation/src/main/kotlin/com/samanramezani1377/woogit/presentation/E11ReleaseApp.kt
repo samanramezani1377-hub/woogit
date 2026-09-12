@@ -1,5 +1,6 @@
 package com.samanramezani1377.woogit.presentation
 
+import android.net.Uri
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
@@ -78,7 +79,26 @@ private fun BillingPaymentScreen(url: String, onClose: () -> Unit) {
                 settings.loadsImagesAutomatically = true
                 settings.allowFileAccess = false
                 settings.allowContentAccess = false
-                webViewClient = WebViewClient()
+                webViewClient = object : WebViewClient() {
+                    override fun shouldOverrideUrlLoading(view: WebView, request: android.webkit.WebResourceRequest): Boolean {
+                        val target = request.url
+                        if (isWooGitAppPaymentReturn(target)) {
+                            onClose()
+                            return true
+                        }
+                        return false
+                    }
+
+                    @Deprecated("Deprecated in API 24; retained for older Android WebView compatibility.")
+                    override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean {
+                        val target = runCatching { Uri.parse(url) }.getOrNull()
+                        if (target != null && isWooGitAppPaymentReturn(target)) {
+                            onClose()
+                            return true
+                        }
+                        return false
+                    }
+                }
                 webView = this
                 loadUrl(url)
             }
@@ -90,4 +110,9 @@ private fun BillingPaymentScreen(url: String, onClose: () -> Unit) {
             webView = null
         },
     )
+}
+
+private fun isWooGitAppPaymentReturn(uri: Uri): Boolean {
+    val path = uri.path.orEmpty().trimEnd('/')
+    return path.endsWith("/payment-result") && uri.getQueryParameter("app") == "1" && uri.getQueryParameter("return_to") == "woogit"
 }
