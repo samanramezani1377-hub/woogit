@@ -29,6 +29,8 @@ class BackendClient(
 ) {
     private val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
 
+    fun hasOperationalSession(storeId: String): Boolean = !sessions.get(storeId).isNullOrBlank()
+
     suspend fun verifySite(storeId: String, siteUrl: String, pair: CredentialPair): Result<BackendVerifyResult> = runCatching {
         val credentialDigest = sha256("${pair.consumerKey}\u0000${pair.consumerSecret}\u0000${pair.wordpressUsername.orEmpty()}\u0000${pair.wordpressApplicationPassword.orEmpty()}".toByteArray(Charsets.UTF_8))
         val idempotencyKey = "verify-${sha256("$storeId\u0000$siteUrl\u0000$credentialDigest".toByteArray(Charsets.UTF_8))}"
