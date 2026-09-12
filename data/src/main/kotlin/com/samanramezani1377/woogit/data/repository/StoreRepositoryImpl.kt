@@ -31,25 +31,30 @@ class StoreRepositoryImpl(
             if (id.value in sessionRestoredForProcess) {
                 result
             } else {
-                restoreOperationalSession(result.value)
-                result
+                val store = result.value
+                val reference = store.credentialReference
+                    ?: return@withLock CoreResult.Failure(DomainError.Authentication("Store credentials are unavailable"))
+                val pair = credentials.get(reference)
+                    ?: return@withLock CoreResult.Failure(DomainError.Authentication("Store credentials are unavailable"))
+                val verified = backend.verifySite(
+                    store.storeId.value,
+                    "${store.baseUrl}?woogit_session_refresh=${System.currentTimeMillis()}",
+                    pair,
+                )
+                verified.fold(
+                    onSuccess = { response ->
+                        if (response.scope != "operational" || !response.accessEnabled) {
+                            CoreResult.Failure(DomainError.Authentication("Backend operational session is unavailable"))
+                        } else {
+                            sessionRestoredForProcess += store.storeId.value
+                            result
+                        }
+                    },
+                    onFailure = { error ->
+                        CoreResult.Failure(DomainError.Network(error.message ?: "Unable to restore Backend session"))
+                    },
+                )
             }
-        }
-    }
-
-    private suspend fun restoreOperationalSession(store: StoreConnection) {
-        val reference = store.credentialReference ?: return
-        val pair = credentials.get(reference) ?: return
-        val verified = backend.verifySite(
-            store.storeId.value,
-            "${store.baseUrl}?woogit_session_refresh=${System.currentTimeMillis()}",
-            pair,
-        )
-        if (verified.isSuccess) {
-            sessionRestoredForProcess += store.storeId.value
-        } else {
-            throw verified.exceptionOrNull()
-                ?: IllegalStateException("Unable to restore Backend session")
         }
     }
 
