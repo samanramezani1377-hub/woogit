@@ -44,11 +44,11 @@ fun BillingSection(storeId: StoreId) {
 
     LaunchedEffect(storeId) { refreshBilling() }
 
-    // The payment page is rendered by E11ReleaseApp at app level. When it closes,
-    // the runtime changes back to null and BillingSection reconciles the payment.
-    val paymentUrl = BillingPaymentRuntime.paymentUrl
-    LaunchedEffect(storeId, paymentUrl) {
-        if (paymentUrl == null) {
+    // Payment is an app-level surface. Reconcile only after an active payment
+    // surface has actually been closed; Preparing must not look like a closed payment.
+    val closeVersion = BillingPaymentRuntime.closeVersion
+    LaunchedEffect(storeId, closeVersion) {
+        if (closeVersion > 0) {
             reconcileAfterPayment()
             refreshBilling()
         }
@@ -79,13 +79,16 @@ fun BillingSection(storeId: StoreId) {
                                 onClick = {
                                     if (!trialDisabled && busyPlanId == null) {
                                         busyPlanId = plan.id
+                                        BillingPaymentRuntime.begin()
                                         scope.launch {
                                             gateway.checkout(storeId, plan.id, plan.variations.firstOrNull()?.id ?: 0)
                                                 .onSuccess { checkout ->
                                                     message = "درگاه پرداخت داخل WooGit باز شد."
                                                     BillingPaymentRuntime.open(checkout.paymentUrl)
                                                 }
-                                                .onFailure { message = billingMessage(it) }
+                                                .onFailure {
+                                                    BillingPaymentRuntime.fail(billingMessage(it))
+                                                }
                                             busyPlanId = null
                                         }
                                     }
