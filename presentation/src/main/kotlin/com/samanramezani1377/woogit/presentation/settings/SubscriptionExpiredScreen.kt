@@ -51,9 +51,9 @@ fun SubscriptionExpiredScreen(storeId: StoreId, onSubscriptionRestored: () -> Un
 
     LaunchedEffect(storeId) { refreshBilling() }
 
-    val paymentUrl = BillingPaymentRuntime.paymentUrl
-    LaunchedEffect(storeId, paymentUrl) {
-        if (paymentUrl == null) {
+    val closeVersion = BillingPaymentRuntime.closeVersion
+    LaunchedEffect(storeId, closeVersion) {
+        if (closeVersion > 0) {
             reconcileAfterPayment()
             refreshBilling()
         }
@@ -71,13 +71,16 @@ fun SubscriptionExpiredScreen(storeId: StoreId, onSubscriptionRestored: () -> Un
         onPlanSelected = { plan ->
             if (busyPlanId == null) {
                 busyPlanId = plan.id
+                BillingPaymentRuntime.begin()
                 scope.launch {
                     gateway.checkout(storeId, plan.id, plan.variations.firstOrNull()?.id ?: 0)
                         .onSuccess { checkout ->
                             BillingPaymentRuntime.open(checkout.paymentUrl)
                             message = "درگاه پرداخت داخل WooGit باز شد."
                         }
-                        .onFailure { message = billingMessage(it) }
+                        .onFailure { error ->
+                            BillingPaymentRuntime.fail(billingMessage(error))
+                        }
                     busyPlanId = null
                 }
             }
