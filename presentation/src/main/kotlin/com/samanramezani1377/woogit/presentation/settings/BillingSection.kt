@@ -1,17 +1,9 @@
 package com.samanramezani1377.woogit.presentation.settings
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import android.webkit.WebView
-import android.webkit.WebViewClient
 import com.samanramezani1377.woogit.core.billing.BillingPlan
 import com.samanramezani1377.woogit.core.billing.BillingStatus
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
@@ -23,21 +15,17 @@ import java.util.Locale
 @Composable
 fun BillingSection(storeId: StoreId) {
     val gateway = BillingRuntime.gateway ?: return
-    val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
     var plans by remember { mutableStateOf<List<BillingPlan>>(emptyList()) }
     var status by remember { mutableStateOf<BillingStatus?>(null) }
     var loading by remember { mutableStateOf(true) }
     var busyPlanId by remember { mutableStateOf<Int?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
-    var paymentUrl by remember { mutableStateOf<String?>(null) }
 
     suspend fun refreshBilling() {
         loading = true
-        val planResult = gateway.plans(storeId)
-        val statusResult = gateway.status(storeId)
-        planResult.onSuccess { plans = it }.onFailure { message = billingMessage(it) }
-        statusResult.onSuccess { status = it }.onFailure { message = billingMessage(it) }
+        gateway.plans(storeId).onSuccess { plans = it }.onFailure { message = billingMessage(it) }
+        gateway.status(storeId).onSuccess { status = it }.onFailure { message = billingMessage(it) }
         loading = false
     }
 
@@ -51,30 +39,19 @@ fun BillingSection(storeId: StoreId) {
                     if (!error.message.orEmpty().contains("session_already_operational")) message = billingMessage(error)
                 }
             }
-        }
+        }.onFailure { message = billingMessage(it) }
     }
 
     LaunchedEffect(storeId) { refreshBilling() }
-    DisposableEffect(lifecycleOwner, storeId, paymentUrl) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME && paymentUrl == null) scope.launch { reconcileAfterPayment() }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
 
-    paymentUrl?.let { url ->
-        PaymentWebView(
-            url = url,
-            onClose = {
-                paymentUrl = null
-                scope.launch {
-                    reconcileAfterPayment()
-                    refreshBilling()
-                }
-            },
-        )
-        return
+    // The payment page is rendered by E11ReleaseApp at app level. When it closes,
+    // the runtime changes back to null and BillingSection reconciles the payment.
+    val paymentUrl = BillingPaymentRuntime.paymentUrl
+    LaunchedEffect(storeId, paymentUrl) {
+        if (paymentUrl == null) {
+            reconcileAfterPayment()
+            refreshBilling()
+        }
     }
 
     GlassCard {
@@ -106,7 +83,7 @@ fun BillingSection(storeId: StoreId) {
                                             gateway.checkout(storeId, plan.id, plan.variations.firstOrNull()?.id ?: 0)
                                                 .onSuccess { checkout ->
                                                     message = "درگاه پرداخت داخل WooGit باز شد."
-                                                    paymentUrl = checkout.paymentUrl
+                                                    BillingPaymentRuntime.open(checkout.paymentUrl)
                                                 }
                                                 .onFailure { message = billingMessage(it) }
                                             busyPlanId = null
@@ -121,51 +98,6 @@ fun BillingSection(storeId: StoreId) {
             }
             message?.let { GlassText(it) }
         }
-    }
-}
-
-@Composable
-private fun PaymentWebView(url: String, onClose: () -> Unit) {
-    val context = LocalContext.current
-    var webView by remember { mutableStateOf<WebView?>(null) }
-
-    BackHandler {
-        val view = webView
-        if (view?.canGoBack() == true) view.goBack() else onClose()
-    }
-
-    Column(modifier = Modifier.fillMaxSize()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.End,
-        ) {
-            GlassPrimaryAction("بازگشت به WooGit", onClick = onClose)
-        }
-        AndroidView(
-            modifier = Modifier.fillMaxSize(),
-            factory = {
-                WebView(context).apply {
-                    settings.javaScriptEnabled = true
-                    settings.domStorageEnabled = true
-                    settings.javaScriptCanOpenWindowsAutomatically = true
-                    settings.setSupportMultipleWindows(false)
-                    settings.loadsImagesAutomatically = true
-                    settings.allowFileAccess = false
-                    settings.allowContentAccess = false
-                    webViewClient = WebViewClient()
-                    loadUrl(url)
-                    webView = this
-                }
-            },
-            update = { view -> webView = view },
-            onRelease = { view ->
-                view.stopLoading()
-                view.destroy()
-                webView = null
-            },
-        )
     }
 }
 
