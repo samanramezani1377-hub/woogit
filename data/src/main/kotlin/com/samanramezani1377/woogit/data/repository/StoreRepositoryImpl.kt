@@ -11,6 +11,8 @@ import com.samanramezani1377.woogit.core.security.CredentialPair
 import com.samanramezani1377.woogit.core.security.SecureCredentialStore
 import com.samanramezani1377.woogit.data.local.SqlStoreDataSource
 import com.samanramezani1377.woogit.data.network.BackendClient
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.net.URI
 
 class StoreRepositoryImpl(
@@ -18,7 +20,39 @@ class StoreRepositoryImpl(
     private val credentials: SecureCredentialStore,
     private val backend: BackendClient,
 ) : StoreRepository {
-    override suspend fun get(id: StoreId): CoreResult<StoreConnection> = local.get(id)
+    private val sessionRestoreMutex = Mutex()
+    private val sessionRestoredForProcess = mutableSetOf<String>()
+
+    override suspend fun get(id: StoreId): CoreResult<StoreConnection> {
+        val result = local.get(id)
+        if (result !is CoreResult.Success || result.value.state != ConnectionState.CONNECTED) return result
+
+        return sessionRestoreMutex.withLock {
+            if (id.value in sessionRestoredForProcess) {
+                result
+            } else {
+                restoreOperationalSession(result.value)
+                result
+            }
+        }
+    }
+
+    private suspend fun restoreOperationalSession(store: StoreConnection) {
+        val reference = store.credentialReference ?: return
+        val pair = credentials.get(reference) ?: return
+        val verified = backend.verifySite(
+            store.storeId.value,
+            "${store.baseUrl}?woogit_session_refresh=${System.currentTimeMillis()}",
+            pair,
+        )
+        if (verified.isSuccess) {
+            sessionRestoredForProcess += store.storeId.value
+        } else {
+            throw verified.exceptionOrNull()
+                ?: IllegalStateException("Unable to restore Backend session")
+        }
+    }
+
     override suspend fun save(store: StoreConnection): CoreResult<StoreConnection> = if (store.baseUrl.isBlank()) CoreResult.Failure(DomainError.Validation("Store URL is required")) else { local.upsert(store); CoreResult.Success(store) }
 
     override suspend fun connect(store: StoreConnection, consumerKey: String, consumerSecret: String, wordpressUsername: String?, wordpressApplicationPassword: String?): CoreResult<StoreConnection> {
@@ -31,6 +65,7 @@ class StoreRepositoryImpl(
             backend.verifySite(store.storeId.value,normalized,pair).fold(
                 onSuccess={
                     credentials.put(reference,consumerKey,actualSecret,actualWpUser,actualWpPassword)
+                    sessionRestoreMutex.withLock { sessionRestoredForProcess += store.storeId.value }
                     val connected=store.copy(baseUrl=normalized,state=ConnectionState.CONNECTED,credentialReference=reference); local.upsert(connected); CoreResult.Success(connected)
                 },
                 onFailure={CoreResult.Failure(DomainError.Network(it.message?:"Unable to verify store through WooGit Backend"))}
@@ -43,6 +78,7 @@ class StoreRepositoryImpl(
         if(current is CoreResult.Success){
             val operationalRevoke=backend.revokeSession(id.value); val billingRevoke=backend.revokeBillingSession(id.value)
             current.value.credentialReference?.let(credentials::remove); backend.clearSession(id.value); local.upsert(current.value.copy(state=ConnectionState.DISCONNECTED,credentialReference=null))
+            sessionRestoreMutex.withLock { sessionRestoredForProcess.remove(id.value) }
             if(operationalRevoke.isFailure)return CoreResult.Failure(DomainError.Network(operationalRevoke.exceptionOrNull()?.message?:"Unable to revoke Backend session"))
             if(billingRevoke.isFailure)return CoreResult.Failure(DomainError.Network(billingRevoke.exceptionOrNull()?.message?:"Unable to revoke billing session"))
         }
