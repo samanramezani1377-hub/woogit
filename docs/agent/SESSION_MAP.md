@@ -19,6 +19,12 @@ Never reorder the final two operations. A connected store without the required s
 
 Reauthentication must use real credentials/verification and the backend must re-check Account + Site + Entitlement. The App never manufactures a valid backend session.
 
+## Session restore after process restart
+
+`connected store -> persisted operational token exists -> reuse persisted session -> no verifySite call`
+
+The Android session store is persistent, so an app process restart must not be treated as a new login. `StoreRepositoryImpl.get` only calls `verifySite` when no operational token is currently stored. This prevents repeated process launches/reloads from creating redundant Backend session rows. If the stored token has expired or has been revoked, normal authenticated requests clear it and the next restore path may perform a real reauthentication.
+
 ## Operational expiry
 
 `operational session invalid/expired -> remove operational token -> reauthenticate -> verifySite may return billing-only session -> billing session becomes the available authenticated context for billing/account bootstrap endpoints`
@@ -59,6 +65,7 @@ Dashboard and background consumers must not start operational calls before sessi
 
 - `BackendSessionStore`
 - `AndroidBackendSessionStore`
+- `BackendClient.hasOperationalSession`
 - `BackendClient.verifySite`
 - `AccountSetupClient.requiresWebPassword`
 - `AccountSetupClient.setupWebPassword`
@@ -66,6 +73,7 @@ Dashboard and background consumers must not start operational calls before sessi
 - `BillingClient.status`
 - `BillingClient.checkout`
 - `BillingClient.activateOperationalSession`
+- `StoreRepositoryImpl.get`
 - `StoreRepositoryImpl.connect`
 - `ConnectionViewModel.connect`
 - `E11AppNavigation`
