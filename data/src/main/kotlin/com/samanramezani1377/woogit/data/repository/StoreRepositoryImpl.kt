@@ -21,40 +21,38 @@ class StoreRepositoryImpl(
     private val backend: BackendClient,
 ) : StoreRepository {
     private val sessionRestoreMutex = Mutex()
-    private val sessionRestoredForProcess = mutableSetOf<String>()
 
     override suspend fun get(id: StoreId): CoreResult<StoreConnection> {
         val result = local.get(id)
         if (result !is CoreResult.Success || result.value.state != ConnectionState.CONNECTED) return result
 
         return sessionRestoreMutex.withLock {
-            if (id.value in sessionRestoredForProcess) {
-                result
-            } else {
-                val store = result.value
-                val reference = store.credentialReference
-                    ?: return@withLock CoreResult.Failure(DomainError.Authentication("Store credentials are unavailable"))
-                val pair = credentials.get(reference)
-                    ?: return@withLock CoreResult.Failure(DomainError.Authentication("Store credentials are unavailable"))
-                val verified = backend.verifySite(
-                    store.storeId.value,
-                    "${store.baseUrl}?woogit_session_refresh=${System.currentTimeMillis()}",
-                    pair,
-                )
-                verified.fold(
-                    onSuccess = { response ->
-                        if (response.scope != "operational" || !response.accessEnabled) {
-                            CoreResult.Failure(DomainError.Authentication("Backend operational session is unavailable"))
-                        } else {
-                            sessionRestoredForProcess += store.storeId.value
-                            result
-                        }
-                    },
-                    onFailure = { error ->
-                        CoreResult.Failure(DomainError.Network(error.message ?: "Unable to restore Backend session"))
-                    },
-                )
+            val store = result.value
+            if (backend.hasOperationalSession(store.storeId.value)) {
+                return@withLock result
             }
+
+            val reference = store.credentialReference
+                ?: return@withLock CoreResult.Failure(DomainError.Authentication("Store credentials are unavailable"))
+            val pair = credentials.get(reference)
+                ?: return@withLock CoreResult.Failure(DomainError.Authentication("Store credentials are unavailable"))
+            val verified = backend.verifySite(
+                store.storeId.value,
+                "${store.baseUrl}?woogit_session_refresh=${System.currentTimeMillis()}",
+                pair,
+            )
+            verified.fold(
+                onSuccess = { response ->
+                    if (response.scope != "operational" || !response.accessEnabled) {
+                        CoreResult.Failure(DomainError.Authentication("Backend operational session is unavailable"))
+                    } else {
+                        result
+                    }
+                },
+                onFailure = { error ->
+                    CoreResult.Failure(DomainError.Network(error.message ?: "Unable to restore Backend session"))
+                },
+            )
         }
     }
 
@@ -70,7 +68,7 @@ class StoreRepositoryImpl(
             backend.verifySite(store.storeId.value,normalized,pair).fold(
                 onSuccess={
                     credentials.put(reference,consumerKey,actualSecret,actualWpUser,actualWpPassword)
-                    sessionRestoreMutex.withLock { sessionRestoredForProcess += store.storeId.value }
+                    sessionRestoreMutex.withLock { }
                     val connected=store.copy(baseUrl=normalized,state=ConnectionState.CONNECTED,credentialReference=reference); local.upsert(connected); CoreResult.Success(connected)
                 },
                 onFailure={CoreResult.Failure(DomainError.Network(it.message?:"Unable to verify store through WooGit Backend"))}
@@ -83,7 +81,6 @@ class StoreRepositoryImpl(
         if(current is CoreResult.Success){
             val operationalRevoke=backend.revokeSession(id.value); val billingRevoke=backend.revokeBillingSession(id.value)
             current.value.credentialReference?.let(credentials::remove); backend.clearSession(id.value); local.upsert(current.value.copy(state=ConnectionState.DISCONNECTED,credentialReference=null))
-            sessionRestoreMutex.withLock { sessionRestoredForProcess.remove(id.value) }
             if(operationalRevoke.isFailure)return CoreResult.Failure(DomainError.Network(operationalRevoke.exceptionOrNull()?.message?:"Unable to revoke Backend session"))
             if(billingRevoke.isFailure)return CoreResult.Failure(DomainError.Network(billingRevoke.exceptionOrNull()?.message?:"Unable to revoke billing session"))
         }
