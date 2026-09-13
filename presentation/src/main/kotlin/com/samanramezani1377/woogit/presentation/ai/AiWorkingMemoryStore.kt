@@ -16,11 +16,9 @@ internal class AiWorkingMemoryStore(context: Context, private val storeKey: Stri
     private val prefs = context.applicationContext.getSharedPreferences("woogit_ai_working_memory", Context.MODE_PRIVATE)
     private val prefix = "working_${storeKey}_"
 
-    /** Returns a compact prompt-safe view; the complete state stays persisted internally. */
     @Synchronized
     fun read(conversationId: String): JSONObject? = readRaw(conversationId)?.let(::promptSnapshot)
 
-    /** Existing state is never replaced just because a new request arrived. */
     @Synchronized
     fun ensure(conversationId: String, task: String): JSONObject {
         val existing = readRaw(conversationId)
@@ -28,7 +26,6 @@ internal class AiWorkingMemoryStore(context: Context, private val storeKey: Stri
         return newState(conversationId, task).also { write(conversationId, it) }
     }
 
-    /** Explicit resume preserves executionId, checkpoint, progress and operation history. */
     @Synchronized
     fun resume(conversationId: String): JSONObject {
         val state = readRaw(conversationId) ?: return JSONObject().put("status", "empty")
@@ -43,7 +40,6 @@ internal class AiWorkingMemoryStore(context: Context, private val storeKey: Stri
     @Synchronized
     fun update(conversationId: String, data: JSONObject): JSONObject {
         val state = readRaw(conversationId) ?: newState(conversationId, data.optString("task", "Agent task"))
-
         data.optString("task").takeIf { it.isNotBlank() }?.let { state.put("task", it.take(MAX_TASK_LENGTH)) }
         data.optString("status").takeIf { it.isNotBlank() }?.let { state.put("status", it) }
         data.optString("summary").takeIf { it.isNotBlank() }?.let { state.put("summary", it.take(MAX_SUMMARY_LENGTH)) }
@@ -51,7 +47,6 @@ internal class AiWorkingMemoryStore(context: Context, private val storeKey: Stri
         data.optString("nextOperation").takeIf { it.isNotBlank() }?.let { state.put("nextOperation", it) }
         data.optJSONObject("progress")?.let { state.put("progress", mergeObject(state.optJSONObject("progress") ?: JSONObject(), it)) }
         data.optJSONObject("checkpoint")?.let { state.put("checkpoint", JSONObject(it.toString())) }
-
         state.put("updatedAt", System.currentTimeMillis())
         write(conversationId, state)
         return promptSnapshot(state)
@@ -64,11 +59,7 @@ internal class AiWorkingMemoryStore(context: Context, private val storeKey: Stri
         val operations = state.optJSONArray("operations") ?: JSONArray()
         val normalized = JSONObject(operation.toString())
         val fingerprint = normalized.optString("fingerprint").ifBlank {
-            fingerprintOf(
-                normalized.optString("name"),
-                normalized.optString("arguments"),
-                normalized.optString("status"),
-            )
+            fingerprintOf(normalized.optString("name"), normalized.optString("arguments"))
         }
 
         var duplicate = false
@@ -209,8 +200,8 @@ internal class AiWorkingMemoryStore(context: Context, private val storeKey: Stri
         return target
     }
 
-    private fun fingerprintOf(name: String, arguments: String, status: String): String {
-        return "$name|$arguments|$status".hashCode().toString()
+    private fun fingerprintOf(name: String, arguments: String): String {
+        return "$name|$arguments".hashCode().toString()
     }
 
     private fun write(conversationId: String, state: JSONObject) {
