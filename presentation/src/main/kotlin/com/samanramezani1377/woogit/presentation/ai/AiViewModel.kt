@@ -178,7 +178,7 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
                 if (generationId == requestGenerationId) {
                     val responseMessage = messages + AiMessage(
                         "assistant",
-                        "اجرای درخواست متوقف شد: ${error.message?.takeIf { it.isNotBlank() } ?: "سرویس AI پاسخ نهایی تولید نکرد."}\n\nمی‌توانید با «تلاش دوباره» اجرای درخواست را دوباره شروع کنید.",
+                        "اجرای درخواست متوقف شد: ${error.message?.takeIf { it.isNotBlank() } ?: "سرویس AI پاسخ نهایی تولید نکرد."}\n\nاگر کار چندمرحله‌ای نیمه‌تمام مانده است، با گفتن «ادامه بده» از وضعیت ذخیره‌شده ادامه دهید.",
                     )
                     historyStore.saveSession(currentSessionId, responseMessage)
                     refreshHistory()
@@ -193,7 +193,7 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
         }
     }
 
-    private fun mandatoryResponseFallback() = "اجرای ابزارها تمام شد، اما متن پاسخ نهایی خالی بود. وضعیت انجام‌شده حفظ شده است؛ می‌توانید با «تلاش دوباره» ادامه دهید."
+    private fun mandatoryResponseFallback() = "اجرای ابزارها تمام شد، اما متن پاسخ نهایی خالی بود. وضعیت انجام‌شده حفظ شده است؛ می‌توانید با گفتن «ادامه بده» ادامه دهید."
 
     private fun refreshHistory() { _history.value = historyStore.loadSessions() }
     class Factory(private val context: Context) : ViewModelProvider.Factory { @Suppress("UNCHECKED_CAST") override fun <T : ViewModel> create(modelClass: Class<T>): T = AiViewModel(context, AiRuntime.dependencies) as T }
