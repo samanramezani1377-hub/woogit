@@ -12,7 +12,7 @@ class WooCommerceApi(private val backend: BackendClient, private val storeId: St
     suspend fun addOrderNote(id:Long,body:String,idempotencyKey:String?=null)=mut("/wp-json/wc/v3/orders/$id/notes","POST",body,idempotencyKey=idempotencyKey)
     suspend fun deleteOrder(id:Long,force:Boolean=false,idempotencyKey:String?=null)=mut("/wp-json/wc/v3/orders/$id","DELETE",null,mapOf("force" to force),idempotencyKey=idempotencyKey)
     suspend fun salesReport(dateMin:String,dateMax:String)=get("/wp-json/wc/v3/reports/sales",mapOf("date_min" to dateMin,"date_max" to dateMax))
-    suspend fun listProducts(page:Int=1,perPage:Int=20,search:String?=null,modifiedAfter:String?=null)=get("/wp-json/wc/v3/products",q(page,perPage,search,null,modifiedAfter))
+    suspend fun listProducts(page:Int=1,perPage:Int=20,search:String?=null,modifiedAfter:String?=null,categoryId:Long?=null)=get("/wp-json/wc/v3/products",q(page,perPage,search,null,modifiedAfter,categoryId))
     suspend fun getProduct(id:Long)=get("/wp-json/wc/v3/products/$id")
     suspend fun createProduct(body:String,idempotencyKey:String?=null)=mut("/wp-json/wc/v3/products","POST",body,idempotencyKey=idempotencyKey)
     suspend fun updateProduct(id:Long,body:String,idempotencyKey:String?=null)=mut("/wp-json/wc/v3/products/$id","PUT",body,idempotencyKey=idempotencyKey)
@@ -55,8 +55,8 @@ class WooCommerceApi(private val backend: BackendClient, private val storeId: St
     suspend fun deleteOrder(b:String,id:Long,force:Boolean=false,idempotencyKey:String?=null)=deleteOrder(id,force,idempotencyKey)
     @Deprecated("Routing is owned by Backend; baseUrl is ignored. Use salesReport(dateMin, dateMax).")
     suspend fun salesReport(b:String,dateMin:String,dateMax:String)=salesReport(dateMin,dateMax)
-    @Deprecated("Routing is owned by Backend; baseUrl is ignored. Use listProducts(page, perPage, search, modifiedAfter).")
-    suspend fun listProducts(b:String,page:Int=1,perPage:Int=20,search:String?=null,modifiedAfter:String?=null)=listProducts(page,perPage,search,modifiedAfter)
+    @Deprecated("Routing is owned by Backend; baseUrl is ignored. Use listProducts(page, perPage, search, modifiedAfter, categoryId).")
+    suspend fun listProducts(b:String,page:Int=1,perPage:Int=20,search:String?=null,modifiedAfter:String?=null,categoryId:Long?=null)=listProducts(page,perPage,search,modifiedAfter,categoryId)
     @Deprecated("Routing is owned by Backend; baseUrl is ignored. Use getProduct(id).")
     suspend fun getProduct(b:String,id:Long)=getProduct(id)
     @Deprecated("Routing is owned by Backend; baseUrl is ignored. Use createProduct(body, idempotencyKey).")
@@ -110,7 +110,7 @@ class WooCommerceApi(private val backend: BackendClient, private val storeId: St
 
     private suspend fun get(path:String,query:Map<String,Any> = emptyMap())=backend.forward(storeId,path,"GET",credentials,query)
     private suspend fun mut(path:String,method:String,body:String?,query:Map<String,Any> = emptyMap(),idempotencyKey:String?=null)=backend.forward(storeId,path,method,credentials,query,body,idempotencyKey)
-    private fun q(page:Int,perPage:Int,search:String?=null,status:String?=null,modifiedAfter:String?=null)=buildMap<String,Any>{put("page",page);put("per_page",perPage);if(!search.isNullOrBlank())put("search",search);if(!status.isNullOrBlank())put("status",status);if(!modifiedAfter.isNullOrBlank()){put("modified_after",modifiedAfter);put("dates_are_gmt",true)}}
+    private fun q(page:Int,perPage:Int,search:String?=null,status:String?=null,modifiedAfter:String?=null,categoryId:Long?=null)=buildMap<String,Any>{put("page",page);put("per_page",perPage);if(!search.isNullOrBlank())put("search",search);if(!status.isNullOrBlank())put("status",status);if(!modifiedAfter.isNullOrBlank()){put("modified_after",modifiedAfter);put("dates_are_gmt",true)};if(categoryId!=null)put("category",categoryId)}
 }
 
 data class ApiResponse(val statusCode:Int,val body:String,val method:String="",val endpoint:String="",val headers:Map<String,String> = emptyMap()){val total:Int? get()=headers["x-wp-total"]?.toIntOrNull();val totalPages:Int? get()=headers["x-wp-totalpages"]?.toIntOrNull()}
