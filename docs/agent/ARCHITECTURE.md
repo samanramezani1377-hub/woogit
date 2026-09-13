@@ -87,7 +87,7 @@ The model must report every item in its normal assistant response. The UI displa
 
 `WooGitToolExecutor.products_image_add` accepts an `AiAttachment`, uploads it through the WooGit media path, updates the product, then rereads the product and requires verification before returning success. A batch image operation therefore follows the same `execute -> reread -> verified` rule as other writes.
 
-A single selected image may intentionally be reused for multiple product image-add calls. When multiple source images are supplied, attachment-to-operation mapping must remain explicit before expanding batch semantics; the executor currently consumes the first attachment supplied to an image-add call.
+A single selected image may intentionally be reused for multiple product image-add calls. Multiple simultaneous source images must not be guessed or silently distributed across products when the mapping is ambiguous; the Agent prompt requires clarification rather than unsafe attachment reuse. The executor currently consumes the first attachment supplied to an image-add call, so explicit mapping is required before introducing automatic multi-image fan-out.
 
 ## 8. Reauthentication invariant
 
@@ -115,5 +115,6 @@ Background workers include order polling, product catalog synchronization, annou
 - AI execution: `presentation/.../ai/AiAgent.kt`, `AiWorkingMemoryStore.kt`, `AiViewModel.kt`.
 - AI tool execution: `presentation/.../ai/WooGitToolExecutor.kt`.
 - AI confirmation UI: `presentation/.../ai/AiScreen.kt`.
+- AI safety/reporting rules: `presentation/.../ai/AiAgentPrompt.kt`.
 
 Always verify current paths/symbols before editing; this map is an index, not a substitute for source inspection.
