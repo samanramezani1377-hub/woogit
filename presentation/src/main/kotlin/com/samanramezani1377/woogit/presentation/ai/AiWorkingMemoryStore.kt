@@ -26,7 +26,6 @@ internal class AiWorkingMemoryStore(context: Context, private val storeKey: Stri
         return newState(conversationId, task).also { write(conversationId, it) }
     }
 
-    /** Starts a distinct execution while archiving the previous execution summary/checkpoint. */
     @Synchronized
     fun beginNewExecution(conversationId: String, task: String): JSONObject {
         val previous = readRaw(conversationId)
@@ -50,7 +49,6 @@ internal class AiWorkingMemoryStore(context: Context, private val storeKey: Stri
         return promptSnapshot(state)
     }
 
-    /** Explicit resume preserves executionId, checkpoint, progress and operation history. */
     @Synchronized
     fun resume(conversationId: String): JSONObject {
         val state = readRaw(conversationId) ?: return JSONObject().put("status", "empty")
@@ -61,7 +59,24 @@ internal class AiWorkingMemoryStore(context: Context, private val storeKey: Stri
         return promptSnapshot(state)
     }
 
-    /** Delta update; operation/error arrays are never replaced by a generic update. */
+    /** Persist the mutation intent before the real WooCommerce call starts. */
+    @Synchronized
+    fun beginInFlightOperation(conversationId: String, operation: JSONObject): JSONObject {
+        val state = readRaw(conversationId) ?: newState(conversationId, operation.optString("task", "Agent task"))
+        val fingerprint = operation.optString("fingerprint").ifBlank {
+            fingerprintOf(operation.optString("tool"), operation.optString("arguments"))
+        }
+        val checkpoint = JSONObject(operation.toString())
+            .put("fingerprint", fingerprint)
+            .put("status", "in_flight")
+            .put("startedAt", System.currentTimeMillis())
+        state.put("checkpoint", checkpoint)
+        state.put("lastOperation", operation.optString("tool"))
+        state.put("updatedAt", System.currentTimeMillis())
+        write(conversationId, state)
+        return promptSnapshot(state)
+    }
+
     @Synchronized
     fun update(conversationId: String, data: JSONObject): JSONObject {
         val state = readRaw(conversationId) ?: newState(conversationId, data.optString("task", "Agent task"))
@@ -77,7 +92,6 @@ internal class AiWorkingMemoryStore(context: Context, private val storeKey: Stri
         return promptSnapshot(state)
     }
 
-    /** Append-only and idempotent operation log. */
     @Synchronized
     fun recordOperation(conversationId: String, operation: JSONObject, progress: JSONObject? = null): JSONObject {
         val state = readRaw(conversationId) ?: newState(conversationId, operation.optString("task", "Agent task"))
@@ -128,7 +142,6 @@ internal class AiWorkingMemoryStore(context: Context, private val storeKey: Stri
         state.put("status", "completed")
         state.put("summary", summary.take(MAX_SUMMARY_LENGTH))
         state.put("updatedAt", System.currentTimeMillis())
-        // Completion must not erase the checkpoint or successful operation history.
         write(conversationId, state)
         return promptSnapshot(state)
     }
