@@ -5,7 +5,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -88,7 +88,11 @@ internal fun AiScreen() {
                     }
                 }
                 LazyColumn(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    items(messages) { message -> MessageBubble(message) }
+                    itemsIndexed(messages) { index, message ->
+                        MessageBubble(message) {
+                            if (!isGenerating) vm.retry(index)
+                        }
+                    }
                     if (state is AiUiState.Working && activities.isNotEmpty()) item {
                         GlassCard(Modifier.fillMaxWidth()) {
                             Text("فعالیت Agent", fontWeight = FontWeight.SemiBold)
@@ -128,34 +132,10 @@ internal fun AiScreen() {
                     if (state is AiUiState.Error) item { GlassCard { Text("خطا: ${(state as? AiUiState.Error)?.message.orEmpty()}", color = GlassTokens.urgent) } }
                 }
                 if (attachments.isNotEmpty()) {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Row(
-                            Modifier
-                                .weight(1f)
-                                .clip(RoundedCornerShape(16.dp))
-                                .background(Color.White.copy(alpha = .42f))
-                                .padding(horizontal = 8.dp, vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        ) {
-                            AsyncImage(
-                                model = attachments.first().bytes,
-                                contentDescription = "پیش‌نمایش ${attachments.first().name}",
-                                contentScale = ContentScale.Crop,
-                                modifier = Modifier
-                                    .size(44.dp)
-                                    .clip(RoundedCornerShape(11.dp)),
-                            )
-                            Text(
-                                attachments.first().name,
-                                modifier = Modifier.weight(1f),
-                                maxLines = 1,
-                                color = GlassTokens.ink,
-                            )
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).background(Color.White.copy(alpha = .42f)).padding(horizontal = 8.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            AsyncImage(model = attachments.first().bytes, contentDescription = "پیش‌نمایش ${attachments.first().name}", contentScale = ContentScale.Crop, modifier = Modifier.size(44.dp).clip(RoundedCornerShape(11.dp)))
+                            Text(attachments.first().name, modifier = Modifier.weight(1f), maxLines = 1, color = GlassTokens.ink)
                         }
                         TextButton(onClick = vm::removeImage) { Text("حذف") }
                     }
