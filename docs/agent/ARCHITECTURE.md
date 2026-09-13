@@ -65,21 +65,45 @@ The App must never silently treat an operational session as a billing session or
 
 `BillingClient.status -> expired -> E11AppNavigation billingLocked -> SubscriptionExpiredScreen -> plans/status -> checkout -> payment result -> status -> activateOperationalSession`
 
-## 6. Reauthentication invariant
+## 6. AI Agent execution
+
+The AI write flow is confirmation-first and keeps the model as the source of the user-facing result:
+
+`AiScreen -> AiViewModel -> AiAgent -> AiProvider -> tool_calls -> confirmation -> WooGitToolExecutor -> verified/failed result -> AiAgent outcome context -> AiProvider final response -> AiViewModel chat message`
+
+For a multi-write response, `AiAgent` creates a `PendingBatchConfirmation`. `AiScreen` owns only selection UX; it must not fabricate a result card. After confirmation, every selected operation is executed and every rejected item is persisted as `REJECTED_BY_USER` in `AiWorkingMemoryStore`.
+
+The batch outcome context passed back to the model contains every item and its status:
+
+- `VERIFIED` — store mutation was confirmed.
+- `FAILED` — mutation was not successfully verified; the stored error/result is authoritative.
+- `REJECTED_BY_USER` — operation was not executed because it was not selected.
+
+The model must report every item in its normal assistant response. The UI displays that response as an ordinary chat message.
+
+`AiWorkingMemoryStore` is the recovery/audit source for execution state. It records batch item status and result, preserves `IN_FLIGHT` checkpoints, and prevents a resumed execution from treating an interrupted write as verified without checking the real store state first.
+
+## 7. AI image operations
+
+`WooGitToolExecutor.products_image_add` accepts an `AiAttachment`, uploads it through the WooGit media path, updates the product, then rereads the product and requires verification before returning success. A batch image operation therefore follows the same `execute -> reread -> verified` rule as other writes.
+
+A single selected image may intentionally be reused for multiple product image-add calls. When multiple source images are supplied, attachment-to-operation mapping must remain explicit before expanding batch semantics; the executor currently consumes the first attachment supplied to an image-add call.
+
+## 8. Reauthentication invariant
 
 When an authenticated request receives a session-invalidating response, the App may remove the affected session and invoke the configured reauthentication path. Reauthentication must call the existing verification/login contract; it must not fabricate or locally mint a session.
 
-## 7. Logout / disconnect
+## 9. Logout / disconnect
 
 `Logout/Disconnect -> revoke operational session -> revoke billing session -> clear local session/credential state according to disconnect policy -> return to connection/login state`
 
 Both session classes are part of the disconnect contract.
 
-## 8. Background operations
+## 10. Background operations
 
 Background workers include order polling, product catalog synchronization, announcements and force-update checks. Any worker that reaches WooCommerce through the backend must resolve the correct store/session context before issuing an operational request.
 
-## 9. Source-of-truth files
+## 11. Source-of-truth files
 
 - App session contract: `data/.../BackendSessionStore.kt` and `app/.../security/AndroidBackendSessionStore.kt`.
 - Backend transport: `BackendClient.kt`.
@@ -88,5 +112,8 @@ Background workers include order polling, product catalog synchronization, annou
 - Navigation/billing gate: `E11AppNavigation.kt`.
 - Dashboard concurrency/readiness: `DashboardViewModel.kt`.
 - Credential persistence: `AndroidSecureCredentialStore.kt`.
+- AI execution: `presentation/.../ai/AiAgent.kt`, `AiWorkingMemoryStore.kt`, `AiViewModel.kt`.
+- AI tool execution: `presentation/.../ai/WooGitToolExecutor.kt`.
+- AI confirmation UI: `presentation/.../ai/AiScreen.kt`.
 
 Always verify current paths/symbols before editing; this map is an index, not a substitute for source inspection.
