@@ -51,6 +51,20 @@ internal class AiWorkingMemoryStore(context: Context, private val storeKey: Stri
     }
 
     @Synchronized
+    fun recordOperation(conversationId: String, operation: JSONObject, progress: JSONObject? = null): JSONObject {
+        val state = read(conversationId) ?: ensure(conversationId, operation.optString("task", "Agent task"))
+        val operations = state.optJSONArray("operations") ?: JSONArray()
+        operations.put(operation.put("recordedAt", System.currentTimeMillis()))
+        while (operations.length() > MAX_OPERATIONS) operations.remove(0)
+        state.put("operations", operations)
+        progress?.let { state.put("progress", JSONObject(it.toString())) }
+        state.put("checkpoint", JSONObject(operation.toString()))
+        state.put("updatedAt", System.currentTimeMillis())
+        write(conversationId, state)
+        return state
+    }
+
+    @Synchronized
     fun checkpoint(conversationId: String, data: JSONObject): JSONObject {
         val state = read(conversationId) ?: ensure(conversationId, data.optString("task", "Agent task"))
         val checkpoint = data.optJSONObject("checkpoint") ?: data
@@ -134,5 +148,6 @@ internal class AiWorkingMemoryStore(context: Context, private val storeKey: Stri
     private companion object {
         const val MAX_TASK_LENGTH = 500
         const val MAX_SUMMARY_LENGTH = 2000
+        const val MAX_OPERATIONS = 200
     }
 }
