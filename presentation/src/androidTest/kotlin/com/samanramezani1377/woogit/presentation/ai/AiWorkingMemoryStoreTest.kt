@@ -6,7 +6,6 @@ import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
-import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -99,7 +98,7 @@ class AiWorkingMemoryStoreTest {
 
         val snapshot = store.read(CONVERSATION_ID) ?: error("Working Memory missing")
         assertEquals(8, snapshot.getJSONArray("operations").length())
-        assertTrue(snapshot.getJSONArray("operations").getJSONObject(0).getString("arguments").contains("page\\\":4"))
+        assertEquals("{\"page\":4}", snapshot.getJSONArray("operations").getJSONObject(0).getString("arguments"))
         assertNotEquals(0, snapshot.getString("executionId").length)
     }
 
