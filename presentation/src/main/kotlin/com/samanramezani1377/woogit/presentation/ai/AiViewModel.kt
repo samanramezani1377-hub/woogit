@@ -94,6 +94,16 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
         request(currentMessages() + AiMessage("user", value, currentAttachments.firstOrNull()), attachments = currentAttachments)
     }
 
+    fun retry(messageIndex: Int) {
+        if (_isGenerating.value) return
+        val messages = currentMessages()
+        if (messageIndex !in messages.indices || messages[messageIndex].role != "assistant") return
+        val userIndex = (messageIndex - 1 downTo 0).firstOrNull { messages[it].role == "user" } ?: return
+        val baseMessages = messages.take(userIndex + 1)
+        val userAttachments = messages[userIndex].attachment?.let { listOf(it) }.orEmpty()
+        request(baseMessages, attachments = userAttachments)
+    }
+
     fun confirm(pending: AgentReply) {
         val token = pending.confirmationToken ?: return
         request(currentMessages(), token, _attachments.value)
