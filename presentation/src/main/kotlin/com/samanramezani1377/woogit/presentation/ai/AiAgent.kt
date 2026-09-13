@@ -124,9 +124,15 @@ internal class AiAgent(
             )
             if (batchSelection.isEmpty()) {
                 return AgentReply(
-                    text = "هیچ موردی برای اجرا انتخاب نشد. موارد انتخاب‌نشده به‌عنوان REJECTED_BY_USER ثبت شدند.",
+                    text = "هیچ موردی برای اجرا انتخاب نشد. همه موارد به‌عنوان «اجرا نشد چون توسط کاربر انتخاب نشد» ثبت شدند.",
                 )
             }
+            appendBatchOutcomeContext(
+                pendingBatch,
+                conversationId,
+                working,
+            )
+            activateWorkingMemory(conversationId, messages, working)
         } else if (confirmationToken != null) {
             val action = pending.remove(confirmationToken)
                 ?: throw IllegalStateException(
@@ -167,7 +173,8 @@ internal class AiAgent(
                 ),
             )
             if (AiAgentTools.isWrite(action.name)) {
-                val json = JSONObject(result)
+                val json = runCatching { JSONObject(result) }
+                    .getOrElse { JSONObject().put("ok", false).put("error", result) }
                 if (!json.optBoolean("ok") || !json.optBoolean("verified")) {
                     recordOperation(
                         conversationId,
@@ -176,18 +183,15 @@ internal class AiAgent(
                         result,
                         "failed",
                     )
-                    return AgentReply(
-                        text = writeFailureMessage(json),
-                        attachments = resultAttachments,
+                } else {
+                    recordOperation(
+                        conversationId,
+                        action.name,
+                        action.arguments,
+                        result,
+                        "verified",
                     )
                 }
-                recordOperation(
-                    conversationId,
-                    action.name,
-                    action.arguments,
-                    result,
-                    "verified",
-                )
             } else {
                 recordOperation(
                     conversationId,
@@ -495,6 +499,46 @@ internal class AiAgent(
             }
         }
         return resultAttachments
+    }
+
+    private fun appendBatchOutcomeContext(
+        batch: PendingBatchConfirmation,
+        conversationId: String,
+        working: JSONArray,
+    ) {
+        val state = workingMemory.read(conversationId)
+        val batches = state?.optJSONArray("batches") ?: JSONArray()
+        val outcome = JSONArray()
+
+        for (i in 0 until batches.length()) {
+            val storedBatch = batches.optJSONObject(i) ?: continue
+            if (storedBatch.optString("batchId") != batch.token) continue
+
+            val items = storedBatch.optJSONArray("items") ?: JSONArray()
+            for (j in 0 until items.length()) {
+                val item = items.optJSONObject(j) ?: continue
+                outcome.put(
+                    JSONObject()
+                        .put("itemId", item.optString("itemId"))
+                        .put("status", item.optString("status"))
+                        .put("result", item.optString("result")),
+                )
+            }
+            break
+        }
+
+        working.put(
+            JSONObject()
+                .put("role", "system")
+                .put(
+                    "content",
+                    """Batch execution has completed. This is an internal execution report, not a user-facing message.
+Report every batch item in the final answer. VERIFIED means the write was confirmed by the store. FAILED means it was not successfully verified; report the actual error/result briefly. REJECTED_BY_USER means the item was not executed because the user did not select it. Never claim success for FAILED or REJECTED_BY_USER items.
+Batch token: ${batch.token}
+Per-item outcome:
+$outcome""".trimIndent(),
+                ),
+        )
     }
 
     private fun latestUserText(messages: List<Pair<String, String>>): String =
