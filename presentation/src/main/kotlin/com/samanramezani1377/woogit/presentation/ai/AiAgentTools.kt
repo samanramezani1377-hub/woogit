@@ -5,6 +5,7 @@ import org.json.JSONObject
 
 internal object AiAgentTools {
     fun definitions() = JSONArray().apply {
+        put(tool("calculator", "محاسبه‌گر امن داخلی WooGit. برای یک عبارت از expression و برای چند محاسبه مستقل از calculations استفاده کن. برای چند محصول، هر محصول را با id مستقل و expression جداگانه در calculations بده و نتیجه هرکدام را بگیر. فقط محاسبه انجام می‌دهد و هیچ محصولی را تغییر نمی‌دهد.", calculatorSchema()))
         put(tool("product_categories_list", "دسته‌بندی‌های محصولات فروشگاه را از مسیر WooGit پیدا کن. برای یافتن محصولات یک دسته، ابتدا با search نام دسته را پیدا کن و سپس id آن را به products_list به‌عنوان categoryId بده.", categoryListSchema()))
         put(tool("products_list", "فهرست محصولات با اطلاعات لازم برای تصمیم‌گیری؛ بدون بایت تصویر. برای جستجوی محصولات یک دسته از categoryId استفاده کن تا فقط همان دسته از فروشگاه درخواست شود. پاسخ pagination شامل endOfCollection و lastPage است و اگر endOfCollection=true بود دیگر صفحه بعدی را درخواست نکن.", listSchema()))
         put(tool("products_get", "جزئیات کامل محصول از مسیر WooGit؛ بدون ارسال بایت تصویر.", idSchema()))
@@ -25,6 +26,7 @@ internal object AiAgentTools {
     }
 
     fun label(name: String) = when (name) {
+        "calculator" -> "در حال انجام محاسبات"
         "product_categories_list" -> "در حال بررسی دسته‌بندی‌های محصولات"
         "products_list" -> "در حال بررسی فهرست محصولات"
         "products_get" -> "در حال دریافت محصول"
@@ -63,6 +65,12 @@ internal object AiAgentTools {
         ))
 
     private fun idSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("id", JSONObject().put("type", "integer").put("minimum", 1))).put("required", JSONArray().put("id"))
+    private fun calculatorSchema() = JSONObject().put("type", "object").put("properties", JSONObject()
+        .put("expression", JSONObject().put("type", "string").put("description", "عبارت ریاضی ساده؛ مانند 2500000 * 1.10"))
+        .put("calculations", JSONObject().put("type", "array").put("maxItems", 100).put("items", JSONObject().put("type", "object").put("properties", JSONObject()
+            .put("id", JSONObject().put("type", "string").put("description", "شناسه مستقل، مثلاً product ID"))
+            .put("expression", JSONObject().put("type", "string"))
+        ).put("required", JSONArray().put("id").put("expression")))))
     private fun categoryListSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("page", JSONObject().put("type", "integer").put("minimum", 1)).put("perPage", JSONObject().put("type", "integer").put("minimum", 1).put("maximum", 100)).put("search", JSONObject().put("type", "string")))
     private fun listSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("page", JSONObject().put("type", "integer").put("minimum", 1)).put("perPage", JSONObject().put("type", "integer").put("minimum", 1).put("maximum", 99)).put("search", JSONObject().put("type", "string")).put("status", JSONObject().put("type", "string")).put("categoryId", JSONObject().put("type", "integer").put("minimum", 1)))
     private fun imageSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("id", JSONObject().put("type", "integer").put("minimum", 1)).put("imageIndex", JSONObject().put("type", "integer").put("minimum", 0))).put("required", JSONArray().put("id"))
