@@ -5,218 +5,42 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 
-/** Crash-safe, per-conversation working state for Agent tasks. */
 internal class AiWorkingMemoryStore(context: Context, private val storeKey: String) {
     private val prefs = context.applicationContext.getSharedPreferences("woogit_ai_working_memory", Context.MODE_PRIVATE)
     private val prefix = "working_${storeKey}_"
-
     @Synchronized fun read(conversationId: String): JSONObject? = readRaw(conversationId)?.let(::promptSnapshot)
-
-    @Synchronized fun ensure(conversationId: String, task: String): JSONObject {
-        val existing = readRaw(conversationId)
-        if (existing != null) return existing
-        return newState(conversationId, task).also { write(conversationId, it) }
-    }
-
+    @Synchronized fun ensure(conversationId: String, task: String): JSONObject { val existing = readRaw(conversationId); if (existing != null) return existing; return newState(conversationId, task).also { write(conversationId, it) } }
     @Synchronized fun beginNewExecution(conversationId: String, task: String): JSONObject {
-        val previous = readRaw(conversationId)
-        val state = newState(conversationId, task)
+        val previous = readRaw(conversationId); val state = newState(conversationId, task)
         if (previous != null) {
             val history = previous.optJSONArray("executionHistory") ?: JSONArray()
-            history.put(JSONObject().apply {
-                put("executionId", previous.optString("executionId"))
-                put("task", previous.optString("task"))
-                put("status", previous.optString("status"))
-                put("summary", previous.optString("summary"))
-                put("progress", previous.optJSONObject("progress") ?: JSONObject())
-                put("checkpoint", previous.optJSONObject("checkpoint") ?: JSONObject())
-                put("lastOperation", previous.optString("lastOperation"))
-                put("nextOperation", previous.optString("nextOperation"))
-                put("batches", tail(previous.optJSONArray("batches"), BATCH_HISTORY_LIMIT))
-            })
+            history.put(JSONObject().apply { put("executionId", previous.optString("executionId")); put("task", previous.optString("task")); put("status", previous.optString("status")); put("summary", previous.optString("summary")); put("progress", previous.optJSONObject("progress") ?: JSONObject()); put("checkpoint", previous.optJSONObject("checkpoint") ?: JSONObject()); put("lastOperation", previous.optString("lastOperation")); put("nextOperation", previous.optString("nextOperation")); put("batches", tail(previous.optJSONArray("batches"), BATCH_HISTORY_LIMIT)) })
             while (history.length() > MAX_EXECUTION_HISTORY) history.remove(0)
             state.put("executionHistory", history)
+            state.put("batches", tail(previous.optJSONArray("batches"), BATCH_HISTORY_LIMIT))
         }
-        write(conversationId, state)
-        return promptSnapshot(state)
+        write(conversationId, state); return promptSnapshot(state)
     }
-
-    @Synchronized fun resume(conversationId: String): JSONObject {
-        val state = readRaw(conversationId) ?: return JSONObject().put("status", "empty")
-        state.put("status", "active").put("resumedAt", System.currentTimeMillis()).put("updatedAt", System.currentTimeMillis())
-        write(conversationId, state)
-        return promptSnapshot(state)
-    }
-
-    @Synchronized fun beginInFlightOperation(conversationId: String, operation: JSONObject): JSONObject {
-        val state = readRaw(conversationId) ?: newState(conversationId, operation.optString("task", "Agent task"))
-        val fingerprint = operation.optString("fingerprint").ifBlank { fingerprintOf(operation.optString("tool"), operation.optString("arguments")) }
-        state.put("checkpoint", JSONObject(operation.toString()).put("fingerprint", fingerprint).put("status", "in_flight").put("startedAt", System.currentTimeMillis()))
-        state.put("lastOperation", operation.optString("tool")).put("updatedAt", System.currentTimeMillis())
-        write(conversationId, state)
-        return promptSnapshot(state)
-    }
-
-    @Synchronized fun createBatch(conversationId: String, batchId: String, task: String, items: JSONArray): JSONObject {
-        val state = readRaw(conversationId) ?: newState(conversationId, task)
-        val batches = state.optJSONArray("batches") ?: JSONArray()
-        batches.put(JSONObject().put("batchId", batchId).put("task", task.take(MAX_TASK_LENGTH)).put("status", "awaiting_confirmation").put("createdAt", System.currentTimeMillis()).put("items", JSONArray(items.toString())))
-        while (batches.length() > MAX_BATCHES) batches.remove(0)
-        state.put("batches", batches).put("updatedAt", System.currentTimeMillis())
-        write(conversationId, state)
-        return promptSnapshot(state)
-    }
-
-    @Synchronized fun updateBatchItem(conversationId: String, batchId: String, itemId: String, status: String, result: String = ""): JSONObject? {
-        val state = readRaw(conversationId) ?: return null
-        val batches = state.optJSONArray("batches") ?: return promptSnapshot(state)
-        for (i in 0 until batches.length()) {
-            val batch = batches.optJSONObject(i) ?: continue
-            if (batch.optString("batchId") != batchId) continue
-            val items = batch.optJSONArray("items") ?: JSONArray()
-            for (j in 0 until items.length()) {
-                val item = items.optJSONObject(j) ?: continue
-                if (item.optString("itemId") == itemId) {
-                    item.put("status", status).put("updatedAt", System.currentTimeMillis())
-                    if (result.isNotBlank()) item.put("result", result.take(MAX_RESULT_LENGTH))
-                    break
-                }
-            }
-            val counts = countBatchStatuses(items)
-            batch.put("counts", counts)
-            if (counts.optInt("pending", 0) == 0) batch.put("status", if (counts.optInt("failed", 0) > 0) "completed_with_failures" else "completed")
-            break
-        }
-        state.put("updatedAt", System.currentTimeMillis())
-        write(conversationId, state)
-        return promptSnapshot(state)
-    }
-
-    @Synchronized fun update(conversationId: String, data: JSONObject): JSONObject {
-        val state = readRaw(conversationId) ?: newState(conversationId, data.optString("task", "Agent task"))
-        data.optString("task").takeIf { it.isNotBlank() }?.let { state.put("task", it.take(MAX_TASK_LENGTH)) }
-        data.optString("status").takeIf { it.isNotBlank() }?.let { state.put("status", it) }
-        data.optString("summary").takeIf { it.isNotBlank() }?.let { state.put("summary", it.take(MAX_SUMMARY_LENGTH)) }
-        data.optString("lastOperation").takeIf { it.isNotBlank() }?.let { state.put("lastOperation", it) }
-        data.optString("nextOperation").takeIf { it.isNotBlank() }?.let { state.put("nextOperation", it) }
-        data.optJSONObject("progress")?.let { state.put("progress", mergeObject(state.optJSONObject("progress") ?: JSONObject(), it)) }
-        data.optJSONObject("checkpoint")?.let { state.put("checkpoint", JSONObject(it.toString())) }
-        state.put("updatedAt", System.currentTimeMillis())
-        write(conversationId, state)
-        return promptSnapshot(state)
-    }
-
-    @Synchronized fun recordOperation(conversationId: String, operation: JSONObject, progress: JSONObject? = null): JSONObject {
-        val state = readRaw(conversationId) ?: newState(conversationId, operation.optString("task", "Agent task"))
-        val operations = state.optJSONArray("operations") ?: JSONArray()
-        val normalized = JSONObject(operation.toString())
-        val fingerprint = normalized.optString("fingerprint").ifBlank { fingerprintOf(normalized.optString("tool"), normalized.optString("arguments")) }
-        var duplicate = false
-        for (i in 0 until operations.length()) if (operations.optJSONObject(i)?.optString("fingerprint") == fingerprint) { duplicate = true; break }
-        if (!duplicate) {
-            normalized.put("fingerprint", fingerprint).put("recordedAt", System.currentTimeMillis())
-            operations.put(normalized)
-            while (operations.length() > MAX_OPERATIONS) operations.remove(0)
-        }
-        progress?.let { state.put("progress", mergeObject(state.optJSONObject("progress") ?: JSONObject(), it)) }
-        state.put("checkpoint", JSONObject(normalized.toString()))
-        normalized.optString("tool").takeIf { it.isNotBlank() }?.let { state.put("lastOperation", it) }
-        state.put("updatedAt", System.currentTimeMillis())
-        write(conversationId, state)
-        return promptSnapshot(state)
-    }
-
-    @Synchronized fun checkpoint(conversationId: String, data: JSONObject): JSONObject {
-        val state = readRaw(conversationId) ?: newState(conversationId, data.optString("task", "Agent task"))
-        state.put("checkpoint", JSONObject((data.optJSONObject("checkpoint") ?: data).toString()))
-        data.optJSONObject("progress")?.let { state.put("progress", mergeObject(state.optJSONObject("progress") ?: JSONObject(), it)) }
-        data.optString("lastOperation").takeIf { it.isNotBlank() }?.let { state.put("lastOperation", it) }
-        data.optString("nextOperation").takeIf { it.isNotBlank() }?.let { state.put("nextOperation", it) }
-        state.put("updatedAt", System.currentTimeMillis())
-        write(conversationId, state)
-        return promptSnapshot(state)
-    }
-
-    @Synchronized fun complete(conversationId: String, summary: String): JSONObject? {
-        val state = readRaw(conversationId) ?: return null
-        state.put("status", "completed").put("summary", summary.take(MAX_SUMMARY_LENGTH)).put("updatedAt", System.currentTimeMillis())
-        write(conversationId, state)
-        return promptSnapshot(state)
-    }
-
-    @Synchronized fun compact(conversationId: String): JSONObject? {
-        val state = readRaw(conversationId) ?: return null
-        compactInPlace(state)
-        state.put("updatedAt", System.currentTimeMillis())
-        write(conversationId, state)
-        return promptSnapshot(state)
-    }
-
+    @Synchronized fun resume(conversationId: String): JSONObject { val state = readRaw(conversationId) ?: return JSONObject().put("status", "empty"); state.put("status", "active").put("resumedAt", System.currentTimeMillis()).put("updatedAt", System.currentTimeMillis()); write(conversationId, state); return promptSnapshot(state) }
+    @Synchronized fun beginInFlightOperation(conversationId: String, operation: JSONObject): JSONObject { val state = readRaw(conversationId) ?: newState(conversationId, operation.optString("task", "Agent task")); val fingerprint = operation.optString("fingerprint").ifBlank { fingerprintOf(operation.optString("tool"), operation.optString("arguments")) }; state.put("checkpoint", JSONObject(operation.toString()).put("fingerprint", fingerprint).put("status", "in_flight").put("startedAt", System.currentTimeMillis())); state.put("lastOperation", operation.optString("tool")).put("updatedAt", System.currentTimeMillis()); write(conversationId, state); return promptSnapshot(state) }
+    @Synchronized fun createBatch(conversationId: String, batchId: String, task: String, items: JSONArray): JSONObject { val state = readRaw(conversationId) ?: newState(conversationId, task); val batches = state.optJSONArray("batches") ?: JSONArray(); batches.put(JSONObject().put("batchId", batchId).put("task", task.take(MAX_TASK_LENGTH)).put("status", "awaiting_confirmation").put("createdAt", System.currentTimeMillis()).put("items", JSONArray(items.toString()))); while (batches.length() > MAX_BATCHES) batches.remove(0); state.put("batches", batches).put("updatedAt", System.currentTimeMillis()); write(conversationId, state); return promptSnapshot(state) }
+    @Synchronized fun updateBatchItem(conversationId: String, batchId: String, itemId: String, status: String, result: String = ""): JSONObject? { val state = readRaw(conversationId) ?: return null; val batches = state.optJSONArray("batches") ?: return promptSnapshot(state); for (i in 0 until batches.length()) { val batch = batches.optJSONObject(i) ?: continue; if (batch.optString("batchId") != batchId) continue; val items = batch.optJSONArray("items") ?: JSONArray(); for (j in 0 until items.length()) { val item = items.optJSONObject(j) ?: continue; if (item.optString("itemId") == itemId) { item.put("status", status).put("updatedAt", System.currentTimeMillis()); if (result.isNotBlank()) item.put("result", result.take(MAX_RESULT_LENGTH)); break } }; val counts = countBatchStatuses(items); batch.put("counts", counts); if (counts.optInt("pending", 0) == 0) batch.put("status", if (counts.optInt("failed", 0) > 0) "completed_with_failures" else "completed"); break }; state.put("updatedAt", System.currentTimeMillis()); write(conversationId, state); return promptSnapshot(state) }
+    @Synchronized fun update(conversationId: String, data: JSONObject): JSONObject { val state = readRaw(conversationId) ?: newState(conversationId, data.optString("task", "Agent task")); data.optString("task").takeIf { it.isNotBlank() }?.let { state.put("task", it.take(MAX_TASK_LENGTH)) }; data.optString("status").takeIf { it.isNotBlank() }?.let { state.put("status", it) }; data.optString("summary").takeIf { it.isNotBlank() }?.let { state.put("summary", it.take(MAX_SUMMARY_LENGTH)) }; data.optString("lastOperation").takeIf { it.isNotBlank() }?.let { state.put("lastOperation", it) }; data.optString("nextOperation").takeIf { it.isNotBlank() }?.let { state.put("nextOperation", it) }; data.optJSONObject("progress")?.let { state.put("progress", mergeObject(state.optJSONObject("progress") ?: JSONObject(), it)) }; data.optJSONObject("checkpoint")?.let { state.put("checkpoint", JSONObject(it.toString())) }; state.put("updatedAt", System.currentTimeMillis()); write(conversationId, state); return promptSnapshot(state) }
+    @Synchronized fun recordOperation(conversationId: String, operation: JSONObject, progress: JSONObject? = null): JSONObject { val state = readRaw(conversationId) ?: newState(conversationId, operation.optString("task", "Agent task")); val operations = state.optJSONArray("operations") ?: JSONArray(); val normalized = JSONObject(operation.toString()); val fingerprint = normalized.optString("fingerprint").ifBlank { fingerprintOf(normalized.optString("tool"), normalized.optString("arguments")) }; var duplicate = false; for (i in 0 until operations.length()) if (operations.optJSONObject(i)?.optString("fingerprint") == fingerprint) { duplicate = true; break }; if (!duplicate) { normalized.put("fingerprint", fingerprint).put("recordedAt", System.currentTimeMillis()); operations.put(normalized); while (operations.length() > MAX_OPERATIONS) operations.remove(0) }; progress?.let { state.put("progress", mergeObject(state.optJSONObject("progress") ?: JSONObject(), it)) }; state.put("checkpoint", JSONObject(normalized.toString())); normalized.optString("tool").takeIf { it.isNotBlank() }?.let { state.put("lastOperation", it) }; state.put("updatedAt", System.currentTimeMillis()); write(conversationId, state); return promptSnapshot(state) }
+    @Synchronized fun checkpoint(conversationId: String, data: JSONObject): JSONObject { val state = readRaw(conversationId) ?: newState(conversationId, data.optString("task", "Agent task")); state.put("checkpoint", JSONObject((data.optJSONObject("checkpoint") ?: data).toString())); data.optJSONObject("progress")?.let { state.put("progress", mergeObject(state.optJSONObject("progress") ?: JSONObject(), it)) }; data.optString("lastOperation").takeIf { it.isNotBlank() }?.let { state.put("lastOperation", it) }; data.optString("nextOperation").takeIf { it.isNotBlank() }?.let { state.put("nextOperation", it) }; state.put("updatedAt", System.currentTimeMillis()); write(conversationId, state); return promptSnapshot(state) }
+    @Synchronized fun complete(conversationId: String, summary: String): JSONObject? { val state = readRaw(conversationId) ?: return null; state.put("status", "completed").put("summary", summary.take(MAX_SUMMARY_LENGTH)).put("updatedAt", System.currentTimeMillis()); write(conversationId, state); return promptSnapshot(state) }
+    @Synchronized fun compact(conversationId: String): JSONObject? { val state = readRaw(conversationId) ?: return null; compactInPlace(state); state.put("updatedAt", System.currentTimeMillis()); write(conversationId, state); return promptSnapshot(state) }
     @Synchronized fun clear(conversationId: String): Boolean = prefs.edit().remove(key(conversationId)).commit()
-
-    fun tool(conversationId: String, arguments: JSONObject): JSONObject = runCatching {
-        when (arguments.optString("operation").trim().lowercase()) {
-            "read" -> read(conversationId) ?: JSONObject().put("status", "empty")
-            "update" -> update(conversationId, arguments.optJSONObject("data") ?: JSONObject())
-            "checkpoint" -> checkpoint(conversationId, arguments.optJSONObject("data") ?: JSONObject())
-            "resume" -> resume(conversationId)
-            "compact" -> compact(conversationId) ?: JSONObject().put("status", "empty")
-            "complete" -> complete(conversationId, arguments.optString("summary")) ?: JSONObject().put("status", "empty")
-            "clear" -> JSONObject().put("cleared", clear(conversationId))
-            else -> JSONObject().put("error", "unknown working memory operation")
-        }
-    }.getOrElse { JSONObject().put("error", it.message ?: "working memory operation failed") }
-
-    private fun newState(conversationId: String, task: String): JSONObject {
-        val now = System.currentTimeMillis()
-        return JSONObject().put("version", 4).put("executionId", UUID.randomUUID().toString()).put("conversationId", conversationId)
-            .put("task", task.take(MAX_TASK_LENGTH)).put("status", "active").put("createdAt", now).put("updatedAt", now)
-            .put("progress", JSONObject().put("total", 0).put("completed", 0).put("failed", 0).put("remaining", 0))
-            .put("targets", JSONArray()).put("calculations", JSONArray()).put("operations", JSONArray()).put("errors", JSONArray()).put("batches", JSONArray())
-            .put("checkpoint", JSONObject()).put("summary", "").put("executionHistory", JSONArray())
-    }
-
+    fun tool(conversationId: String, arguments: JSONObject): JSONObject = runCatching { when (arguments.optString("operation").trim().lowercase()) { "read" -> read(conversationId) ?: JSONObject().put("status", "empty"); "update" -> update(conversationId, arguments.optJSONObject("data") ?: JSONObject()); "checkpoint" -> checkpoint(conversationId, arguments.optJSONObject("data") ?: JSONObject()); "resume" -> resume(conversationId); "compact" -> compact(conversationId) ?: JSONObject().put("status", "empty"); "complete" -> complete(conversationId, arguments.optString("summary")) ?: JSONObject().put("status", "empty"); "clear" -> JSONObject().put("cleared", clear(conversationId)); else -> JSONObject().put("error", "unknown working memory operation") } }.getOrElse { JSONObject().put("error", it.message ?: "working memory operation failed") }
+    private fun newState(conversationId: String, task: String): JSONObject { val now = System.currentTimeMillis(); return JSONObject().put("version", 4).put("executionId", UUID.randomUUID().toString()).put("conversationId", conversationId).put("task", task.take(MAX_TASK_LENGTH)).put("status", "active").put("createdAt", now).put("updatedAt", now).put("progress", JSONObject().put("total", 0).put("completed", 0).put("failed", 0).put("remaining", 0)).put("targets", JSONArray()).put("calculations", JSONArray()).put("operations", JSONArray()).put("errors", JSONArray()).put("batches", JSONArray()).put("checkpoint", JSONObject()).put("summary", "").put("executionHistory", JSONArray()) }
     private fun readRaw(conversationId: String): JSONObject? = runCatching { prefs.getString(key(conversationId), null)?.let { JSONObject(it) } }.getOrNull()
-
-    private fun promptSnapshot(state: JSONObject): JSONObject = JSONObject().apply {
-        put("version", state.optInt("version", 4)); put("executionId", state.optString("executionId")); put("conversationId", state.optString("conversationId")); put("task", state.optString("task")); put("status", state.optString("status"))
-        put("progress", state.optJSONObject("progress") ?: JSONObject()); put("checkpoint", state.optJSONObject("checkpoint") ?: JSONObject()); put("lastOperation", state.optString("lastOperation")); put("nextOperation", state.optString("nextOperation")); put("summary", state.optString("summary"))
-        put("operations", tail(state.optJSONArray("operations"), PROMPT_OPERATION_LIMIT)); put("errors", tail(state.optJSONArray("errors"), PROMPT_ERROR_LIMIT)); put("batches", tail(state.optJSONArray("batches"), BATCH_HISTORY_LIMIT))
-    }
-
-    private fun countBatchStatuses(items: JSONArray): JSONObject {
-        val counts = JSONObject().put("pending", 0).put("approved", 0).put("rejected", 0).put("verified", 0).put("failed", 0)
-        for (i in 0 until items.length()) when (items.optJSONObject(i)?.optString("status")) {
-            "APPROVED", "NOT_STARTED", "IN_FLIGHT" -> counts.put("pending", counts.optInt("pending") + 1)
-            "REJECTED_BY_USER" -> counts.put("rejected", counts.optInt("rejected") + 1)
-            "VERIFIED" -> counts.put("verified", counts.optInt("verified") + 1)
-            "FAILED" -> counts.put("failed", counts.optInt("failed") + 1)
-            else -> counts.put("pending", counts.optInt("pending") + 1)
-        }
-        return counts
-    }
-
-    private fun tail(source: JSONArray?, limit: Int): JSONArray {
-        val result = JSONArray(); if (source == null) return result
-        for (i in maxOf(0, source.length() - limit) until source.length()) result.put(source.opt(i))
-        return result
-    }
-
-    private fun compactInPlace(state: JSONObject) {
-        state.put("operations", tail(state.optJSONArray("operations"), COMPACT_OPERATION_LIMIT)); state.put("errors", tail(state.optJSONArray("errors"), COMPACT_ERROR_LIMIT)); state.put("batches", tail(state.optJSONArray("batches"), BATCH_HISTORY_LIMIT)); state.remove("targets"); state.remove("calculations")
-    }
-
-    private fun mergeObject(target: JSONObject, source: JSONObject): JSONObject {
-        val iterator = source.keys()
-        while (iterator.hasNext()) { val name = iterator.next(); target.put(name, source.get(name)) }
-        return target
-    }
-
+    private fun promptSnapshot(state: JSONObject): JSONObject = JSONObject().apply { put("version", state.optInt("version", 4)); put("executionId", state.optString("executionId")); put("conversationId", state.optString("conversationId")); put("task", state.optString("task")); put("status", state.optString("status")); put("progress", state.optJSONObject("progress") ?: JSONObject()); put("checkpoint", state.optJSONObject("checkpoint") ?: JSONObject()); put("lastOperation", state.optString("lastOperation")); put("nextOperation", state.optString("nextOperation")); put("summary", state.optString("summary")); put("operations", tail(state.optJSONArray("operations"), PROMPT_OPERATION_LIMIT)); put("errors", tail(state.optJSONArray("errors"), PROMPT_ERROR_LIMIT)); put("batches", tail(state.optJSONArray("batches"), BATCH_HISTORY_LIMIT)) }
+    private fun countBatchStatuses(items: JSONArray): JSONObject { val counts = JSONObject().put("pending", 0).put("approved", 0).put("rejected", 0).put("verified", 0).put("failed", 0); for (i in 0 until items.length()) when (items.optJSONObject(i)?.optString("status")) { "APPROVED", "NOT_STARTED", "IN_FLIGHT" -> counts.put("pending", counts.optInt("pending") + 1); "REJECTED_BY_USER" -> counts.put("rejected", counts.optInt("rejected") + 1); "VERIFIED" -> counts.put("verified", counts.optInt("verified") + 1); "FAILED" -> counts.put("failed", counts.optInt("failed") + 1); else -> counts.put("pending", counts.optInt("pending") + 1) }; return counts }
+    private fun tail(source: JSONArray?, limit: Int): JSONArray { val result = JSONArray(); if (source == null) return result; for (i in maxOf(0, source.length() - limit) until source.length()) result.put(source.opt(i)); return result }
+    private fun compactInPlace(state: JSONObject) { state.put("operations", tail(state.optJSONArray("operations"), COMPACT_OPERATION_LIMIT)); state.put("errors", tail(state.optJSONArray("errors"), COMPACT_ERROR_LIMIT)); state.put("batches", tail(state.optJSONArray("batches"), BATCH_HISTORY_LIMIT)); state.remove("targets"); state.remove("calculations") }
+    private fun mergeObject(target: JSONObject, source: JSONObject): JSONObject { val iterator = source.keys(); while (iterator.hasNext()) { val name = iterator.next(); target.put(name, source.get(name)) }; return target }
     private fun fingerprintOf(tool: String, arguments: String): String = "$tool|$arguments".hashCode().toString()
     private fun write(conversationId: String, state: JSONObject) { prefs.edit().putString(key(conversationId), state.toString()).commit() }
     private fun key(conversationId: String) = "$prefix$conversationId"
-
-    private companion object {
-        const val MAX_TASK_LENGTH = 500; const val MAX_SUMMARY_LENGTH = 2000; const val MAX_RESULT_LENGTH = 500; const val MAX_OPERATIONS = 200; const val MAX_BATCHES = 20; const val BATCH_HISTORY_LIMIT = 5; const val MAX_EXECUTION_HISTORY = 10; const val PROMPT_OPERATION_LIMIT = 8; const val PROMPT_ERROR_LIMIT = 8; const val COMPACT_OPERATION_LIMIT = 100; const val COMPACT_ERROR_LIMIT = 100
-    }
+    private companion object { const val MAX_TASK_LENGTH = 500; const val MAX_SUMMARY_LENGTH = 2000; const val MAX_RESULT_LENGTH = 500; const val MAX_OPERATIONS = 200; const val MAX_BATCHES = 20; const val BATCH_HISTORY_LIMIT = 5; const val MAX_EXECUTION_HISTORY = 10; const val PROMPT_OPERATION_LIMIT = 8; const val PROMPT_ERROR_LIMIT = 8; const val COMPACT_OPERATION_LIMIT = 100; const val COMPACT_ERROR_LIMIT = 100 }
 }
