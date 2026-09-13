@@ -153,10 +153,39 @@ internal class AiAgent(
         return actions.count(normalized::contains) >= 2 || userText.length >= 260
     }
 
+    private fun shouldResumeWorkingMemory(messages: List<Pair<String, String>>): Boolean {
+        val userText = messages.asReversed().firstOrNull { it.first.equals("user", ignoreCase = true) }?.second?.trim().orEmpty().lowercase()
+        if (userText.isBlank()) return false
+        return listOf("ادامه بده", "ادامه بده", "ادامه کار", "از همونجا", "از همانجا", "ادامه", "resume", "continue").any(userText::contains)
+    }
+
     private fun activateWorkingMemory(conversationId: String, messages: List<Pair<String, String>>, working: JSONArray) {
         val existing = workingMemory.read(conversationId)
         val state = workingMemory.ensure(conversationId, messages.asReversed().firstOrNull { it.first.equals("user", ignoreCase = true) }?.second.orEmpty())
-        if (existing?.optString("status") == "active") return
+        if (existing?.optString("status") == "active") {
+            if (shouldResumeWorkingMemory(messages)) {
+                val snapshot = JSONObject().apply {
+                    put("executionId", state.optString("executionId"))
+                    put("task", state.optString("task"))
+                    put("status", state.optString("status"))
+                    put("progress", state.optJSONObject("progress") ?: JSONObject())
+                    put("checkpoint", state.optJSONObject("checkpoint") ?: JSONObject())
+                    put("summary", state.optString("summary"))
+                    put("operations", state.optJSONArray("operations") ?: JSONArray())
+                    put("errors", state.optJSONArray("errors") ?: JSONArray())
+                }
+                working.put(JSONObject().put("role", "system").put("content", """
+این پیام یک درخواست برای ادامه دادن اجرای قبلی است. Working Memory فعال قبلی را ادامه بده؛ اجرای جدید شروع نکن.
+کارهایی که در operations ثبت شده‌اند را دوباره انجام نده، مگر اینکه نتیجه ثبت‌شده شکست خورده باشد.
+ابتدا checkpoint و progress را مبنای ادامه قرار بده و فقط بخش باقی‌مانده را انجام بده.
+اگر برای تعیین مرحله بعد لازم است، از ابزار working_memory با operation=read استفاده کن. بعد از هر موفقیت واقعی checkpoint را به‌روز کن.
+وضعیت فعلی Working Memory:
+$snapshot
+این وضعیت داخلی است و نباید عیناً به کاربر نمایش داده شود.
+""".trimIndent()))
+            }
+            return
+        }
         val progress = state.optJSONObject("progress") ?: JSONObject()
         progress.put("phase", "execution")
         progress.put("autoActivated", true)
@@ -182,7 +211,7 @@ $workingSnapshot
 فقط یک پاسخ نهایی و قابل‌فهم برای کاربر بنویس و بر اساس نتایج واقعی همین اجرا بگو:
 - چه کارهایی با موفقیت انجام شد؛
 - اگر کار کامل نشده، دقیقاً چه مقدار/چه بخشی باقی مانده است؛
-- اگر ادامه کار با درخواست بعدی یا اجرای مجدد لازم است، واضح بگو.
+- اگر ادامه کار با درخواست بعدی لازم است، واضح بگو که کاربر با گفتن «ادامه بده» می‌تواند از وضعیت ذخیره‌شده ادامه دهد.
 هرگز ادعا نکن کاری انجام شده که در نتایج ابزارها تأیید نشده است.
 اگر Working Memory فعال است، از checkpoint و progress آن برای توضیح وضعیت استفاده کن، اما محتوای داخلی آن را عیناً نمایش نده.
 این مرحله فقط برای تولید پاسخ نهایی است و نباید هیچ tool callای تولید کند.
@@ -202,7 +231,7 @@ $workingMemoryContext
         val progress = state?.optJSONObject("progress")
         val completed = progress?.optInt("completed", -1) ?: -1
         val total = progress?.optInt("total", -1) ?: -1
-        return if (completed >= 0 && total > 0) "بخشی از کار انجام شد و اجرای ابزارها به سقف این مرحله رسید: $completed از $total مورد تکمیل شده است. وضعیت کار ذخیره شده و می‌توان از نقطه ادامه، اجرای آن را ادامه داد." else "بخشی از کار انجام شد، اما سقف اجرای ابزارها در این مرحله رسید. نتیجه‌های انجام‌شده حفظ شده‌اند و می‌توان کار را از وضعیت فعلی ادامه داد."
+        return if (completed >= 0 && total > 0) "بخشی از کار انجام شد و اجرای ابزارها به سقف این مرحله رسید: $completed از $total مورد تکمیل شده است. وضعیت کار ذخیره شده و می‌توان با گفتن «ادامه بده» از همین نقطه ادامه داد." else "بخشی از کار انجام شد، اما سقف اجرای ابزارها در این مرحله رسید. نتیجه‌های انجام‌شده حفظ شده‌اند و می‌توان با گفتن «ادامه بده» کار را از وضعیت فعلی ادامه داد."
     }
 
     private suspend fun executeTool(name: String, arguments: String, attachments: List<AiAttachment>, conversationId: String): String {
