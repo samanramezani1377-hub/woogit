@@ -44,7 +44,7 @@ class TypedWooCommerceApi(private val raw: WooCommerceApi) {
     suspend fun orderNotes(b:String,id:Long,page:Int=1,perPage:Int=100) = decode(raw.listOrderNotes(b,id,page,perPage)) { typedJson.decodeFromString<List<WooOrderNoteDto>>(it) }
     suspend fun addOrderNote(b:String,id:Long,n:WooOrderNoteDto,idempotencyKey:String?=null) = decode(raw.addOrderNote(b,id,typedJson.encodeToString(n),idempotencyKey)) { typedJson.decodeFromString<WooOrderNoteDto>(it) }
     suspend fun salesReport(b:String,dateMin:String,dateMax:String) = decode(raw.salesReport(b,dateMin,dateMax)) { typedJson.decodeFromString<List<WooSalesReportDto>>(it).firstOrNull() ?: WooSalesReportDto() }
-    suspend fun products(b:String,p:Int,n:Int,s:String?,modifiedAfter:String?=null) = decode(raw.listProducts(b,p,n,s,modifiedAfter)) { typedJson.decodeFromString<List<WooProductTypedDto>>(it) }
+    suspend fun products(b:String,p:Int,n:Int,s:String?,modifiedAfter:String?=null,categoryId:Long?=null) = decode(raw.listProducts(b,p,n,s,modifiedAfter,categoryId)) { typedJson.decodeFromString<List<WooProductTypedDto>>(it) }
     suspend fun productsTotal(b:String,s:String?) = total(raw.listProducts(b,1,1,s))
     suspend fun product(b:String,id:Long) = decode(raw.getProduct(b,id)) { typedJson.decodeFromString<WooProductTypedDto>(it) }
     suspend fun createProduct(b:String,p:WooProductTypedDto,idempotencyKey:String?=null) = decode(raw.createProduct(b,typedJson.encodeToString(p),idempotencyKey)) { typedJson.decodeFromString<WooProductTypedDto>(it) }
