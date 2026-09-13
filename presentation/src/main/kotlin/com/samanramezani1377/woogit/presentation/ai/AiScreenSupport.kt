@@ -1,16 +1,25 @@
 package com.samanramezani1377.woogit.presentation.ai
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.graphics.BitmapFactory
+import android.widget.Toast
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.samanramezani1377.woogit.presentation.GlassOutlinedButton
@@ -54,11 +63,73 @@ internal fun formatToolArguments(raw: String): String = runCatching {
     buildString { json.keys().forEach { key -> val value = json.opt(key); if (length > 0) append("\n"); append(labels[key] ?: key); append(": "); append(if (value is JSONArray || value is JSONObject) value.toString() else value.toString()) } }
 }.getOrElse { raw }
 
+private fun markdownLine(line: String): String {
+    Regex("^\\s*[-*+]\\s+(.*)$").find(line)?.let { return "• ${it.groupValues[1]}" }
+    Regex("^\\s*(\\d+)[.)]\\s+(.*)$").find(line)?.let { return "${it.groupValues[1]}. ${it.groupValues[2]}" }
+    return line
+}
+
+private fun markdownAnnotated(text: String): AnnotatedString {
+    val builder = AnnotatedString.Builder()
+    val matches = (Regex("\\*\\*(.+?)\\*\\*").findAll(text).map { it to SpanStyle(fontWeight = FontWeight.Bold) } + Regex("`([^`]+)`").findAll(text).map { it to SpanStyle(fontFamily = FontFamily.Monospace) }).sortedBy { it.first.range.first }
+    var cursor = 0
+    for ((match, style) in matches) {
+        if (match.range.first < cursor) continue
+        builder.append(text.substring(cursor, match.range.first))
+        builder.pushStyle(style)
+        builder.append(match.groupValues[1])
+        builder.pop()
+        cursor = match.range.last + 1
+    }
+    builder.append(text.substring(cursor))
+    return builder.toAnnotatedString()
+}
+
+@Composable
+private fun MarkdownMessage(text: String) {
+    val lines = text.replace("\\r\\n", "\\n").replace("\\r", "\\n").split('\n')
+    var inCode = false
+    var code = StringBuilder()
+    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        lines.forEach { raw ->
+            val line = raw.trimEnd()
+            if (line.trimStart().startsWith("```") ) {
+                if (inCode) {
+                    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Color.Black.copy(alpha = .07f)).padding(10.dp)) {
+                        Text(code.toString().trimEnd(), color = GlassTokens.ink, fontFamily = FontFamily.Monospace)
+                    }
+                    code = StringBuilder()
+                    inCode = false
+                } else inCode = true
+                return@forEach
+            }
+            if (inCode) {
+                code.append(line).append('\n')
+                return@forEach
+            }
+            if (line.isBlank()) Spacer(Modifier.height(4.dp))
+            else Text(markdownAnnotated(markdownLine(line)), color = GlassTokens.ink)
+        }
+        if (inCode && code.isNotEmpty()) {
+            Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Color.Black.copy(alpha = .07f)).padding(10.dp)) {
+                Text(code.toString().trimEnd(), color = GlassTokens.ink, fontFamily = FontFamily.Monospace)
+            }
+        }
+    }
+}
+
+private fun copyToClipboard(context: Context, text: String) {
+    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    clipboard.setPrimaryClip(ClipData.newPlainText("WooGit AI", text))
+    Toast.makeText(context, "کپی شد", Toast.LENGTH_SHORT).show()
+}
+
 @Composable
 internal fun HistoryItem(session: AiChatSession, onClick: () -> Unit) { GlassOutlinedButton(session.title, onClick, Modifier.fillMaxWidth()) }
 
 @Composable
-internal fun MessageBubble(message: AiMessage) {
+internal fun MessageBubble(message: AiMessage, onRetry: (() -> Unit)? = null) {
+    val context = LocalContext.current
     val user = message.role == "user"
     Row(Modifier.fillMaxWidth(), horizontalArrangement = if (user) Arrangement.End else Arrangement.Start) {
         Box(Modifier.fillMaxWidth(.88f).clip(RoundedCornerShape(20.dp)).background(if (user) GlassTokens.accent.copy(alpha = .12f) else Color.White.copy(alpha = .54f)).padding(14.dp)) {
@@ -68,7 +139,13 @@ internal fun MessageBubble(message: AiMessage) {
                     val bitmap = remember(attachment) { BitmapFactory.decodeByteArray(attachment.bytes, 0, attachment.bytes.size)?.asImageBitmap() }
                     bitmap?.let { Image(it, contentDescription = attachment.name, modifier = Modifier.fillMaxWidth().heightIn(max = 260.dp).clip(RoundedCornerShape(14.dp))) }
                 }
-                if (message.content.isNotBlank()) Text(message.content, color = GlassTokens.ink)
+                if (message.content.isNotBlank()) MarkdownMessage(message.content)
+                if (message.content.isNotBlank()) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = { copyToClipboard(context, message.content) }) { Text("کپی") }
+                        if (!user && onRetry != null) TextButton(onClick = onRetry) { Text("تلاش دوباره") }
+                    }
+                }
             }
         }
     }
