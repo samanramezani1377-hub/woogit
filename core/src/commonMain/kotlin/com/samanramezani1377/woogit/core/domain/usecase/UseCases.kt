@@ -10,7 +10,7 @@ interface GetOrders { suspend operator fun invoke(storeId: StoreId, page: Int = 
 interface GetSalesSummary { suspend operator fun invoke(storeId: StoreId): CoreResult<SalesSummary> }
 interface UpdateOrder { suspend operator fun invoke(storeId: StoreId, id: EntityId, value: Order): CoreResult<Order> }
 interface GetProduct { suspend operator fun invoke(storeId: StoreId, id: EntityId): CoreResult<Product> }
-interface GetProducts { suspend operator fun invoke(storeId: StoreId, page: Int = 1, perPage: Int = 20, search: String? = null): CoreResult<List<Product>>; suspend fun count(storeId: StoreId, search: String? = null): CoreResult<Int> }
+interface GetProducts { suspend operator fun invoke(storeId: StoreId, page: Int = 1, perPage: Int = 20, search: String? = null, categoryId: Long? = null): CoreResult<List<Product>>; suspend fun count(storeId: StoreId, search: String? = null): CoreResult<Int> }
 interface CreateProduct { suspend operator fun invoke(storeId: StoreId, value: Product): CoreResult<Product> }
 interface UpdateProduct { suspend operator fun invoke(storeId: StoreId, id: EntityId, value: Product): CoreResult<Product> }
 interface DeleteProduct { suspend operator fun invoke(storeId: StoreId, id: EntityId): CoreResult<Unit> }
