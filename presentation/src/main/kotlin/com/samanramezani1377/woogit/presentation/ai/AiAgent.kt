@@ -47,8 +47,9 @@ internal class AiAgent(
         var resultAttachments = emptyList<AiAttachment>()
 
         // Long/batch/resumable work must not depend on the model remembering to activate
-        // Working Memory. Simple one-step requests remain memory-free.
-        if (confirmationToken == null && shouldActivateWorkingMemory(messages)) {
+        // Working Memory. Simple one-step requests remain memory-free unless an unfinished
+        // Working Memory already exists for this conversation.
+        if (confirmationToken == null && (shouldActivateWorkingMemory(messages) || workingMemory.read(conversationId)?.optString("status") == "active")) {
             activateWorkingMemory(conversationId, messages, working)
         }
 
@@ -153,37 +154,30 @@ internal class AiAgent(
         return actions.count(normalized::contains) >= 2 || userText.length >= 260
     }
 
-    private fun shouldResumeWorkingMemory(messages: List<Pair<String, String>>): Boolean {
-        val userText = messages.asReversed().firstOrNull { it.first.equals("user", ignoreCase = true) }?.second?.trim().orEmpty().lowercase()
-        if (userText.isBlank()) return false
-        return listOf("ادامه بده", "ادامه بده", "ادامه کار", "از همونجا", "از همانجا", "ادامه", "resume", "continue").any(userText::contains)
-    }
-
     private fun activateWorkingMemory(conversationId: String, messages: List<Pair<String, String>>, working: JSONArray) {
         val existing = workingMemory.read(conversationId)
         val state = workingMemory.ensure(conversationId, messages.asReversed().firstOrNull { it.first.equals("user", ignoreCase = true) }?.second.orEmpty())
         if (existing?.optString("status") == "active") {
-            if (shouldResumeWorkingMemory(messages)) {
-                val snapshot = JSONObject().apply {
-                    put("executionId", state.optString("executionId"))
-                    put("task", state.optString("task"))
-                    put("status", state.optString("status"))
-                    put("progress", state.optJSONObject("progress") ?: JSONObject())
-                    put("checkpoint", state.optJSONObject("checkpoint") ?: JSONObject())
-                    put("summary", state.optString("summary"))
-                    put("operations", state.optJSONArray("operations") ?: JSONArray())
-                    put("errors", state.optJSONArray("errors") ?: JSONArray())
-                }
-                working.put(JSONObject().put("role", "system").put("content", """
-این پیام یک درخواست برای ادامه دادن اجرای قبلی است. Working Memory فعال قبلی را ادامه بده؛ اجرای جدید شروع نکن.
-کارهایی که در operations ثبت شده‌اند را دوباره انجام نده، مگر اینکه نتیجه ثبت‌شده شکست خورده باشد.
-ابتدا checkpoint و progress را مبنای ادامه قرار بده و فقط بخش باقی‌مانده را انجام بده.
-اگر برای تعیین مرحله بعد لازم است، از ابزار working_memory با operation=read استفاده کن. بعد از هر موفقیت واقعی checkpoint را به‌روز کن.
+            val snapshot = JSONObject().apply {
+                put("executionId", state.optString("executionId"))
+                put("task", state.optString("task"))
+                put("status", state.optString("status"))
+                put("progress", state.optJSONObject("progress") ?: JSONObject())
+                put("checkpoint", state.optJSONObject("checkpoint") ?: JSONObject())
+                put("summary", state.optString("summary"))
+                put("operations", state.optJSONArray("operations") ?: JSONArray())
+                put("errors", state.optJSONArray("errors") ?: JSONArray())
+            }
+            working.put(JSONObject().put("role", "system").put("content", """
+یک Working Memory فعال و ناتمام از اجرای قبلی این گفتگو وجود دارد.
+قبل از اجرای هر ابزار جدید، پیام کاربر فعلی را با task و progress قبلی مقایسه کن و خودت تعیین کن آیا کاربر می‌خواهد همان کار ناتمام را ادامه دهد یا یک کار کاملاً جدید شروع کند.
+اگر پیام فعلی ادامه همان کار است، اجرای جدید از صفر شروع نکن؛ checkpoint و progress و operations را مبنا قرار بده و فقط موارد باقی‌مانده را انجام بده. عملیات‌هایی که در operations با موفقیت ثبت شده‌اند را تکرار نکن، مگر اینکه خود کاربر صراحتاً درخواست تکرارشان را بدهد.
+اگر پیام فعلی یک کار کاملاً جدید است، Working Memory قبلی را به آن ربط نده و درخواست جدید را مستقل اجرا کن؛ وضعیت اجرای قبلی را هم پاک نکن مگر اینکه کاربر صراحتاً درخواست پاک‌کردن یا پایان آن را بدهد.
+اگر تشخیص دشوار است، برای جلوگیری از اجرای دوباره عملیات قبلی، ابتدا وضعیت Working Memory را بررسی کن و سپس بر اساس معنای درخواست تصمیم بگیر.
 وضعیت فعلی Working Memory:
 $snapshot
 این وضعیت داخلی است و نباید عیناً به کاربر نمایش داده شود.
 """.trimIndent()))
-            }
             return
         }
         val progress = state.optJSONObject("progress") ?: JSONObject()
