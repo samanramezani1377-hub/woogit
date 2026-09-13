@@ -45,11 +45,32 @@ internal class AiAgent(
         }
         var attachmentsForNextRequest = attachments
         var resultAttachments = emptyList<AiAttachment>()
+        val latestUserText = latestUserText(messages)
 
-        // Long/batch/resumable work must not depend on the model remembering to activate
-        // Working Memory. Simple one-step requests remain memory-free unless an unfinished
-        // Working Memory already exists for this conversation.
-        if (confirmationToken == null && (shouldActivateWorkingMemory(messages) || workingMemory.read(conversationId)?.optString("status") == "active")) {
+        // Working Memory is always initialized for the conversation. The only requests that
+        // bypass execution are deterministic read-only status queries and an explicit resume
+        // that has no remaining work.
+        if (confirmationToken == null) {
+            if (isStatusQuery(latestUserText)) {
+                return statusReply(conversationId)
+            }
+
+            if (isContinuationRequest(latestUserText)) {
+                val state = workingMemory.read(conversationId)
+                if (state == null) {
+                    return AgentReply(text = "کار ناتمامی برای ادامه پیدا نشد. درخواست جدید خودت را بگو تا از ابتدا انجامش بدهم.")
+                }
+                val progress = state.optJSONObject("progress")
+                val remaining = progress?.optInt("remaining", 0) ?: 0
+                if (state.optString("status") == "completed" && remaining <= 0) {
+                    return AgentReply(text = "کار قبلی طبق Working Memory کامل شده است؛ چیزی برای ادامه باقی نمانده است.")
+                }
+                workingMemory.resume(conversationId)
+            } else {
+                // Every normal user request starts its own execution record. If a previous
+                // execution exists, it is archived instead of being overwritten.
+                workingMemory.beginNewExecution(conversationId, latestUserText.ifBlank { "Agent task" })
+            }
             activateWorkingMemory(conversationId, messages, working)
         }
 
@@ -144,47 +165,69 @@ internal class AiAgent(
         )
     }
 
-    private fun shouldActivateWorkingMemory(messages: List<Pair<String, String>>): Boolean {
-        val userText = messages.asReversed().firstOrNull { it.first.equals("user", ignoreCase = true) }?.second?.trim().orEmpty()
-        if (userText.isBlank()) return false
-        val normalized = userText.lowercase()
-        val markers = listOf("همه", "تمام", "تک تک", "هر کدام", "برای هر", "چند تا", "چند", "یکجا", "مرحله", "ادامه", "طولانی", "دسته دسته", "دسته‌بندی", "اول", "بعد", "سپس", "در ادامه", "bulk", "batch", "all ", "each ", "every ", "continue", "step by step", "long-running")
-        if (markers.any(normalized::contains)) return true
-        val actions = listOf("ایجاد", "بساز", "ویرایش", "تغییر", "حذف", "اضافه", "آپدیت", "بررسی", "پیدا کن", "محاسبه")
-        return actions.count(normalized::contains) >= 2 || userText.length >= 260
+    private fun latestUserText(messages: List<Pair<String, String>>): String =
+        messages.asReversed().firstOrNull { it.first.equals("user", ignoreCase = true) }?.second?.trim().orEmpty()
+
+    private fun isStatusQuery(text: String): Boolean {
+        val normalized = text.lowercase().replace("‌", " ").trim()
+        if (normalized.isBlank()) return false
+        return normalized in setOf(
+            "چی شد؟", "چی شد", "چه شد؟", "چه شد", "کجا رسید؟", "کجا رسید", "وضعیت چیه؟", "وضعیت چیه", "وضعیت چی شد؟", "وضعیت چی شد", "الان کجاست؟", "الان کجاست"
+        ) || normalized.contains("وضعیت کار") || normalized.contains("وضعیت اجرای")
+    }
+
+    private fun isContinuationRequest(text: String): Boolean {
+        val normalized = text.lowercase().replace("‌", " ").trim()
+        return normalized in setOf("ادامه بده", "ادامه بده.", "ادامه", "ادامه کار", "ادامه کار رو انجام بده", "continue", "continue.", "resume")
+    }
+
+    private fun statusReply(conversationId: String): AgentReply {
+        val state = workingMemory.read(conversationId)
+            ?: return AgentReply(text = "هنوز اجرای ذخیره‌شده‌ای برای این گفتگو ندارم.")
+        val progress = state.optJSONObject("progress")
+        val completed = progress?.optInt("completed", 0) ?: 0
+        val total = progress?.optInt("total", 0) ?: 0
+        val remaining = progress?.optInt("remaining", 0) ?: 0
+        val summary = state.optString("summary").trim()
+        val status = state.optString("status")
+        val progressText = if (total > 0) "$completed از $total مورد انجام شده و $remaining مورد باقی مانده" else if (remaining > 0) "$remaining مورد باقی مانده" else "مقدار دقیق باقی‌مانده ثبت نشده است"
+        val text = when {
+            status == "completed" && remaining <= 0 && summary.isNotBlank() -> "آخرین اجرای ثبت‌شده کامل شده است. $summary"
+            status == "active" -> "کار در حال پیگیری است: $progressText.${if (summary.isNotBlank()) " آخرین جمع‌بندی: $summary" else ""}"
+            summary.isNotBlank() -> "آخرین وضعیت: $summary؛ $progressText."
+            else -> "آخرین وضعیت Working Memory: $progressText."
+        }
+        return AgentReply(text = text)
     }
 
     private fun activateWorkingMemory(conversationId: String, messages: List<Pair<String, String>>, working: JSONArray) {
         val existing = workingMemory.read(conversationId)
-        val state = workingMemory.ensure(conversationId, messages.asReversed().firstOrNull { it.first.equals("user", ignoreCase = true) }?.second.orEmpty())
+        val state = workingMemory.ensure(conversationId, latestUserText(messages).ifBlank { "Agent task" })
         if (existing?.optString("status") == "active") {
-            val snapshot = JSONObject().apply {
-                put("executionId", state.optString("executionId"))
-                put("task", state.optString("task"))
-                put("status", state.optString("status"))
-                put("progress", state.optJSONObject("progress") ?: JSONObject())
-                put("checkpoint", state.optJSONObject("checkpoint") ?: JSONObject())
-                put("summary", state.optString("summary"))
-                put("operations", state.optJSONArray("operations") ?: JSONArray())
-                put("errors", state.optJSONArray("errors") ?: JSONArray())
-            }
             working.put(JSONObject().put("role", "system").put("content", """
-یک Working Memory فعال و ناتمام از اجرای قبلی این گفتگو وجود دارد.
-قبل از اجرای هر ابزار جدید، پیام کاربر فعلی را با task و progress قبلی مقایسه کن و خودت تعیین کن آیا کاربر می‌خواهد همان کار ناتمام را ادامه دهد یا یک کار کاملاً جدید شروع کند.
-اگر پیام فعلی ادامه همان کار است، اجرای جدید از صفر شروع نکن؛ checkpoint و progress و operations را مبنا قرار بده و فقط موارد باقی‌مانده را انجام بده. عملیات‌هایی که در operations با موفقیت ثبت شده‌اند را تکرار نکن، مگر اینکه خود کاربر صراحتاً درخواست تکرارشان را بدهد.
-اگر پیام فعلی یک کار کاملاً جدید است، Working Memory قبلی را به آن ربط نده و درخواست جدید را مستقل اجرا کن؛ وضعیت اجرای قبلی را هم پاک نکن مگر اینکه کاربر صراحتاً درخواست پاک‌کردن یا پایان آن را بدهد.
-اگر تشخیص دشوار است، برای جلوگیری از اجرای دوباره عملیات قبلی، ابتدا وضعیت Working Memory را بررسی کن و سپس بر اساس معنای درخواست تصمیم بگیر.
-وضعیت فعلی Working Memory:
-$snapshot
+یک Working Memory فعال برای اجرای جاری وجود دارد.
+از executionId، progress، checkpoint، lastOperation و nextOperation به‌عنوان منبع وضعیت استفاده کن. عملیات موفق ثبت‌شده را تکرار نکن. اگر کار چندمرحله‌ای است، قبل از ادامه وضعیت را بخوان و بعد از هر مرحله مهم delta و checkpoint ثبت کن. تاریخچه کامل operations لازم نیست؛ فقط برای تصمیم‌گیری از snapshot فشرده استفاده کن.
+وضعیت فشرده Working Memory:
+$state
 این وضعیت داخلی است و نباید عیناً به کاربر نمایش داده شود.
 """.trimIndent()))
             return
         }
+
+        if (existing?.optString("status") == "completed") {
+            working.put(JSONObject().put("role", "system").put("content", """
+Working Memory اجرای قبلی completed است. آن را دوباره از صفر اجرا نکن. اگر کاربر صریحاً «ادامه بده» خواست، باید با ابزار working_memory و operation=resume همان executionId را ادامه دهی؛ اگر باقی‌مانده صفر است، اعلام کن کار قبلی تمام شده. برای درخواست جدید، این execution را مستقل در نظر بگیر.
+وضعیت فشرده اجرای قبلی:
+$state
+""".trimIndent()))
+            return
+        }
+
         val progress = state.optJSONObject("progress") ?: JSONObject()
         progress.put("phase", "execution")
         progress.put("autoActivated", true)
         workingMemory.update(conversationId, JSONObject().put("progress", progress))
-        working.put(JSONObject().put("role", "system").put("content", "Working Memory برای این اجرای چندمرحله‌ای به‌صورت خودکار فعال شد. قبل از مراحل بعدی وضعیت آن را با ابزار working_memory بررسی کن؛ در طول کار progress و checkpoint را به‌روز کن و پس از موفقیت واقعی checkpoint ثبت کن. این عملیات داخلی نیاز به تأیید کاربر ندارد."))
+        working.put(JSONObject().put("role", "system").put("content", "Working Memory برای این اجرای جاری فعال شد. برای کارهای چندمرحله‌ای استفاده از آن اجباری است؛ progress و checkpoint را به‌صورت delta ثبت کن و عملیات موفق را تکرار نکن."))
     }
 
     private suspend fun generateMandatoryFinalResponse(working: JSONArray, conversationId: String, attachments: List<AiAttachment>, onEvent: suspend (AiStreamEvent) -> Unit): AgentReply {
