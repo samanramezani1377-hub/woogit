@@ -150,6 +150,31 @@ internal class AiAgent(
         for (i in 0 until working.length()) {
             finalMessages.put(working.opt(i))
         }
+
+        // Working Memory is intentionally not exposed as a tool in the final phase.
+        // The agent reads it itself and injects only a compact, model-readable snapshot.
+        val workingSnapshot = workingMemory.read(conversationId)?.let { state ->
+            JSONObject().apply {
+                put("executionId", state.optString("executionId"))
+                put("task", state.optString("task"))
+                put("status", state.optString("status"))
+                put("progress", state.optJSONObject("progress") ?: JSONObject())
+                put("checkpoint", state.optJSONObject("checkpoint") ?: JSONObject())
+                put("summary", state.optString("summary"))
+                put("errors", state.optJSONArray("errors") ?: JSONArray())
+            }.toString()
+        }
+
+        val workingMemoryContext = if (!workingSnapshot.isNullOrBlank()) {
+            """
+وضعیت فشرده Working Memory که Agent همین حالا برای مرحله نهایی خوانده است:
+$workingSnapshot
+این وضعیت داخلی است؛ آن را عیناً به کاربر نمایش نده. از آن فقط برای گزارش دقیق پیشرفت، checkpoint و بخش باقی‌مانده استفاده کن.
+            """.trimIndent()
+        } else {
+            "Working Memory فعالی برای این اجرا وجود ندارد؛ وضعیت را فقط بر اساس نتایج واقعی ابزارهای همین اجرا گزارش کن."
+        }
+
         finalMessages.put(
             JSONObject()
                 .put("role", "system")
@@ -165,6 +190,8 @@ internal class AiAgent(
 هرگز ادعا نکن کاری انجام شده که در نتایج ابزارها تأیید نشده است.
 اگر Working Memory فعال است، از checkpoint و progress آن برای توضیح وضعیت استفاده کن، اما محتوای داخلی آن را عیناً نمایش نده.
 این مرحله فقط برای تولید پاسخ نهایی است و نباید هیچ tool callای تولید کند.
+
+$workingMemoryContext
                     """.trimIndent(),
                 ),
         )
