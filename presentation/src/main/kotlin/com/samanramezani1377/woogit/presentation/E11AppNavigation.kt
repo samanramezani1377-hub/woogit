@@ -20,8 +20,6 @@ import com.samanramezani1377.woogit.presentation.orders.*
 import com.samanramezani1377.woogit.presentation.product.*
 import com.samanramezani1377.woogit.presentation.settings.*
 import com.samanramezani1377.woogit.presentation.sync.*
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 
 @Composable
 internal fun E11AppNavigation(
@@ -67,19 +65,11 @@ internal fun E11AppNavigation(
         }
     }
 
-    LaunchedEffect(activeStore, BillingRuntime.gateway) {
-        while (isActive) {
-            val store = activeStore
-            if (store == null) {
-                billingLocked = false
-                break
-            }
-            BillingRuntime.gateway?.status(StoreId(store))?.onSuccess { status ->
-                billingLocked = status.status !in setOf("active", "trial")
-            }
-            delay(BILLING_STATUS_REFRESH_MS)
-        }
-    }
+    AppBillingMonitor(
+        storeId = activeStore,
+        gateway = BillingRuntime.gateway,
+        onBillingLockedChanged = { billingLocked = it },
+    )
 
     BackHandler(enabled = billingLocked) { }
     BackHandler(enabled = !billingLocked && route != E11Routes.CONNECTION && route != E11Routes.CREATE_PASSWORD) {
@@ -165,8 +155,6 @@ internal fun E11AppNavigation(
         composable(E11Routes.SETTINGS) { val store = activeStore; if (store != null) SettingsScreen(storeName = store, storeId = StoreId(store), dependencies = dependencies, onBack = { navController.popBackStack() }, onDisconnect = { dependencies.onStoreDisconnected(); activeStore = null; navController.navigate(E11Routes.CONNECTION) { popUpTo(E11Routes.SETTINGS) { inclusive = true } } }) }
     }
 }
-
-private const val BILLING_STATUS_REFRESH_MS = 30_000L
 
 private fun mapOrdersState(state: FeatureUiState<List<Order>>, hasMore: Boolean): OrdersUiState = when (state) { FeatureUiState.Loading, FeatureUiState.Pending -> OrdersUiState.Loading; FeatureUiState.Empty -> OrdersUiState.Empty; is FeatureUiState.Error -> OrdersUiState.Error(state.message, state.retryable); FeatureUiState.Offline -> OrdersUiState.Offline(); is FeatureUiState.Conflict -> OrdersUiState.Error("تعارض در داده‌های سفارش وجود دارد.", false); is FeatureUiState.Success -> OrdersUiState.Content(state.value.map { order -> OrderRowUiModel(order.number, order.customer?.name.orEmpty(), order.customer?.email.orEmpty(), order.status.name, formatMoney(order.total), order.payment?.methodTitle.orEmpty(), order.modifiedAt?.toString().orEmpty()) }, hasMore) }
 private fun mapOrderDetailState(state: FeatureUiState<Order>): OrderDetailUiState = when (state) { FeatureUiState.Loading, FeatureUiState.Pending -> OrderDetailUiState.Loading; FeatureUiState.Empty -> OrderDetailUiState.NotFound; is FeatureUiState.Error -> OrderDetailUiState.Error(state.message); FeatureUiState.Offline -> OrderDetailUiState.Error("سفارش در حالت آفلاین در دسترس نیست."); is FeatureUiState.Conflict -> OrderDetailUiState.Error("تعارض در وضعیت سفارش."); is FeatureUiState.Success -> OrderDetailUiState.Content(state.value) }
