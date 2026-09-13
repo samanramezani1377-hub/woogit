@@ -36,12 +36,14 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
     private val gemini = GeminiProvider(appContext)
     private val groq = GroqProvider(appContext)
     private val cloudflare = CloudflareProvider(appContext)
+    private val catalogExecutor = AiProductCatalogToolExecutor(dependencies, storeId)
+    private val groqCatalogExecutor = AiProductCatalogToolExecutor(dependencies, storeId, groqMode = true)
     private val agents = mapOf(
-        "deepseek" to AiAgent(AiContextWindowProvider(deepSeek), WooGitToolExecutor(dependencies, storeId), appContext, activeStoreId),
-        "openrouter" to AiAgent(AiContextWindowProvider(openRouter), WooGitToolExecutor(dependencies, storeId), appContext, activeStoreId),
-        "gemini" to AiAgent(AiContextWindowProvider(gemini), WooGitToolExecutor(dependencies, storeId), appContext, activeStoreId),
-        "groq" to AiAgent(AiContextWindowProvider(groq), WooGitToolExecutor(dependencies, storeId, groqMode = true), appContext, activeStoreId),
-        "cloudflare" to AiAgent(AiContextWindowProvider(cloudflare), WooGitToolExecutor(dependencies, storeId), appContext, activeStoreId),
+        "deepseek" to AiAgent(AiContextWindowProvider(deepSeek), WooGitToolExecutor(dependencies, storeId), catalogExecutor, appContext, activeStoreId),
+        "openrouter" to AiAgent(AiContextWindowProvider(openRouter), WooGitToolExecutor(dependencies, storeId), catalogExecutor, appContext, activeStoreId),
+        "gemini" to AiAgent(AiContextWindowProvider(gemini), WooGitToolExecutor(dependencies, storeId), catalogExecutor, appContext, activeStoreId),
+        "groq" to AiAgent(AiContextWindowProvider(groq), WooGitToolExecutor(dependencies, storeId, groqMode = true), groqCatalogExecutor, appContext, activeStoreId),
+        "cloudflare" to AiAgent(AiContextWindowProvider(cloudflare), WooGitToolExecutor(dependencies, storeId), catalogExecutor, appContext, activeStoreId),
     )
     private val _providerId = MutableStateFlow(prefs.getString("provider", "openrouter") ?: "openrouter")
     val providerId: StateFlow<String> = _providerId.asStateFlow()
