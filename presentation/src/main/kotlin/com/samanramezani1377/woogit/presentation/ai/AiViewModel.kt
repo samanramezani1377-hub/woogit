@@ -167,7 +167,8 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
                 if (!isCurrentGeneration()) return@launch
                 val baseMessages = messages
                 _state.value = if (reply.confirmationToken != null) AiUiState.Ready(baseMessages, reply) else {
-                    val completedMessages = baseMessages + AiMessage("assistant", reply.text.ifBlank { streaming }, reply.attachments.firstOrNull())
+                    val text = reply.text.trim().ifBlank { streaming.trim().ifBlank { mandatoryResponseFallback() } }
+                    val completedMessages = baseMessages + AiMessage("assistant", text, reply.attachments.firstOrNull())
                     historyStore.saveSession(currentSessionId, completedMessages)
                     refreshHistory()
                     AiUiState.Ready(completedMessages, null)
@@ -175,9 +176,13 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
             } catch (error: CancellationException) {
             } catch (error: Throwable) {
                 if (generationId == requestGenerationId) {
-                    historyStore.saveSession(currentSessionId, messages)
+                    val responseMessage = messages + AiMessage(
+                        "assistant",
+                        "اجرای درخواست متوقف شد: ${error.message?.takeIf { it.isNotBlank() } ?: "سرویس AI پاسخ نهایی تولید نکرد."}\n\nمی‌توانید با «تلاش دوباره» اجرای درخواست را دوباره شروع کنید.",
+                    )
+                    historyStore.saveSession(currentSessionId, responseMessage)
                     refreshHistory()
-                    _state.value = AiUiState.Error(messages, error.message ?: "ارتباط با سرویس AI ناموفق بود.")
+                    _state.value = AiUiState.Error(responseMessage, error.message ?: "ارتباط با سرویس AI ناموفق بود.")
                 }
             } finally {
                 if (generationId == requestGenerationId) {
@@ -187,6 +192,8 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
             }
         }
     }
+
+    private fun mandatoryResponseFallback() = "اجرای ابزارها تمام شد، اما متن پاسخ نهایی خالی بود. وضعیت انجام‌شده حفظ شده است؛ می‌توانید با «تلاش دوباره» ادامه دهید."
 
     private fun refreshHistory() { _history.value = historyStore.loadSessions() }
     class Factory(private val context: Context) : ViewModelProvider.Factory { @Suppress("UNCHECKED_CAST") override fun <T : ViewModel> create(modelClass: Class<T>): T = AiViewModel(context, AiRuntime.dependencies) as T }
