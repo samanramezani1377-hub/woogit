@@ -46,6 +46,12 @@ internal class AiAgent(
         var attachmentsForNextRequest = attachments
         var resultAttachments = emptyList<AiAttachment>()
 
+        // Long/batch/resumable work must not depend on the model remembering to activate
+        // Working Memory. Simple one-step requests remain memory-free.
+        if (confirmationToken == null && shouldActivateWorkingMemory(messages)) {
+            activateWorkingMemory(conversationId, messages, working)
+        }
+
         if (confirmationToken != null) {
             val action = pending.remove(confirmationToken) ?: throw IllegalStateException("عملیات در انتظار تأیید پیدا نشد. دوباره درخواست را ارسال کنید.")
             onEvent(AiStreamEvent.Status("در حال اجرای عملیات تأییدشده..."))
@@ -69,6 +75,7 @@ internal class AiAgent(
         }
 
         repeat(MAX_STEPS) { step ->
+            if (step > 0) activateWorkingMemory(conversationId, messages, working)
             onEvent(AiStreamEvent.Status(if (step == 0) "در حال بررسی درخواست..." else "در حال بررسی نتیجه مرحله قبل..."))
             val tools = AiAgentTools.definitions()
             val requestMessages = working
@@ -82,6 +89,7 @@ internal class AiAgent(
                 workingMemory.complete(conversationId, text.ifBlank { "کار Agent با موفقیت به پایان رسید." })
                 return AgentReply(text = text, attachments = resultAttachments)
             }
+            if (calls.length() > 1) activateWorkingMemory(conversationId, messages, working)
             working.put(message)
 
             for (i in 0 until calls.length()) {
@@ -127,9 +135,6 @@ internal class AiAgent(
             }
         }
 
-        // Tool execution has its own hard budget. Reaching that budget must never
-        // leave the user without a response. The final-response phase is deliberately
-        // outside MAX_STEPS and receives no tools, so it cannot consume another tool step.
         return generateMandatoryFinalResponse(
             working = working,
             conversationId = conversationId,
@@ -138,49 +143,40 @@ internal class AiAgent(
         )
     }
 
-    private suspend fun generateMandatoryFinalResponse(
-        working: JSONArray,
-        conversationId: String,
-        attachments: List<AiAttachment>,
-        onEvent: suspend (AiStreamEvent) -> Unit,
-    ): AgentReply {
+    private fun shouldActivateWorkingMemory(messages: List<Pair<String, String>>): Boolean {
+        val userText = messages.asReversed().firstOrNull { it.first.equals("user", ignoreCase = true) }?.second?.trim().orEmpty()
+        if (userText.isBlank()) return false
+        val normalized = userText.lowercase()
+        val markers = listOf("همه", "تمام", "تک تک", "هر کدام", "برای هر", "چند تا", "چند", "یکجا", "مرحله", "ادامه", "طولانی", "دسته دسته", "دسته‌بندی", "اول", "بعد", "سپس", "در ادامه", "bulk", "batch", "all ", "each ", "every ", "continue", "step by step", "long-running")
+        if (markers.any(normalized::contains)) return true
+        val actions = listOf("ایجاد", "بساز", "ویرایش", "تغییر", "حذف", "اضافه", "آپدیت", "بررسی", "پیدا کن", "محاسبه")
+        return actions.count(normalized::contains) >= 2 || userText.length >= 260
+    }
+
+    private fun activateWorkingMemory(conversationId: String, messages: List<Pair<String, String>>, working: JSONArray) {
+        val existing = workingMemory.read(conversationId)
+        val state = workingMemory.ensure(conversationId, messages.asReversed().firstOrNull { it.first.equals("user", ignoreCase = true) }?.second.orEmpty())
+        if (existing?.optString("status") == "active") return
+        val progress = state.optJSONObject("progress") ?: JSONObject()
+        progress.put("phase", "execution")
+        progress.put("autoActivated", true)
+        workingMemory.update(conversationId, JSONObject().put("progress", progress))
+        working.put(JSONObject().put("role", "system").put("content", "Working Memory برای این اجرای چندمرحله‌ای به‌صورت خودکار فعال شد. قبل از مراحل بعدی وضعیت آن را با ابزار working_memory بررسی کن؛ در طول کار progress و checkpoint را به‌روز کن و پس از موفقیت واقعی checkpoint ثبت کن. این عملیات داخلی نیاز به تأیید کاربر ندارد."))
+    }
+
+    private suspend fun generateMandatoryFinalResponse(working: JSONArray, conversationId: String, attachments: List<AiAttachment>, onEvent: suspend (AiStreamEvent) -> Unit): AgentReply {
         onEvent(AiStreamEvent.Status("در حال نوشتن نتیجه نهایی..."))
-
         val finalMessages = JSONArray()
-        for (i in 0 until working.length()) {
-            finalMessages.put(working.opt(i))
-        }
-
-        // Working Memory is intentionally not exposed as a tool in the final phase.
-        // The agent reads it itself and injects only a compact, model-readable snapshot.
-        val workingSnapshot = workingMemory.read(conversationId)?.let { state ->
-            JSONObject().apply {
-                put("executionId", state.optString("executionId"))
-                put("task", state.optString("task"))
-                put("status", state.optString("status"))
-                put("progress", state.optJSONObject("progress") ?: JSONObject())
-                put("checkpoint", state.optJSONObject("checkpoint") ?: JSONObject())
-                put("summary", state.optString("summary"))
-                put("errors", state.optJSONArray("errors") ?: JSONArray())
-            }.toString()
-        }
-
-        val workingMemoryContext = if (!workingSnapshot.isNullOrBlank()) {
-            """
+        for (i in 0 until working.length()) finalMessages.put(working.opt(i))
+        val workingSnapshot = workingMemory.read(conversationId)?.let { state -> JSONObject().apply {
+            put("executionId", state.optString("executionId")); put("task", state.optString("task")); put("status", state.optString("status")); put("progress", state.optJSONObject("progress") ?: JSONObject()); put("checkpoint", state.optJSONObject("checkpoint") ?: JSONObject()); put("summary", state.optString("summary")); put("errors", state.optJSONArray("errors") ?: JSONArray())
+        }.toString() }
+        val workingMemoryContext = if (!workingSnapshot.isNullOrBlank()) """
 وضعیت فشرده Working Memory که Agent همین حالا برای مرحله نهایی خوانده است:
 $workingSnapshot
 این وضعیت داخلی است؛ آن را عیناً به کاربر نمایش نده. از آن فقط برای گزارش دقیق پیشرفت، checkpoint و بخش باقی‌مانده استفاده کن.
-            """.trimIndent()
-        } else {
-            "Working Memory فعالی برای این اجرا وجود ندارد؛ وضعیت را فقط بر اساس نتایج واقعی ابزارهای همین اجرا گزارش کن."
-        }
-
-        finalMessages.put(
-            JSONObject()
-                .put("role", "system")
-                .put(
-                    "content",
-                    """
+""".trimIndent() else "Working Memory فعالی برای این اجرا وجود ندارد؛ وضعیت را فقط بر اساس نتایج واقعی ابزارهای همین اجرا گزارش کن."
+        finalMessages.put(JSONObject().put("role", "system").put("content", """
 این نوبت اجرای ابزارها به سقف مجاز رسید. اکنون مرحله نهایی و اجباری پاسخ است.
 دیگر هیچ ابزاری را فراخوانی نکن و کار جدیدی شروع نکن.
 فقط یک پاسخ نهایی و قابل‌فهم برای کاربر بنویس و بر اساس نتایج واقعی همین اجرا بگو:
@@ -192,27 +188,13 @@ $workingSnapshot
 این مرحله فقط برای تولید پاسخ نهایی است و نباید هیچ tool callای تولید کند.
 
 $workingMemoryContext
-                    """.trimIndent(),
-                ),
-        )
-
+""".trimIndent()))
         return try {
-            // Empty tool definitions make this a text-only generation phase.
             val response = provider.stream(finalMessages, JSONArray(), attachments, onEvent)
             val message = response.optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("message")
             val text = message?.optString("content")?.trim().orEmpty()
-            if (text.isNotBlank()) {
-                // Do not complete/clear active Working Memory here: reaching the tool
-                // budget means the underlying task may still be resumable.
-                AgentReply(text = text, attachments = attachments)
-            } else {
-                AgentReply(text = mandatoryFallback(conversationId), attachments = attachments)
-            }
-        } catch (_: Throwable) {
-            // The final phase itself must not turn into another silent failure. If the
-            // provider cannot produce the final text, return a deterministic status.
-            AgentReply(text = mandatoryFallback(conversationId), attachments = attachments)
-        }
+            if (text.isNotBlank()) AgentReply(text = text, attachments = attachments) else AgentReply(text = mandatoryFallback(conversationId), attachments = attachments)
+        } catch (_: Throwable) { AgentReply(text = mandatoryFallback(conversationId), attachments = attachments) }
     }
 
     private fun mandatoryFallback(conversationId: String): String {
@@ -220,11 +202,7 @@ $workingMemoryContext
         val progress = state?.optJSONObject("progress")
         val completed = progress?.optInt("completed", -1) ?: -1
         val total = progress?.optInt("total", -1) ?: -1
-        return if (completed >= 0 && total > 0) {
-            "بخشی از کار انجام شد و اجرای ابزارها به سقف این مرحله رسید: $completed از $total مورد تکمیل شده است. وضعیت کار ذخیره شده و می‌توان از نقطه ادامه، اجرای آن را ادامه داد."
-        } else {
-            "بخشی از کار انجام شد، اما سقف اجرای ابزارها در این مرحله رسید. نتیجه‌های انجام‌شده حفظ شده‌اند و می‌توان کار را از وضعیت فعلی ادامه داد."
-        }
+        return if (completed >= 0 && total > 0) "بخشی از کار انجام شد و اجرای ابزارها به سقف این مرحله رسید: $completed از $total مورد تکمیل شده است. وضعیت کار ذخیره شده و می‌توان از نقطه ادامه، اجرای آن را ادامه داد." else "بخشی از کار انجام شد، اما سقف اجرای ابزارها در این مرحله رسید. نتیجه‌های انجام‌شده حفظ شده‌اند و می‌توان کار را از وضعیت فعلی ادامه داد."
     }
 
     private suspend fun executeTool(name: String, arguments: String, attachments: List<AiAttachment>, conversationId: String): String {
@@ -237,15 +215,9 @@ $workingMemoryContext
     }
 
     private fun recordOperation(conversationId: String, name: String, arguments: String, result: String, status: String) {
-        // Only persist tool operations after the Agent has explicitly entered a Working Memory flow.
-        // Simple one-step requests must not create Working Memory implicitly.
         val state = workingMemory.read(conversationId) ?: return
         if (state.optString("status") != "active") return
-        val operation = JSONObject()
-            .put("tool", name)
-            .put("arguments", arguments.take(MAX_OPERATION_ARGUMENTS))
-            .put("result", summarize(result))
-            .put("status", status)
+        val operation = JSONObject().put("tool", name).put("arguments", arguments.take(MAX_OPERATION_ARGUMENTS)).put("result", summarize(result)).put("status", status)
         workingMemory.recordOperation(conversationId, operation)
     }
 
