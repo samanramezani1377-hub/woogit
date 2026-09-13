@@ -11,7 +11,7 @@ class GetOrdersUseCase(private val r: OrderRepository) : GetOrders { override su
 class GetSalesSummaryUseCase(private val r: OrderRepository) : GetSalesSummary { override suspend fun invoke(storeId: StoreId) = r.salesSummary(storeId) }
 class UpdateOrderUseCase(private val r: OrderRepository) : UpdateOrder { override suspend fun invoke(storeId: StoreId, id: EntityId, value: Order) = r.update(storeId, id, value) }
 class GetProductUseCase(private val r: ProductRepository) : GetProduct { override suspend fun invoke(storeId: StoreId, id: EntityId) = r.get(storeId, id) }
-class GetProductsUseCase(private val r: ProductRepository) : GetProducts { override suspend fun invoke(storeId: StoreId, page: Int, perPage: Int, search: String?) = r.list(storeId, page, perPage, search); override suspend fun count(storeId: StoreId, search: String?) = r.count(storeId, search) }
+class GetProductsUseCase(private val r: ProductRepository) : GetProducts { override suspend fun invoke(storeId: StoreId, page: Int, perPage: Int, search: String?, categoryId: Long?) = r.list(storeId, page, perPage, search, categoryId); override suspend fun count(storeId: StoreId, search: String?) = r.count(storeId, search) }
 class CreateProductUseCase(private val r: ProductRepository) : CreateProduct { override suspend fun invoke(storeId: StoreId, value: Product) = r.create(storeId, value) }
 class UpdateProductUseCase(private val r: ProductRepository) : UpdateProduct { override suspend fun invoke(storeId: StoreId, id: EntityId, value: Product) = r.update(storeId, id, value) }
 class DeleteProductUseCase(private val r: ProductRepository) : DeleteProduct { override suspend fun invoke(storeId: StoreId, id: EntityId) = r.delete(storeId, id) }
