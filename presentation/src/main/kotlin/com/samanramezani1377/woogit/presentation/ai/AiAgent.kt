@@ -139,6 +139,10 @@ internal class AiAgent(
     }
 
     private fun recordOperation(conversationId: String, name: String, arguments: String, result: String, status: String) {
+        // Only persist tool operations after the Agent has explicitly entered a Working Memory flow.
+        // Simple one-step requests must not create Working Memory implicitly.
+        val state = workingMemory.read(conversationId) ?: return
+        if (state.optString("status") != "active") return
         val operation = JSONObject()
             .put("tool", name)
             .put("arguments", arguments.take(MAX_OPERATION_ARGUMENTS))
