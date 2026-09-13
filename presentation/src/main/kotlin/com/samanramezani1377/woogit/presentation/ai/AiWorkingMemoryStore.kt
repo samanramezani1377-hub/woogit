@@ -5,13 +5,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 
-/**
- * Crash-safe, per-conversation working state for Agent tasks.
- *
- * The persisted state is authoritative. Prompt-facing reads are deliberately compact so
- * the Agent does not receive the complete operation/error log on every turn. Mutations are
- * applied as deltas and execution identity is preserved across resume/reload.
- */
+/** Crash-safe, per-conversation working state for Agent tasks. */
 internal class AiWorkingMemoryStore(context: Context, private val storeKey: String) {
     private val prefs = context.applicationContext.getSharedPreferences("woogit_ai_working_memory", Context.MODE_PRIVATE)
     private val prefix = "working_${storeKey}_"
@@ -41,6 +35,7 @@ internal class AiWorkingMemoryStore(context: Context, private val storeKey: Stri
                 .put("checkpoint", previous.optJSONObject("checkpoint") ?: JSONObject())
                 .put("lastOperation", previous.optString("lastOperation"))
                 .put("nextOperation", previous.optString("nextOperation"))
+                .put("batches", tail(previous.optJSONArray("batches"), BATCH_HISTORY_LIMIT))
             history.put(archived)
             while (history.length() > MAX_EXECUTION_HISTORY) history.remove(0)
             state.put("executionHistory", history)
@@ -78,6 +73,51 @@ internal class AiWorkingMemoryStore(context: Context, private val storeKey: Stri
     }
 
     @Synchronized
+    fun createBatch(conversationId: String, batchId: String, task: String, items: JSONArray): JSONObject {
+        val state = readRaw(conversationId) ?: newState(conversationId, task)
+        val batches = state.optJSONArray("batches") ?: JSONArray()
+        val batch = JSONObject()
+            .put("batchId", batchId)
+            .put("task", task.take(MAX_TASK_LENGTH))
+            .put("status", "awaiting_confirmation")
+            .put("createdAt", System.currentTimeMillis())
+            .put("items", JSONObject(items.toString()))
+        batches.put(batch)
+        while (batches.length() > MAX_BATCHES) batches.remove(0)
+        state.put("batches", batches)
+        state.put("updatedAt", System.currentTimeMillis())
+        write(conversationId, state)
+        return promptSnapshot(state)
+    }
+
+    @Synchronized
+    fun updateBatchItem(conversationId: String, batchId: String, itemId: String, status: String, result: String = ""): JSONObject? {
+        val state = readRaw(conversationId) ?: return null
+        val batches = state.optJSONArray("batches") ?: return promptSnapshot(state)
+        for (i in 0 until batches.length()) {
+            val batch = batches.optJSONObject(i) ?: continue
+            if (batch.optString("batchId") != batchId) continue
+            val items = batch.optJSONArray("items") ?: JSONArray()
+            for (j in 0 until items.length()) {
+                val item = items.optJSONObject(j) ?: continue
+                if (item.optString("itemId") != itemId) continue
+                item.put("status", status)
+                if (result.isNotBlank()) item.put("result", result.take(MAX_RESULT_LENGTH))
+                item.put("updatedAt", System.currentTimeMillis())
+                break
+            }
+            val counts = countBatchStatuses(items)
+            batch.put("counts", counts)
+            val terminal = counts.optInt("pending", 0) == 0
+            if (terminal) batch.put("status", if (counts.optInt("failed", 0) > 0) "completed_with_failures" else "completed")
+            break
+        }
+        state.put("updatedAt", System.currentTimeMillis())
+        write(conversationId, state)
+        return promptSnapshot(state)
+    }
+
+    @Synchronized
     fun update(conversationId: String, data: JSONObject): JSONObject {
         val state = readRaw(conversationId) ?: newState(conversationId, data.optString("task", "Agent task"))
         data.optString("task").takeIf { it.isNotBlank() }?.let { state.put("task", it.take(MAX_TASK_LENGTH)) }
@@ -100,7 +140,6 @@ internal class AiWorkingMemoryStore(context: Context, private val storeKey: Stri
         val fingerprint = normalized.optString("fingerprint").ifBlank {
             fingerprintOf(normalized.optString("tool"), normalized.optString("arguments"))
         }
-
         var duplicate = false
         for (i in 0 until operations.length()) {
             if (operations.optJSONObject(i)?.optString("fingerprint") == fingerprint) {
@@ -114,7 +153,6 @@ internal class AiWorkingMemoryStore(context: Context, private val storeKey: Stri
             operations.put(normalized)
             while (operations.length() > MAX_OPERATIONS) operations.remove(0)
         }
-
         progress?.let { state.put("progress", mergeObject(state.optJSONObject("progress") ?: JSONObject(), it)) }
         state.put("checkpoint", JSONObject(normalized.toString()))
         normalized.optString("tool").takeIf { it.isNotBlank() }?.let { state.put("lastOperation", it) }
@@ -177,7 +215,7 @@ internal class AiWorkingMemoryStore(context: Context, private val storeKey: Stri
     private fun newState(conversationId: String, task: String): JSONObject {
         val now = System.currentTimeMillis()
         return JSONObject()
-            .put("version", 3)
+            .put("version", 4)
             .put("executionId", UUID.randomUUID().toString())
             .put("conversationId", conversationId)
             .put("task", task.take(MAX_TASK_LENGTH))
@@ -189,18 +227,17 @@ internal class AiWorkingMemoryStore(context: Context, private val storeKey: Stri
             .put("calculations", JSONArray())
             .put("operations", JSONArray())
             .put("errors", JSONArray())
+            .put("batches", JSONArray())
             .put("checkpoint", JSONObject())
             .put("summary", "")
             .put("executionHistory", JSONArray())
     }
 
-    private fun readRaw(conversationId: String): JSONObject? = runCatching {
-        prefs.getString(key(conversationId), null)?.let { JSONObject(it) }
-    }.getOrNull()
+    private fun readRaw(conversationId: String): JSONObject? = runCatching { prefs.getString(key(conversationId), null)?.let { JSONObject(it) } }.getOrNull()
 
     private fun promptSnapshot(state: JSONObject): JSONObject {
         val snapshot = JSONObject()
-        snapshot.put("version", state.optInt("version", 3))
+        snapshot.put("version", state.optInt("version", 4))
         snapshot.put("executionId", state.optString("executionId"))
         snapshot.put("conversationId", state.optString("conversationId"))
         snapshot.put("task", state.optString("task"))
@@ -212,7 +249,22 @@ internal class AiWorkingMemoryStore(context: Context, private val storeKey: Stri
         snapshot.put("summary", state.optString("summary"))
         snapshot.put("operations", tail(state.optJSONArray("operations"), PROMPT_OPERATION_LIMIT))
         snapshot.put("errors", tail(state.optJSONArray("errors"), PROMPT_ERROR_LIMIT))
+        snapshot.put("batches", tail(state.optJSONArray("batches"), BATCH_HISTORY_LIMIT))
         return snapshot
+    }
+
+    private fun countBatchStatuses(items: JSONArray): JSONObject {
+        val counts = JSONObject().put("pending", 0).put("approved", 0).put("rejected", 0).put("verified", 0).put("failed", 0)
+        for (i in 0 until items.length()) {
+            when (items.optJSONObject(i)?.optString("status")) {
+                "APPROVED", "NOT_STARTED", "IN_FLIGHT" -> counts.put("approved", counts.optInt("approved") + 1)
+                "REJECTED_BY_USER" -> counts.put("rejected", counts.optInt("rejected") + 1)
+                "VERIFIED" -> counts.put("verified", counts.optInt("verified") + 1)
+                "FAILED" -> counts.put("failed", counts.optInt("failed") + 1)
+                else -> counts.put("pending", counts.optInt("pending") + 1)
+            }
+        }
+        return counts
     }
 
     private fun tail(source: JSONArray?, limit: Int): JSONArray {
@@ -226,31 +278,28 @@ internal class AiWorkingMemoryStore(context: Context, private val storeKey: Stri
     private fun compactInPlace(state: JSONObject) {
         state.put("operations", tail(state.optJSONArray("operations"), COMPACT_OPERATION_LIMIT))
         state.put("errors", tail(state.optJSONArray("errors"), COMPACT_ERROR_LIMIT))
+        state.put("batches", tail(state.optJSONArray("batches"), BATCH_HISTORY_LIMIT))
         state.remove("targets")
         state.remove("calculations")
     }
 
     private fun mergeObject(target: JSONObject, source: JSONObject): JSONObject {
         val iterator = source.keys()
-        while (iterator.hasNext()) {
-            val name = iterator.next()
-            target.put(name, source.get(name))
-        }
+        while (iterator.hasNext()) target.put(iterator.next(), source.get(iterator.next()))
         return target
     }
 
     private fun fingerprintOf(tool: String, arguments: String): String = "$tool|$arguments".hashCode().toString()
-
-    private fun write(conversationId: String, state: JSONObject) {
-        prefs.edit().putString(key(conversationId), state.toString()).commit()
-    }
-
+    private fun write(conversationId: String, state: JSONObject) { prefs.edit().putString(key(conversationId), state.toString()).commit() }
     private fun key(conversationId: String) = "$prefix$conversationId"
 
     private companion object {
         const val MAX_TASK_LENGTH = 500
         const val MAX_SUMMARY_LENGTH = 2000
+        const val MAX_RESULT_LENGTH = 500
         const val MAX_OPERATIONS = 200
+        const val MAX_BATCHES = 20
+        const val BATCH_HISTORY_LIMIT = 5
         const val MAX_EXECUTION_HISTORY = 10
         const val PROMPT_OPERATION_LIMIT = 8
         const val PROMPT_ERROR_LIMIT = 8
