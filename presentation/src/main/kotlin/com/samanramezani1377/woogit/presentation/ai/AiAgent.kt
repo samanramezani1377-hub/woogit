@@ -38,24 +38,9 @@ internal class AiAgent(
         val attachmentContext = if (activeAttachments.isNotEmpty()) {
             "\n\nمهم: کاربر در همین درخواست ${activeAttachments.size} تصویر را از داخل برنامه انتخاب و به پیام پیوست کرده است. این تصاویر همین حالا در اختیار Agent هستند. اگر کاربر می‌خواهد تصویر انتخاب‌شده را به یک محصول اضافه کند، مستقیماً ابزار products_image_add را با شناسه محصول صدا بزن؛ هرگز از کاربر نخواه فایل یا تصویر را دوباره انتخاب کند و هرگز برای افزودن تصویر نام فایل را از کاربر نپرس. نام فایل و بایت تصویر توسط برنامه مدیریت می‌شوند."
         } else ""
-        val task = messages.lastOrNull { it.first == "user" }?.second?.trim().orEmpty().ifBlank { "Agent task" }
-        val workingState = workingMemory.ensure(conversationId, task)
-        val workingContext = workingState.optJSONObject("progress")?.let { progress ->
-            "\n\nحافظه اجرای همین گفتگو:\n" + JSONObject()
-                .put("executionId", workingState.optString("executionId"))
-                .put("status", workingState.optString("status"))
-                .put("task", workingState.optString("task"))
-                .put("progress", progress)
-                .put("checkpoint", workingState.optJSONObject("checkpoint") ?: JSONObject())
-                .put("lastOperation", workingState.optString("lastOperation"))
-                .put("nextOperation", workingState.optString("nextOperation"))
-                .put("summary", workingState.optString("summary"))
-                .toString() +
-                "\nاین حافظه برای ادامه کار بعد از قطع اجراست. برای جزئیات بیشتر working_memory را با operation=read بخوان. عملیات موفق را پس از تأیید واقعی checkpoint کن و کارهای تمام‌شده را در پایان compact/complete کن."
-        } ?: ""
         val memoryContext = memory.contextText()
         val working = JSONArray().apply {
-            put(JSONObject().put("role", "system").put("content", AiAgentPrompt.SYSTEM_PROMPT + attachmentContext + memoryContext + workingContext))
+            put(JSONObject().put("role", "system").put("content", AiAgentPrompt.SYSTEM_PROMPT + attachmentContext + memoryContext))
             messages.forEach { (role, content) -> put(JSONObject().put("role", role).put("content", content)) }
         }
         var attachmentsForNextRequest = attachments
