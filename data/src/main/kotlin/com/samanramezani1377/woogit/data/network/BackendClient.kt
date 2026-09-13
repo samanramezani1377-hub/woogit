@@ -10,6 +10,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.request.*
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.*
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -85,7 +86,12 @@ class BackendClient(
             }
             val text=response.bodyAsText();responseObserver?.onResponse(response.status.value,text);if(response.status.value==401)sessions.remove(storeId)
             ApiResponse(response.status.value,text,normalizedMethod,path,response.headers.entries().associate{it.key.lowercase() to it.value.joinToString(",")})
-        }catch(throwable:Throwable){reportTransport("WooCommerce","BackendClient.forward",method.uppercase(),endpoint,throwable);throw throwable}
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (throwable: Throwable) {
+            reportTransport("WooCommerce","BackendClient.forward",method.uppercase(),endpoint,throwable)
+            ApiResponse(NETWORK_FAILURE_STATUS, networkFailureBody(throwable), method.uppercase(), path)
+        }
     }
 
     suspend fun forwardBinary(storeId: String, path: String, method: String, pair: CredentialPair, query: Map<String, Any> = emptyMap(), bytes: ByteArray, contentType: String, fileName: String, idempotencyKey: String? = null): ApiResponse {
@@ -98,7 +104,12 @@ class BackendClient(
                 pair.wordpressUsername?.takeIf{it.isNotBlank()}?.let{header("X-WooGit-Wordpress-Username",it)};pair.wordpressApplicationPassword?.takeIf{it.isNotBlank()}?.let{header("X-WooGit-Wordpress-Application-Password",it)};header("Idempotency-Key",key);header(HttpHeaders.ContentDisposition,"attachment; filename=\"${fileName.substringAfterLast('/').substringAfterLast('\\')}\"");this.contentType(ContentType.parse(contentType));setBody(bytes)
             }
             val text=response.bodyAsText();responseObserver?.onResponse(response.status.value,text);if(response.status.value==401)sessions.remove(storeId);ApiResponse(response.status.value,text,normalizedMethod,path,response.headers.entries().associate{it.key.lowercase() to it.value.joinToString(",")})
-        }catch(throwable:Throwable){reportTransport("Media","BackendClient.forwardBinary",method.uppercase(),endpoint,throwable);throw throwable}
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (throwable: Throwable) {
+            reportTransport("Media","BackendClient.forwardBinary",method.uppercase(),endpoint,throwable)
+            ApiResponse(NETWORK_FAILURE_STATUS, networkFailureBody(throwable), method.uppercase(), path)
+        }
     }
 
     suspend fun getOperation(storeId:String,operationId:String):BackendOperationStatus=runCatching{
@@ -120,11 +131,12 @@ class BackendClient(
 
     private fun extractBackendReason(body:String):String?=runCatching{val obj=json.parseToJsonElement(body).jsonObject;obj["reason"]?.jsonPrimitive?.contentOrNull?:obj["code"]?.jsonPrimitive?.contentOrNull?:obj["message"]?.jsonPrimitive?.contentOrNull}.getOrNull()
     private fun reportTransport(feature:String,location:String,method:String,endpoint:String,throwable:Throwable){technicalErrorReporter.report(TechnicalErrorContext(feature=feature,location=location,operation="Backend HTTP request",type="NetworkError",httpMethod=method,endpoint=endpoint.substringBefore('?'),details="Backend transport/protocol request failed"),throwable)}
+    private fun networkFailureBody(throwable: Throwable): String = "{\"error\":\"network_failure\",\"type\":\"${throwable::class.simpleName.orEmpty()}\",\"message\":${JsonPrimitive(throwable.message.orEmpty()).toString()}}"
     private fun stableMutationKey(storeId:String,method:String,path:String,query:Map<String,Any>,body:String?):String{val canonical="$storeId|$method|$path|${query.toSortedMap().entries.joinToString("&"){"${it.key}=${it.value}"}}|${body.orEmpty()}";return "app-${sha256(canonical.toByteArray(Charsets.UTF_8))}"}
     private fun sha256(value:ByteArray):String=MessageDigest.getInstance("SHA-256").digest(value).joinToString(""){"%02x".format(it)}
     private fun String.urlEncode():String=java.net.URLEncoder.encode(this,Charsets.UTF_8.name()).replace("+","%20")
     private fun url(path:String)=baseUrl.trimEnd('/')+path
-    private companion object{val MUTATION_METHODS=setOf("POST","PUT","PATCH","DELETE")}
+    private companion object{const val NETWORK_FAILURE_STATUS=599;val MUTATION_METHODS=setOf("POST","PUT","PATCH","DELETE")}
 }
 
 data class BackendVerifyResult(val session:String,val scope:String,val accessEnabled:Boolean,val billingSession:String?=null)
