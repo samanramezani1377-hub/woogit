@@ -6,6 +6,7 @@ import org.json.JSONObject
 internal object AiAgentTools {
     fun definitions() = JSONArray().apply {
         put(tool("calculator", "محاسبه‌گر امن داخلی WooGit. برای یک عبارت از expression و برای چند محاسبه مستقل از calculations استفاده کن. برای چند محصول، هر محصول را با id مستقل و expression جداگانه در calculations بده و نتیجه هرکدام را بگیر. فقط محاسبه انجام می‌دهد و هیچ محصولی را تغییر نمی‌دهد.", calculatorSchema()))
+        put(tool("working_memory", "حافظه موقت و پایدار اجرای همین گفتگوی Agent. برای checkpoint کردن پیشرفت، ثبت وضعیت عملیات، خواندن وضعیت بعد از قطع اجرا، compact کردن اطلاعات تمام‌شده و clear کردن حافظه استفاده کن. این حافظه متعلق به Agent است و برای ادامه اجرای کارهای طولانی ساخته شده؛ تاریخچه گفتگو را در آن کپی نکن.", workingMemorySchema()))
         put(tool("product_categories_list", "دسته‌بندی‌های محصولات فروشگاه را از مسیر WooGit پیدا کن. برای یافتن محصولات یک دسته، ابتدا با search نام دسته را پیدا کن و سپس id آن را به products_list به‌عنوان categoryId بده.", categoryListSchema()))
         put(tool("products_list", "فهرست محصولات با اطلاعات لازم برای تصمیم‌گیری؛ بدون بایت تصویر. برای جستجوی محصولات یک دسته از categoryId استفاده کن تا فقط همان دسته از فروشگاه درخواست شود. پاسخ pagination شامل endOfCollection و lastPage است و اگر endOfCollection=true بود دیگر صفحه بعدی را درخواست نکن.", listSchema()))
         put(tool("products_get", "جزئیات کامل محصول از مسیر WooGit؛ بدون ارسال بایت تصویر.", idSchema()))
@@ -27,6 +28,7 @@ internal object AiAgentTools {
 
     fun label(name: String) = when (name) {
         "calculator" -> "در حال انجام محاسبات"
+        "working_memory" -> "در حال ثبت وضعیت کار"
         "product_categories_list" -> "در حال بررسی دسته‌بندی‌های محصولات"
         "products_list" -> "در حال بررسی فهرست محصولات"
         "products_get" -> "در حال دریافت محصول"
@@ -51,6 +53,8 @@ internal object AiAgentTools {
 
     fun isMemory(name: String) = name == "memory_read" || name == "memory_write" || name == "memory_update" || name == "memory_delete"
 
+    fun isWorkingMemory(name: String) = name == "working_memory"
+
     fun assistantToolCall(id: String, name: String, arguments: String, signature: String?) = JSONObject()
         .put("role", "assistant")
         .put("content", JSONObject.NULL)
@@ -71,6 +75,16 @@ internal object AiAgentTools {
             .put("id", JSONObject().put("type", "string").put("description", "شناسه مستقل، مثلاً product ID"))
             .put("expression", JSONObject().put("type", "string"))
         ).put("required", JSONArray().put("id").put("expression")))))
+    private fun workingMemorySchema() = JSONObject().put("type", "object").put("properties", JSONObject()
+        .put("operation", JSONObject().put("type", "string").put("enum", JSONArray().put("read").put("update").put("checkpoint").put("compact").put("complete").put("clear")))
+        .put("data", JSONObject().put("type", "object"))
+        .put("summary", JSONObject().put("type", "string"))
+        .put("task", JSONObject().put("type", "string"))
+        .put("progress", JSONObject().put("type", "object"))
+        .put("lastOperation", JSONObject().put("type", "string"))
+        .put("nextOperation", JSONObject().put("type", "string"))
+        .put("checkpoint", JSONObject().put("type", "object")))
+        .put("required", JSONArray().put("operation"))
     private fun categoryListSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("page", JSONObject().put("type", "integer").put("minimum", 1)).put("perPage", JSONObject().put("type", "integer").put("minimum", 1).put("maximum", 100)).put("search", JSONObject().put("type", "string")))
     private fun listSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("page", JSONObject().put("type", "integer").put("minimum", 1)).put("perPage", JSONObject().put("type", "integer").put("minimum", 1).put("maximum", 99)).put("search", JSONObject().put("type", "string")).put("status", JSONObject().put("type", "string")).put("categoryId", JSONObject().put("type", "integer").put("minimum", 1)))
     private fun imageSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("id", JSONObject().put("type", "integer").put("minimum", 1)).put("imageIndex", JSONObject().put("type", "integer").put("minimum", 0))).put("required", JSONArray().put("id"))
