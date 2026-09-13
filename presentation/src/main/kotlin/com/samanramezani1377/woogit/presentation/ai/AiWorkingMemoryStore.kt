@@ -16,19 +16,11 @@ internal class AiWorkingMemoryStore(context: Context, private val storeKey: Stri
     private val prefs = context.applicationContext.getSharedPreferences("woogit_ai_working_memory", Context.MODE_PRIVATE)
     private val prefix = "working_${storeKey}_"
 
-    /**
-     * Returns a compact prompt-safe view. The full operation/error history remains persisted
-     * and is used internally for deduplication and mutation; only the latest entries are
-     * exposed to the model.
-     */
+    /** Returns a compact prompt-safe view; the complete state stays persisted internally. */
     @Synchronized
     fun read(conversationId: String): JSONObject? = readRaw(conversationId)?.let(::promptSnapshot)
 
-    /**
-     * Creates the state only when the conversation has never had Working Memory.
-     * Existing completed/interrupted state is intentionally preserved so a follow-up cannot
-     * silently create a new executionId and lose the previous checkpoint.
-     */
+    /** Existing state is never replaced just because a new request arrived. */
     @Synchronized
     fun ensure(conversationId: String, task: String): JSONObject {
         val existing = readRaw(conversationId)
@@ -36,9 +28,7 @@ internal class AiWorkingMemoryStore(context: Context, private val storeKey: Stri
         return newState(conversationId, task).also { write(conversationId, it) }
     }
 
-    /**
-     * Explicitly resumes an existing execution without generating a new executionId.
-     */
+    /** Explicit resume preserves executionId, checkpoint, progress and operation history. */
     @Synchronized
     fun resume(conversationId: String): JSONObject {
         val state = readRaw(conversationId) ?: return JSONObject().put("status", "empty")
@@ -46,13 +36,10 @@ internal class AiWorkingMemoryStore(context: Context, private val storeKey: Stri
         state.put("resumedAt", System.currentTimeMillis())
         state.put("updatedAt", System.currentTimeMillis())
         write(conversationId, state)
-        return state
+        return promptSnapshot(state)
     }
 
-    /**
-     * Delta update. The old generic merge used to replace arrays and nested state wholesale.
-     * Only known mutable execution fields are accepted here; operation history is append-only.
-     */
+    /** Delta update; operation/error arrays are never replaced by a generic update. */
     @Synchronized
     fun update(conversationId: String, data: JSONObject): JSONObject {
         val state = readRaw(conversationId) ?: newState(conversationId, data.optString("task", "Agent task"))
@@ -62,20 +49,15 @@ internal class AiWorkingMemoryStore(context: Context, private val storeKey: Stri
         data.optString("summary").takeIf { it.isNotBlank() }?.let { state.put("summary", it.take(MAX_SUMMARY_LENGTH)) }
         data.optString("lastOperation").takeIf { it.isNotBlank() }?.let { state.put("lastOperation", it) }
         data.optString("nextOperation").takeIf { it.isNotBlank() }?.let { state.put("nextOperation", it) }
-        data.optJSONObject("progress")?.let { mergeObject(state.optJSONObject("progress") ?: JSONObject(), it).also { state.put("progress", it) } }
+        data.optJSONObject("progress")?.let { state.put("progress", mergeObject(state.optJSONObject("progress") ?: JSONObject(), it)) }
         data.optJSONObject("checkpoint")?.let { state.put("checkpoint", JSONObject(it.toString())) }
-
-        // A completed execution can only be reopened through an explicit execution update.
-        // This is what lets the existing Agent activation path resume the same executionId.
-        if (state.optString("status") == "completed" && data.optJSONObject("progress") != null) {
-            state.put("status", "active")
-        }
 
         state.put("updatedAt", System.currentTimeMillis())
         write(conversationId, state)
         return promptSnapshot(state)
     }
 
+    /** Append-only and idempotent operation log. */
     @Synchronized
     fun recordOperation(conversationId: String, operation: JSONObject, progress: JSONObject? = null): JSONObject {
         val state = readRaw(conversationId) ?: newState(conversationId, operation.optString("task", "Agent task"))
@@ -89,8 +71,6 @@ internal class AiWorkingMemoryStore(context: Context, private val storeKey: Stri
             )
         }
 
-        // Idempotent append: a retry of the same verified/completed tool call must not create
-        // another identical operation entry in Working Memory.
         var duplicate = false
         for (i in 0 until operations.length()) {
             if (operations.optJSONObject(i)?.optString("fingerprint") == fingerprint) {
@@ -132,8 +112,7 @@ internal class AiWorkingMemoryStore(context: Context, private val storeKey: Stri
         state.put("status", "completed")
         state.put("summary", summary.take(MAX_SUMMARY_LENGTH))
         state.put("updatedAt", System.currentTimeMillis())
-        // Do not delete targets/calculations/operations/errors here. A later "ادامه بده"
-        // must be able to inspect the exact checkpoint and successful operations.
+        // Completion must not erase the checkpoint or successful operation history.
         write(conversationId, state)
         return promptSnapshot(state)
     }
