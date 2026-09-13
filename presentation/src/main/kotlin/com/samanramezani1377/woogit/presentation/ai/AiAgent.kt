@@ -1,6 +1,7 @@
 package com.samanramezani1377.woogit.presentation.ai
 
 import android.content.Context
+import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
 import org.json.JSONArray
 import org.json.JSONObject
 import java.security.MessageDigest
@@ -8,6 +9,7 @@ import java.security.MessageDigest
 internal class AiAgent(
     private val provider: AiProvider,
     private val executor: WooGitToolExecutor,
+    private val catalogExecutor: AiProductCatalogToolExecutor,
     context: Context,
     storeId: String,
 ) {
@@ -46,7 +48,7 @@ internal class AiAgent(
             val action = pending.remove(confirmationToken) ?: throw IllegalStateException("عملیات در انتظار تأیید پیدا نشد. دوباره درخواست را ارسال کنید.")
             onEvent(AiStreamEvent.Status("در حال اجرای عملیات تأییدشده..."))
             working.put(AiAgentTools.assistantToolCall(action.callId, action.name, action.arguments, action.thoughtSignature))
-            val result = executor.execute(action.name, action.arguments, action.attachments)
+            val result = executeTool(action.name, action.arguments, action.attachments)
             val imageAttachment = executor.consumeImageAttachment()
             if (imageAttachment != null) {
                 resultAttachments = listOf(imageAttachment)
@@ -96,7 +98,7 @@ internal class AiAgent(
                     return AgentReply(confirmationToken = token, toolName = name, toolArguments = arguments, attachments = resultAttachments)
                 }
 
-                val result = executor.execute(name, arguments)
+                val result = executeTool(name, arguments)
                 val imageAttachment = executor.consumeImageAttachment()
                 if (imageAttachment != null) {
                     resultAttachments = listOf(imageAttachment)
@@ -107,6 +109,14 @@ internal class AiAgent(
             }
         }
         throw IllegalStateException("Agent به حداکثر مراحل مجاز رسید.")
+    }
+
+    private suspend fun executeTool(name: String, arguments: String, attachments: List<AiAttachment> = emptyList()): String {
+        return if (name == "product_categories_list" || (name == "products_list" && JSONObject(arguments).optLong("categoryId", 0L) > 0L)) {
+            catalogExecutor.execute(name, JSONObject(arguments))
+        } else {
+            executor.execute(name, arguments, attachments)
+        }
     }
 
     private fun writeFailureMessage(result: JSONObject) = result.optString("error").ifBlank { "عملیات تغییر انجام نشد یا قابل تأیید نیست." }
