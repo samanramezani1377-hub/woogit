@@ -95,9 +95,11 @@ class BackendClient(
     }
 
     suspend fun forwardBinary(storeId: String, path: String, method: String, pair: CredentialPair, query: Map<String, Any> = emptyMap(), bytes: ByteArray, contentType: String, fileName: String, idempotencyKey: String? = null): ApiResponse {
+        val normalizedMethod = method.uppercase()
+        require(normalizedMethod in MUTATION_METHODS) { "Binary forwarding is only supported for mutations" }
         val endpoint="/wp-json/woogit/v1/forward?path=$path"
         return try{
-            val token=sessions.get(storeId)?:throw BackendProtocolException("Backend session is unavailable");val normalizedMethod=method.uppercase();require(normalizedMethod in MUTATION_METHODS){"Binary forwarding is only supported for mutations"}
+            val token=sessions.get(storeId)?:throw BackendProtocolException("Backend session is unavailable")
             val payloadDigest=sha256(bytes);val key=idempotencyKey?:stableMutationKey(storeId,normalizedMethod,path,query,"binary:$payloadDigest")
             val response=httpClient.request(URLBuilder(url("/wp-json/woogit/v1/forward")).apply{parameters.append("path",path);query.forEach{(k,v)->parameters.append(k,v.toString())}}.build()){
                 this.method=HttpMethod.parse(normalizedMethod);header("X-WooGit-App-Version",appVersion);header("X-WooGit-Session",token);header("X-WooGit-Consumer-Key",pair.consumerKey);header("X-WooGit-Consumer-Secret",pair.consumerSecret)
