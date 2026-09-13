@@ -6,8 +6,8 @@ import com.samanramezani1377.woogit.core.security.SecureCredentialStore
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
-import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.client.request.HttpRequestData
+import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.headersOf
@@ -111,6 +111,16 @@ class BackendClientTest {
         val sessions = FakeSessionStore().also { it.put("store-1", "session-token") }
         client(engine, sessions).forward("store-1", "/wc/v3/products", "GET", pair)
         assertNull(sessions.get("store-1"))
+    }
+
+    @Test
+    fun networkFailureForwardReturnsRecoverableHttpResultInsteadOfThrowing() = kotlinx.coroutines.test.runTest {
+        val engine = MockEngine { throw java.net.UnknownHostException("Unable to resolve host woogit.ir") }
+        val sessions = FakeSessionStore().also { it.put("store-1", "session-token") }
+        val response = client(engine, sessions).forward("store-1", "/wc/v3/products", "GET", pair)
+        assertEquals(599, response.statusCode)
+        assertTrue(response.body.contains("network_failure"))
+        assertTrue(response.body.contains("UnknownHostException"))
     }
 
     @Test
