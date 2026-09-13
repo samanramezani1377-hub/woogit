@@ -5,7 +5,8 @@ import org.json.JSONObject
 
 internal object AiAgentTools {
     fun definitions() = JSONArray().apply {
-        put(tool("products_list", "فهرست محصولات با اطلاعات لازم برای تصمیم‌گیری؛ بدون بایت تصویر. پاسخ pagination شامل endOfCollection و lastPage است و اگر endOfCollection=true بود دیگر صفحه بعدی را درخواست نکن.", listSchema()))
+        put(tool("product_categories_list", "دسته‌بندی‌های محصولات فروشگاه را از مسیر WooGit پیدا کن. برای یافتن محصولات یک دسته، ابتدا با search نام دسته را پیدا کن و سپس id آن را به products_list به‌عنوان categoryId بده.", categoryListSchema()))
+        put(tool("products_list", "فهرست محصولات با اطلاعات لازم برای تصمیم‌گیری؛ بدون بایت تصویر. برای جستجوی محصولات یک دسته از categoryId استفاده کن تا فقط همان دسته از فروشگاه درخواست شود. پاسخ pagination شامل endOfCollection و lastPage است و اگر endOfCollection=true بود دیگر صفحه بعدی را درخواست نکن.", listSchema()))
         put(tool("products_get", "جزئیات کامل محصول از مسیر WooGit؛ بدون ارسال بایت تصویر.", idSchema()))
         put(tool("products_get_image", "یک تصویر مشخص محصول را به‌صورت attachment واقعی از مسیر رسانه WooGit دریافت کن. URL تصویر به مدل داده نمی‌شود و برای تحلیل تصویری فقط attachment را استفاده کن.", imageSchema()))
         put(tool("products_image_add", "تصویر انتخاب‌شده و از قبل پیوست‌شده توسط کاربر را به محصول اضافه کن. تصویر از قبل در برنامه انتخاب شده است؛ هرگز نام فایل یا انتخاب دوباره تصویر را از کاربر نخواه. فقط شناسه محصول را مشخص کن؛ نیازمند تأیید.", imageAddSchema()))
@@ -24,6 +25,7 @@ internal object AiAgentTools {
     }
 
     fun label(name: String) = when (name) {
+        "product_categories_list" -> "در حال بررسی دسته‌بندی‌های محصولات"
         "products_list" -> "در حال بررسی فهرست محصولات"
         "products_get" -> "در حال دریافت محصول"
         "products_get_image" -> "در حال دریافت تصویر محصول"
@@ -61,7 +63,8 @@ internal object AiAgentTools {
         ))
 
     private fun idSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("id", JSONObject().put("type", "integer").put("minimum", 1))).put("required", JSONArray().put("id"))
-    private fun listSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("page", JSONObject().put("type", "integer").put("minimum", 1)).put("perPage", JSONObject().put("type", "integer").put("minimum", 1).put("maximum", 99)).put("search", JSONObject().put("type", "string")).put("status", JSONObject().put("type", "string")))
+    private fun categoryListSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("page", JSONObject().put("type", "integer").put("minimum", 1)).put("perPage", JSONObject().put("type", "integer").put("minimum", 1).put("maximum", 100)).put("search", JSONObject().put("type", "string")))
+    private fun listSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("page", JSONObject().put("type", "integer").put("minimum", 1)).put("perPage", JSONObject().put("type", "integer").put("minimum", 1).put("maximum", 99)).put("search", JSONObject().put("type", "string")).put("status", JSONObject().put("type", "string")).put("categoryId", JSONObject().put("type", "integer").put("minimum", 1)))
     private fun imageSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("id", JSONObject().put("type", "integer").put("minimum", 1)).put("imageIndex", JSONObject().put("type", "integer").put("minimum", 0))).put("required", JSONArray().put("id"))
     private fun imageAddSchema() = idSchema()
     private fun imageRemoveSchema() = JSONObject().put("type", "object").put("properties", JSONObject().put("id", JSONObject().put("type", "integer").put("minimum", 1)).put("imageIndex", JSONObject().put("type", "integer").put("minimum", 0)).put("imageId", JSONObject().put("type", "string"))).put("required", JSONArray().put("id"))
