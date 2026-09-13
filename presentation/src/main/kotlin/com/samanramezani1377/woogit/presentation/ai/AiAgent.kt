@@ -126,7 +126,78 @@ internal class AiAgent(
                 recordOperation(conversationId, name, arguments, result, "completed")
             }
         }
-        throw IllegalStateException("Agent به حداکثر مراحل مجاز رسید.")
+
+        // Tool execution has its own hard budget. Reaching that budget must never
+        // leave the user without a response. The final-response phase is deliberately
+        // outside MAX_STEPS and receives no tools, so it cannot consume another tool step.
+        return generateMandatoryFinalResponse(
+            working = working,
+            conversationId = conversationId,
+            attachments = resultAttachments,
+            onEvent = onEvent,
+        )
+    }
+
+    private suspend fun generateMandatoryFinalResponse(
+        working: JSONArray,
+        conversationId: String,
+        attachments: List<AiAttachment>,
+        onEvent: suspend (AiStreamEvent) -> Unit,
+    ): AgentReply {
+        onEvent(AiStreamEvent.Status("در حال نوشتن نتیجه نهایی..."))
+
+        val finalMessages = JSONArray()
+        for (i in 0 until working.length()) {
+            finalMessages.put(working.opt(i))
+        }
+        finalMessages.put(
+            JSONObject()
+                .put("role", "system")
+                .put(
+                    "content",
+                    """
+این نوبت اجرای ابزارها به سقف مجاز رسید. اکنون مرحله نهایی و اجباری پاسخ است.
+دیگر هیچ ابزاری را فراخوانی نکن و کار جدیدی شروع نکن.
+فقط یک پاسخ نهایی و قابل‌فهم برای کاربر بنویس و بر اساس نتایج واقعی همین اجرا بگو:
+- چه کارهایی با موفقیت انجام شد؛
+- اگر کار کامل نشده، دقیقاً چه مقدار/چه بخشی باقی مانده است؛
+- اگر ادامه کار با درخواست بعدی یا اجرای مجدد لازم است، واضح بگو.
+هرگز ادعا نکن کاری انجام شده که در نتایج ابزارها تأیید نشده است.
+اگر Working Memory فعال است، از checkpoint و progress آن برای توضیح وضعیت استفاده کن، اما محتوای داخلی آن را عیناً نمایش نده.
+این مرحله فقط برای تولید پاسخ نهایی است و نباید هیچ tool callای تولید کند.
+                    """.trimIndent(),
+                ),
+        )
+
+        return try {
+            // Empty tool definitions make this a text-only generation phase.
+            val response = provider.stream(finalMessages, JSONArray(), attachments, onEvent)
+            val message = response.optJSONArray("choices")?.optJSONObject(0)?.optJSONObject("message")
+            val text = message?.optString("content")?.trim().orEmpty()
+            if (text.isNotBlank()) {
+                // Do not complete/clear active Working Memory here: reaching the tool
+                // budget means the underlying task may still be resumable.
+                AgentReply(text = text, attachments = attachments)
+            } else {
+                AgentReply(text = mandatoryFallback(conversationId), attachments = attachments)
+            }
+        } catch (_: Throwable) {
+            // The final phase itself must not turn into another silent failure. If the
+            // provider cannot produce the final text, return a deterministic status.
+            AgentReply(text = mandatoryFallback(conversationId), attachments = attachments)
+        }
+    }
+
+    private fun mandatoryFallback(conversationId: String): String {
+        val state = workingMemory.read(conversationId)
+        val progress = state?.optJSONObject("progress")
+        val completed = progress?.optInt("completed", -1) ?: -1
+        val total = progress?.optInt("total", -1) ?: -1
+        return if (completed >= 0 && total > 0) {
+            "بخشی از کار انجام شد و اجرای ابزارها به سقف این مرحله رسید: $completed از $total مورد تکمیل شده است. وضعیت کار ذخیره شده و می‌توان از نقطه ادامه، اجرای آن را ادامه داد."
+        } else {
+            "بخشی از کار انجام شد، اما سقف اجرای ابزارها در این مرحله رسید. نتیجه‌های انجام‌شده حفظ شده‌اند و می‌توان کار را از وضعیت فعلی ادامه داد."
+        }
     }
 
     private suspend fun executeTool(name: String, arguments: String, attachments: List<AiAttachment>, conversationId: String): String {
