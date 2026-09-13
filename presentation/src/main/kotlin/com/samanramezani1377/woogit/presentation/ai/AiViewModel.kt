@@ -143,7 +143,7 @@ internal class AiViewModel(context: Context, dependencies: V1PresentationDepende
                 var activities = emptyList<AiActivity>(); var streaming = ""
                 fun isCurrentGeneration() = generationId == requestGenerationId
                 fun publish() { if (isCurrentGeneration()) _state.value = AiUiState.Working(messages, activities, streaming) }
-                val reply = agent.run(messages.map { it.role to it.content }, confirmationToken, attachments) { event ->
+                val reply = agent.run(messages.map { it.role to it.content }, currentSessionId, confirmationToken, attachments) { event ->
                     if (!isCurrentGeneration()) return@run
                     when (event) {
                         is AiStreamEvent.Status -> activities = (activities.map { it.copy(completed = true) } + AiActivity(event.text)).takeLast(5)
