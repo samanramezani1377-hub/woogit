@@ -372,15 +372,44 @@ private fun BatchConfirmationCard(
         mutableStateOf(batch.items.map { it.id }.toSet())
     }
 
+    val allSelected = selected.size == batch.items.size
+    val noneSelected = selected.isEmpty()
+
     GlassCard {
         Text(batch.title, fontWeight = FontWeight.Bold)
         Text(batch.description, color = GlassTokens.muted)
         Spacer(Modifier.height(6.dp))
+
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            TextButton(
+                onClick = { selected = batch.items.map { it.id }.toSet() },
+                enabled = !allSelected,
+            ) {
+                Text("انتخاب همه")
+            }
+            TextButton(
+                onClick = { selected = emptySet() },
+                enabled = !noneSelected,
+            ) {
+                Text("پاک کردن انتخاب")
+            }
+        }
+
         Text(
             "موارد انتخاب‌شده: ${selected.size} از ${batch.items.size}",
             color = GlassTokens.accent,
             fontWeight = FontWeight.SemiBold,
         )
+        if (noneSelected) {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "هیچ موردی انتخاب نشده است. برای اجرا حداقل یک مورد را انتخاب کنید.",
+                color = GlassTokens.urgent,
+            )
+        }
         Spacer(Modifier.height(4.dp))
 
         batch.items.forEach { item ->
@@ -433,6 +462,7 @@ private fun BatchConfirmationCard(
                 "تأیید موارد انتخاب‌شده",
                 { onConfirm(selected) },
                 Modifier.weight(1f),
+                enabled = !noneSelected,
             )
             GlassOutlinedButton(
                 "رد کردن همه",
