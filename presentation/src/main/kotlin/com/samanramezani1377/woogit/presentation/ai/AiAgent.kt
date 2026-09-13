@@ -9,7 +9,6 @@ internal class AiAgent(
     private val provider: AiProvider,
     private val executor: WooGitToolExecutor,
     private val catalogExecutor: AiProductCatalogToolExecutor,
-    private val calculatorExecutor: AiCalculatorToolExecutor,
     context: Context,
     storeId: String,
 ) {
@@ -23,6 +22,7 @@ internal class AiAgent(
 
     private val pending = mutableMapOf<String, PendingAction>()
     private val memory = AiAgentMemory(context, storeId)
+    private val calculatorExecutor = AiCalculatorToolExecutor()
 
     fun cancel(token: String): Boolean = pending.remove(token) != null
 
