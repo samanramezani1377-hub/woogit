@@ -1,7 +1,6 @@
 package com.samanramezani1377.woogit.presentation.ai
 
 import android.content.Context
-import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
 import org.json.JSONArray
 import org.json.JSONObject
 import java.security.MessageDigest
@@ -10,6 +9,7 @@ internal class AiAgent(
     private val provider: AiProvider,
     private val executor: WooGitToolExecutor,
     private val catalogExecutor: AiProductCatalogToolExecutor,
+    private val calculatorExecutor: AiCalculatorToolExecutor,
     context: Context,
     storeId: String,
 ) {
@@ -112,10 +112,10 @@ internal class AiAgent(
     }
 
     private suspend fun executeTool(name: String, arguments: String, attachments: List<AiAttachment> = emptyList()): String {
-        return if (name == "product_categories_list" || (name == "products_list" && JSONObject(arguments).optLong("categoryId", 0L) > 0L)) {
-            catalogExecutor.execute(name, JSONObject(arguments))
-        } else {
-            executor.execute(name, arguments, attachments)
+        return when {
+            name == "calculator" -> calculatorExecutor.execute(JSONObject(arguments))
+            name == "product_categories_list" || (name == "products_list" && JSONObject(arguments).optLong("categoryId", 0L) > 0L) -> catalogExecutor.execute(name, JSONObject(arguments))
+            else -> executor.execute(name, arguments, attachments)
         }
     }
 
