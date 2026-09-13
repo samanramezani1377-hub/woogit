@@ -6,7 +6,7 @@ import org.json.JSONObject
 internal object AiAgentTools {
     fun definitions() = JSONArray().apply {
         put(tool("calculator", "محاسبه‌گر امن داخلی WooGit. برای یک عبارت از expression و برای چند محاسبه مستقل از calculations استفاده کن. برای چند محصول، هر محصول را با id مستقل و expression جداگانه در calculations بده و نتیجه هرکدام را بگیر. فقط محاسبه انجام می‌دهد و هیچ محصولی را تغییر نمی‌دهد.", calculatorSchema()))
-        put(tool("working_memory", "حافظه موقت و پایدار اجرای همین گفتگوی Agent. برای checkpoint کردن پیشرفت، ثبت وضعیت عملیات، خواندن وضعیت بعد از قطع اجرا، compact کردن اطلاعات تمام‌شده و clear کردن حافظه استفاده کن. این حافظه متعلق به Agent است و برای ادامه اجرای کارهای طولانی ساخته شده؛ تاریخچه گفتگو را در آن کپی نکن.", workingMemorySchema()))
+        put(tool("working_memory", "حافظه موقت و پایدار اجرای همین گفتگوی Agent. همیشه وضعیت اجرای جاری را مبنا قرار بده؛ برای خواندن وضعیت، ثبت delta، checkpoint، resume کردن اجرای نیمه‌تمام، compact کردن اطلاعات قدیمی و پایان واقعی اجرا استفاده کن. تاریخچه گفتگو را در آن کپی نکن.", workingMemorySchema()))
         put(tool("product_categories_list", "دسته‌بندی‌های محصولات فروشگاه را از مسیر WooGit پیدا کن. برای یافتن محصولات یک دسته، ابتدا با search نام دسته را پیدا کن و سپس id آن را به products_list به‌عنوان categoryId بده.", categoryListSchema()))
         put(tool("products_list", "فهرست محصولات با اطلاعات لازم برای تصمیم‌گیری؛ بدون بایت تصویر. برای جستجوی محصولات یک دسته از categoryId استفاده کن تا فقط همان دسته از فروشگاه درخواست شود. پاسخ pagination شامل endOfCollection و lastPage است و اگر endOfCollection=true بود دیگر صفحه بعدی را درخواست نکن.", listSchema()))
         put(tool("products_get", "جزئیات کامل محصول از مسیر WooGit؛ بدون ارسال بایت تصویر.", idSchema()))
@@ -76,7 +76,7 @@ internal object AiAgentTools {
             .put("expression", JSONObject().put("type", "string"))
         ).put("required", JSONArray().put("id").put("expression")))))
     private fun workingMemorySchema() = JSONObject().put("type", "object").put("properties", JSONObject()
-        .put("operation", JSONObject().put("type", "string").put("enum", JSONArray().put("read").put("update").put("checkpoint").put("compact").put("complete").put("clear")))
+        .put("operation", JSONObject().put("type", "string").put("enum", JSONArray().put("read").put("update").put("checkpoint").put("resume").put("compact").put("complete").put("clear")))
         .put("data", JSONObject().put("type", "object"))
         .put("summary", JSONObject().put("type", "string"))
         .put("task", JSONObject().put("type", "string"))
