@@ -67,6 +67,38 @@ class AiWorkingMemoryStoreTest {
     }
 
     @Test
+    fun inFlightMutationSurvivesResumeAndIsNotMarkedVerifiedPrematurely() {
+        val initial = store.ensure(CONVERSATION_ID, "تغییر محصول")
+        val executionId = initial.getString("executionId")
+        store.beginInFlightOperation(
+            CONVERSATION_ID,
+            JSONObject()
+                .put("tool", "products_update")
+                .put("arguments", "{\"id\":10,\"status\":\"publish\"}"),
+        )
+
+        val stopped = store.read(CONVERSATION_ID) ?: error("Working Memory missing")
+        assertEquals(executionId, stopped.getString("executionId"))
+        assertEquals("in_flight", stopped.getJSONObject("checkpoint").getString("status"))
+
+        store.resume(CONVERSATION_ID)
+        val resumed = store.read(CONVERSATION_ID) ?: error("Working Memory missing after resume")
+        assertEquals(executionId, resumed.getString("executionId"))
+        assertEquals("in_flight", resumed.getJSONObject("checkpoint").getString("status"))
+
+        store.recordOperation(
+            CONVERSATION_ID,
+            JSONObject()
+                .put("tool", "products_update")
+                .put("arguments", "{\"id\":10,\"status\":\"publish\"}")
+                .put("status", "verified"),
+        )
+        val verified = store.read(CONVERSATION_ID) ?: error("Working Memory missing after verification")
+        assertEquals("verified", verified.getJSONObject("checkpoint").getString("status"))
+        assertEquals(1, verified.getJSONArray("operations").length())
+    }
+
+    @Test
     fun repeatedOperationIsIdempotent() {
         val initial = store.ensure(CONVERSATION_ID, "کار تکرارشونده")
         val executionId = initial.getString("executionId")
