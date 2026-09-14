@@ -15,7 +15,7 @@ private val typedJson = Json { ignoreUnknownKeys = true; explicitNulls = false }
 @Serializable data class WooLineItemDto(val id:Long,val name:String="",val product_id:Long=0,val variation_id:Long=0,val quantity:Double=0.0,val subtotal:String="0",val total:String="0")
 @Serializable data class WooShippingLineDto(val id:Long=0,val method_id:String?=null,val method_title:String?=null,val total:String?=null)
 @Serializable data class WooCouponLineDto(val code:String="",val discount:String="0")
-@Serializable data class WooOrderTypedDto(val id:Long,val number:String="",val status:String="",val total:String="0",val currency:String="",val customer_id:Long=0,val billing:WooAddressDto?=null,val shipping:WooAddressDto?=null,val payment_method:String?=null,val payment_method_title:String?=null,val transaction_id:String?=null,val set_paid:Boolean?=null,val date_paid_gmt:String?=null,val date_modified_gmt:String?=null,val line_items:List<WooLineItemDto> = emptyList(),val shipping_lines:List<WooShippingLineDto> = emptyList(),val coupon_lines:List<WooCouponLineDto> = emptyList())
+@Serializable data class WooOrderTypedDto(val id:Long,val number:String="",val status:String="",val total:String="0",val currency:String="",val customer_id:Long=0,val billing:WooAddressDto?=null,val shipping:WooAddressDto?=null,val payment_method:String?=null,val payment_method_title:String?=null,val transaction_id:String?=null,val set_paid:Boolean?=null,val date_paid_gmt:String?=null,val date_created_gmt:String?=null,val date_modified_gmt:String?=null,val line_items:List<WooLineItemDto> = emptyList(),val shipping_lines:List<WooShippingLineDto> = emptyList(),val coupon_lines:List<WooCouponLineDto> = emptyList())
 @Serializable data class WooOrderNoteDto(val id:Long=0,val note:String,val customer_note:Boolean=false,val date_created_gmt:String?=null)
 @Serializable data class WooImageTypedDto(val id:Long?=null,val src:String?=null,val name:String?=null,val alt:String?=null)
 @Serializable data class WooCategoryDto(val id:Long=0,val name:String="",val parent:Long=0)
@@ -71,7 +71,7 @@ class TypedWooCommerceApi(private val raw: WooCommerceApi) {
     suspend fun media(b:String,p:Int,n:Int,s:String?) = decode(raw.listMedia(b,p,n,s)) { typedJson.decodeFromString<List<WooMediaDto>>(it) }
     suspend fun downloadMedia(b:String,sourceUrl:String) = runCatching { raw.downloadMedia(b,sourceUrl) }
     suspend fun uploadMedia(b:String,f:String,bytes:ByteArray,m:String,idempotencyKey:String?=null) = decode(raw.uploadMedia(b,f,bytes,m,idempotencyKey)) { typedJson.decodeFromString<WooMediaDto>(it) }
-    suspend fun deleteMedia(b:String,id:Long,idempotencyKey:String?=null) = decode(raw.deleteMedia(b,id,true,idempotencyKey)) { Unit }
+    suspend fun deleteMedia(b:String,id:Long,idempotencyKey:String?=null) = decode(raw.deleteMedia(b,idempotencyKey)) { Unit }
 }
 
 data class HttpApiException(val statusCode:Int,val body:String):Exception("WooCommerce HTTP $statusCode")
