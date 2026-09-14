@@ -21,6 +21,7 @@ Primary layers:
 6. `BillingClient` owns billing-specific backend calls.
 7. Store/domain repositories consume those clients.
 8. `E11AppNavigation` selects the active store and gates the UI by connection/billing state.
+9. `MainActivity` installs the shared `WooCommerceClientProvider` into `CommerceRuntime` so commerce UI uses the same authenticated provider instance.
 
 ## 3. Store connection / login flow
 
@@ -69,7 +70,7 @@ The App must never silently treat an operational session as a billing session or
 
 Commerce features use the existing authenticated WooCommerce transport rather than introducing a second store credential/session path:
 
-`Commerce UI/ViewModel -> WooCommerceClientProvider.commerceClient -> WooCommerceCommerceApi -> BackendClient.forward -> /wp-json/wc/v3/*`
+`Commerce UI/ViewModel -> CommerceRuntime.provider -> WooCommerceClientProvider.commerceClient -> WooCommerceCommerceApi -> BackendClient.forward -> /wp-json/wc/v3/*`
 
 The commerce API currently covers:
 
@@ -129,6 +130,7 @@ Background workers include order polling, product catalog synchronization, annou
 - Navigation/billing gate: `E11AppNavigation.kt`.
 - Dashboard concurrency/readiness: `DashboardViewModel.kt`.
 - Credential persistence: `AndroidSecureCredentialStore.kt`.
+- Commerce runtime: `presentation/.../commerce/CommerceRuntime.kt`.
 - Commerce transport: `data/.../CommerceWooCommerceApi.kt`, `WooCommerceClientProvider.kt`.
 - Commerce domain calculations: `core/.../commerce/CommerceFeatureEngine.kt`, `BarcodeResolver.kt`, `InvoiceDocumentFactory.kt`.
 - Commerce Android integration: `app/.../commerce/BarcodeScannerScreen.kt`, `InvoicePdfRenderer.kt`.
