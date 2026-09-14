@@ -12,7 +12,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalContext
 
 private const val SCANNER_ACTIVITY_CLASS = "com.samanramezani1377.woogit.commerce.CommerceScannerActivity"
-private const val EXTRA_BARCODE = "commerce_scanner_barcode"
+private const val EXTRA_BARCODE = "commerce_barcode"
 
 @Composable
 internal fun CommerceCameraScanButton(onDetected: (String) -> Unit) {
