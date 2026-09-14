@@ -42,6 +42,7 @@ class AppComposition(context: Context) {
     private val termLocal = SqlTermDataSource(db)
     private val pending = PendingOperationRepositoryImpl(db)
     private val provider = WooCommerceClientProvider(db, secure, network.httpClient, backend, sessions)
+    val commerceClientProvider = provider
     private val imageFetcher = DirectCustomerImageFetcher(db, secure, network.httpClient)
     private val mutationCoordinator = SqlMutationCoordinator(db)
 
@@ -103,7 +104,7 @@ class AppComposition(context: Context) {
     val deleteAttribute = DeleteAttributeUseCase(attributeRepository)
     val getTerms = GetTermsUseCase(termRepository)
     val getTerm = GetTermUseCase(termRepository)
-    val createTerm = CreateTermUseCase(termRepository)
+    val createTerm = CreateTermUseCase(createTermRepository = termRepository)
     val updateTerm = UpdateTermUseCase(termRepository)
     val deleteTerm = DeleteTermUseCase(termRepository)
     val uploadMedia = UploadMediaUseCase(mediaRepository)
@@ -137,18 +138,3 @@ class AppComposition(context: Context) {
         uploadMedia, deleteMedia, getConnectionState, getSyncState, getPending, getConflictsFn, resolveConflictFn,
         syncPending, restoredStoreId, ::rememberStore, ::forgetStore
     )
-
-    init {
-        BillingRuntime.gateway = billingClient
-        restoredStoreId?.let(::startBackgroundWork)
-    }
-
-    fun startBackgroundWork(storeId: String) {
-        if (ForceUpdateController.isActive(appContext)) return
-        OrderPollingWorker.schedule(appContext, storeId)
-        ProductCatalogSyncWorker.schedule(appContext, storeId)
-    }
-
-    fun cancelBackgroundWork(storeId: String) { OrderPollingWorker.cancel(appContext, storeId); ProductCatalogSyncWorker.cancel(appContext, storeId) }
-    fun close() { BillingRuntime.gateway = null; announcementCenter.dispose(); scope.cancel(); network.close() }
-}
