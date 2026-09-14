@@ -34,6 +34,15 @@ This is the source-of-truth locator for agent work. The contract maps in this di
 | AI state and confirmation dispatch | `presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/ai/AiViewModel.kt` |
 | AI runtime prompt | `presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/ai/AiAgentPrompt.kt` |
 | AI regression tests | `presentation/src/androidTest/kotlin/com/samanramezani1377/woogit/presentation/ai/AiWorkingMemoryStoreTest.kt` |
+| Commerce feature dispatcher | `presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/commerce/CommerceFeaturePages.kt` |
+| Commerce shared feature UI | `presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/commerce/CommerceFeatureUi.kt` |
+| Commerce barcode UI | `presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/commerce/BarcodePage.kt` |
+| Commerce bulk order UI | `presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/commerce/BulkOrdersPage.kt` |
+| Commerce inventory UI | `presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/commerce/InventoryPage.kt` |
+| Commerce customer UI | `presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/commerce/CustomersPage.kt` |
+| Commerce analytics UI | `presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/commerce/AnalyticsPage.kt` |
+| Commerce coupon UI | `presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/commerce/CouponsPage.kt` |
+| Commerce invoice UI | `presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/commerce/InvoicePage.kt` |
 | Background order polling | `app/src/main/kotlin/com/samanramezani1377/woogit/background/OrderPollingWorker.kt` |
 | Product sync | `app/src/main/kotlin/com/samanramezani1377/woogit/background/ProductCatalogSyncWorker.kt` |
 | Notifications | `app/src/main/kotlin/com/samanramezani1377/woogit/background/OrderNotificationManager.kt` |
