@@ -18,12 +18,11 @@ internal fun CommerceFeaturePage(
     onBulkCoupon: (Set<Long>, String) -> Unit,
     onInvoice: (String) -> Unit,
     onProduct: (String) -> Unit,
-    onOrder: (String) -> Unit,
 ) {
     Column(Modifier.fillMaxSize()) {
         FeatureHeader(feature.titleFa(), feature.subtitleFa(), onBack)
         when (feature) {
-            CommerceFeature.BARCODE -> BarcodePage(state, onBarcode, onProduct, onOrder)
+            CommerceFeature.BARCODE -> BarcodePage(state, onBarcode, onProduct)
             CommerceFeature.BULK_ORDERS -> BulkOrdersPage(state, onBulkOrder)
             CommerceFeature.INVENTORY -> InventoryPage(state, onInventoryFilter, onProduct)
             CommerceFeature.CUSTOMERS -> CustomersPage(state, onBulkCustomer)
