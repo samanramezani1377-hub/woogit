@@ -43,15 +43,16 @@ internal fun CommerceCenterScreen(
     onBack: () -> Unit,
     onOpenProduct: (String) -> Unit,
     onOpenOrder: (String) -> Unit,
+    initialFeature: CommerceFeature? = null,
     modifier: Modifier = Modifier,
 ) {
     val vm: CommerceViewModel = viewModel(key = "commerce-${storeId.value}", factory = CommerceViewModelFactory(dependencies, storeId))
     val state by vm.state.collectAsStateWithLifecycle()
-    var selected by remember { mutableStateOf<CommerceFeature?>(null) }
+    var selected by remember { mutableStateOf(initialFeature) }
     LaunchedEffect(storeId) { vm.load() }
     Column(modifier = modifier.fillMaxSize().padding(16.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Column { Text("مرکز یکپارچه Commerce"); Text("ابزارهای مستقیم فروشگاه") }
+            Column { Text("مرکز تجارت"); Text("ابزارهای مستقیم فروشگاه") }
             TextButton(onClick = onBack) { Text("بازگشت") }
         }
         if (state.loading) {
@@ -118,116 +119,64 @@ private fun CommerceFeatureContent(
     }
 
     confirmOrderStatus?.let { target ->
-        AlertDialog(
-            onDismissRequest = { confirmOrderStatus = null },
-            title = { Text("تأیید عملیات گروهی") },
-            text = { Text("${selectedIds.size} سفارش به وضعیت ${target.name} تغییر می‌کند. ادامه می‌دهید؟") },
-            confirmButton = { Button(onClick = { onBulkOrder(selectedIds, target); selectedIds = emptySet(); confirmOrderStatus = null }) { Text("تأیید") } },
-            dismissButton = { TextButton(onClick = { confirmOrderStatus = null }) { Text("لغو") } },
-        )
+        AlertDialog(onDismissRequest = { confirmOrderStatus = null }, title = { Text("تأیید عملیات") }, text = { Text("وضعیت سفارش‌های انتخاب‌شده به «${target.name}» تغییر کند؟") }, confirmButton = { TextButton(onClick = { onBulkOrder(selectedIds, target); confirmOrderStatus = null }) { Text("تأیید") } }, dismissButton = { TextButton(onClick = { confirmOrderStatus = null }) { Text("انصراف") } })
     }
-    if (confirmCustomers) {
-        AlertDialog(
-            onDismissRequest = { confirmCustomers = false },
-            title = { Text("تأیید تغییر مشتریان") },
-            text = { Text("${selectedLongIds.size} مشتری به role «$customerRole» تغییر می‌کنند.") },
-            confirmButton = { Button(onClick = { onBulkCustomer(selectedLongIds, customerRole); selectedLongIds = emptySet(); confirmCustomers = false }) { Text("تأیید") } },
-            dismissButton = { TextButton(onClick = { confirmCustomers = false }) { Text("لغو") } },
-        )
-    }
-    if (confirmCoupons) {
-        AlertDialog(
-            onDismissRequest = { confirmCoupons = false },
-            title = { Text("تأیید تغییر کوپن‌ها") },
-            text = { Text("مبلغ ${input} برای ${selectedLongIds.size} کوپن ثبت می‌شود.") },
-            confirmButton = { Button(onClick = { onBulkCoupon(selectedLongIds, input); selectedLongIds = emptySet(); confirmCoupons = false }) { Text("تأیید") } },
-            dismissButton = { TextButton(onClick = { confirmCoupons = false }) { Text("لغو") } },
-        )
-    }
+    if (confirmCustomers) AlertDialog(onDismissRequest = { confirmCustomers = false }, title = { Text("تأیید تغییر مشتریان") }, text = { Text("نقش ${selectedLongIds.size} مشتری تغییر کند؟") }, confirmButton = { TextButton(onClick = { onBulkCustomer(selectedLongIds, customerRole); confirmCustomers = false }) { Text("تأیید") } }, dismissButton = { TextButton(onClick = { confirmCustomers = false }) { Text("انصراف") } })
+    if (confirmCoupons) AlertDialog(onDismissRequest = { confirmCoupons = false }, title = { Text("تأیید تغییر کوپن‌ها") }, text = { Text("مبلغ ${selectedLongIds.size} کوپن تغییر کند؟") }, confirmButton = { TextButton(onClick = { onBulkCoupon(selectedLongIds, input); confirmCoupons = false }) { Text("تأیید") } }, dismissButton = { TextButton(onClick = { confirmCoupons = false }) { Text("انصراف") } })
 
-    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        when (feature) {
-            CommerceFeature.BARCODE -> item {
-                TextField(input, { input = it }, label = { Text("SKU یا شماره سفارش") }, modifier = Modifier.fillMaxWidth())
-                Row { Button(onClick = { onBarcode(input) }) { Text("Resolve") }; CommerceCameraScanButton(onDetected = { input = it; onBarcode(it) }) }
-                state.barcodeResult?.let { result ->
-                    Text("نتیجه: ${result.kind} / ${result.value}")
-                    result.productId?.let { id -> Button(onClick = { onProduct(id) }) { Text("باز کردن محصول") } }
-                    result.orderId?.let { id -> Button(onClick = { onOrder(id) }) { Text("باز کردن سفارش") } }
+    when (feature) {
+        CommerceFeature.BARCODE -> {
+            TextField(input, { input = it }, label = { Text("SKU یا شماره سفارش") }, modifier = Modifier.fillMaxWidth())
+            Row { Button(onClick = { onBarcode(input) }) { Text("جستجو") }; CommerceCameraScanButton(onDetected = { input = it; onBarcode(it) }) }
+            state.barcodeResult?.let { result ->
+                Text("نتیجه: ${result.kind} / ${result.value}")
+                result.productId?.let { id -> Button(onClick = { onProduct(id) }) { Text("باز کردن محصول") } }
+                result.orderId?.let { id -> Button(onClick = { onOrder(id) }) { Text("باز کردن سفارش") } }
+            }
+        }
+        CommerceFeature.BULK_ORDERS -> {
+            Row { OutlinedButton(onClick = { selectedIds = state.orders.map { it.id }.toSet() }) { Text("انتخاب همه") }; TextButton(onClick = { selectedIds = emptySet() }) { Text("پاک کردن") } }
+            state.orders.forEach { order -> Text("#${order.id} ${order.status}") }
+            Row { Button(onClick = { confirmOrderStatus = OrderStatus.PROCESSING }) { Text("در حال پردازش") }; Button(onClick = { confirmOrderStatus = OrderStatus.COMPLETED }) { Text("تکمیل شده") } }
+        }
+        CommerceFeature.INVENTORY -> {
+            TextField(input, { input = it }, label = { Text("جستجوی محصول") }, modifier = Modifier.fillMaxWidth())
+            Row { OutlinedButton(onClick = { lowStock = !lowStock; onInventoryFilter(input, lowStock, outOfStock) }) { Text("کم‌موجودی") }; OutlinedButton(onClick = { outOfStock = !outOfStock; onInventoryFilter(input, lowStock, outOfStock) }) { Text("ناموجود") } }
+            state.products.forEach { product -> Text("${product.name} · ${product.stockQuantity ?: "—"}") }
+        }
+        CommerceFeature.CUSTOMERS -> {
+            Row { OutlinedButton(onClick = { selectedLongIds = state.customers.map { it.id }.toSet() }) { Text("انتخاب همه") }; TextButton(onClick = { selectedLongIds = emptySet() }) { Text("پاک کردن") } }
+            TextField(customerRole, { customerRole = it }, label = { Text("نقش مشتری") })
+            state.customers.forEach { customer -> Text("${customer.id} · ${customer.name}") }
+            Button(onClick = { confirmCustomers = true }) { Text("ذخیره گروهی") }
+        }
+        CommerceFeature.ANALYTICS -> {
+            Text("فروش: ${state.analytics?.sales ?: "—"}")
+            Text("سفارش‌های تکمیل‌شده: ${state.analytics?.completedOrders ?: "—"}")
+            Text("کل سفارش‌ها: ${state.analytics?.totalOrders ?: "—"}")
+            Text("میانگین ارزش سفارش: ${state.analytics?.averageOrderValue ?: "—"}")
+            Text("محصولات موجودی: ${state.analytics?.inventoryProducts ?: "—"}")
+            state.analytics?.statusCounts?.forEach { (status, count) -> Text("$status: $count") }
+            state.analytics?.topProducts?.forEach { Text("${it.name}: ${it.quantity}") }
+            state.analytics?.customerAggregates?.forEach { Text("${it.name}: ${it.total}") }
+            state.analytics?.couponAnalytics?.forEach { Text("${it.code}: ${it.usage}") }
+        }
+        CommerceFeature.COUPONS -> {
+            Row { OutlinedButton(onClick = { selectedLongIds = state.coupons.map { it.id }.toSet() }) { Text("انتخاب همه") }; TextButton(onClick = { selectedLongIds = emptySet() }) { Text("پاک کردن") } }
+            TextField(input, { input = it }, label = { Text("مبلغ") }, modifier = Modifier.fillMaxWidth())
+            state.coupons.forEach { coupon -> Text("${coupon.id} · ${coupon.code} · ${coupon.amount}") }
+            Button(onClick = { confirmCoupons = true }) { Text("ذخیره گروهی") }
+        }
+        CommerceFeature.INVOICE -> {
+            state.orders.forEach { order ->
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text("#${order.id}")
+                    Button(onClick = { onInvoice(order.id) }) { Text("آماده‌سازی فاکتور") }
                 }
             }
-            CommerceFeature.BULK_ORDERS -> {
-                item {
-                    Row {
-                        OutlinedButton(onClick = { selectedIds = state.orders.map { it.id.value }.toSet() }) { Text("انتخاب همه") }
-                        TextButton(onClick = { selectedIds = emptySet() }) { Text("پاک کردن") }
-                    }
-                    Text("${selectedIds.size} از ${state.orders.size} سفارش انتخاب شده")
-                }
-                items(state.orders) { order ->
-                    val id = order.id.value
-                    OutlinedButton(onClick = { selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id }) { Text("${if (id in selectedIds) "✓ " else ""}#${order.number} · ${order.status}") }
-                }
-                item {
-                    Row {
-                        Button(enabled = selectedIds.isNotEmpty(), onClick = { confirmOrderStatus = OrderStatus.COMPLETED }) { Text("تکمیل‌شده") }
-                        Button(enabled = selectedIds.isNotEmpty(), onClick = { confirmOrderStatus = OrderStatus.PROCESSING }) { Text("در حال پردازش") }
-                    }
-                }
-            }
-            CommerceFeature.INVENTORY -> {
-                item {
-                    TextField(input, { input = it; onInventoryFilter(it, lowStock, outOfStock) }, label = { Text("نام یا SKU") }, modifier = Modifier.fillMaxWidth())
-                    Row { OutlinedButton(onClick = { lowStock = !lowStock; onInventoryFilter(input, lowStock, outOfStock) }) { Text("کم‌موجودی") }; OutlinedButton(onClick = { outOfStock = !outOfStock; onInventoryFilter(input, lowStock, outOfStock) }) { Text("ناموجود") } }
-                    Text("${state.inventory.size} محصول")
-                }
-                items(state.inventory) { product -> Text("${product.name} · SKU ${product.sku.orEmpty()} · ${product.stock?.quantity ?: 0}") }
-            }
-            CommerceFeature.CUSTOMERS -> {
-                item {
-                    Text("${selectedLongIds.size} از ${state.customers.size} مشتری انتخاب شده")
-                    Row { OutlinedButton(onClick = { selectedLongIds = state.customers.map { it.id }.toSet() }) { Text("انتخاب همه") }; TextButton(onClick = { selectedLongIds = emptySet() }) { Text("پاک کردن") } }
-                    TextField(customerRole, { customerRole = it }, label = { Text("Role") }, modifier = Modifier.fillMaxWidth())
-                }
-                items(state.customers) { customer ->
-                    val id = customer.id
-                    OutlinedButton(onClick = { selectedLongIds = if (id in selectedLongIds) selectedLongIds - id else selectedLongIds + id }) { Text("${if (id in selectedLongIds) "✓ " else ""}${customer.first_name.orEmpty()} ${customer.last_name.orEmpty()} · ${customer.email.orEmpty()}") }
-                }
-                item { Button(enabled = selectedLongIds.isNotEmpty() && customerRole.isNotBlank(), onClick = { confirmCustomers = true }) { Text("به‌روزرسانی گروهی") } }
-            }
-            CommerceFeature.ANALYTICS -> item {
-                state.analytics?.let { a ->
-                    Text("فروش تکمیل‌شده: ${a.sales}")
-                    Text("سفارش‌های تکمیل‌شده: ${a.completedOrders}")
-                    Text("کل سفارش‌ها: ${a.totalOrders}")
-                    Text("میانگین سفارش: ${a.averageOrderValue}")
-                    Text("محصولات موجود: ${a.inventoryProducts}")
-                    a.statusCounts.forEach { (status, count) -> Text("$status: $count") }
-                    Text("محبوب‌ترین محصولات: ${a.topProductIds.take(5).joinToString { it.first + " (${it.second})" }}")
-                }
-                Text("مشتریان تجمیع‌شده: ${state.customerAggregation.size}")
-                state.customerAggregation.take(10).forEach { Text("${it.customer.name} · ${it.orderCount} سفارش · ${it.totalSpent}") }
-                Text("کوپن‌های استفاده‌شده: ${state.couponAnalytics.size}")
-            }
-            CommerceFeature.COUPONS -> {
-                item {
-                    Text("${selectedLongIds.size} از ${state.coupons.size} کوپن انتخاب شده")
-                    Row { OutlinedButton(onClick = { selectedLongIds = state.coupons.map { it.id }.toSet() }) { Text("انتخاب همه") }; TextButton(onClick = { selectedLongIds = emptySet() }) { Text("پاک کردن") } }
-                }
-                items(state.coupons) { coupon ->
-                    val id = coupon.id
-                    OutlinedButton(onClick = { selectedLongIds = if (id in selectedLongIds) selectedLongIds - id else selectedLongIds + id }) { Text("${if (id in selectedLongIds) "✓ " else ""}${coupon.code} · ${coupon.amount} · usage ${coupon.usage_count}") }
-                }
-                item {
-                    TextField(input, { input = it }, label = { Text("مبلغ جدید") })
-                    Button(enabled = selectedLongIds.isNotEmpty() && input.isNotBlank(), onClick = { confirmCoupons = true }) { Text("ذخیره گروهی") }
-                    state.couponAnalytics.take(10).forEach { Text("${it.code}: ${it.usageCount} استفاده · ${it.discountTotal} تخفیف") }
-                }
-            }
-            CommerceFeature.INVOICE -> {
-                item { Text("ساخت فاکتور از سفارش واقعی · ${state.orders.size} سفارش") }
-                items(state.orders) { order -> Button(onClick = { onInvoice(order.id.value) }) { Text("فاکتور #${order.number}") } }
-                state.invoice?.let { invoice -> item { Text("فاکتور #${invoice.orderNumber} آماده است."); Button(onClick = { pdfLauncher.launch("invoice-${invoice.orderNumber}.pdf") }) { Text("ذخیره PDF") } } }
+            state.invoice?.let { invoice ->
+                Text("فاکتور سفارش #${invoice.orderId}")
+                Button(onClick = { pdfLauncher.launch("invoice-${invoice.orderId}.pdf") }) { Text("ذخیره PDF") }
             }
         }
     }
