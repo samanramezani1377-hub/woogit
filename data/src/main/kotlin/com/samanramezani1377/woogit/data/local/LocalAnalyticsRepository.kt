@@ -5,6 +5,10 @@ import com.samanramezani1377.woogit.core.domain.commerce.AnalyticsSnapshot
 import com.samanramezani1377.woogit.core.domain.commerce.CommerceFeatureEngine
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.core.domain.error.CoreResult
+import com.samanramezani1377.woogit.core.domain.repository.LocalOrderDataSource
+import com.samanramezani1377.woogit.core.domain.repository.LocalProductDataSource
+import com.samanramezani1377.woogit.core.domain.model.Order
+import com.samanramezani1377.woogit.core.domain.model.Product
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 
@@ -15,8 +19,8 @@ import kotlinx.datetime.Instant
  * never creates or accesses a WooCommerce/network client.
  */
 class LocalAnalyticsRepository(
-    private val orders: LocalOrderDataSource<com.samanramezani1377.woogit.core.domain.model.Order>,
-    private val products: LocalProductDataSource<com.samanramezani1377.woogit.core.domain.model.Product>,
+    private val orders: LocalOrderDataSource<Order>,
+    private val products: LocalProductDataSource<Product>,
 ) {
     fun get(
         storeId: StoreId,
