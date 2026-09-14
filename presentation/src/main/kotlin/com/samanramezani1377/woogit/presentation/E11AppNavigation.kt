@@ -13,6 +13,7 @@ import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.core.domain.model.*
 import com.samanramezani1377.woogit.presentation.account.*
 import com.samanramezani1377.woogit.presentation.ai.AiScreen
+import com.samanramezani1377.woogit.presentation.commerce.CommerceCenterScreen
 import com.samanramezani1377.woogit.presentation.connection.ConnectionScreen
 import com.samanramezani1377.woogit.presentation.dashboard.*
 import com.samanramezani1377.woogit.presentation.order.*
@@ -41,40 +42,20 @@ internal fun E11AppNavigation(
             if (activeStore != persistedStore) activeStore = persistedStore
         }
     }
-
-    LaunchedEffect(activeStore) {
-        activeStore?.let(accountSetupViewModel::checkRequirement)
-    }
-
+    LaunchedEffect(activeStore) { activeStore?.let(accountSetupViewModel::checkRequirement) }
     LaunchedEffect(accountSetupState, activeStore, route) {
         val store = activeStore ?: return@LaunchedEffect
         when (accountSetupState) {
-            AccountSetupUiState.PasswordRequired -> {
-                if (route != E11Routes.CREATE_PASSWORD && !billingLocked) {
-                    navController.navigate(E11Routes.CREATE_PASSWORD) { launchSingleTop = true }
-                }
-            }
-            AccountSetupUiState.Ready -> {
-                if (route == E11Routes.CONNECTION && !billingLocked) {
-                    navController.navigate(E11Routes.DASHBOARD) {
-                        popUpTo(E11Routes.CONNECTION) { inclusive = true }
-                    }
-                }
-            }
+            AccountSetupUiState.PasswordRequired -> if (route != E11Routes.CREATE_PASSWORD && !billingLocked) navController.navigate(E11Routes.CREATE_PASSWORD) { launchSingleTop = true }
+            AccountSetupUiState.Ready -> if (route == E11Routes.CONNECTION && !billingLocked) navController.navigate(E11Routes.DASHBOARD) { popUpTo(E11Routes.CONNECTION) { inclusive = true } }
             else -> Unit
         }
     }
 
-    AppBillingMonitor(
-        storeId = activeStore,
-        gateway = BillingRuntime.gateway,
-        onBillingLockedChanged = { billingLocked = it },
-    )
-
+    AppBillingMonitor(storeId = activeStore, gateway = BillingRuntime.gateway, onBillingLockedChanged = { billingLocked = it })
     BackHandler(enabled = billingLocked) { }
     BackHandler(enabled = !billingLocked && route != E11Routes.CONNECTION && route != E11Routes.CREATE_PASSWORD) {
-        if (navController.previousBackStackEntry != null) navController.popBackStack()
-        else (context as? Activity)?.moveTaskToBack(true)
+        if (navController.previousBackStackEntry != null) navController.popBackStack() else (context as? Activity)?.moveTaskToBack(true)
     }
 
     val startDestination = when {
@@ -82,49 +63,26 @@ internal fun E11AppNavigation(
         initialOrderId != null -> E11Routes.order(initialOrderId)
         else -> E11Routes.DASHBOARD
     }
-
     val restoreSubscription = {
         billingLocked = false
-        navController.navigate(E11Routes.DASHBOARD) {
-            popUpTo(E11Routes.DASHBOARD) { inclusive = false }
-            launchSingleTop = true
-        }
+        navController.navigate(E11Routes.DASHBOARD) { popUpTo(E11Routes.DASHBOARD) { inclusive = false }; launchSingleTop = true }
     }
-
     if (billingLocked && activeStore != null) {
-        SubscriptionExpiredScreen(
-            storeId = StoreId(activeStore!!),
-            onSubscriptionRestored = restoreSubscription,
-        )
+        SubscriptionExpiredScreen(storeId = StoreId(activeStore!!), onSubscriptionRestored = restoreSubscription)
         return
     }
 
     NavHost(navController, startDestination) {
         composable(E11Routes.CONNECTION) {
-            ConnectionScreen(
-                dependencies = dependencies,
-                onConnected = { storeId ->
-                    activeStore = storeId
-                    dependencies.onStoreConnected(storeId)
-                },
-                onDebugLogs = { navController.navigate(E11Routes.DEBUG_LOGS) },
-            )
+            ConnectionScreen(dependencies = dependencies, onConnected = { storeId -> activeStore = storeId; dependencies.onStoreConnected(storeId) }, onDebugLogs = { navController.navigate(E11Routes.DEBUG_LOGS) })
         }
         composable(E11Routes.CREATE_PASSWORD) {
             val store = activeStore
-            if (store != null) {
-                CreatePasswordScreen(
-                    state = accountSetupState,
-                    onSubmit = { password, confirmation -> accountSetupViewModel.setupPassword(store, password, confirmation) },
-                    onCompleted = {
-                        accountSetupViewModel.resetReady()
-                        navController.navigate(E11Routes.DASHBOARD) {
-                            popUpTo(E11Routes.CREATE_PASSWORD) { inclusive = true }
-                            launchSingleTop = true
-                        }
-                    },
-                )
-            }
+            if (store != null) CreatePasswordScreen(
+                state = accountSetupState,
+                onSubmit = { password, confirmation -> accountSetupViewModel.setupPassword(store, password, confirmation) },
+                onCompleted = { accountSetupViewModel.resetReady(); navController.navigate(E11Routes.DASHBOARD) { popUpTo(E11Routes.CREATE_PASSWORD) { inclusive = true }; launchSingleTop = true } },
+            )
         }
         composable(E11Routes.DASHBOARD) {
             val store = activeStore
@@ -135,8 +93,43 @@ internal fun E11AppNavigation(
                 LaunchedEffect(storeId) { vm.refresh() }
                 DisposableEffect(vm, storeId) { vm.startConnectionHealthMonitor(); onDispose { vm.stopConnectionHealthMonitor() } }
                 LiquidGlassEnvironment {
-                    DashboardScreen(storeId.value, state.connectionState == ConnectionState.CONNECTED, state.ordersCount, state.productsCount, state.revenue, state.processingCount, state.orders.firstOrNull()?.number, state.orders.firstOrNull()?.customer?.name.orEmpty(), formatMoney(state.orders.firstOrNull()?.total), state.orders.firstOrNull()?.status, { state.orders.firstOrNull()?.number?.let { navController.navigate(E11Routes.order(it)) } }, { navController.navigate(E11Routes.ORDERS) }, { navController.navigate(E11Routes.PRODUCTS) }, { navController.navigate(E11Routes.SETTINGS) }, { navController.navigate(E11Routes.SYNC) }, { navController.navigate(E11Routes.CONFLICTS) }, DashboardDestination.DASHBOARD, { destination -> when (destination) { DashboardDestination.DASHBOARD -> Unit; DashboardDestination.ORDERS -> navController.navigate(E11Routes.ORDERS); DashboardDestination.PRODUCTS -> navController.navigate(E11Routes.PRODUCTS); DashboardDestination.SETTINGS -> navController.navigate(E11Routes.SETTINGS) } }, { navController.navigate(E11Routes.AI) }, { vm.refresh() }, state.loading)
+                    DashboardScreen(
+                        storeId.value,
+                        state.connectionState == ConnectionState.CONNECTED,
+                        state.ordersCount,
+                        state.productsCount,
+                        state.revenue,
+                        state.processingCount,
+                        state.orders.firstOrNull()?.number,
+                        state.orders.firstOrNull()?.customer?.name.orEmpty(),
+                        formatMoney(state.orders.firstOrNull()?.total),
+                        state.orders.firstOrNull()?.status,
+                        { state.orders.firstOrNull()?.number?.let { navController.navigate(E11Routes.order(it)) } },
+                        { navController.navigate(E11Routes.ORDERS) },
+                        { navController.navigate(E11Routes.PRODUCTS) },
+                        { navController.navigate(E11Routes.SETTINGS) },
+                        { navController.navigate(E11Routes.SYNC) },
+                        { navController.navigate(E11Routes.CONFLICTS) },
+                        DashboardDestination.DASHBOARD,
+                        { destination -> when (destination) { DashboardDestination.DASHBOARD -> Unit; DashboardDestination.ORDERS -> navController.navigate(E11Routes.ORDERS); DashboardDestination.PRODUCTS -> navController.navigate(E11Routes.PRODUCTS); DashboardDestination.SETTINGS -> navController.navigate(E11Routes.SETTINGS) } },
+                        { navController.navigate(E11Routes.AI) },
+                        { vm.refresh() },
+                        state.loading,
+                        { navController.navigate(E11Routes.COMMERCE) },
+                    )
                 }
+            }
+        }
+        composable(E11Routes.COMMERCE) {
+            val store = activeStore
+            if (store != null) {
+                CommerceCenterScreen(
+                    storeId = StoreId(store),
+                    dependencies = dependencies,
+                    onBack = { navController.popBackStack() },
+                    onOpenProduct = { id -> navController.navigate(E11Routes.product(id)) },
+                    onOpenOrder = { id -> navController.navigate(E11Routes.order(id)) },
+                )
             }
         }
         composable(E11Routes.DEBUG_LOGS) { DebugLogsScreen { navController.popBackStack() } }
