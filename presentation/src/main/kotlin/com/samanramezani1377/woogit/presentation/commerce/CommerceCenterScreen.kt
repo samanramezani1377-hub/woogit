@@ -64,7 +64,6 @@ internal fun CommerceCenterScreen(
             onBulkCoupon = vm::bulkCouponAmount,
             onInvoice = vm::prepareInvoice,
             onProduct = onOpenProduct,
-            onOrder = onOpenOrder,
         )
         return
     }
@@ -78,10 +77,10 @@ internal fun CommerceCenterScreen(
 
     GlassScaffold(modifier) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            GlassTopBar(title = "مرکز تجارت", subtitle = "مدیریت مشتریان و کوپن‌های فروشگاه", actions = { GlassOutlinedButton("بازگشت", onBack) })
+            GlassTopBar(title = "مرکز تجارت", subtitle = "مشتریان و کوپن‌های فروشگاه", actions = { GlassOutlinedButton("بازگشت", onBack) })
             GlassCard {
-                GlassText("مشتریان و کوپن‌ها", style = MaterialTheme.typography.titleMedium)
-                GlassText("مدیریت گروهی مشتریان و کوپن‌ها از این بخش انجام می‌شود. سایر ابزارهای تجارت از صفحات مرتبط خود اپ در دسترس هستند.", style = MaterialTheme.typography.bodyMedium.copy(color = GlassTokens.muted))
+                GlassText("ابزارهای مدیریت فروشگاه", style = MaterialTheme.typography.titleMedium)
+                GlassText("این مرکز فقط برای مشتریان و کوپن‌هاست. ابزارهای سفارش، موجودی، تحلیل، فاکتور و بارکد از صفحات مرتبط خود اپ در دسترس هستند.", style = MaterialTheme.typography.bodyMedium.copy(color = GlassTokens.muted))
             }
             when {
                 state.loading -> GlassLoading("در حال آماده‌سازی…")
