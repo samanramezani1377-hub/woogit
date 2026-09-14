@@ -36,7 +36,7 @@ internal fun InventoryPage(
             GlassSearchField(
                 value = query,
                 onValueChange = { query = it; onFilter(it, low, out) },
-                placeholder = "نام محصول یا SKU",
+                label = "نام محصول یا SKU",
                 modifier = Modifier.fillMaxWidth(),
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
