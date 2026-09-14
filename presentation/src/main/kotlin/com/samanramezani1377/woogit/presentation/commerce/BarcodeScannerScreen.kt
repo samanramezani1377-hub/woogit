@@ -19,12 +19,12 @@ import com.samanramezani1377.woogit.presentation.GlassCard
 import com.samanramezani1377.woogit.presentation.GlassEmptyState
 import com.samanramezani1377.woogit.presentation.GlassErrorState
 import com.samanramezani1377.woogit.presentation.GlassLoading
+import com.samanramezani1377.woogit.presentation.GlassOutlinedButton
 import com.samanramezani1377.woogit.presentation.GlassPrimaryAction
 import com.samanramezani1377.woogit.presentation.GlassSearchField
 import com.samanramezani1377.woogit.presentation.GlassScaffold
 import com.samanramezani1377.woogit.presentation.GlassText
 import com.samanramezani1377.woogit.presentation.GlassTopBar
-import com.samanramezani1377.woogit.presentation.GlassTokens
 
 @Composable
 internal fun BarcodeScannerScreen(
@@ -43,7 +43,7 @@ internal fun BarcodeScannerScreen(
             GlassTopBar(
                 title = "بارکد و SKU",
                 subtitle = "پیدا کردن سریع محصول",
-                navigation = { GlassPrimaryAction("بازگشت", onBack) },
+                navigation = { GlassOutlinedButton("بازگشت", onBack) },
             )
 
             GlassCard {
