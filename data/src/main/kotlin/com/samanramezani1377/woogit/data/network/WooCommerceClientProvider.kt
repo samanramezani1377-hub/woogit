@@ -19,13 +19,82 @@ class WooCommerceClientProvider(
     private val sessions: BackendSessionStore,
 ) {
     fun client(storeId: StoreId): CoreResult<Pair<StoreConnection, TypedWooCommerceApi>> {
-        val row=db.storeQueries.selectById(storeId.value).executeAsOneOrNull() ?: return CoreResult.Failure(DomainError.NotFound("store",storeId.value))
-        val connection=StoreConnection(storeId,row.base_url,runCatching{ConnectionState.valueOf(row.connection_state)}.getOrDefault(ConnectionState.DISCONNECTED),row.credential_reference?.let(::CredentialReference))
-        val ref=connection.credentialReference ?: return CoreResult.Failure(DomainError.Authentication("Store credentials are not configured"))
-        val pair=credentials.get(ref) ?: return CoreResult.Failure(DomainError.Authentication("Store credentials are unavailable"))
-        if(sessions.get(storeId.value).isNullOrBlank()) return CoreResult.Failure(DomainError.Authentication("WooGit Backend session is unavailable; reconnect the store"))
-        return CoreResult.Success(connection to TypedWooCommerceApi(WooCommerceApi(backend,storeId.value,pair)))
+        val row = db.storeQueries.selectById(storeId.value).executeAsOneOrNull()
+            ?: return CoreResult.Failure(
+                DomainError.NotFound("store", storeId.value),
+            )
+        val connection = StoreConnection(
+            storeId,
+            row.base_url,
+            runCatching {
+                ConnectionState.valueOf(row.connection_state)
+            }.getOrDefault(ConnectionState.DISCONNECTED),
+            row.credential_reference?.let(::CredentialReference),
+        )
+        val ref = connection.credentialReference
+            ?: return CoreResult.Failure(
+                DomainError.Authentication("Store credentials are not configured"),
+            )
+        val pair = credentials.get(ref)
+            ?: return CoreResult.Failure(
+                DomainError.Authentication("Store credentials are unavailable"),
+            )
+        if (sessions.get(storeId.value).isNullOrBlank()) {
+            return CoreResult.Failure(
+                DomainError.Authentication(
+                    "WooGit Backend session is unavailable; reconnect the store",
+                ),
+            )
+        }
+        return CoreResult.Success(
+            connection to TypedWooCommerceApi(
+                WooCommerceApi(backend, storeId.value, pair),
+            ),
+        )
     }
 
-    suspend fun reconcileOperation(storeId: StoreId, operationId: String): BackendOperationStatus = backend.getOperation(storeId.value, operationId)
+    fun commerceClient(storeId: StoreId): CoreResult<Pair<StoreConnection, WooCommerceCommerceApi>> {
+        val row = db.storeQueries.selectById(storeId.value).executeAsOneOrNull()
+            ?: return CoreResult.Failure(
+                DomainError.NotFound("store", storeId.value),
+            )
+        val connection = StoreConnection(
+            storeId,
+            row.base_url,
+            runCatching {
+                ConnectionState.valueOf(row.connection_state)
+            }.getOrDefault(ConnectionState.DISCONNECTED),
+            row.credential_reference?.let(::CredentialReference),
+        )
+        val ref = connection.credentialReference
+            ?: return CoreResult.Failure(
+                DomainError.Authentication("Store credentials are not configured"),
+            )
+        val pair = credentials.get(ref)
+            ?: return CoreResult.Failure(
+                DomainError.Authentication("Store credentials are unavailable"),
+            )
+        if (sessions.get(storeId.value).isNullOrBlank()) {
+            return CoreResult.Failure(
+                DomainError.Authentication(
+                    "WooGit Backend session is unavailable; reconnect the store",
+                ),
+            )
+        }
+        return CoreResult.Success(
+            connection to WooCommerceCommerceApi(
+                backend,
+                storeId.value,
+                pair,
+            ),
+        )
+    }
+
+    suspend fun reconcileOperation(
+        storeId: StoreId,
+        operationId: String,
+    ): BackendOperationStatus = backend.getOperation(
+        storeId.value,
+        operationId,
+    )
 }
