@@ -118,6 +118,7 @@ private fun SalesTrendChart(points: List<AnalyticsTrendPoint>) {
         return
     }
     val maxSales = points.maxOfOrNull { it.sales }?.takeIf { it > 0.0 } ?: 1.0
+    val chartColor = MaterialTheme.colorScheme.primary
     GlassCard(Modifier.fillMaxWidth()) {
         Canvas(Modifier.fillMaxWidth().height(190.dp)) {
             val horizontalPadding = 14.dp.toPx()
@@ -131,11 +132,11 @@ private fun SalesTrendChart(points: List<AnalyticsTrendPoint>) {
                 val y = verticalPadding + height - (point.sales / maxSales).toFloat() * height
                 if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
             }
-            drawPath(path, color = MaterialTheme.colorScheme.primary, style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round))
+            drawPath(path, color = chartColor, style = Stroke(width = 4.dp.toPx(), cap = StrokeCap.Round))
             points.forEachIndexed { index, point ->
                 val x = horizontalPadding + width * index / denominator
                 val y = verticalPadding + height - (point.sales / maxSales).toFloat() * height
-                drawCircle(MaterialTheme.colorScheme.primary, radius = 3.dp.toPx(), center = Offset(x, y))
+                drawCircle(chartColor, radius = 3.dp.toPx(), center = Offset(x, y))
             }
         }
         Spacer(Modifier.height(6.dp))
