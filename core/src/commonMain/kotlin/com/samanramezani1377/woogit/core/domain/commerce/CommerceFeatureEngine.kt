@@ -18,7 +18,7 @@ enum class AnalyticsRange(val days: Int, val label: String) {
     DAYS_7(7, "۷ روز"),
     DAYS_30(30, "۳۰ روز"),
     DAYS_90(90, "۹۰ روز"),
-    YEAR(365, "امسال"),
+    YEAR(365, "یک سال"),
 }
 
 /** Native commerce calculations shared by the seven commerce features. */
@@ -65,8 +65,8 @@ object CommerceFeatureEngine {
     ): AnalyticsSnapshot {
         val currentStart = rangeStart(range, now)
         val previousStart = currentStart - rangeDuration(range, now)
-        val currentOrders = orders.filter { it.inRange(currentStart, now) }
-        val previousOrders = orders.filter { it.inRange(previousStart, currentStart) }
+        val currentOrders = orders.filter { it.analyticsDate()?.let { date -> date >= currentStart && date < now } == true }
+        val previousOrders = orders.filter { it.analyticsDate()?.let { date -> date >= previousStart && date < currentStart } == true }
         val completed = currentOrders.filter { it.status == OrderStatus.COMPLETED }
         val previousCompleted = previousOrders.filter { it.status == OrderStatus.COMPLETED }
         val sales = completed.sumOf { it.total?.toDoubleOrNull() ?: 0.0 }
@@ -103,7 +103,7 @@ object CommerceFeatureEngine {
         }.groupBy { it.first }
         val customerAnalytics = customerRows.map { (key, rows) ->
             val spent = rows.sumOf { it.second.total?.toDoubleOrNull() ?: 0.0 }
-            val firstDate = rows.mapNotNull { it.second.modifiedAt }.minOrNull()
+            val firstDate = rows.mapNotNull { it.second.analyticsDate() }.minOrNull()
             val newCustomer = firstDate?.let { it >= currentStart && it <= now } == true
             AnalyticsCustomerInsight(
                 key = key,
@@ -139,7 +139,7 @@ object CommerceFeatureEngine {
         val trendDays = range.days.coerceIn(7, 365)
         val trend = (0 until trendDays).map { offset ->
             val date = now.minus(offset.days).toLocalDateTime(TimeZone.UTC).date
-            val dayOrders = completed.filter { it.modifiedAt?.toLocalDateTime(TimeZone.UTC)?.date == date }
+            val dayOrders = completed.filter { it.analyticsDate()?.toLocalDateTime(TimeZone.UTC)?.date == date }
             AnalyticsTrendPoint(
                 label = date.toString().removePrefix("20"),
                 sales = dayOrders.sumOf { it.total?.toDoubleOrNull() ?: 0.0 },
@@ -212,23 +212,14 @@ object CommerceFeatureEngine {
         currency = order.currency.orEmpty(),
     )
 
-    private fun rangeStart(range: AnalyticsRange, now: Instant): Instant {
-        if (range != AnalyticsRange.YEAR) return now - range.days.days
-        val date = now.toLocalDateTime(TimeZone.UTC).date
-        return LocalDateTime(LocalDate(date.year, 1, 1), kotlinx.datetime.LocalTime(0, 0)).toInstant(TimeZone.UTC)
-    }
+    private fun rangeStart(range: AnalyticsRange, now: Instant): Instant = now - range.days.days
 
-    private fun rangeDuration(range: AnalyticsRange, now: Instant): kotlin.time.Duration =
-        if (range == AnalyticsRange.YEAR) {
-            val start = rangeStart(range, now)
-            now - start
-        } else range.days.days
+    private fun rangeDuration(range: AnalyticsRange, now: Instant): kotlin.time.Duration = range.days.days
 
     private fun growthPercent(current: Double, previous: Double): Double? =
         if (previous == 0.0) null else ((current - previous) / previous) * 100.0
 
-    private fun Order.inRange(start: Instant, end: Instant): Boolean =
-        modifiedAt?.let { it >= start && it < end } == true
+    private fun Order.analyticsDate(): Instant? = createdAt ?: modifiedAt
 }
 
 enum class BarcodeKind { Numeric, Sku, Unknown }
