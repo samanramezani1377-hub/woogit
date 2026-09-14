@@ -56,13 +56,13 @@ internal class CommerceViewModel(
     private val _state = MutableStateFlow(CommerceUiState())
     val state: StateFlow<CommerceUiState> = _state.asStateFlow()
 
-    fun load() = viewModelScope.launch {
+    fun load(loadRemoteCommerceData: Boolean = true) = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null, message = null)
         try {
             val products = readAllProducts()
             val orders = readAllOrders()
             applyProductAndOrderState(products, orders)
-            loadCustomersAndCoupons()
+            if (loadRemoteCommerceData) loadCustomersAndCoupons()
         } catch (t: Throwable) {
             fail("بارگذاری ابزارهای Commerce ناموفق بود: ${t.message.orEmpty()}")
         }
