@@ -28,6 +28,7 @@ object OrderRepositoryV1Mapper {
         emptyList(),
         v.line_items.map { OrderItem(EntityId(it.id.toString()), it.product_id.takeIf { id -> id != 0L }?.let { id -> EntityId(id.toString()) }, it.variation_id.takeIf { id -> id != 0L }?.let { id -> EntityId(id.toString()) }, it.name, it.quantity, it.subtotal, it.total) },
         v.date_modified_gmt?.let(Instant::parse), v.number.ifBlank { v.id.toString() }, v.total, v.currency,
+        createdAt = v.date_created_gmt?.takeIf { it.isNotBlank() }?.let(Instant::parse),
     )
 }
 
