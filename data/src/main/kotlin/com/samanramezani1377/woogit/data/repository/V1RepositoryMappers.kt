@@ -6,6 +6,12 @@ import com.samanramezani1377.woogit.data.network.WooOrderTypedDto
 import com.samanramezani1377.woogit.data.network.WooProductTypedDto
 import kotlinx.datetime.Instant
 
+private fun parseWooInstant(value: String?): Instant? {
+    val raw = value?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+    return runCatching { Instant.parse(raw) }.getOrNull()
+        ?: runCatching { Instant.parse("${raw}Z") }.getOrNull()
+}
+
 object OrderRepositoryV1Mapper {
     fun toDomain(v: WooOrderTypedDto): Order = Order(
         EntityId(v.id.toString()),
@@ -27,8 +33,8 @@ object OrderRepositoryV1Mapper {
         v.coupon_lines.map { Discount(it.code, it.discount) },
         emptyList(),
         v.line_items.map { OrderItem(EntityId(it.id.toString()), it.product_id.takeIf { id -> id != 0L }?.let { id -> EntityId(id.toString()) }, it.variation_id.takeIf { id -> id != 0L }?.let { id -> EntityId(id.toString()) }, it.name, it.quantity, it.subtotal, it.total) },
-        v.date_modified_gmt?.let(Instant::parse), v.number.ifBlank { v.id.toString() }, v.total, v.currency,
-        createdAt = v.date_created_gmt?.takeIf { it.isNotBlank() }?.let(Instant::parse),
+        parseWooInstant(v.date_modified_gmt), v.number.ifBlank { v.id.toString() }, v.total, v.currency,
+        createdAt = parseWooInstant(v.date_created_gmt),
     )
 }
 
