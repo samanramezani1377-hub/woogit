@@ -26,6 +26,7 @@ import com.samanramezani1377.woogit.presentation.GlassEmptyState
 import com.samanramezani1377.woogit.presentation.GlassLoading
 import com.samanramezani1377.woogit.presentation.GlassTokens
 import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 
 @Composable
 internal fun AnalyticsPage(state: CommerceUiState) {
@@ -46,7 +47,6 @@ internal fun AnalyticsPage(state: CommerceUiState) {
                     ),
                 )
             }
-
             Section("رشد فروش", "مقایسه ۷ روز اخیر با ۷ روز قبل.") {
                 MetricGrid(
                     listOf(
@@ -57,32 +57,22 @@ internal fun AnalyticsPage(state: CommerceUiState) {
                     ),
                 )
             }
-
             Section("روند فروش", "روند روزانه فروش تکمیل‌شده در ۳۰ روز اخیر.") {
                 SalesTrendChart(analytics.trend)
             }
-
             Section("نرخ تکمیل سفارش") {
                 MetricCard("نرخ تکمیل", "${analytics.completionRate.roundToInt()}٪")
                 Spacer(Modifier.height(6.dp))
-                Text(
-                    "${analytics.completedOrders} سفارش از ${analytics.totalOrders} سفارش تکمیل شده است.",
-                    color = GlassTokens.muted,
-                    style = MaterialTheme.typography.bodySmall,
-                )
+                Text("${analytics.completedOrders} سفارش از ${analytics.totalOrders} سفارش تکمیل شده است.", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
             }
-
             if (analytics.statusCounts.isNotEmpty()) {
                 Section("ترکیب وضعیت سفارش‌ها", "تعداد و سهم هر وضعیت از کل سفارش‌ها.") {
-                    analytics.statusCounts.entries
-                        .sortedByDescending { it.value }
-                        .forEach { (status, count) ->
-                            val share = if (analytics.totalOrders == 0) 0.0 else count * 100.0 / analytics.totalOrders
-                            MetricRow(status.faLabel(), "$count  •  ${share.roundToInt()}٪")
-                        }
+                    analytics.statusCounts.entries.sortedByDescending { it.value }.forEach { (status, count) ->
+                        val share = if (analytics.totalOrders == 0) 0.0 else count * 100.0 / analytics.totalOrders
+                        MetricRow(status.faLabel(), "$count  •  ${share.roundToInt()}٪")
+                    }
                 }
             }
-
             if (analytics.topProductIds.isNotEmpty()) {
                 Section("پرفروش‌ترین محصولات", "بر اساس تعداد اقلام فروخته‌شده در سفارش‌های تکمیل‌شده.") {
                     analytics.topProductIds.take(10).forEachIndexed { index, item ->
@@ -90,34 +80,23 @@ internal fun AnalyticsPage(state: CommerceUiState) {
                     }
                 }
             }
-
             val topCustomers = analytics.topCustomerIds.mapNotNull { entry ->
-                state.customerAggregation.firstOrNull { it.key == entry.first }?.let { customer ->
-                    customer to entry.second
-                }
+                state.customerAggregation.firstOrNull { it.key == entry.first }?.let { customer -> customer to entry.second }
             }
             if (topCustomers.isNotEmpty()) {
                 Section("مشتریان برتر", "مشتریانی که بیشترین سفارش را ثبت کرده‌اند.") {
                     topCustomers.take(10).forEachIndexed { index, (customer, orderCount) ->
-                        MetricRow(
-                            "${index + 1}. ${customer.customer.name.ifBlank { "مشتری ${customer.key}" }}",
-                            "$orderCount سفارش  •  ${formatNumber(customer.totalSpent)}",
-                        )
+                        MetricRow("${index + 1}. ${customer.customer.name.ifBlank { "مشتری ${customer.key}" }}", "$orderCount سفارش  •  ${formatNumber(customer.totalSpent)}")
                     }
                 }
             }
-
             if (state.couponAnalytics.isNotEmpty()) {
                 Section("تحلیل کوپن‌ها", "میزان استفاده و تخفیف ایجادشده توسط کوپن‌ها.") {
                     state.couponAnalytics.take(10).forEachIndexed { index, coupon ->
-                        MetricRow(
-                            "${index + 1}. ${coupon.code}",
-                            "${coupon.usageCount} استفاده  •  ${formatNumber(coupon.discountTotal)} تخفیف",
-                        )
+                        MetricRow("${index + 1}. ${coupon.code}", "${coupon.usageCount} استفاده  •  ${formatNumber(coupon.discountTotal)} تخفیف")
                     }
                 }
             }
-
             Section("سلامت موجودی", "نمای کلی وضعیت موجودی محصولات.") {
                 MetricGrid(
                     listOf(
@@ -140,16 +119,12 @@ private fun SalesTrendChart(points: List<AnalyticsTrendPoint>) {
     }
     val maxSales = points.maxOfOrNull { it.sales }?.takeIf { it > 0.0 } ?: 1.0
     GlassCard(Modifier.fillMaxWidth()) {
-        Canvas(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(190.dp),
-        ) {
+        Canvas(Modifier.fillMaxWidth().height(190.dp)) {
             val horizontalPadding = 14.dp.toPx()
             val verticalPadding = 18.dp.toPx()
             val width = size.width - horizontalPadding * 2
             val height = size.height - verticalPadding * 2
-            val denominator = (points.lastIndex).coerceAtLeast(1)
+            val denominator = points.lastIndex.coerceAtLeast(1)
             val path = Path()
             points.forEachIndexed { index, point ->
                 val x = horizontalPadding + width * index / denominator
@@ -177,9 +152,7 @@ private fun MetricGrid(metrics: List<Pair<String, String>>) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         metrics.chunked(2).forEach { row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                row.forEach { (label, value) ->
-                    MetricCard(label, value, Modifier.weight(1f))
-                }
+                row.forEach { (label, value) -> MetricCard(label, value, Modifier.weight(1f)) }
                 if (row.size == 1) Spacer(Modifier.weight(1f))
             }
         }
@@ -196,21 +169,18 @@ private fun MetricCard(label: String, value: String, modifier: Modifier = Modifi
 
 @Composable
 private fun MetricRow(label: String, value: String) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(vertical = 3.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Text(label, color = GlassTokens.muted, modifier = Modifier.weight(1f))
         Spacer(Modifier.width(8.dp))
         Text(value, fontWeight = FontWeight.Bold)
     }
 }
 
-private fun formatNumber(value: Double): String =
-    "%,.0f".format(value)
+private fun formatNumber(value: Double): String {
+    val rounded = value.roundToLong()
+    val sign = if (rounded < 0) "-" else ""
+    val digits = rounded.toString().removePrefix("-")
+    return sign + digits.reversed().chunked(3).joinToString(",").reversed()
+}
 
-private fun formatPercent(value: Double?): String =
-    value?.let { "${if (it > 0) "+" else ""}${it.roundToInt()}٪" } ?: "—"
+private fun formatPercent(value: Double?): String = value?.let { "${if (it > 0) "+" else ""}${it.roundToInt()}٪" } ?: "—"
