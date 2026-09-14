@@ -9,6 +9,7 @@ import com.samanramezani1377.woogit.core.domain.model.ProductType
 import com.samanramezani1377.woogit.core.domain.model.Pricing
 import com.samanramezani1377.woogit.core.domain.model.Stock
 import com.samanramezani1377.woogit.core.domain.model.StockStatus
+import kotlinx.datetime.Instant
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -32,17 +33,46 @@ class CommerceFeatureEngineTest {
     }
 
     @Test
-    fun analytics_counts_completed_sales_and_statuses() {
+    fun analytics_uses_order_creation_date_for_sales() {
+        val now = Instant.parse("2026-09-14T12:00:00Z")
         val orders = listOf(
-            order("1", OrderStatus.COMPLETED, "10"),
-            order("2", OrderStatus.COMPLETED, "20"),
-            order("3", OrderStatus.PENDING, "5"),
+            order("1", OrderStatus.COMPLETED, "10", createdAt = "2026-09-13T06:00:00Z", modifiedAt = "2026-09-14T11:00:00Z"),
+            order("2", OrderStatus.COMPLETED, "20", createdAt = "2026-09-12T06:00:00Z", modifiedAt = "2026-09-14T10:00:00Z"),
+            order("3", OrderStatus.PENDING, "5", createdAt = "2026-09-13T07:00:00Z", modifiedAt = "2026-09-14T09:00:00Z"),
         )
-        val snapshot = CommerceFeatureEngine.analytics(orders, emptyList())
+        val snapshot = CommerceFeatureEngine.analytics(orders, emptyList(), now = now)
         assertEquals(30.0, snapshot.sales)
         assertEquals(2, snapshot.completedOrders)
         assertEquals(15.0, snapshot.averageOrderValue)
         assertEquals(1, snapshot.statusCounts[OrderStatus.PENDING])
+    }
+
+    @Test
+    fun analytics_falls_back_to_modified_date_when_creation_date_is_missing() {
+        val now = Instant.parse("2026-09-14T12:00:00Z")
+        val snapshot = CommerceFeatureEngine.analytics(
+            listOf(order("fallback", OrderStatus.COMPLETED, "42", createdAt = null, modifiedAt = "2026-09-13T06:00:00Z")),
+            emptyList(),
+            now = now,
+        )
+        assertEquals(42.0, snapshot.sales)
+        assertEquals(1, snapshot.completedOrders)
+    }
+
+    @Test
+    fun one_year_range_is_trailing_365_days() {
+        val now = Instant.parse("2026-09-14T12:00:00Z")
+        val snapshot = CommerceFeatureEngine.analytics(
+            listOf(
+                order("inside", OrderStatus.COMPLETED, "10", createdAt = "2025-09-15T12:00:00Z"),
+                order("outside", OrderStatus.COMPLETED, "20", createdAt = "2025-09-14T11:59:59Z"),
+            ),
+            emptyList(),
+            range = AnalyticsRange.YEAR,
+            now = now,
+        )
+        assertEquals(10.0, snapshot.sales)
+        assertEquals(1, snapshot.completedOrders)
     }
 
     private fun product(name: String, quantity: Double, status: StockStatus) = Product(
@@ -61,7 +91,13 @@ class CommerceFeatureEngineTest {
         modifiedAt = null,
     )
 
-    private fun order(id: String, status: OrderStatus, total: String) = Order(
+    private fun order(
+        id: String,
+        status: OrderStatus,
+        total: String,
+        createdAt: String? = null,
+        modifiedAt: String? = null,
+    ) = Order(
         id = EntityId(id),
         status = status,
         customer = null,
@@ -72,9 +108,10 @@ class CommerceFeatureEngineTest {
         discounts = emptyList(),
         notes = emptyList(),
         items = emptyList(),
-        modifiedAt = null,
+        modifiedAt = modifiedAt?.let(Instant::parse),
         number = id,
         total = total,
         currency = "EUR",
+        createdAt = createdAt?.let(Instant::parse),
     )
 }
