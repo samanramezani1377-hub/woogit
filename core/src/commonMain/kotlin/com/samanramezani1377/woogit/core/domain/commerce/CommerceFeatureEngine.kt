@@ -71,8 +71,14 @@ object CommerceFeatureEngine {
             totalOrders = orders.size,
             averageOrderValue = averageOrderValue,
             statusCounts = statusCounts,
-            topProductIds = productCounts.entries.sortedByDescending { it.value }.take(10).map { it.key to it.value },
-            topCustomerIds = customerCounts.entries.sortedByDescending { it.value }.take(10).map { it.key to it.value },
+            topProductIds = productCounts.entries
+                .sortedByDescending { it.value }
+                .take(10)
+                .map { it.key to it.value },
+            topCustomerIds = customerCounts.entries
+                .sortedByDescending { it.value }
+                .take(10)
+                .map { it.key to it.value },
             inventoryProducts = products.size,
         )
     }
@@ -121,8 +127,9 @@ object CommerceFeatureEngine {
         return InvoiceDocumentModel(
             storeName = storeName,
             orderNumber = order.number,
-            customerName = order.customer?.name ?: listOfNotNull(order.billing?.firstName, order.billing?.lastName).joinToString(" "),
-            customerEmail = order.customer?.email ?: order.billing?.let { null },
+            customerName = order.customer?.name
+                ?: listOfNotNull(order.billing?.firstName, order.billing?.lastName).joinToString(" "),
+            customerEmail = order.customer?.email,
             customerPhone = order.billing?.phone,
             items = order.items.map {
                 InvoiceLineModel(
