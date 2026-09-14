@@ -9,10 +9,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.platform.LocalContext
 import com.samanramezani1377.woogit.commerce.CommerceScannerActivity
 
 @Composable
 internal fun CommerceCameraScanButton(onDetected: (String) -> Unit) {
+    val context = LocalContext.current
     val latestOnDetected by rememberUpdatedState(onDetected)
     val launcher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
@@ -27,9 +29,9 @@ internal fun CommerceCameraScanButton(onDetected: (String) -> Unit) {
 
     Button(
         onClick = {
-            // Use an explicit Intent. The scanner Activity is intentionally
-            // not exported and therefore has no external ACTION intent-filter.
-            launcher.launch(Intent(context = androidx.compose.ui.platform.LocalContext.current, CommerceScannerActivity::class.java))
+            // The scanner Activity is not exported and intentionally has no
+            // external intent-filter, so it must be launched explicitly.
+            launcher.launch(Intent(context, CommerceScannerActivity::class.java))
         },
     ) {
         Text("اسکن با دوربین")
