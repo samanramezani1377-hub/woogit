@@ -42,16 +42,16 @@ internal fun InventoryPage(state: CommerceUiState, onFilter: (String, Boolean, B
         } else {
             LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(state.inventory, key = { it.id.value }) { product ->
-                    val quantity = product.stock?.quantity ?: 0
+                    val quantityText = product.stock?.quantity?.toString() ?: "0"
                     GlassCard(Modifier.fillMaxWidth().clickable { onProduct(product.id.value) }) {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text(product.name, fontWeight = FontWeight.SemiBold)
                                 Text("SKU: ${product.sku.orEmpty().ifBlank { "بدون SKU" }}", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
-                                Text(if (quantity <= 0) "ناموجود" else "موجود", color = if (quantity <= 0) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
+                                Text("موجودی: $quantityText", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
                             }
                             Column(horizontalAlignment = Alignment.End) {
-                                Text(quantity.toString(), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                                Text(quantityText, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
                                 Text("تعداد", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
                             }
                         }
