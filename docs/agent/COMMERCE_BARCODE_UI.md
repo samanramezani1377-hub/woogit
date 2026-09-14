@@ -42,3 +42,5 @@ The scanner is a dedicated E11 destination. It must not be rendered as a card or
 - Camera launch control: `presentation/.../commerce/CommerceCameraScanButton.kt`
 
 The ViewModel continues to own resolution and store data loading; the screen only owns transient input text and navigation callbacks.
+
+The scanner screen uses the shared `GlassSearchField(value, onValueChange, ...)` contract and narrows nullable product IDs before navigation. This is part of the compile-time UI contract and must remain synchronized with the shared Glass components.

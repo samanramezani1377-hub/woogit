@@ -22,6 +22,7 @@ import com.samanramezani1377.woogit.presentation.GlassScaffold
 import com.samanramezani1377.woogit.presentation.GlassText
 import com.samanramezani1377.woogit.presentation.GlassTopBar
 
+/** Shared Glass scanner surface; keep input and navigation contracts explicit. */
 /**
  * Product lookup surface for warehouse/counter workflows.
  *
