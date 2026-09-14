@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -19,41 +20,60 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.samanramezani1377.woogit.presentation.GlassCard
+import com.samanramezani1377.woogit.presentation.GlassEmptyState
 import com.samanramezani1377.woogit.presentation.GlassOutlinedButton
 import com.samanramezani1377.woogit.presentation.GlassPrimaryAction
+import com.samanramezani1377.woogit.presentation.GlassSearchField
+import com.samanramezani1377.woogit.presentation.GlassTokens
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 
 @Composable
 internal fun InvoicePage(state: CommerceUiState, onInvoice: (String) -> Unit) {
+    var query by rememberSaveable { mutableStateOf("") }
+    val visible = state.orders.filter { it.number.contains(query.trim(), true) }
+    val context = LocalContext.current
+    val renderer = remember { InvoicePdfRenderer() }
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri: Uri? ->
+        val invoice = state.invoice ?: return@rememberLauncherForActivityResult
+        if (uri != null) runCatching { context.contentResolver.openOutputStream(uri)?.use { it.write(renderer.render(invoice)) } }
+    }
+
     FeatureBody {
-        Section("انتخاب سفارش", "یک سفارش را انتخاب کنید تا فاکتور آن آماده شود.") {
-            Text("${state.orders.size} سفارش در دسترس")
+        Section("فاکتور سفارش", "سفارش را انتخاب کنید تا پیش‌نمایش فاکتور آماده شود.") {
+            GlassSearchField(value = query, onValueChange = { query = it }, label = "شماره سفارش", modifier = Modifier.fillMaxWidth())
+            Text("${visible.size} سفارش", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
         }
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
-            items(state.orders, key = { it.id.value }) { order ->
-                GlassCard(Modifier.clickable { onInvoice(order.id.value) }) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Column {
-                            Text("فاکتور #${order.number}", fontWeight = FontWeight.SemiBold)
-                            Text(order.status.faLabel())
-                        }
-                        GlassOutlinedButton("آماده‌سازی", { onInvoice(order.id.value) })
+
+        state.invoice?.let { invoice ->
+            Section("فاکتور آماده است", "این فاکتور آماده ذخیره به صورت PDF است.") {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text("سفارش #${invoice.orderNumber}", fontWeight = FontWeight.Bold)
+                        Text("فاکتور آماده ذخیره", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
                     }
+                    GlassPrimaryAction("ذخیره PDF", { launcher.launch("invoice-${invoice.orderNumber}.pdf") })
                 }
             }
         }
-        state.invoice?.let { invoice ->
-            Section("فاکتور آماده است", "فایل PDF را در حافظه دستگاه ذخیره کنید.") {
-                Text("شماره سفارش: ${invoice.orderNumber}", fontWeight = FontWeight.SemiBold)
-                val context = LocalContext.current
-                val renderer = remember { InvoicePdfRenderer() }
-                val launcher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri: Uri? ->
-                    if (uri != null) {
-                        runCatching {
-                            context.contentResolver.openOutputStream(uri)?.use { output -> output.write(renderer.render(invoice)) }
+
+        if (visible.isEmpty()) {
+            GlassEmptyState("سفارشی برای ساخت فاکتور پیدا نشد.")
+        } else {
+            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(visible, key = { it.id.value }) { order ->
+                    GlassCard(Modifier.fillMaxWidth().clickable { onInvoice(order.id.value) }) {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                Text("#${order.number}", fontWeight = FontWeight.SemiBold)
+                                Text(order.status.faLabel(), color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
+                            }
+                            GlassOutlinedButton("انتخاب", { onInvoice(order.id.value) })
                         }
                     }
                 }
-                GlassPrimaryAction("ذخیره PDF", { launcher.launch("invoice-${invoice.orderNumber}.pdf") })
             }
         }
     }
