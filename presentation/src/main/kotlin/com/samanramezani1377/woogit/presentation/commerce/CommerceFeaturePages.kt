@@ -5,6 +5,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -84,7 +85,7 @@ private fun FeatureHeader(title: String, subtitle: String, onBack: () -> Unit) {
 }
 
 @Composable
-private fun FeatureBody(content: @Composable () -> Unit) {
+private fun FeatureBody(content: @Composable ColumnScope.() -> Unit) {
     Column(
         Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 10.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
