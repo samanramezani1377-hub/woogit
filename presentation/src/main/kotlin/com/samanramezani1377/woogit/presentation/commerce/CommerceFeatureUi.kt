@@ -80,7 +80,7 @@ internal fun CommerceFeature.subtitleFa(): String = when (this) {
     CommerceFeature.BARCODE -> "پیدا کردن سریع محصول یا سفارش"
     CommerceFeature.BULK_ORDERS -> "انتخاب، فیلتر و تغییر چند سفارش با هم"
     CommerceFeature.INVENTORY -> "پیدا کردن کالاهای کم‌موجودی و ناموجود"
-    CommerceFeature.CUSTOMERS -> "انتخاب و مدیریت گروهی مشتریان"
+    CommerceFeature.CUSTOMERS -> "فهرست، پرونده و سابقه خرید مشتریان"
     CommerceFeature.ANALYTICS -> "درک سریع عملکرد فروشگاه"
     CommerceFeature.COUPONS -> "پیدا کردن و ویرایش گروهی کوپن‌ها"
     CommerceFeature.INVOICE -> "ساخت و ذخیره فاکتور سفارش"
