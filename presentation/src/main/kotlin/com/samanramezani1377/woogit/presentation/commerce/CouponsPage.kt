@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
@@ -47,7 +46,12 @@ internal fun CouponsPage(
     }
     FeatureBody {
         Section("پیدا کردن و انتخاب", "کوپن‌ها را جستجو کنید، موارد موردنظر را انتخاب و سپس تغییر را اعمال کنید.") {
-            GlassSearchField(query, { query = it }, "کد کوپن", Modifier.fillMaxWidth())
+            GlassSearchField(
+                value = query,
+                onValueChange = { query = it },
+                placeholder = "کد کوپن",
+                modifier = Modifier.fillMaxWidth(),
+            )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 GlassOutlinedButton("انتخاب نتایج", { selected = selected + visible.map { it.id }.toSet() })
                 GlassOutlinedButton("پاک کردن", { selected = emptySet() })
@@ -55,7 +59,12 @@ internal fun CouponsPage(
             }
         }
         Section("ویرایش گروهی") {
-            GlassSearchField(amount, { amount = it }, "مبلغ جدید", Modifier.fillMaxWidth())
+            GlassSearchField(
+                value = amount,
+                onValueChange = { amount = it },
+                placeholder = "مبلغ جدید",
+                modifier = Modifier.fillMaxWidth(),
+            )
             GlassPrimaryAction("ذخیره تغییرات", { confirm = true }, enabled = selected.isNotEmpty() && amount.isNotBlank())
         }
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
