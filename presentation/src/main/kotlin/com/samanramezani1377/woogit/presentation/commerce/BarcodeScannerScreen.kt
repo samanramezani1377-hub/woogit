@@ -6,12 +6,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,8 +56,8 @@ internal fun BarcodeScannerScreen(
                     GlassText("جستجوی محصول")
                     GlassText("بارکد یا SKU را وارد کنید یا با دوربین اسکن کنید.")
                     GlassSearchField(
-                        query = query,
-                        onQueryChange = { query = it },
+                        value = query,
+                        onValueChange = { query = it },
                         label = "بارکد / SKU",
                     )
                     Row(
@@ -95,24 +93,18 @@ internal fun BarcodeScannerScreen(
             }
 
             state.barcodeResult?.let { result ->
-                when {
-                    result.productId != null -> {
-                        val productId = result.productId
-                        GlassCard {
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                GlassText("محصول پیدا شد")
-                                GlassText("شناسه ورودی: ${result.value}")
-                                GlassPrimaryAction(
-                                    label = "باز کردن محصول",
-                                    onClick = { onProduct(productId) },
-                                )
-                            }
+                result.productId?.let { productId ->
+                    GlassCard {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            GlassText("محصول پیدا شد")
+                            GlassText("شناسه ورودی: ${result.value}")
+                            GlassPrimaryAction(
+                                label = "باز کردن محصول",
+                                onClick = { onProduct(productId) },
+                            )
                         }
                     }
-                    else -> {
-                        GlassEmptyState("محصولی با این بارکد یا SKU پیدا نشد.")
-                    }
-                }
+                } ?: GlassEmptyState("محصولی با این بارکد یا SKU پیدا نشد.")
             }
 
             if (state.barcodeResult == null && !state.loading && state.products.isNotEmpty()) {
