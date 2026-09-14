@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
@@ -79,7 +78,12 @@ internal fun BulkOrdersPage(
 
     FeatureBody {
         Section("فیلتر و انتخاب", "انتخاب‌ها با تغییر فیلتر حفظ می‌شوند تا بتوانید چند گروه را پشت سر هم انتخاب کنید.") {
-            GlassSearchField(query, { query = it }, "شماره سفارش", Modifier.fillMaxWidth())
+            GlassSearchField(
+                value = query,
+                onValueChange = { query = it },
+                placeholder = "شماره سفارش",
+                modifier = Modifier.fillMaxWidth(),
+            )
             LazyColumn(
                 horizontalAlignment = Alignment.Start,
                 verticalArrangement = Arrangement.spacedBy(6.dp),
