@@ -49,14 +49,14 @@ internal fun BarcodeScannerScreen(
             GlassCard {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     GlassText("جستجوی محصول", style = MaterialTheme.typography.titleMedium)
-                    GlassText("SKU یا مقدار بارکد را وارد کنید یا با دوربین بخوانید.", color = GlassTokens.muted)
+                    GlassText("SKU یا مقدار بارکد را وارد کنید یا با دوربین بخوانید.")
                     GlassSearchField(
                         value = query,
                         onValueChange = { query = it },
                         label = "SKU / بارکد",
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         GlassPrimaryAction(
                             "جستجو",
                             { onResolve(query.trim()) },
@@ -77,7 +77,7 @@ internal fun BarcodeScannerScreen(
                         GlassCard {
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 GlassText("محصول پیدا شد", style = MaterialTheme.typography.titleMedium)
-                                GlassText("ورودی: ${result.value}", color = GlassTokens.muted)
+                                GlassText("ورودی: ${result.value}")
                                 GlassPrimaryAction("باز کردن محصول", { onProduct(productId) }, modifier = Modifier.fillMaxWidth())
                             }
                         }
@@ -86,7 +86,7 @@ internal fun BarcodeScannerScreen(
                 else -> GlassCard {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         GlassText("آماده اسکن", style = MaterialTheme.typography.titleMedium)
-                        GlassText("برای شروع، مقدار را وارد کنید یا دکمه دوربین را بزنید.", color = GlassTokens.muted)
+                        GlassText("برای شروع، مقدار را وارد کنید یا دکمه دوربین را بزنید.")
                     }
                 }
             }
