@@ -1,11 +1,8 @@
 package com.samanramezani1377.woogit.presentation.commerce
 
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.material3.FilterChip
+import androidx.compose.foundation.layout.*
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -23,7 +20,7 @@ import androidx.compose.ui.unit.dp
 import com.samanramezani1377.woogit.core.domain.commerce.AnalyticsTrendPoint
 import com.samanramezani1377.woogit.presentation.GlassCard
 import com.samanramezani1377.woogit.presentation.GlassTokens
-import kotlin.math.roundToLong
+import kotlin.math.roundToInt
 
 @Composable
 internal fun ComparisonTrendChart(current: List<AnalyticsTrendPoint>, previous: List<AnalyticsTrendPoint>, sales: Boolean) {
@@ -60,7 +57,7 @@ internal fun ComparisonTrendChart(current: List<AnalyticsTrendPoint>, previous: 
                     val y = vp + height - (values[index] / max).toFloat() * height
                     return Offset(x, y)
                 }
-                fun drawSeries(values: List<Double>, color: Color) { val path = Path(); values.take(count).forEachIndexed { index, value -> val x = hp + width * index / divisor; val y = vp + height - (value / max).toFloat() * height; if (index == 0) path.moveTo(x, y) else path.lineTo(x, y) }; drawPath(path, color = color, style = Stroke(4.dp.toPx(), cap = StrokeCap.Round)); values.take(count).forEachIndexed { index, value -> drawCircle(color, 3.dp.toPx(), point(values, index)) } }
+                fun drawSeries(values: List<Double>, color: Color) { val path = Path(); values.take(count).forEachIndexed { index, value -> val x = hp + width * index / divisor; val y = vp + height - (value / max).toFloat() * height; if (index == 0) path.moveTo(x, y) else path.lineTo(x, y) }; drawPath(path, color = color, style = Stroke(4.dp.toPx(), cap = StrokeCap.Round)); values.take(count).forEachIndexed { index, _ -> drawCircle(color, 3.dp.toPx(), point(values, index)) } }
                 drawSeries(currentValues, currentColor); drawSeries(previousValues, previousColor)
                 selectedIndex?.let { index ->
                     val currentPoint = point(currentValues, index)
@@ -73,10 +70,9 @@ internal fun ComparisonTrendChart(current: List<AnalyticsTrendPoint>, previous: 
             selectedIndex?.let { index ->
                 val currentPoint = current[index]
                 val previousPoint = previous[index]
-                val date = currentPoint.label
                 Surface(Modifier.align(Alignment.TopCenter), tonalElevation = 4.dp, shadowElevation = 6.dp) {
                     Column(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text(date, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                        Text(currentPoint.label, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                         Text("دوره فعلی: ${if (sales) formatNumber(currentPoint.sales) else currentPoint.orders}", color = currentColor, style = MaterialTheme.typography.labelSmall)
                         Text("دوره قبل: ${if (sales) formatNumber(previousPoint.sales) else previousPoint.orders}", color = previousColor, style = MaterialTheme.typography.labelSmall)
                     }
