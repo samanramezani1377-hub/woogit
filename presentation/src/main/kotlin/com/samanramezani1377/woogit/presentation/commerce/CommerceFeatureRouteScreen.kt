@@ -16,9 +16,9 @@ import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
 /**
  * Hosts one Commerce capability as a real E11 destination.
  *
- * The feature keeps its own workflow/content, but its visual shell is the same
- * WooGit presentation shell used by the rest of the app. A capability route
- * must never become a second UI system just because it is navigated separately.
+ * Each capability keeps its own workflow/content, while the presentation shell
+ * stays on WooGit's shared Glass design system. Barcode/SKU has a dedicated
+ * screen because it is a scan-first workflow rather than a generic feature card.
  */
 @Composable
 internal fun CommerceFeatureRouteScreen(
@@ -37,25 +37,34 @@ internal fun CommerceFeatureRouteScreen(
 
     LaunchedEffect(storeId) { vm.load() }
 
-    GlassScaffold {
-        Box(
-            Modifier
-                .fillMaxSize()
-                .padding(horizontal = com.samanramezani1377.woogit.presentation.GlassTokens.spacingSm),
-        ) {
-            CommerceFeaturePage(
-                feature = feature,
-                state = state,
-                onBack = onBack,
-                onBarcode = vm::resolveBarcode,
-                onInventoryFilter = vm::filterInventory,
-                onBulkOrder = vm::bulkOrderStatus,
-                onBulkCustomer = vm::bulkCustomerRole,
-                onBulkCoupon = vm::bulkCouponAmount,
-                onInvoice = vm::prepareInvoice,
-                onProduct = onOpenProduct,
-                onOrder = onOpenOrder,
-            )
+    if (feature == CommerceFeature.BARCODE) {
+        BarcodeScannerScreen(
+            state = state,
+            onResolve = vm::resolveBarcode,
+            onProduct = onOpenProduct,
+            onBack = onBack,
+        )
+    } else {
+        GlassScaffold {
+            Box(
+                Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = com.samanramezani1377.woogit.presentation.GlassTokens.spacingSm),
+            ) {
+                CommerceFeaturePage(
+                    feature = feature,
+                    state = state,
+                    onBack = onBack,
+                    onBarcode = vm::resolveBarcode,
+                    onInventoryFilter = vm::filterInventory,
+                    onBulkOrder = vm::bulkOrderStatus,
+                    onBulkCustomer = vm::bulkCustomerRole,
+                    onBulkCoupon = vm::bulkCouponAmount,
+                    onInvoice = vm::prepareInvoice,
+                    onProduct = onOpenProduct,
+                    onOrder = onOpenOrder,
+                )
+            }
         }
     }
 }
