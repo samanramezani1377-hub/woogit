@@ -11,6 +11,10 @@
         android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true">
         <activity
+            android:name=".commerce.CommerceScannerActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.Material.Light.NoActionBar" />
+        <activity
             android:name=".MainActivity"
             android:exported="true"
             android:theme="@android:style/Theme.Material.Light.NoActionBar"
