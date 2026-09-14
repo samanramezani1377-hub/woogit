@@ -125,6 +125,39 @@ data class WooCommerceCommerceApi(
         mapOf("force" to force),
     )
 
+    suspend fun batchUpdateCustomers(
+        updates: List<Pair<Long, WooCustomerCommerceWriteDto>>,
+        idempotencyKey: String? = null,
+    ): ApiResponse {
+        require(updates.isNotEmpty()) {
+            "At least one customer update is required"
+        }
+        require(updates.size <= MAX_BATCH_SIZE) {
+            "WooCommerce customer batches are limited to $MAX_BATCH_SIZE items"
+        }
+
+        val payload = buildString {
+            append("{\"update\":[")
+            updates.forEachIndexed { index, update ->
+                if (index > 0) {
+                    append(',')
+                }
+                append("{\"id\":")
+                append(update.first)
+                append(',')
+                append(commerceJson.encodeToString(update.second).removePrefix("{").removeSuffix("}"))
+                append('}')
+            }
+            append("]}")
+        }
+        return mutate(
+            "/wp-json/wc/v3/customers/batch",
+            "POST",
+            payload,
+            idempotencyKey,
+        )
+    }
+
     suspend fun listCoupons(
         page: Int = 1,
         perPage: Int = 20,
@@ -170,6 +203,39 @@ data class WooCommerceCommerceApi(
         idempotencyKey,
         mapOf("force" to force),
     )
+
+    suspend fun batchUpdateCoupons(
+        updates: List<Pair<Long, WooCouponCommerceWriteDto>>,
+        idempotencyKey: String? = null,
+    ): ApiResponse {
+        require(updates.isNotEmpty()) {
+            "At least one coupon update is required"
+        }
+        require(updates.size <= MAX_BATCH_SIZE) {
+            "WooCommerce coupon batches are limited to $MAX_BATCH_SIZE items"
+        }
+
+        val payload = buildString {
+            append("{\"update\":[")
+            updates.forEachIndexed { index, update ->
+                if (index > 0) {
+                    append(',')
+                }
+                append("{\"id\":")
+                append(update.first)
+                append(',')
+                append(commerceJson.encodeToString(update.second).removePrefix("{").removeSuffix("}"))
+                append('}')
+            }
+            append("]}")
+        }
+        return mutate(
+            "/wp-json/wc/v3/coupons/batch",
+            "POST",
+            payload,
+            idempotencyKey,
+        )
+    }
 
     suspend fun batchUpdateOrderStatuses(
         updates: List<Pair<Long, String>>,
