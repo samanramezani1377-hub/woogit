@@ -18,6 +18,7 @@ import com.samanramezani1377.woogit.data.repository.*
 import com.samanramezani1377.woogit.data.local.*
 import com.samanramezani1377.woogit.data.sync.*
 import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
+import com.samanramezani1377.woogit.presentation.analytics.AnalyticsRuntime
 import com.samanramezani1377.woogit.presentation.account.AccountSetupGateway
 import com.samanramezani1377.woogit.presentation.settings.BillingRuntime
 import kotlinx.coroutines.*
@@ -45,6 +46,7 @@ class AppComposition(context: Context) {
     val commerceClientProvider = provider
     private val imageFetcher = DirectCustomerImageFetcher(db, secure, network.httpClient)
     private val mutationCoordinator = SqlMutationCoordinator(db)
+    private val localAnalyticsRepository = LocalAnalyticsRepository(orderLocal, productLocal)
 
     private val restoredStoreId: String? = run {
         val savedId = prefs.getString("active_store_id", null)
@@ -141,6 +143,7 @@ class AppComposition(context: Context) {
 
     init {
         BillingRuntime.gateway = billingClient
+        AnalyticsRuntime.loader = { storeId, range -> localAnalyticsRepository.get(storeId, range) }
         restoredStoreId?.let(::startBackgroundWork)
     }
 
@@ -157,6 +160,7 @@ class AppComposition(context: Context) {
 
     fun close() {
         BillingRuntime.gateway = null
+        AnalyticsRuntime.loader = null
         announcementCenter.dispose()
         scope.cancel()
         network.close()
