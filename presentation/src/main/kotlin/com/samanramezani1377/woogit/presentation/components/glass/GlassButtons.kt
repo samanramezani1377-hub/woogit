@@ -19,7 +19,7 @@ fun GlassButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifie
     val shape = RoundedCornerShape(12.dp)
     Button(
         onClick = onClick,
-        modifier = modifier.fillMaxWidth().widthIn(min = 160.dp).heightIn(min = 56.dp),
+        modifier = modifier.heightIn(min = 56.dp),
         enabled = enabled,
         shape = shape,
         colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = Color.White, disabledContainerColor = Color.Transparent),
@@ -44,7 +44,7 @@ fun GlassOutlinedButton(label: String, onClick: () -> Unit, modifier: Modifier =
     val shape = RoundedCornerShape(12.dp)
     OutlinedButton(
         onClick = onClick,
-        modifier = modifier.fillMaxWidth().widthIn(min = 160.dp).heightIn(min = 52.dp).liquidGlass(shape, surface = Color.White.copy(alpha = .30f), blurRadius = 9f, lensHeight = 14f, lensAmount = 10f, shadowElevation = 4f),
+        modifier = modifier.heightIn(min = 52.dp).liquidGlass(shape, surface = Color.White.copy(alpha = .30f), blurRadius = 9f, lensHeight = 14f, lensAmount = 10f, shadowElevation = 4f),
         enabled = enabled,
         shape = shape,
         border = null,
