@@ -68,28 +68,41 @@ The App must never silently treat an operational session as a billing session or
 
 ## 6. Commerce feature execution
 
-Commerce is a real E11 navigation surface:
+Commerce has one top-level E11 surface for the customer/coupon domain and separate E11 destinations for the operational capabilities that belong elsewhere in the app:
 
-`Dashboard quick action -> E11Routes.COMMERCE -> CommerceCenterScreen -> CommerceViewModel -> CommerceRuntime.provider -> WooCommerceClientProvider.commerceClient -> WooCommerceCommerceApi -> BackendClient.forward -> /wp-json/wc/v3/*`
+- `E11Routes.COMMERCE -> CommerceCenterScreen` — only Customers and Coupons remain here.
+- `E11Routes.COMMERCE_BARCODE -> CommerceFeatureRouteScreen(BARCODE)` — independent Barcode / SKU destination.
+- `E11Routes.COMMERCE_BULK_ORDERS -> CommerceFeatureRouteScreen(BULK_ORDERS)` — independent bulk-order destination, surfaced from Orders navigation/actions.
+- `E11Routes.COMMERCE_INVENTORY -> CommerceFeatureRouteScreen(INVENTORY)` — independent inventory destination, surfaced from Products navigation/actions.
+- `E11Routes.COMMERCE_ANALYTICS -> CommerceFeatureRouteScreen(ANALYTICS)` — independent full analytics destination, with summary entry points allowed from Dashboard.
+- `E11Routes.COMMERCE_INVOICE -> CommerceFeatureRouteScreen(INVOICE)` — independent invoice workflow destination, with entry points allowed from Order Detail.
 
-The Commerce center exposes these flows:
+The seven capabilities are therefore not seven cards inside Commerce Center and are not seven independent visual design systems. They share the WooGit presentation shell and design system while retaining independent feature workflows.
 
-- **Barcode / SKU Scanner:** CameraX + ML Kit returns a barcode to the Commerce screen; `BarcodeResolver` resolves product SKU or order number against the loaded catalog/order set.
-- **Bulk Order Status:** selected orders are planned by `CommerceFeatureEngine` and sent in WooCommerce batch requests, chunked at 100 items so the endpoint limit is never exceeded.
-- **Bulk Customer Operations:** selected customers can be updated through the WooCommerce customers batch endpoint using write-only DTOs and 100-item chunks.
+All feature routes use `CommerceFeatureRouteScreen`, which owns the feature ViewModel and wraps the workflow in the same `GlassScaffold` used by the main WooGit UI. `CommerceFeaturePages.kt` is content/workflow composition only; it does not own application navigation or a second app shell.
+
+Commerce execution remains:
+
+`CommerceFeatureRouteScreen -> CommerceFeaturePage -> CommerceViewModel -> CommerceRuntime.provider -> WooCommerceClientProvider.commerceClient -> WooCommerceCommerceApi -> BackendClient.forward -> /wp-json/wc/v3/*`
+
+The Commerce center exposes only these flows:
+
+- **Customer operations:** selected customers can be updated through the WooCommerce customers batch endpoint using write-only DTOs and 100-item chunks.
+- **Coupon usage analytics / coupon operations:** coupon usage is aggregated from orders and selected coupons can be batch-updated through `/coupons/batch`, chunked at 100.
+
+The independent operational flows are:
+
+- **Barcode / SKU Scanner:** CameraX + ML Kit returns a barcode; `BarcodeResolver` resolves product SKU or order number against the loaded catalog/order set.
+- **Bulk Order Status:** selected orders are planned by `CommerceFeatureEngine` and sent in WooCommerce batch requests, chunked at 100 items.
 - **Inventory Filtering:** product name/SKU, low-stock and out-of-stock filtering is calculated by `CommerceFeatureEngine`.
-- **Customer Aggregation:** order-derived customer counts/spend are calculated from the complete Commerce order dataset loaded through pagination.
-- **Coupon Usage Analytics / Bulk Coupon Operations:** coupon usage is aggregated from orders and selected coupons can be batch-updated through `/coupons/batch`, chunked at 100.
 - **Advanced Sales Analytics:** completed sales, completed/total orders, average order value, status counts, top products/customers and inventory coverage are calculated from the complete paginated product/order dataset.
-- **Invoice:** `InvoiceDocumentFactory` creates the domain invoice and the presentation-layer `InvoicePdfRenderer` renders it; the UI uses Android `CreateDocument` to save the generated PDF.
+- **Invoice:** `InvoiceDocumentFactory` creates the domain invoice and `InvoicePdfRenderer` renders it; Android `CreateDocument` saves the generated PDF.
 
 Commerce reads are paginated in 100-item pages with a safety ceiling of 10,000 records per entity to avoid unbounded memory/network loops. Results are deduplicated by entity ID before analytics and UI use.
 
 Commerce read DTOs and write DTOs remain separate so WooCommerce read-only fields are not sent back in mutations. No Commerce feature creates a second credential or session path; it uses the same authenticated `WooCommerceClientProvider` installed by `MainActivity`.
 
-The Commerce UI now exposes loading/retry states, selection counts, select-all/clear-selection actions and confirmation dialogs for destructive/group mutations. Partial batch failures are reported separately from successful operations.
-
-Core Commerce calculations have dedicated common tests in `core/src/commonTest/kotlin/com/samanramezani1377/woogit/core/CommerceFeatureEngineTest.kt` covering barcode classification and sales/status analytics.
+The Commerce workflows use the shared WooGit Glass presentation language. Independent routing does not permit a feature to introduce a separate scaffold, typography system, spacing system, or visual shell.
 
 ## 7. AI Agent execution
 
@@ -139,7 +152,7 @@ Background workers include order polling, product catalog synchronization, annou
 - Dashboard concurrency/readiness: `DashboardViewModel.kt`.
 - Credential persistence: `AndroidSecureCredentialStore.kt`.
 - Commerce runtime: `presentation/.../commerce/CommerceRuntime.kt`.
-- Commerce navigation/UI: `presentation/.../commerce/CommerceCenterScreen.kt`, `CommerceViewModel.kt`.
+- Commerce navigation/UI: `presentation/.../commerce/CommerceCenterScreen.kt`, `CommerceFeatureRouteScreen.kt`, `CommerceFeaturePages.kt`, `CommerceViewModel.kt`.
 - Commerce transport: `data/.../CommerceWooCommerceApi.kt`, `WooCommerceClientProvider.kt`.
 - Commerce domain calculations: `core/.../commerce/CommerceFeatureEngine.kt`, `BarcodeResolver.kt`, `InvoiceDocumentFactory.kt`.
 - Commerce Android scanner: `app/.../commerce/BarcodeScannerScreen.kt`, `CommerceScannerActivity.kt`.
