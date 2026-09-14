@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,7 +16,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -30,11 +28,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import com.samanramezani1377.woogit.core.domain.model.OrderStatus
 
 @Composable
@@ -56,7 +53,7 @@ internal fun CommerceFeaturePage(
         when (feature) {
             CommerceFeature.BARCODE -> BarcodePage(state, onBarcode, onProduct, onOrder)
             CommerceFeature.BULK_ORDERS -> BulkOrdersPage(state, onBulkOrder)
-            CommerceFeature.INVENTORY -> InventoryPage(state, onInventoryFilter)
+            CommerceFeature.INVENTORY -> InventoryPage(state, onInventoryFilter, onProduct)
             CommerceFeature.CUSTOMERS -> CustomersPage(state, onBulkCustomer)
             CommerceFeature.ANALYTICS -> AnalyticsPage(state)
             CommerceFeature.COUPONS -> CouponsPage(state, onBulkCoupon)
@@ -67,12 +64,8 @@ internal fun CommerceFeaturePage(
 
 @Composable
 private fun FeatureHeader(title: String, subtitle: String, onBack: () -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
+    Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
@@ -86,14 +79,11 @@ private fun FeatureBody(content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun GlassSection(title: String, content: @Composable () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .58f)),
-    ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+private fun Section(title: String, description: String? = null, content: @Composable () -> Unit) {
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .58f))) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            description?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             content()
         }
     }
@@ -103,23 +93,22 @@ private fun GlassSection(title: String, content: @Composable () -> Unit) {
 private fun BarcodePage(state: CommerceUiState, onBarcode: (String) -> Unit, onProduct: (String) -> Unit, onOrder: (String) -> Unit) {
     var query by rememberSaveable { mutableStateOf("") }
     FeatureBody {
-        GlassSection("جستجوی سریع", {
-            Text("بارکد، SKU یا شماره سفارش را وارد کنید یا با دوربین اسکن کنید.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            TextField(query, { query = it }, label = { Text("بارکد یا SKU") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        Section("پیدا کردن سریع", "بارکد، SKU یا شماره سفارش را وارد کنید یا مستقیماً اسکن کنید.") {
+            TextField(query, { query = it }, label = { Text("شناسه محصول یا سفارش") }, singleLine = true, modifier = Modifier.fillMaxWidth())
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(enabled = query.isNotBlank(), onClick = { onBarcode(query.trim()) }) { Text("جستجو") }
+                Button(enabled = query.isNotBlank(), onClick = { onBarcode(query.trim()) }) { Text("پیدا کردن") }
                 CommerceCameraScanButton(onDetected = { query = it; onBarcode(it) })
             }
-        })
+        }
         state.barcodeResult?.let { result ->
-            GlassSection("نتیجه جستجو", {
+            Section("نتیجه", "نتیجه پیدا شده را باز کنید و ادامه کار را همان‌جا انجام دهید.") {
                 Text("نوع: ${result.kind}")
                 Text("شناسه: ${result.value}", fontWeight = FontWeight.SemiBold)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    result.productId?.let { Button(onClick = { onProduct(it) }) { Text("مشاهده محصول") } }
-                    result.orderId?.let { OutlinedButton(onClick = { onOrder(it) }) { Text("مشاهده سفارش") } }
+                    result.productId?.let { Button(onClick = { onProduct(it) }) { Text("باز کردن محصول") } }
+                    result.orderId?.let { OutlinedButton(onClick = { onOrder(it) }) { Text("باز کردن سفارش") } }
                 }
-            })
+            }
         }
     }
 }
@@ -128,28 +117,42 @@ private fun BarcodePage(state: CommerceUiState, onBarcode: (String) -> Unit, onP
 private fun BulkOrdersPage(state: CommerceUiState, onBulkOrder: (Set<String>, OrderStatus) -> Unit) {
     var selected by remember { mutableStateOf(emptySet<String>()) }
     var target by remember { mutableStateOf<OrderStatus?>(null) }
+    var query by rememberSaveable { mutableStateOf("") }
+    var statusFilter by remember { mutableStateOf<OrderStatus?>(null) }
+    val visible = state.orders.filter { order ->
+        val text = "${order.number} ${order.status.name}".contains(query.trim(), ignoreCase = true)
+        text && (statusFilter == null || order.status == statusFilter)
+    }
     target?.let { status ->
-        AlertDialog(onDismissRequest = { target = null }, title = { Text("تأیید تغییر وضعیت") }, text = { Text("${selected.size} سفارش به «${status.faLabel()}» تغییر می‌کند.") }, confirmButton = { Button(onClick = { onBulkOrder(selected, status); selected = emptySet(); target = null }) { Text("تأیید") } }, dismissButton = { TextButton(onClick = { target = null }) { Text("لغو") } })
+        AlertDialog(onDismissRequest = { target = null }, title = { Text("تأیید عملیات گروهی") }, text = { Text("${selected.size} سفارش به «${status.faLabel()}» تغییر می‌کند.") }, confirmButton = { Button(onClick = { onBulkOrder(selected, status); selected = emptySet(); target = null }) { Text("اعمال") } }, dismissButton = { TextButton(onClick = { target = null }) { Text("لغو") } })
     }
     FeatureBody {
-        GlassSection("عملیات گروهی سفارش‌ها", {
+        Section("انتخاب سفارش‌ها", "اول سفارش‌ها را فیلتر کنید، سپس موارد موردنظر را انتخاب و یک عملیات را اجرا کنید.") {
+            TextField(query, { query = it }, label = { Text("شماره سفارش") }, singleLine = true, modifier = Modifier.fillMaxWidth())
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(onClick = { selected = state.orders.map { it.id.value }.toSet() }) { Text("انتخاب همه") }
+                OutlinedButton(onClick = { selected = visible.map { it.id.value }.toSet() }) { Text("انتخاب نتایج") }
                 TextButton(onClick = { selected = emptySet() }) { Text("پاک کردن") }
             }
-            Text("${selected.size} از ${state.orders.size} سفارش انتخاب شده", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(selected = statusFilter == null, onClick = { statusFilter = null }, label = { Text("همه") })
+                FilterChip(selected = statusFilter == OrderStatus.PROCESSING, onClick = { statusFilter = OrderStatus.PROCESSING }, label = { Text("پردازش") })
+                FilterChip(selected = statusFilter == OrderStatus.COMPLETED, onClick = { statusFilter = OrderStatus.COMPLETED }, label = { Text("تکمیل") })
+            }
+            Text("${selected.size} سفارش انتخاب شده از ${visible.size} نتیجه", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Section("عملیات") {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(enabled = selected.isNotEmpty(), onClick = { target = OrderStatus.PROCESSING }) { Text("در حال پردازش") }
                 OutlinedButton(enabled = selected.isNotEmpty(), onClick = { target = OrderStatus.COMPLETED }) { Text("تکمیل‌شده") }
             }
-        })
+        }
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
-            items(state.orders, key = { it.id.value }) { order ->
+            items(visible, key = { it.id.value }) { order ->
                 val id = order.id.value
-                Card(onClick = { selected = if (id in selected) selected - id else selected + id }, shape = RoundedCornerShape(18.dp)) {
+                Card(onClick = { selected = if (id in selected) selected - id else selected + id }, shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = if (id in selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .5f))) {
                     Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                         Column { Text("#${order.number}", fontWeight = FontWeight.SemiBold); Text(order.status.faLabel(), color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                        Text(if (id in selected) "✓" else "انتخاب")
+                        Text(if (id in selected) "انتخاب شد" else "انتخاب")
                     }
                 }
             }
@@ -158,25 +161,33 @@ private fun BulkOrdersPage(state: CommerceUiState, onBulkOrder: (Set<String>, Or
 }
 
 @Composable
-private fun InventoryPage(state: CommerceUiState, onFilter: (String, Boolean, Boolean) -> Unit) {
+private fun InventoryPage(state: CommerceUiState, onFilter: (String, Boolean, Boolean) -> Unit, onProduct: (String) -> Unit) {
     var query by rememberSaveable { mutableStateOf("") }
     var low by rememberSaveable { mutableStateOf(false) }
     var out by rememberSaveable { mutableStateOf(false) }
     FeatureBody {
-        GlassSection("جستجو و فیلتر", {
-            TextField(query, { query = it; onFilter(it, low, out) }, label = { Text("نام یا SKU") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        Section("وضعیت موجودی", "برای پیدا کردن کالاهای مسئله‌دار فیلتر کنید؛ برای ویرایش، محصول را باز کنید.") {
+            TextField(query, { query = it; onFilter(it, low, out) }, label = { Text("نام محصول یا SKU") }, singleLine = true, modifier = Modifier.fillMaxWidth())
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 FilterChip(selected = low, onClick = { low = !low; onFilter(query, low, out) }, label = { Text("کم‌موجودی") })
                 FilterChip(selected = out, onClick = { out = !out; onFilter(query, low, out) }, label = { Text("ناموجود") })
             }
-            Text("${state.inventory.size} محصول", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        })
+            Text("${state.inventory.size} محصول مطابق فیلتر", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
-            items(state.inventory) { product ->
-                GlassSection(product.name, {
-                    Text("SKU: ${product.sku.orEmpty().ifBlank { "بدون SKU" }}")
-                    Text("موجودی: ${product.stock?.quantity ?: 0}", fontWeight = FontWeight.SemiBold)
-                })
+            items(state.inventory, key = { it.id.value }) { product ->
+                Card(onClick = { onProduct(product.id.value) }, shape = RoundedCornerShape(18.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Column(Modifier.weight(1f)) {
+                            Text(product.name, fontWeight = FontWeight.SemiBold)
+                            Text("SKU: ${product.sku.orEmpty().ifBlank { "بدون SKU" }}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
+                            Text("${product.stock?.quantity ?: 0}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text("موجودی", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
             }
         }
     }
@@ -186,19 +197,24 @@ private fun InventoryPage(state: CommerceUiState, onFilter: (String, Boolean, Bo
 private fun CustomersPage(state: CommerceUiState, onBulkCustomer: (Set<Long>, String) -> Unit) {
     var selected by remember { mutableStateOf(emptySet<Long>()) }
     var role by rememberSaveable { mutableStateOf("customer") }
+    var query by rememberSaveable { mutableStateOf("") }
     var confirm by remember { mutableStateOf(false) }
-    if (confirm) AlertDialog(onDismissRequest = { confirm = false }, title = { Text("تأیید تغییر مشتریان") }, text = { Text("${selected.size} مشتری به نقش «$role» تغییر می‌کنند.") }, confirmButton = { Button(onClick = { onBulkCustomer(selected, role); selected = emptySet(); confirm = false }) { Text("تأیید") } }, dismissButton = { TextButton(onClick = { confirm = false }) { Text("لغو") } })
+    val visible = state.customers.filter { "${it.first_name.orEmpty()} ${it.last_name.orEmpty()} ${it.email.orEmpty()}".contains(query.trim(), ignoreCase = true) }
+    if (confirm) AlertDialog(onDismissRequest = { confirm = false }, title = { Text("تأیید تغییر مشتریان") }, text = { Text("${selected.size} مشتری به نقش «$role» تغییر می‌کنند.") }, confirmButton = { Button(onClick = { onBulkCustomer(selected, role); selected = emptySet(); confirm = false }) { Text("اعمال") } }, dismissButton = { TextButton(onClick = { confirm = false }) { Text("لغو") } })
     FeatureBody {
-        GlassSection("مدیریت مشتریان", {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedButton(onClick = { selected = state.customers.map { it.id }.toSet() }) { Text("انتخاب همه") }; TextButton(onClick = { selected = emptySet() }) { Text("پاک کردن") } }
+        Section("انتخاب مشتریان", "مشتریان را جستجو کنید و فقط گروه موردنظر را انتخاب کنید.") {
+            TextField(query, { query = it }, label = { Text("نام یا ایمیل") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedButton(onClick = { selected = visible.map { it.id }.toSet() }) { Text("انتخاب نتایج") }; TextButton(onClick = { selected = emptySet() }) { Text("پاک کردن") } }
             Text("${selected.size} مشتری انتخاب شده", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Section("تغییر نقش") {
             TextField(role, { role = it }, label = { Text("نقش جدید") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            Button(enabled = selected.isNotEmpty() && role.isNotBlank(), onClick = { confirm = true }) { Text("اعمال تغییر") }
-        })
+            Button(enabled = selected.isNotEmpty() && role.isNotBlank(), onClick = { confirm = true }) { Text("اعمال روی انتخاب‌ها") }
+        }
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
-            items(state.customers, key = { it.id }) { customer ->
+            items(visible, key = { it.id }) { customer ->
                 val id = customer.id
-                Card(onClick = { selected = if (id in selected) selected - id else selected + id }, shape = RoundedCornerShape(18.dp)) {
+                Card(onClick = { selected = if (id in selected) selected - id else selected + id }, shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = if (id in selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .5f))) {
                     Column(Modifier.fillMaxWidth().padding(14.dp)) { Text("${customer.first_name.orEmpty()} ${customer.last_name.orEmpty()}".trim().ifBlank { "مشتری بدون نام" }, fontWeight = FontWeight.SemiBold); Text(customer.email.orEmpty(), color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 }
             }
@@ -210,40 +226,47 @@ private fun CustomersPage(state: CommerceUiState, onBulkCustomer: (Set<Long>, St
 private fun AnalyticsPage(state: CommerceUiState) {
     FeatureBody {
         state.analytics?.let { a ->
-            GlassSection("خلاصه فروش", {
+            Section("نمای کلی فروش", "اعداد اصلی عملکرد فروشگاه در یک نگاه.") {
                 MetricRow("فروش تکمیل‌شده", a.sales.toString())
                 MetricRow("سفارش‌های تکمیل‌شده", a.completedOrders.toString())
                 MetricRow("کل سفارش‌ها", a.totalOrders.toString())
                 MetricRow("میانگین ارزش سفارش", a.averageOrderValue.toString())
-                MetricRow("محصولات موجود", a.inventoryProducts.toString())
-            })
-            GlassSection("وضعیت سفارش‌ها", { a.statusCounts.forEach { (status, count) -> MetricRow(status.faLabel(), count.toString()) } })
-            GlassSection("محصولات پرفروش", { a.topProductIds.take(8).forEach { MetricRow("محصول ${it.first}", it.second.toString()) } })
+                MetricRow("محصولات دارای موجودی", a.inventoryProducts.toString())
+            }
+            Section("وضعیت سفارش‌ها") { a.statusCounts.forEach { (status, count) -> MetricRow(status.faLabel(), count.toString()) } }
+            Section("محصولات پرفروش") { a.topProductIds.take(10).forEach { MetricRow("محصول ${it.first}", it.second.toString()) } }
         }
-        GlassSection("مشتریان و کوپن‌ها", { MetricRow("مشتریان تجمیع‌شده", state.customerAggregation.size.toString()); MetricRow("کوپن‌های دارای آمار", state.couponAnalytics.size.toString()) })
+        Section("مشتریان و کوپن‌ها") { MetricRow("مشتریان تجمیع‌شده", state.customerAggregation.size.toString()); MetricRow("کوپن‌های دارای آمار", state.couponAnalytics.size.toString()) }
     }
 }
 
 @Composable
-private fun MetricRow(label: String, value: String) { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text(label); Text(value, fontWeight = FontWeight.Bold) } }
+private fun MetricRow(label: String, value: String) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), horizontalArrangement = Arrangement.SpaceBetween) { Text(label); Text(value, fontWeight = FontWeight.Bold) }
+}
 
 @Composable
 private fun CouponsPage(state: CommerceUiState, onBulkCoupon: (Set<Long>, String) -> Unit) {
     var selected by remember { mutableStateOf(emptySet<Long>()) }
     var amount by rememberSaveable { mutableStateOf("") }
+    var query by rememberSaveable { mutableStateOf("") }
     var confirm by remember { mutableStateOf(false) }
-    if (confirm) AlertDialog(onDismissRequest = { confirm = false }, title = { Text("تأیید تغییر کوپن‌ها") }, text = { Text("مبلغ $amount برای ${selected.size} کوپن ثبت می‌شود.") }, confirmButton = { Button(onClick = { onBulkCoupon(selected, amount); selected = emptySet(); confirm = false }) { Text("تأیید") } }, dismissButton = { TextButton(onClick = { confirm = false }) { Text("لغو") } })
+    val visible = state.coupons.filter { it.code.contains(query.trim(), ignoreCase = true) }
+    if (confirm) AlertDialog(onDismissRequest = { confirm = false }, title = { Text("تأیید تغییر کوپن‌ها") }, text = { Text("مبلغ $amount برای ${selected.size} کوپن ثبت می‌شود.") }, confirmButton = { Button(onClick = { onBulkCoupon(selected, amount); selected = emptySet(); confirm = false }) { Text("اعمال") } }, dismissButton = { TextButton(onClick = { confirm = false }) { Text("لغو") } })
     FeatureBody {
-        GlassSection("عملیات کوپن‌ها", {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedButton(onClick = { selected = state.coupons.map { it.id }.toSet() }) { Text("انتخاب همه") }; TextButton(onClick = { selected = emptySet() }) { Text("پاک کردن") } }
+        Section("پیدا کردن کوپن‌ها", "کوپن‌ها را جستجو و گروه موردنظر را انتخاب کنید.") {
+            TextField(query, { query = it }, label = { Text("کد کوپن") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedButton(onClick = { selected = visible.map { it.id }.toSet() }) { Text("انتخاب نتایج") }; TextButton(onClick = { selected = emptySet() }) { Text("پاک کردن") } }
             Text("${selected.size} کوپن انتخاب شده", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Section("ویرایش گروهی") {
             TextField(amount, { amount = it }, label = { Text("مبلغ جدید") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            Button(enabled = selected.isNotEmpty() && amount.isNotBlank(), onClick = { confirm = true }) { Text("ذخیره تغییرات") }
-        })
+            Button(enabled = selected.isNotEmpty() && amount.isNotBlank(), onClick = { confirm = true }) { Text("ذخیره روی انتخاب‌ها") }
+        }
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
-            items(state.coupons, key = { it.id }) { coupon ->
+            items(visible, key = { it.id }) { coupon ->
                 val id = coupon.id
-                Card(onClick = { selected = if (id in selected) selected - id else selected + id }, shape = RoundedCornerShape(18.dp)) {
+                Card(onClick = { selected = if (id in selected) selected - id else selected + id }, shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = if (id in selected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .5f))) {
                     Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween) { Column { Text(coupon.code, fontWeight = FontWeight.SemiBold); Text("مبلغ: ${coupon.amount}") }; Text("${coupon.usage_count} استفاده") }
                 }
             }
@@ -259,13 +282,30 @@ private fun InvoicePage(state: CommerceUiState, onInvoice: (String) -> Unit) {
         val invoice = state.invoice ?: return@rememberLauncherForActivityResult
         if (uri != null) runCatching { context.contentResolver.openOutputStream(uri)?.use { it.write(renderer.render(invoice)) } }
     }
+    var query by rememberSaveable { mutableStateOf("") }
+    val visible = state.orders.filter { it.number.contains(query.trim(), ignoreCase = true) }
     FeatureBody {
-        GlassSection("فاکتور سفارش", { Text("یک سفارش را انتخاب کنید تا فاکتور آماده شود.", color = MaterialTheme.colorScheme.onSurfaceVariant) })
+        Section("انتخاب سفارش", "شماره سفارش را پیدا کنید، فاکتور را بسازید و بعد پیش‌نمایش آن را بررسی کنید.") {
+            TextField(query, { query = it }, label = { Text("شماره سفارش") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            Text("${visible.size} سفارش", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
-            items(state.orders, key = { it.id.value }) { order ->
-                Card(onClick = { onInvoice(order.id.value) }, shape = RoundedCornerShape(18.dp)) { Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween) { Text("فاکتور #${order.number}", fontWeight = FontWeight.SemiBold); Text("ساخت فاکتور") } }
+            items(visible, key = { it.id.value }) { order ->
+                Card(onClick = { onInvoice(order.id.value) }, shape = RoundedCornerShape(18.dp)) {
+                    Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Column { Text("#${order.number}", fontWeight = FontWeight.SemiBold); Text(order.status.faLabel(), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                        Button(onClick = { onInvoice(order.id.value) }) { Text("ساخت فاکتور") }
+                    }
+                }
             }
-            state.invoice?.let { invoice -> item { GlassSection("فاکتور آماده است", { Text("شماره سفارش: ${invoice.orderNumber}"); Button(onClick = { launcher.launch("invoice-${invoice.orderNumber}.pdf") }) { Text("ذخیره فایل PDF") } }) } }
+            state.invoice?.let { invoice ->
+                item {
+                    Section("پیش‌نمایش فاکتور", "فاکتور سفارش ${invoice.orderNumber} آماده است.") {
+                        Text("شماره سفارش: ${invoice.orderNumber}", fontWeight = FontWeight.SemiBold)
+                        Button(onClick = { launcher.launch("invoice-${invoice.orderNumber}.pdf") }) { Text("ذخیره PDF") }
+                    }
+                }
+            }
         }
     }
 }
@@ -281,13 +321,13 @@ private fun CommerceFeature.titleFa(): String = when (this) {
 }
 
 private fun CommerceFeature.subtitleFa(): String = when (this) {
-    CommerceFeature.BARCODE -> "جستجوی سریع محصول و سفارش"
-    CommerceFeature.BULK_ORDERS -> "تغییر وضعیت چند سفارش به‌صورت یکجا"
-    CommerceFeature.INVENTORY -> "کنترل موجودی، کم‌موجودی و ناموجودها"
-    CommerceFeature.CUSTOMERS -> "مدیریت و تغییر گروهی مشتریان"
-    CommerceFeature.ANALYTICS -> "نمای کامل عملکرد فروشگاه"
-    CommerceFeature.COUPONS -> "مدیریت و ویرایش گروهی کوپن‌ها"
-    CommerceFeature.INVOICE -> "ساخت و ذخیره فاکتور PDF"
+    CommerceFeature.BARCODE -> "پیدا کردن سریع محصول یا سفارش"
+    CommerceFeature.BULK_ORDERS -> "فیلتر، انتخاب و تغییر گروهی سفارش‌ها"
+    CommerceFeature.INVENTORY -> "پیدا کردن و باز کردن کالاهای کم‌موجودی"
+    CommerceFeature.CUSTOMERS -> "جستجو و تغییر گروهی مشتریان"
+    CommerceFeature.ANALYTICS -> "خواندن عملکرد فروشگاه در یک نگاه"
+    CommerceFeature.COUPONS -> "جستجو و ویرایش گروهی کوپن‌ها"
+    CommerceFeature.INVOICE -> "انتخاب سفارش، ساخت و ذخیره فاکتور"
 }
 
 private fun OrderStatus.faLabel(): String = when (this) {
@@ -298,15 +338,4 @@ private fun OrderStatus.faLabel(): String = when (this) {
     OrderStatus.REFUNDED -> "مسترد شده"
     OrderStatus.FAILED -> "ناموفق"
     else -> name
-}
-
-private fun String.faLabel(): String = when (lowercase()) {
-    "pending" -> "در انتظار"
-    "processing" -> "در حال پردازش"
-    "completed" -> "تکمیل‌شده"
-    "cancelled" -> "لغو شده"
-    "refunded" -> "مسترد شده"
-    "failed" -> "ناموفق"
-    "on-hold", "on_hold" -> "در انتظار"
-    else -> this
 }
