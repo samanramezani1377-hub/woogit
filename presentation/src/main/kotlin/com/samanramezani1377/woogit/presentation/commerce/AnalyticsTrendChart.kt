@@ -32,6 +32,7 @@ internal fun ComparisonTrendChart(current: List<AnalyticsTrendPoint>, previous: 
     val max = maxOf(currentValues.take(count).maxOrNull() ?: 0.0, previousValues.take(count).maxOrNull() ?: 0.0).takeIf { it > 0 } ?: 1.0
     val currentColor = MaterialTheme.colorScheme.primary
     val previousColor = MaterialTheme.colorScheme.secondary
+    val dividerColor = MaterialTheme.colorScheme.outlineVariant
     var selectedIndex by remember(current, previous, sales) { mutableStateOf<Int?>(null) }
     GlassCard(Modifier.fillMaxWidth()) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) { LegendDot(currentColor, "دوره فعلی"); LegendDot(previousColor, "دوره قبل") }
@@ -62,7 +63,7 @@ internal fun ComparisonTrendChart(current: List<AnalyticsTrendPoint>, previous: 
                 selectedIndex?.let { index ->
                     val currentPoint = point(currentValues, index)
                     val previousPoint = point(previousValues, index)
-                    drawLine(GlassTokens.divider, Offset(currentPoint.x, vp), Offset(currentPoint.x, size.height - vp), strokeWidth = 2.dp.toPx())
+                    drawLine(dividerColor, Offset(currentPoint.x, vp), Offset(currentPoint.x, size.height - vp), strokeWidth = 2.dp.toPx())
                     drawCircle(currentColor, 6.dp.toPx(), currentPoint)
                     drawCircle(previousColor, 6.dp.toPx(), previousPoint)
                 }
