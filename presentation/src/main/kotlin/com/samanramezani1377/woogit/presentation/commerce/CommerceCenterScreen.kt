@@ -47,12 +47,8 @@ internal fun CommerceCenterScreen(
     val state by vm.state.collectAsStateWithLifecycle()
     var selected by remember { mutableStateOf<CommerceFeature?>(null) }
     LaunchedEffect(storeId) { vm.load() }
-
     Column(modifier = modifier.fillMaxSize().padding(16.dp)) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("مرکز یکپارچه Commerce")
-            TextButton(onClick = onBack) { Text("بازگشت") }
-        }
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("مرکز یکپارچه Commerce"); TextButton(onClick = onBack) { Text("بازگشت") } }
         state.error?.let { Text(it, modifier = Modifier.padding(vertical = 8.dp)) }
         state.message?.let { Text(it, modifier = Modifier.padding(vertical = 8.dp)) }
         if (selected == null) {
@@ -65,12 +61,7 @@ internal fun CommerceCenterScreen(
                     CommerceFeatureUiModel(CommerceFeature.ANALYTICS, "تحلیل فروش", "فروش، سفارش، مشتری و محصول بر اساس داده واقعی."),
                     CommerceFeatureUiModel(CommerceFeature.COUPONS, "مدیریت کوپن‌ها", "کوپن‌ها، usage analytics و عملیات گروهی."),
                     CommerceFeatureUiModel(CommerceFeature.INVOICE, "فاکتور و رسید PDF", "ساخت و ذخیره سند PDF از سفارش واقعی."),
-                )) { item ->
-                    Column(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
-                        Text(item.title); Text(item.description)
-                        Button(onClick = { selected = item.feature }, modifier = Modifier.padding(top = 6.dp)) { Text("باز کردن") }
-                    }
-                }
+                )) { item -> Column(modifier = Modifier.fillMaxWidth().padding(8.dp)) { Text(item.title); Text(item.description); Button(onClick = { selected = item.feature }, modifier = Modifier.padding(top = 6.dp)) { Text("باز کردن") } } }
             }
         } else {
             TextButton(onClick = { selected = null }) { Text("← همه ابزارها") }
@@ -103,17 +94,15 @@ private fun CommerceFeatureContent(
         val invoice = state.invoice ?: return@rememberLauncherForActivityResult
         if (uri != null) runCatching { context.contentResolver.openOutputStream(uri)?.use { it.write(renderer.render(invoice)) } }
     }
-
     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         when (feature) {
             CommerceFeature.BARCODE -> item {
                 TextField(input, { input = it }, label = { Text("SKU یا شماره سفارش") }, modifier = Modifier.fillMaxWidth())
-                Button(onClick = { onBarcode(input) }) { Text("Resolve") }
-                state.barcodeResult?.let { result ->
-                    Text("نتیجه: ${result.kind} / ${result.value}")
-                    result.productId?.let { id -> Button(onClick = { onProduct(id) }) { Text("باز کردن محصول") } }
-                    result.orderId?.let { id -> Button(onClick = { onOrder(id) }) { Text("باز کردن سفارش") } }
+                Row {
+                    Button(onClick = { onBarcode(input) }) { Text("Resolve") }
+                    CommerceCameraScanButton(onDetected = { input = it; onBarcode(it) })
                 }
+                state.barcodeResult?.let { result -> Text("نتیجه: ${result.kind} / ${result.value}"); result.productId?.let { id -> Button(onClick = { onProduct(id) }) { Text("باز کردن محصول") } }; result.orderId?.let { id -> Button(onClick = { onOrder(id) }) { Text("باز کردن سفارش") } } }
             }
             CommerceFeature.BULK_ORDERS -> {
                 item { Text("انتخاب سفارش‌ها و تغییر وضعیت") }
@@ -129,10 +118,7 @@ private fun CommerceFeatureContent(
                 items(state.customers) { customer -> val id = customer.id; OutlinedButton(onClick = { selectedLongIds = if (id in selectedLongIds) selectedLongIds - id else selectedLongIds + id }) { Text("${if (id in selectedLongIds) "✓ " else ""}${customer.first_name.orEmpty()} ${customer.last_name.orEmpty()} · ${customer.email.orEmpty()}") } }
                 item { Button(onClick = { onBulkCustomer(selectedLongIds, "customer") }) { Text("تبدیل گروهی به Customer") } }
             }
-            CommerceFeature.ANALYTICS -> item {
-                state.analytics?.let { a -> Text("فروش تکمیل‌شده: ${a.sales}"); Text("سفارش‌های تکمیل‌شده: ${a.completedOrders}"); Text("کل سفارش‌ها: ${a.totalOrders}"); Text("میانگین سفارش: ${a.averageOrderValue}"); Text("محصولات موجود در کاتالوگ: ${a.inventoryProducts}") }
-                Text("مشتریان تجمیع‌شده: ${state.customerAggregation.size}"); Text("کوپن‌های استفاده‌شده: ${state.couponAnalytics.size}")
-            }
+            CommerceFeature.ANALYTICS -> item { state.analytics?.let { a -> Text("فروش تکمیل‌شده: ${a.sales}"); Text("سفارش‌های تکمیل‌شده: ${a.completedOrders}"); Text("کل سفارش‌ها: ${a.totalOrders}"); Text("میانگین سفارش: ${a.averageOrderValue}"); Text("محصولات موجود در کاتالوگ: ${a.inventoryProducts}") }; Text("مشتریان تجمیع‌شده: ${state.customerAggregation.size}"); Text("کوپن‌های استفاده‌شده: ${state.couponAnalytics.size}") }
             CommerceFeature.COUPONS -> {
                 item { Text("${state.coupons.size} کوپن · انتخاب و تغییر مبلغ") }
                 items(state.coupons) { coupon -> val id = coupon.id; OutlinedButton(onClick = { selectedLongIds = if (id in selectedLongIds) selectedLongIds - id else selectedLongIds + id }) { Text("${if (id in selectedLongIds) "✓ " else ""}${coupon.code} · ${coupon.amount} · usage ${coupon.usage_count}") } }
