@@ -46,3 +46,5 @@ After a successful or partially successful operation, only the order collection 
 
 1. successful + missing items in the same 2xx batch response;
 2. HTTP-level batch failure with the WooCommerce error body.
+
+The agent-map contract is intentionally updated in the same atomic change as the validation test so the guard evaluates the code/docs pair together.
