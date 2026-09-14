@@ -5,7 +5,9 @@ import com.samanramezani1377.woogit.core.domain.model.BulkOrderStatusResult
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 
 object BulkOrderStatusMapper {
     private val json = Json {
@@ -31,9 +33,11 @@ object BulkOrderStatusMapper {
         }.getOrNull()
 
         val updated = root?.get("update") as? JsonArray
-        val byId = updated.orEmpty().associateBy { element ->
-            (element as? JsonObject)?.get("id")?.jsonPrimitive?.longOrNull
-        }
+        val byId = updated?.mapNotNull { element ->
+            val item = element as? JsonObject ?: return@mapNotNull null
+            val id = item["id"]?.jsonPrimitive?.longOrNull ?: return@mapNotNull null
+            id to item
+        }?.toMap().orEmpty()
 
         return requestedIds.map { id ->
             val item = byId[id]
