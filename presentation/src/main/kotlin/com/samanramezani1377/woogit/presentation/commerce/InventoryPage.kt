@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
@@ -34,7 +33,12 @@ internal fun InventoryPage(
     var out by rememberSaveable { mutableStateOf(false) }
     FeatureBody {
         Section("کنترل موجودی", "کالاهای کم‌موجودی یا ناموجود را پیدا کنید و برای ویرایش وارد صفحه محصول شوید.") {
-            GlassSearchField(query, { query = it; onFilter(it, low, out) }, "نام محصول یا SKU", Modifier.fillMaxWidth())
+            GlassSearchField(
+                value = query,
+                onValueChange = { query = it; onFilter(it, low, out) },
+                placeholder = "نام محصول یا SKU",
+                modifier = Modifier.fillMaxWidth(),
+            )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 GlassOutlinedButton(if (low) "✓ کم‌موجودی" else "کم‌موجودی", { low = !low; onFilter(query, low, out) })
                 GlassOutlinedButton(if (out) "✓ ناموجود" else "ناموجود", { out = !out; onFilter(query, low, out) })
