@@ -11,7 +11,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.Json
 
 private val typedJson = Json { ignoreUnknownKeys = true; explicitNulls = false }
-@Serializable data class WooAddressDto(val first_name:String?=null,val last_name:String?=null,val company:String?=null,val address_1:String?=null,val address_2:String?=null,val city:String?=null,val state:String?=null,val postcode:String?=null,val country:String?=null,val phone:String?=null)
+@Serializable data class WooAddressDto(val first_name:String?=null,val last_name:String?=null,val company:String?=null,val address_1:String?=null,val address_2:String?=null,val city:String?=null,val state:String?=null,val postcode:String?=null,val country:String?=null,val phone:String?=null,val email:String?=null)
 @Serializable data class WooLineItemDto(val id:Long,val name:String="",val product_id:Long=0,val variation_id:Long=0,val quantity:Double=0.0,val subtotal:String="0",val total:String="0")
 @Serializable data class WooShippingLineDto(val id:Long=0,val method_id:String?=null,val method_title:String?=null,val total:String?=null)
 @Serializable data class WooCouponLineDto(val code:String="",val discount:String="0")
