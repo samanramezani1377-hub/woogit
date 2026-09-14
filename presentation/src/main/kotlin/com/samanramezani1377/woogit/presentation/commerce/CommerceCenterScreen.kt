@@ -30,7 +30,6 @@ import com.samanramezani1377.woogit.presentation.GlassOutlinedButton
 import com.samanramezani1377.woogit.presentation.GlassScaffold
 import com.samanramezani1377.woogit.presentation.GlassText
 import com.samanramezani1377.woogit.presentation.GlassTopBar
-import com.samanramezani1377.woogit.presentation.GlassTokens
 import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
 
 internal enum class CommerceFeature { BARCODE, BULK_ORDERS, INVENTORY, CUSTOMERS, ANALYTICS, COUPONS, INVOICE }
@@ -54,13 +53,13 @@ internal fun CommerceCenterScreen(
 
     if (selected != null) {
         CommerceFeaturePage(
+            storeId = storeId,
             feature = selected!!,
             state = state,
             onBack = { selected = null },
             onBarcode = vm::resolveBarcode,
             onInventoryFilter = vm::filterInventory,
             onBulkOrder = vm::bulkOrderStatus,
-            onBulkCustomer = vm::bulkCustomerRole,
             onBulkCoupon = vm::bulkCouponAmount,
             onInvoice = vm::prepareInvoice,
             onProduct = onOpenProduct,
@@ -104,6 +103,6 @@ internal fun CommerceCenterScreen(
 }
 
 private val featureModels = listOf(
-    CommerceFeatureUiModel(CommerceFeature.CUSTOMERS, "مدیریت مشتریان", "انتخاب و مدیریت گروهی مشتریان و نقش‌ها."),
+    CommerceFeatureUiModel(CommerceFeature.CUSTOMERS, "مدیریت مشتریان", "مدیریت مشتریان، پرونده خرید و اطلاعات حساب."),
     CommerceFeatureUiModel(CommerceFeature.COUPONS, "مدیریت کوپن‌ها", "مدیریت گروهی کوپن‌ها و مشاهده آمار استفاده."),
 )
