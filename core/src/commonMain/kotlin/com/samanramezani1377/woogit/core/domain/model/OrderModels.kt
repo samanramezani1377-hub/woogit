@@ -31,7 +31,20 @@ data class SalesSummary(
     val numberOfDecimals: Int,
 )
 data class OrderItem(val id: EntityId,val productId: EntityId?,val variationId: EntityId?,val name: String,val quantity: Double,val subtotal: String,val total: String)
-data class Customer(val id: EntityId?,val name: String,val email: String?)
+data class Customer(
+    val id: EntityId?,
+    val name: String,
+    val email: String?,
+    val username: String? = null,
+    val role: String? = null,
+    val phone: String? = null,
+    val billing: Address? = null,
+    val shipping: Address? = null,
+    val ordersCount: Int = 0,
+    val totalSpent: String = "0",
+    val dateCreated: EntityTimestamp? = null,
+    val dateModified: EntityTimestamp? = null,
+)
 data class Address(val firstName: String?,val lastName: String?,val company: String?,val address1: String?,val address2: String?,val city: String?,val state: String?,val postcode: String?,val country: String?,val phone: String?)
 data class Payment(val methodId: String?,val methodTitle: String?,val transactionId: String?,val paid: Boolean)
 data class ShippingLine(val methodId: String?,val methodTitle: String?,val total: String?)
