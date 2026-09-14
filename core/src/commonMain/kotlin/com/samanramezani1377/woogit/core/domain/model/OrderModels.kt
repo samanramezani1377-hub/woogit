@@ -18,6 +18,8 @@ data class Order(
     val number: String = id.value,
     val total: String? = null,
     val currency: String? = null,
+    /** The order creation time used by sales analytics; modifiedAt remains the sync/change timestamp. */
+    val createdAt: EntityTimestamp? = null,
 )
 data class SalesSummary(
     val netSales: String,
