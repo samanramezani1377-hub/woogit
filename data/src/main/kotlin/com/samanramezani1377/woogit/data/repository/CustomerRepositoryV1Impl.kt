@@ -8,10 +8,10 @@ import com.samanramezani1377.woogit.core.domain.model.Address
 import com.samanramezani1377.woogit.core.domain.model.Customer
 import com.samanramezani1377.woogit.core.domain.repository.CustomerRepository
 import com.samanramezani1377.woogit.core.domain.repository.LocalCustomerDataSource
-import com.samanramezani1377.woogit.data.network.CommerceWooCommerceApi
 import com.samanramezani1377.woogit.data.network.HttpApiException
 import com.samanramezani1377.woogit.data.network.WooAddressDto
 import com.samanramezani1377.woogit.data.network.WooCustomerCommerceDto
+import com.samanramezani1377.woogit.data.network.WooCommerceClientProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Instant
@@ -52,7 +52,7 @@ class CustomerRepositoryV1Impl(
             val numericId = id.value.toLongOrNull() ?: return CoreResult.Failure(DomainError.Validation("شناسه مشتری نامعتبر است."))
             api.decodeCustomer(api.getCustomer(numericId)).fold(
                 onSuccess = { value -> value.toDomain().also { local.upsert(storeId,it) }.let { CoreResult.Success(it) } },
-                onFailure = { error -> local.get(storeId,id).takeIf { it is CoreResult.Success } ?: CoreResult.Failure(error.toDomain()) },
+                onFailure = { error -> local.get(storeId,id).let { cached -> if (cached is CoreResult.Success) cached else CoreResult.Failure(error.toDomain()) } },
             )
         }
         is CoreResult.Failure -> local.get(storeId,id)
@@ -60,11 +60,15 @@ class CustomerRepositoryV1Impl(
 
     override suspend fun list(storeId: StoreId,page: Int,perPage: Int,search: String?): CoreResult<List<Customer>> {
         val normalized = search?.trim()?.takeIf { it.isNotEmpty() }
-        if (page == 1 && normalized == null) {
-            val cached = local.list(storeId)
-            if (cached is CoreResult.Success && cached.value.isNotEmpty()) {
-                refreshScope.launch { refresh(storeId,1,perPage,null) }
-                return CoreResult.Success(cached.value.take(perPage))
+        val cached = local.list(storeId)
+        if (page == 1 && cached is CoreResult.Success) {
+            val filtered = cached.value.filter { customer ->
+                normalized == null || listOf(customer.name,customer.email,customer.username,customer.phone)
+                    .filterNotNull().any { it.contains(normalized, ignoreCase = true) }
+            }
+            if (filtered.isNotEmpty()) {
+                refreshScope.launch { refresh(storeId,1,perPage,normalized) }
+                return CoreResult.Success(filtered.take(perPage))
             }
         }
         return refresh(storeId,page,perPage,normalized)
@@ -83,7 +87,7 @@ class CustomerRepositoryV1Impl(
             )
         }
         is CoreResult.Failure -> {
-            if (page == 1 && search.isNullOrBlank()) local.list(storeId) else CoreResult.Failure(client.error)
+            if (page == 1) local.list(storeId) else CoreResult.Failure(DomainError.Network("ارتباط با فروشگاه برقرار نشد."))
         }
     }
 }
