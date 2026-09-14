@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -24,23 +24,21 @@ import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
 @Composable
-internal fun AnalyticsPage(state: CommerceUiState) {
-    // Use a broad initial range so an otherwise healthy store does not appear empty
-    // simply because its last completed order is older than the default short window.
-    var range by remember { mutableStateOf(AnalyticsRange.YEAR) }
-    val analytics = if (state.orders.isNotEmpty() || state.products.isNotEmpty()) {
-        CommerceFeatureEngine.analytics(state.orders, state.products, range)
-    } else {
-        state.analytics
-    }
-
+internal fun AnalyticsPage(
+    analytics: AnalyticsSnapshot?,
+    loading: Boolean,
+    selectedRange: AnalyticsRange,
+    error: String?,
+    onRangeSelected: (AnalyticsRange) -> Unit,
+) {
     FeatureBody {
-        if (state.loading && analytics == null) GlassLoading("در حال محاسبه آمار فروش…")
+        if (loading && analytics == null) GlassLoading("در حال محاسبه آمار فروش…")
+        else if (error != null && analytics == null) GlassEmptyState(error)
         else if (analytics == null) GlassEmptyState("هنوز داده‌ای برای نمایش تحلیل فروش آماده نیست.")
         else {
-            RangeSelector(range) { range = it }
+            RangeSelector(selectedRange, onRangeSelected)
             Spacer(Modifier.height(10.dp))
-            Section("نمای کلی فروش", "شاخص‌های اصلی در بازه ${range.label}.") { MetricGrid(listOf("فروش تکمیل‌شده" to formatNumber(analytics.sales), "سفارش‌های تکمیل‌شده" to analytics.completedOrders.toString(), "کل سفارش‌ها" to analytics.totalOrders.toString(), "میانگین ارزش سفارش" to formatNumber(analytics.averageOrderValue))) }
+            Section("نمای کلی فروش", "شاخص‌های اصلی در بازه ${selectedRange.label}.") { MetricGrid(listOf("فروش تکمیل‌شده" to formatNumber(analytics.sales), "سفارش‌های تکمیل‌شده" to analytics.completedOrders.toString(), "کل سفارش‌ها" to analytics.totalOrders.toString(), "میانگین ارزش سفارش" to formatNumber(analytics.averageOrderValue))) }
             Section("مقایسه با دوره قبل", "همان بازه زمانی قبل.") { MetricGrid(listOf("فروش دوره قبل" to formatNumber(analytics.previousSales), "سفارش دوره قبل" to analytics.previousOrders.toString(), "رشد فروش" to formatPercent(analytics.salesGrowthPercent), "رشد سفارش" to formatPercent(analytics.orderGrowthPercent), "رشد میانگین سفارش" to formatPercent(analytics.averageOrderGrowthPercent), "میانگین دوره قبل" to formatNumber(analytics.previousAverageOrderValue))) }
             Section("روند فروش", "فروش روزانه سفارش‌های تکمیل‌شده.") { SalesTrendChart(analytics.trend) }
             Section("روند سفارش‌ها", "تعداد سفارش‌های تکمیل‌شده در هر روز.") { OrderTrendChart(analytics.trend) }
