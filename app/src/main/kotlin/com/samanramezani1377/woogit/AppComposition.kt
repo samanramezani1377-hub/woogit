@@ -95,7 +95,7 @@ class AppComposition(context: Context) {
     val getVariations = GetVariationsUseCase(variationRepository)
     val getVariation = GetVariationUseCase(variationRepository)
     val createVariation = CreateVariationUseCase(variationRepository)
-    val updateVariation = UpdateVariationUseCase(updateVariationRepository = variationRepository)
+    val updateVariation = UpdateVariationUseCase(variationRepository)
     val deleteVariation = DeleteVariationUseCase(variationRepository)
     val getAttributes = GetAttributesUseCase(attributeRepository)
     val getAttribute = GetAttributeUseCase(attributeRepository)
@@ -138,4 +138,27 @@ class AppComposition(context: Context) {
         uploadMedia, deleteMedia, getConnectionState, getSyncState, getPending, getConflictsFn, resolveConflictFn,
         syncPending, restoredStoreId, ::rememberStore, ::forgetStore
     )
+
+    init {
+        BillingRuntime.gateway = billingClient
+        restoredStoreId?.let(::startBackgroundWork)
+    }
+
+    fun startBackgroundWork(storeId: String) {
+        if (ForceUpdateController.isActive(appContext)) return
+        OrderPollingWorker.schedule(appContext, storeId)
+        ProductCatalogSyncWorker.schedule(appContext, storeId)
+    }
+
+    fun cancelBackgroundWork(storeId: String) {
+        OrderPollingWorker.cancel(appContext, storeId)
+        ProductCatalogSyncWorker.cancel(appContext, storeId)
+    }
+
+    fun close() {
+        BillingRuntime.gateway = null
+        announcementCenter.dispose()
+        scope.cancel()
+        network.close()
+    }
 }
