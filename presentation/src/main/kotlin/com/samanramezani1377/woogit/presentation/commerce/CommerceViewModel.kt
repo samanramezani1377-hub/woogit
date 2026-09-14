@@ -9,6 +9,7 @@ import com.samanramezani1377.woogit.core.domain.commerce.CommerceFeatureEngine
 import com.samanramezani1377.woogit.core.domain.commerce.CouponUsageSnapshot
 import com.samanramezani1377.woogit.core.domain.commerce.CustomerSnapshot
 import com.samanramezani1377.woogit.core.domain.commerce.InvoiceDocumentFactory
+import com.samanramezani1377.woogit.core.domain.entity.EntityId
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.core.domain.error.CoreResult
 import com.samanramezani1377.woogit.core.domain.model.*
@@ -188,7 +189,7 @@ internal class CommerceViewModel(
                 val numericId = item.orderId.toLongOrNull()
                 if (numericId == null) {
                     results += BulkOrderStatusResult(
-                        orderId = item.orderId.let(::com.samanramezani1377.woogit.core.domain.entity.EntityId),
+                        orderId = EntityId(item.orderId),
                         succeeded = false,
                         error = "شناسه سفارش نامعتبر است.",
                     )
