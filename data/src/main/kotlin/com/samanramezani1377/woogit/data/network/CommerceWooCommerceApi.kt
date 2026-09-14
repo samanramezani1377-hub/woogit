@@ -29,6 +29,18 @@ data class WooCustomerCommerceDto(
 )
 
 @Serializable
+data class WooCustomerCommerceWriteDto(
+    val email: String? = null,
+    val username: String? = null,
+    val password: String? = null,
+    val first_name: String? = null,
+    val last_name: String? = null,
+    val role: String? = null,
+    val billing: WooAddressDto? = null,
+    val shipping: WooAddressDto? = null,
+)
+
+@Serializable
 data class WooCouponCommerceDto(
     val id: Long,
     val code: String = "",
@@ -39,6 +51,22 @@ data class WooCouponCommerceDto(
     val individual_use: Boolean = false,
     val free_shipping: Boolean = false,
     val usage_count: Int = 0,
+    val usage_limit: Int? = null,
+    val usage_limit_per_user: Int? = null,
+    val minimum_amount: String = "",
+    val maximum_amount: String = "",
+    val exclude_sale_items: Boolean = false,
+)
+
+@Serializable
+data class WooCouponCommerceWriteDto(
+    val code: String,
+    val amount: String = "0",
+    val discount_type: String = "percent",
+    val description: String? = null,
+    val date_expires: String? = null,
+    val individual_use: Boolean = false,
+    val free_shipping: Boolean = false,
     val usage_limit: Int? = null,
     val usage_limit_per_user: Int? = null,
     val minimum_amount: String = "",
@@ -65,7 +93,7 @@ data class WooCommerceCommerceApi(
     )
 
     suspend fun createCustomer(
-        customer: WooCustomerCommerceDto,
+        customer: WooCustomerCommerceWriteDto,
         idempotencyKey: String? = null,
     ): ApiResponse = mutate(
         "/wp-json/wc/v3/customers",
@@ -76,7 +104,7 @@ data class WooCommerceCommerceApi(
 
     suspend fun updateCustomer(
         id: Long,
-        customer: WooCustomerCommerceDto,
+        customer: WooCustomerCommerceWriteDto,
         idempotencyKey: String? = null,
     ): ApiResponse = mutate(
         "/wp-json/wc/v3/customers/$id",
@@ -111,7 +139,7 @@ data class WooCommerceCommerceApi(
     )
 
     suspend fun createCoupon(
-        coupon: WooCouponCommerceDto,
+        coupon: WooCouponCommerceWriteDto,
         idempotencyKey: String? = null,
     ): ApiResponse = mutate(
         "/wp-json/wc/v3/coupons",
@@ -122,7 +150,7 @@ data class WooCommerceCommerceApi(
 
     suspend fun updateCoupon(
         id: Long,
-        coupon: WooCouponCommerceDto,
+        coupon: WooCouponCommerceWriteDto,
         idempotencyKey: String? = null,
     ): ApiResponse = mutate(
         "/wp-json/wc/v3/coupons/$id",
@@ -147,6 +175,13 @@ data class WooCommerceCommerceApi(
         updates: List<Pair<Long, String>>,
         idempotencyKey: String? = null,
     ): ApiResponse {
+        require(updates.isNotEmpty()) {
+            "At least one order update is required"
+        }
+        require(updates.size <= MAX_BATCH_SIZE) {
+            "WooCommerce order batches are limited to $MAX_BATCH_SIZE items"
+        }
+
         val payload = buildString {
             append("{\"update\":[")
             updates.forEachIndexed { index, update ->
@@ -228,4 +263,8 @@ data class WooCommerceCommerceApi(
         } else {
             Result.failure(HttpApiException(response.statusCode, response.body))
         }
+
+    private companion object {
+        const val MAX_BATCH_SIZE = 100
+    }
 }
