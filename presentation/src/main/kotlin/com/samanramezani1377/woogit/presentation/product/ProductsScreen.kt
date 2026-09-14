@@ -60,6 +60,7 @@ internal fun ProductsScreen(
     onLoadMore: () -> Unit = {},
     onSearch: (String) -> Unit = {},
     onAddProduct: () -> Unit = {},
+    onInventoryClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var query by remember { mutableStateOf("") }
@@ -84,8 +85,11 @@ internal fun ProductsScreen(
     GlassScaffold(modifier) { paddingValues ->
         Column(Modifier.fillMaxSize().padding(paddingValues).padding(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             GlassTopBar(title = "محصولات", subtitle = "مدیریت محصولات فروشگاه")
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                GlassPrimaryAction("افزودن محصول", onAddProduct, Modifier.weight(1f))
+                GlassPrimaryAction("مدیریت موجودی", onInventoryClick, Modifier.weight(1f))
+            }
             GlassSearchField(query, { query = it; onSearch(it) }, label = "جستجوی محصول")
-            GlassPrimaryAction("افزودن محصول", onAddProduct)
             when (state) {
                 FeatureUiState.Loading -> ProductSyncLoading("در حال همگام‌سازی محصولات با سایت…")
                 FeatureUiState.Pending -> ProductSyncLoading("در حال به‌روزرسانی محصولات…")
