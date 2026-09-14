@@ -36,7 +36,7 @@ internal fun CommerceFeatureRouteScreen(
     val state by vm.state.collectAsStateWithLifecycle()
 
     LaunchedEffect(storeId, feature) {
-        vm.load()
+        vm.load(loadRemoteCommerceData = feature != CommerceFeature.CUSTOMERS)
     }
 
     if (feature == CommerceFeature.BARCODE) {
@@ -45,6 +45,7 @@ internal fun CommerceFeatureRouteScreen(
         GlassScaffold {
             Box(Modifier.fillMaxSize().padding(horizontal = GlassTokens.spacingSm)) {
                 CommerceFeaturePage(
+                    storeId = storeId,
                     feature = feature,
                     state = state,
                     onBack = onBack,
