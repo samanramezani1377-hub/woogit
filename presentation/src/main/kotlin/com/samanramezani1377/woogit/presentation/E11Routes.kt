@@ -7,6 +7,7 @@ internal object E11Routes {
     const val DASHBOARD = "dashboard"
     const val SUBSCRIPTION_EXPIRED = "subscription-expired"
     const val AI = "ai"
+    const val COMMERCE = "commerce"
     const val ORDERS = "orders"
     const val ORDER_ID = "orderId"
     const val ORDER_DETAIL = "orders/{$ORDER_ID}"
