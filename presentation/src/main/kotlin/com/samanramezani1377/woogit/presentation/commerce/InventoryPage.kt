@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -31,7 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.samanramezani1377.woogit.core.domain.commerce.CommerceFeatureEngine
+import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.core.domain.model.Product
 import com.samanramezani1377.woogit.core.domain.model.Stock
 import com.samanramezani1377.woogit.core.domain.model.StockStatus
@@ -44,6 +43,7 @@ import kotlinx.coroutines.launch
 
 @Composable
 internal fun InventoryPage(
+    storeId: StoreId,
     state: CommerceUiState,
     onFilter: (String, Boolean, Boolean) -> Unit,
     onProduct: (String) -> Unit,
@@ -68,25 +68,28 @@ internal fun InventoryPage(
 
     fun applyFilter(next: InventoryFilter) {
         filter = next
-        onFilter(
-            query,
-            lowStock = next == InventoryFilter.LOW,
-            outOfStock = next == InventoryFilter.OUT,
-        )
+        onFilter(query, next == InventoryFilter.LOW, next == InventoryFilter.OUT)
+    }
+
+    val visibleProducts = if (filter == InventoryFilter.IN) {
+        state.inventory.filter { product ->
+            val quantity = localQuantities[product.id.value] ?: product.stock?.quantity
+            quantity != null && quantity > 0.0 && product.stock?.status != StockStatus.OUT_OF_STOCK
+        }
+    } else {
+        state.inventory
     }
 
     FeatureBody {
         Section("مدیریت موجودی", "وضعیت موجودی را ببینید و بدون باز کردن صفحه محصول، مقدار Stock را سریع تغییر دهید.") {
             InventorySummaryRow(total = allProducts.size, low = lowCount, out = outCount)
             Spacer(Modifier.height(10.dp))
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                GlassSearchField(
-                    value = query,
-                    onValueChange = { query = it; onFilter(it, filter == InventoryFilter.LOW, filter == InventoryFilter.OUT) },
-                    label = "جستجوی نام یا SKU",
-                    modifier = Modifier.weight(1f),
-                )
-            }
+            GlassSearchField(
+                value = query,
+                onValueChange = { query = it; onFilter(it, filter == InventoryFilter.LOW, filter == InventoryFilter.OUT) },
+                label = "جستجوی نام یا SKU",
+                modifier = Modifier.fillMaxWidth(),
+            )
             Spacer(Modifier.height(8.dp))
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 item { FilterButton("همه", filter == InventoryFilter.ALL) { applyFilter(InventoryFilter.ALL) } }
@@ -96,14 +99,11 @@ internal fun InventoryPage(
             }
         }
 
-        if (state.inventory.isEmpty()) {
+        if (visibleProducts.isEmpty()) {
             GlassEmptyState("محصولی با این فیلتر پیدا نشد.")
         } else {
-            LazyColumn(
-                Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                items(state.inventory, key = { it.id.value }) { product ->
+            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(visibleProducts, key = { it.id.value }) { product ->
                     val quantity = localQuantities[product.id.value] ?: product.stock?.quantity ?: 0.0
                     val isEditing = editingId == product.id.value
                     val isSaving = savingId == product.id.value
@@ -118,21 +118,26 @@ internal fun InventoryPage(
                             Modifier.fillMaxWidth().clickable(enabled = !isEditing) { onProduct(product.id.value) },
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Column(
-                                Modifier.weight(1f).padding(end = 12.dp),
-                                verticalArrangement = Arrangement.spacedBy(3.dp),
-                            ) {
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                 Text(product.name, fontWeight = FontWeight.SemiBold)
                                 Text(
                                     "SKU: ${product.sku.orEmpty().ifBlank { "بدون SKU" }}",
                                     color = GlassTokens.muted,
                                     style = MaterialTheme.typography.bodySmall,
                                 )
-                                Text(status, color = statusColor(status), style = MaterialTheme.typography.labelSmall)
+                                Text(
+                                    status,
+                                    color = when (status) {
+                                        "ناموجود" -> MaterialTheme.colorScheme.outline
+                                        "کم‌موجودی" -> MaterialTheme.colorScheme.tertiary
+                                        else -> MaterialTheme.colorScheme.primary
+                                    },
+                                    style = MaterialTheme.typography.labelSmall,
+                                )
                             }
                             Column(horizontalAlignment = Alignment.End) {
                                 Text(
-                                    if (quantity % 1.0 == 0.0) quantity.toInt().toString() else quantity.toString(),
+                                    formatQuantity(quantity),
                                     style = MaterialTheme.typography.headlineSmall,
                                     fontWeight = FontWeight.Bold,
                                 )
@@ -140,7 +145,7 @@ internal fun InventoryPage(
                                 TextButton(
                                     onClick = {
                                         editingId = product.id.value
-                                        editingQuantity = quantity.toString().removeSuffix(".0")
+                                        editingQuantity = formatQuantity(quantity)
                                     },
                                     enabled = !isSaving,
                                 ) { Text("تغییر سریع") }
@@ -165,13 +170,10 @@ internal fun InventoryPage(
                                         )
                                         scope.launch {
                                             savingId = product.id.value
-                                            when (val result = InventoryRuntime.updateProduct?.invoke(productStoreIdPlaceholder(), updated)) {
-                                                null -> Unit
-                                                is com.samanramezani1377.woogit.core.domain.error.CoreResult.Success -> {
-                                                    localQuantities[product.id.value] = result.value.stock?.quantity ?: newQuantity
-                                                    editingId = null
-                                                }
-                                                is com.samanramezani1377.woogit.core.domain.error.CoreResult.Failure -> Unit
+                                            val result = InventoryRuntime.updateProduct?.invoke(storeId, updated)
+                                            if (result is com.samanramezani1377.woogit.core.domain.error.CoreResult.Success) {
+                                                localQuantities[product.id.value] = result.value.stock?.quantity ?: newQuantity
+                                                editingId = null
                                             }
                                             savingId = null
                                         }
@@ -200,11 +202,7 @@ private fun InventorySummaryRow(total: Int, low: Int, out: Int) {
 
 @Composable
 private fun InventoryMetric(label: String, value: Int, modifier: Modifier = Modifier) {
-    Surface(
-        modifier = modifier,
-        shape = RoundedCornerShape(14.dp),
-        color = GlassTokens.card,
-    ) {
+    Surface(modifier = modifier, shape = RoundedCornerShape(14.dp), color = GlassTokens.card) {
         Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(value.toString(), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Text(label, color = GlassTokens.muted, style = MaterialTheme.typography.labelSmall)
@@ -228,7 +226,7 @@ private fun QuickStockEditor(
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         OutlinedTextField(
             value = quantity,
-            onValueChange = { value -> if (value.length <= 10 && value.all { it.isDigit() }) onQuantityChange(value) },
+            onValueChange = { value -> if (value.length <= 10 && value.all(Char::isDigit)) onQuantityChange(value) },
             label = { Text("تعداد جدید") },
             singleLine = true,
             modifier = Modifier.weight(1f),
@@ -241,22 +239,4 @@ private fun QuickStockEditor(
     }
 }
 
-private fun statusColor(status: String): androidx.compose.ui.graphics.Color = when (status) {
-    "ناموجود" -> GlassTokens.muted
-    "کم‌موجودی" -> MaterialThemeHolder.warning
-    else -> MaterialThemeHolder.success
-}
-
-private object MaterialThemeHolder {
-    val warning = androidx.compose.ui.graphics.Color(0xFFD97706)
-    val success = androidx.compose.ui.graphics.Color(0xFF16A34A)
-}
-
-// The route owns the store; this bridge keeps the InventoryPage API small.
-// It is replaced by the route-level store callback below.
-private fun productStoreIdPlaceholder(): com.samanramezani1377.woogit.core.domain.entity.StoreId =
-    InventoryStoreContext.current ?: com.samanramezani1377.woogit.core.domain.entity.StoreId("")
-
-internal object InventoryStoreContext {
-    var current: com.samanramezani1377.woogit.core.domain.entity.StoreId? = null
-}
+private fun formatQuantity(value: Double): String = if (value % 1.0 == 0.0) value.toInt().toString() else value.toString()
