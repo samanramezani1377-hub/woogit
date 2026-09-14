@@ -42,7 +42,7 @@ internal fun CustomersPage(storeId: StoreId, state: CommerceUiState) {
     LaunchedEffect(storeId, query) {
         val loader = CustomerRuntime.listLoader ?: return@LaunchedEffect
         loading = true
-        when (val result = loader(storeId,1,100,query.trim().takeIf { it.isNotBlank() })) {
+        when (val result = loader(storeId, 1, 100, query.trim().takeIf { it.isNotBlank() })) {
             is CoreResult.Success -> { customers = result.value; error = null }
             is CoreResult.Failure -> error = result.error.toString()
         }
@@ -52,7 +52,7 @@ internal fun CustomersPage(storeId: StoreId, state: CommerceUiState) {
     LaunchedEffect(storeId, selectedId) {
         val id = selectedId ?: run { selected = null; return@LaunchedEffect }
         val loader = CustomerRuntime.detailLoader ?: return@LaunchedEffect
-        when (val result = loader(storeId,EntityId(id))) {
+        when (val result = loader(storeId, EntityId(id))) {
             is CoreResult.Success -> selected = result.value
             is CoreResult.Failure -> selected = customers.firstOrNull { it.id?.value == id }
         }
@@ -117,7 +117,7 @@ private fun CustomerDetailsCard(customer: Customer, orders: List<Order>, onClose
         InfoLine("سفارش‌های محلی", orders.size.toString())
         if (orders.isNotEmpty()) {
             Text("سابقه سفارش‌ها", fontWeight = FontWeight.SemiBold)
-            orders.take(10).forEach(::OrderSummary)
+            orders.take(10).forEach { order -> OrderSummary(order) }
         } else {
             Text("هنوز سفارشی برای این مشتری در داده‌های محلی موجود نیست.", color = GlassTokens.muted)
         }
