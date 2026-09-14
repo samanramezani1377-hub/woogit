@@ -34,7 +34,6 @@ import com.samanramezani1377.woogit.presentation.GlassSearchField
 import com.samanramezani1377.woogit.presentation.GlassStatusBadge
 import com.samanramezani1377.woogit.presentation.GlassText
 import com.samanramezani1377.woogit.presentation.GlassTokens
-import com.samanramezani1377.woogit.presentation.GlassTopBar
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
@@ -46,6 +45,7 @@ internal fun OrdersScreen(
     onRetry: () -> Unit,
     onLoadMore: () -> Unit = {},
     onSearch: (String) -> Unit = {},
+    onBulkOrdersClick: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
@@ -67,7 +67,13 @@ internal fun OrdersScreen(
     }
 
     Column(modifier.fillMaxSize()) {
-        GlassTopBar("سفارش‌ها", "مدیریت سفارش‌های فروشگاه", Modifier.padding(horizontal = 18.dp, vertical = 8.dp))
+        Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                GlassText("سفارش‌ها", style = MaterialTheme.typography.headlineSmall)
+                GlassText("مدیریت سفارش‌های فروشگاه", style = MaterialTheme.typography.bodyMedium.copy(color = GlassTokens.muted))
+            }
+            TextButton(onClick = onBulkOrdersClick) { GlassText("عملیات گروهی") }
+        }
         GlassSearchField(query, { query = it }, label = "جستجوی سفارش", modifier = Modifier.padding(horizontal = 16.dp))
         when (state) {
             OrdersUiState.Loading -> OrdersSkeleton(Modifier.weight(1f))
