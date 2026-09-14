@@ -101,6 +101,7 @@ internal fun E11AppNavigation(
                         { destination -> when (destination) { DashboardDestination.DASHBOARD -> Unit; DashboardDestination.ORDERS -> navController.navigate(E11Routes.ORDERS); DashboardDestination.PRODUCTS -> navController.navigate(E11Routes.PRODUCTS); DashboardDestination.SETTINGS -> navController.navigate(E11Routes.SETTINGS) } },
                         { navController.navigate(E11Routes.AI) }, { vm.refresh() }, state.loading,
                         { navController.navigate(E11Routes.COMMERCE) }, { navController.navigate(E11Routes.COMMERCE_BARCODE) },
+                        { navController.navigate(E11Routes.COMMERCE_ANALYTICS) },
                     )
                 }
             }
