@@ -81,7 +81,7 @@ internal fun BulkOrdersPage(
             GlassSearchField(
                 value = query,
                 onValueChange = { query = it },
-                placeholder = "شماره سفارش",
+                label = "شماره سفارش",
                 modifier = Modifier.fillMaxWidth(),
             )
             LazyColumn(
