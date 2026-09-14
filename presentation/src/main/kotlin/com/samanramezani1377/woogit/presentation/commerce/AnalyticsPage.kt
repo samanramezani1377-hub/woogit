@@ -1,7 +1,10 @@
 package com.samanramezani1377.woogit.presentation.commerce
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,8 +25,15 @@ import kotlin.math.roundToLong
 
 @Composable
 internal fun AnalyticsPage(state: CommerceUiState) {
-    var range by remember { mutableStateOf(AnalyticsRange.DAYS_30) }
-    val analytics = if (state.orders.isNotEmpty() || state.products.isNotEmpty()) CommerceFeatureEngine.analytics(state.orders, state.products, range) else state.analytics
+    // Use a broad initial range so an otherwise healthy store does not appear empty
+    // simply because its last completed order is older than the default short window.
+    var range by remember { mutableStateOf(AnalyticsRange.YEAR) }
+    val analytics = if (state.orders.isNotEmpty() || state.products.isNotEmpty()) {
+        CommerceFeatureEngine.analytics(state.orders, state.products, range)
+    } else {
+        state.analytics
+    }
+
     FeatureBody {
         if (state.loading && analytics == null) GlassLoading("در حال محاسبه آمار فروش…")
         else if (analytics == null) GlassEmptyState("هنوز داده‌ای برای نمایش تحلیل فروش آماده نیست.")
@@ -52,7 +62,7 @@ internal fun AnalyticsPage(state: CommerceUiState) {
     }
 }
 
-@Composable private fun RangeSelector(selected: AnalyticsRange, onSelect: (AnalyticsRange)->Unit) { GlassCard(Modifier.fillMaxWidth()) { Text("بازه تحلیل", fontWeight=FontWeight.Bold); Spacer(Modifier.height(8.dp)); Row(Modifier.fillMaxWidth(), horizontalArrangement=Arrangement.spacedBy(6.dp)) { AnalyticsRange.values().forEach { r -> FilterChip(selected=r==selected,onClick={onSelect(r)},label={Text(r.label)}) } } } }
+@Composable private fun RangeSelector(selected: AnalyticsRange, onSelect: (AnalyticsRange)->Unit) { GlassCard(Modifier.fillMaxWidth()) { Text("بازه تحلیل", fontWeight=FontWeight.Bold); Spacer(Modifier.height(8.dp)); Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement=Arrangement.spacedBy(6.dp)) { AnalyticsRange.values().forEach { r -> FilterChip(selected=r==selected,onClick={onSelect(r)},label={Text(r.label)}) } } } }
 
 @Composable private fun SalesTrendChart(points: List<AnalyticsTrendPoint>) { if(points.isEmpty()) return; val max=points.maxOfOrNull{it.sales}?.takeIf{it>0}?:1.0; val color=MaterialTheme.colorScheme.primary; GlassCard(Modifier.fillMaxWidth()){ Canvas(Modifier.fillMaxWidth().height(190.dp)){ val hp=14.dp.toPx(); val vp=18.dp.toPx(); val w=size.width-hp*2; val h=size.height-vp*2; val d=points.lastIndex.coerceAtLeast(1); val path=Path(); points.forEachIndexed{i,p->val x=hp+w*i/d; val y=vp+h-(p.sales/max).toFloat()*h;if(i==0)path.moveTo(x,y)else path.lineTo(x,y)}; drawPath(path,color=color,style=Stroke(4.dp.toPx(),cap=StrokeCap.Round)); points.forEachIndexed{i,p->val x=hp+w*i/d;val y=vp+h-(p.sales/max).toFloat()*h;drawCircle(color,3.dp.toPx(),Offset(x,y))} }; TrendLabels(points) } }
 
