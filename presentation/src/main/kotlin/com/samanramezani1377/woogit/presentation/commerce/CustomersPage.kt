@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -33,8 +34,8 @@ import com.samanramezani1377.woogit.presentation.customers.CustomerRuntime
 internal fun CustomersPage(storeId: StoreId, state: CommerceUiState) {
     var query by rememberSaveable { mutableStateOf("") }
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
-    var customers by rememberSaveable { mutableStateOf<List<Customer>>(emptyList()) }
-    var selected by rememberSaveable { mutableStateOf<Customer?>(null) }
+    var customers by remember { mutableStateOf<List<Customer>>(emptyList()) }
+    var selected by remember { mutableStateOf<Customer?>(null) }
     var loading by rememberSaveable { mutableStateOf(true) }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
 
@@ -74,11 +75,7 @@ internal fun CustomersPage(storeId: StoreId, state: CommerceUiState) {
         }
 
         if (selectedCustomer != null) {
-            CustomerDetailsCard(
-                customer = selectedCustomer,
-                orders = selectedOrders,
-                onClose = { selectedId = null },
-            )
+            CustomerDetailsCard(customer = selectedCustomer, orders = selectedOrders, onClose = { selectedId = null })
         }
 
         if (!loading && customers.isEmpty()) {
@@ -86,11 +83,7 @@ internal fun CustomersPage(storeId: StoreId, state: CommerceUiState) {
         } else {
             Section("فهرست مشتریان") {
                 customers.forEach { customer ->
-                    CustomerRow(
-                        customer = customer,
-                        selected = customer.id?.value == selectedId,
-                        onClick = { selectedId = customer.id?.value },
-                    )
+                    CustomerRow(customer = customer, selected = customer.id?.value == selectedId, onClick = { selectedId = customer.id?.value })
                 }
             }
         }
