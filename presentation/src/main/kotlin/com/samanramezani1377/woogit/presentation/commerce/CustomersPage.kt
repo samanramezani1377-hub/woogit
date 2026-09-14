@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -16,54 +17,79 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.samanramezani1377.woogit.core.domain.entity.EntityId
+import com.samanramezani1377.woogit.core.domain.entity.StoreId
+import com.samanramezani1377.woogit.core.domain.error.CoreResult
+import com.samanramezani1377.woogit.core.domain.model.Customer
 import com.samanramezani1377.woogit.core.domain.model.Order
 import com.samanramezani1377.woogit.presentation.GlassCard
 import com.samanramezani1377.woogit.presentation.GlassEmptyState
 import com.samanramezani1377.woogit.presentation.GlassOutlinedButton
 import com.samanramezani1377.woogit.presentation.GlassSearchField
 import com.samanramezani1377.woogit.presentation.GlassTokens
-import com.samanramezani1377.woogit.data.network.WooCustomerCommerceDto
+import com.samanramezani1377.woogit.presentation.customers.CustomerRuntime
 
 @Composable
-internal fun CustomersPage(state: CommerceUiState) {
+internal fun CustomersPage(storeId: StoreId, state: CommerceUiState) {
     var query by rememberSaveable { mutableStateOf("") }
-    var selectedId by rememberSaveable { mutableStateOf<Long?>(null) }
+    var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
+    var customers by rememberSaveable { mutableStateOf<List<Customer>>(emptyList()) }
+    var selected by rememberSaveable { mutableStateOf<Customer?>(null) }
+    var loading by rememberSaveable { mutableStateOf(true) }
+    var error by rememberSaveable { mutableStateOf<String?>(null) }
 
-    val normalizedQuery = query.trim()
-    val visible = state.customers.filter { customer ->
-        "${customer.first_name.orEmpty()} ${customer.last_name.orEmpty()} ${customer.email.orEmpty()} ${customer.username.orEmpty()}"
-            .contains(normalizedQuery, ignoreCase = true)
+    LaunchedEffect(storeId, query) {
+        val loader = CustomerRuntime.listLoader ?: return@LaunchedEffect
+        loading = true
+        when (val result = loader(storeId,1,100,query.trim().takeIf { it.isNotBlank() })) {
+            is CoreResult.Success -> { customers = result.value; error = null }
+            is CoreResult.Failure -> error = result.error.toString()
+        }
+        loading = false
     }
-    val selected = state.customers.firstOrNull { it.id == selectedId }
+
+    LaunchedEffect(storeId, selectedId) {
+        val id = selectedId ?: run { selected = null; return@LaunchedEffect }
+        val loader = CustomerRuntime.detailLoader ?: return@LaunchedEffect
+        when (val result = loader(storeId,EntityId(id))) {
+            is CoreResult.Success -> selected = result.value
+            is CoreResult.Failure -> selected = customers.firstOrNull { it.id?.value == id }
+        }
+    }
+
+    val selectedCustomer = selected
+    val selectedOrders = selectedCustomer?.id?.value?.let { id -> state.orders.filter { it.customer?.id?.value == id } }.orEmpty()
 
     FeatureBody {
-        Section("مشتریان", "فهرست مشتریان فروشگاه؛ برای مشاهده پرونده کامل، یک مشتری را انتخاب کنید.") {
+        Section("مشتریان", "فهرست مشتریان فروشگاه؛ پرونده هر مشتری را جداگانه ببینید.") {
             GlassSearchField(
                 value = query,
                 onValueChange = { query = it },
-                label = "نام، نام خانوادگی، ایمیل یا نام کاربری",
+                label = "نام، نام خانوادگی، ایمیل، نام کاربری یا تلفن",
                 modifier = Modifier.fillMaxWidth(),
             )
-            Text("${visible.size} مشتری", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
+            Text("${customers.size} مشتری", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
+            if (loading) Text("در حال بارگذاری…", color = GlassTokens.muted)
+            error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
 
-        if (selected != null) {
+        if (selectedCustomer != null) {
             CustomerDetailsCard(
-                customer = selected,
-                orders = state.orders.filter { it.customer?.id?.value == selected.id },
+                customer = selectedCustomer,
+                orders = selectedOrders,
                 onClose = { selectedId = null },
             )
         }
 
-        if (visible.isEmpty()) {
-            GlassEmptyState("مشتری مطابق جستجو پیدا نشد.")
+        if (!loading && customers.isEmpty()) {
+            GlassEmptyState(if (query.isBlank()) "هنوز مشتری محلی ندارید. همگام‌سازی فروشگاه را اجرا کنید." else "مشتری مطابق جستجو پیدا نشد.")
         } else {
             Section("فهرست مشتریان") {
-                visible.forEach { customer ->
+                customers.forEach { customer ->
                     CustomerRow(
                         customer = customer,
-                        selected = customer.id == selectedId,
-                        onClick = { selectedId = customer.id },
+                        selected = customer.id?.value == selectedId,
+                        onClick = { selectedId = customer.id?.value },
                     )
                 }
             }
@@ -72,29 +98,13 @@ internal fun CustomersPage(state: CommerceUiState) {
 }
 
 @Composable
-private fun CustomerRow(
-    customer: WooCustomerCommerceDto,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    val name = "${customer.first_name.orEmpty()} ${customer.last_name.orEmpty()}"
-        .trim()
-        .ifBlank { customer.username.orEmpty().ifBlank { "مشتری بدون نام" } }
-
-    GlassCard(
-        Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-    ) {
+private fun CustomerRow(customer: Customer, selected: Boolean, onClick: () -> Unit) {
+    GlassCard(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(name, fontWeight = FontWeight.SemiBold)
-                Text(customer.email.orEmpty().ifBlank { "ایمیل ثبت نشده" }, color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
-                Text(
-                    "${customer.orders_count ?: 0} سفارش  •  ${customer.total_spent.orEmpty().ifBlank { "0" }}",
-                    color = GlassTokens.muted,
-                    style = MaterialTheme.typography.bodySmall,
-                )
+                Text(customer.name.ifBlank { "مشتری بدون نام" }, fontWeight = FontWeight.SemiBold)
+                Text(customer.email ?: "ایمیل ثبت نشده", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
+                Text("${customer.ordersCount} سفارش  •  ${customer.totalSpent}", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
             }
             if (selected) Text("باز", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
         }
@@ -102,36 +112,22 @@ private fun CustomerRow(
 }
 
 @Composable
-private fun CustomerDetailsCard(
-    customer: WooCustomerCommerceDto,
-    orders: List<Order>,
-    onClose: () -> Unit,
-) {
-    val name = "${customer.first_name.orEmpty()} ${customer.last_name.orEmpty()}"
-        .trim()
-        .ifBlank { customer.username.orEmpty().ifBlank { "مشتری بدون نام" } }
-    val phone = customer.billing?.phone.orEmpty().ifBlank { customer.shipping?.phone.orEmpty() }
-    val localSpend = orders.sumOf { it.total }
-
+private fun CustomerDetailsCard(customer: Customer, orders: List<Order>, onClose: () -> Unit) {
     Section("پرونده مشتری", "اطلاعات حساب، تماس و سابقه خرید") {
-        Text(name, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-        InfoLine("ایمیل", customer.email.orEmpty().ifBlank { "ثبت نشده" })
-        InfoLine("تلفن", phone.ifBlank { "ثبت نشده" })
-        InfoLine("نام کاربری", customer.username.orEmpty().ifBlank { "ثبت نشده" })
-        InfoLine("نقش", customer.role.orEmpty().ifBlank { "مشتری" })
-        InfoLine("تعداد سفارش", (customer.orders_count ?: orders.size).toString())
-        InfoLine("مجموع خرید", customer.total_spent.orEmpty().ifBlank { localSpend.toString() })
+        Text(customer.name.ifBlank { "مشتری بدون نام" }, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        InfoLine("ایمیل", customer.email ?: "ثبت نشده")
+        InfoLine("تلفن", customer.phone ?: "ثبت نشده")
+        InfoLine("نام کاربری", customer.username ?: "ثبت نشده")
+        InfoLine("نقش", customer.role ?: "مشتری")
+        InfoLine("تعداد سفارش", customer.ordersCount.toString())
+        InfoLine("مجموع خرید", customer.totalSpent)
         InfoLine("سفارش‌های محلی", orders.size.toString())
-
         if (orders.isNotEmpty()) {
             Text("سابقه سفارش‌ها", fontWeight = FontWeight.SemiBold)
-            orders.take(10).forEach { order ->
-                OrderSummary(order)
-            }
+            orders.take(10).forEach(::OrderSummary)
         } else {
             Text("هنوز سفارشی برای این مشتری در داده‌های محلی موجود نیست.", color = GlassTokens.muted)
         }
-
         GlassOutlinedButton("بستن پرونده", onClose, modifier = Modifier.fillMaxWidth())
     }
 }
@@ -151,6 +147,6 @@ private fun OrderSummary(order: Order) {
             Text("#${order.number}", fontWeight = FontWeight.SemiBold)
             Text(order.status.faLabel(), color = GlassTokens.muted)
         }
-        Text(order.total.toString(), color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
+        Text(order.total ?: "0", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
     }
 }
