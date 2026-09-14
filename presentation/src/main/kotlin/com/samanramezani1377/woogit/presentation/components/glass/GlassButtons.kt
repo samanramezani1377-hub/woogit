@@ -19,7 +19,7 @@ fun GlassButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifie
     val shape = RoundedCornerShape(12.dp)
     Button(
         onClick = onClick,
-        modifier = modifier.heightIn(min = 56.dp),
+        modifier = modifier.fillMaxWidth().widthIn(min = 160.dp).heightIn(min = 56.dp),
         enabled = enabled,
         shape = shape,
         colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent, contentColor = Color.White, disabledContainerColor = Color.Transparent),
