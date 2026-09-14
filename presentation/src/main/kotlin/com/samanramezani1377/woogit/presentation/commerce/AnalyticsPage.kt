@@ -32,43 +32,387 @@ internal fun AnalyticsPage(
     onRangeSelected: (AnalyticsRange) -> Unit,
 ) {
     FeatureBody {
-        if (loading && analytics == null) GlassLoading("در حال محاسبه آمار فروش…")
-        else if (error != null && analytics == null) GlassEmptyState(error)
-        else if (analytics == null) GlassEmptyState("هنوز داده‌ای برای نمایش تحلیل فروش آماده نیست.")
-        else {
-            RangeSelector(selectedRange, onRangeSelected)
-            Spacer(Modifier.height(10.dp))
-            Section("نمای کلی فروش", "شاخص‌های اصلی در بازه ${selectedRange.label}.") { MetricGrid(listOf("فروش تکمیل‌شده" to formatNumber(analytics.sales), "سفارش‌های تکمیل‌شده" to analytics.completedOrders.toString(), "کل سفارش‌ها" to analytics.totalOrders.toString(), "میانگین ارزش سفارش" to formatNumber(analytics.averageOrderValue))) }
-            Section("مقایسه با دوره قبل", "همان بازه زمانی قبل.") { MetricGrid(listOf("فروش دوره قبل" to formatNumber(analytics.previousSales), "سفارش دوره قبل" to analytics.previousOrders.toString(), "رشد فروش" to formatPercent(analytics.salesGrowthPercent), "رشد سفارش" to formatPercent(analytics.orderGrowthPercent), "رشد میانگین سفارش" to formatPercent(analytics.averageOrderGrowthPercent), "میانگین دوره قبل" to formatNumber(analytics.previousAverageOrderValue))) }
-            Section("روند فروش", "فروش روزانه سفارش‌های تکمیل‌شده.") { SalesTrendChart(analytics.trend) }
-            Section("روند سفارش‌ها", "تعداد سفارش‌های تکمیل‌شده در هر روز.") { OrderTrendChart(analytics.trend) }
-            Section("نرخ تکمیل سفارش") { MetricCard("نرخ تکمیل", "${analytics.completionRate.roundToInt()}٪"); Spacer(Modifier.height(6.dp)); Text("${analytics.completedOrders} سفارش از ${analytics.totalOrders} سفارش تکمیل شده است.", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall) }
-            if (analytics.statusCounts.isNotEmpty()) Section("درآمد بر اساس وضعیت", "تعداد، سهم و درآمد هر وضعیت.") { analytics.statusCounts.entries.sortedByDescending { it.value }.forEach { (status,count) -> val share = if (analytics.totalOrders == 0) 0.0 else count * 100.0 / analytics.totalOrders; MetricRow(status.faLabel(), "$count • ${share.roundToInt()}٪ • ${formatNumber(analytics.statusRevenue[status] ?: 0.0)}") } }
-            if (analytics.productAnalytics.isNotEmpty()) Section("تحلیل محصولات", "فروش، درآمد و سهم از فروش.") { analytics.productAnalytics.forEachIndexed { i,p -> MetricRow("${i+1}. ${p.name}", "${formatNumber(p.quantity)} عدد • ${formatNumber(p.revenue)} • ${p.sharePercent.roundToInt()}٪") } }
-            if (analytics.customerAnalytics.isNotEmpty()) Section("تحلیل مشتری‌ها", "مشتریان جدید، تکراری و ارزش خرید.") {
-                MetricGrid(listOf("تعداد مشتریان" to analytics.uniqueCustomers.toString(), "مشتریان جدید" to analytics.newCustomers.toString(), "مشتریان تکراری" to analytics.repeatCustomers.toString(), "میانگین خرید مشتری" to formatNumber(analytics.averageCustomerSpend)))
-                Spacer(Modifier.height(8.dp))
-                analytics.customerAnalytics.forEachIndexed { i,c -> MetricRow("${i+1}. ${c.name}${if(c.isNew) " • جدید" else ""}", "${c.orderCount} سفارش • ${formatNumber(c.totalSpent)}") }
+        when {
+            loading && analytics == null -> GlassLoading("در حال محاسبه آمار فروش…")
+            error != null && analytics == null -> GlassEmptyState(error)
+            analytics == null -> GlassEmptyState("هنوز داده‌ای برای نمایش تحلیل فروش آماده نیست.")
+            else -> {
+                RangeSelector(selectedRange, onRangeSelected)
+                Spacer(Modifier.height(10.dp))
+                OverviewCard(analytics, selectedRange)
+                ComparisonCard(analytics)
+                TrendSection(analytics)
+                CompletionCard(analytics)
+                StatusBreakdownCard(analytics)
+                ProductBreakdownCard(analytics)
+                CustomerInsightsCard(analytics)
+                CouponPerformanceCard(analytics)
+                InventoryHealthCard(analytics)
             }
-            if (analytics.couponAnalytics.isNotEmpty()) Section("تحلیل کوپن‌ها", "استفاده، تخفیف و فروش مرتبط.") {
-                analytics.couponAnalytics.maxByOrNull { it.generatedSales }?.let { MetricCard("پربازده‌ترین کوپن", "${it.code} • ${formatNumber(it.generatedSales)}") }
-                Spacer(Modifier.height(8.dp))
-                analytics.couponAnalytics.take(10).forEachIndexed { i,c -> MetricRow("${i+1}. ${c.code}", "${c.usageCount} استفاده • تخفیف ${formatNumber(c.discountTotal)} • فروش ${formatNumber(c.generatedSales)}") }
-            }
-            Section("سلامت موجودی", "وضعیت موجودی محصولات.") { MetricGrid(listOf("کل محصولات" to analytics.inventoryProducts.toString(), "موجودی کم" to analytics.lowStockProducts.toString(), "ناموجود" to analytics.outOfStockProducts.toString())) }
         }
     }
 }
 
-@Composable private fun RangeSelector(selected: AnalyticsRange, onSelect: (AnalyticsRange)->Unit) { GlassCard(Modifier.fillMaxWidth()) { Text("بازه تحلیل", fontWeight=FontWeight.Bold); Spacer(Modifier.height(8.dp)); Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement=Arrangement.spacedBy(6.dp)) { AnalyticsRange.values().forEach { r -> FilterChip(selected=r==selected,onClick={onSelect(r)},label={Text(r.label)}) } } } }
+@Composable
+private fun OverviewCard(analytics: AnalyticsSnapshot, range: AnalyticsRange) {
+    Section("نمای کلی فروش", "شاخص‌های اصلی در بازه ${range.label}.") {
+        MetricGrid(
+            listOf(
+                "فروش تکمیل‌شده" to formatNumber(analytics.sales),
+                "سفارش‌های تکمیل‌شده" to analytics.completedOrders.toString(),
+                "کل سفارش‌ها" to analytics.totalOrders.toString(),
+                "میانگین ارزش سفارش" to formatNumber(analytics.averageOrderValue),
+            )
+        )
+    }
+}
 
-@Composable private fun SalesTrendChart(points: List<AnalyticsTrendPoint>) { if(points.isEmpty()) return; val max=points.maxOfOrNull{it.sales}?.takeIf{it>0}?:1.0; val color=MaterialTheme.colorScheme.primary; GlassCard(Modifier.fillMaxWidth()){ Canvas(Modifier.fillMaxWidth().height(190.dp)){ val hp=14.dp.toPx(); val vp=18.dp.toPx(); val w=size.width-hp*2; val h=size.height-vp*2; val d=points.lastIndex.coerceAtLeast(1); val path=Path(); points.forEachIndexed{i,p->val x=hp+w*i/d; val y=vp+h-(p.sales/max).toFloat()*h;if(i==0)path.moveTo(x,y)else path.lineTo(x,y)}; drawPath(path,color=color,style=Stroke(4.dp.toPx(),cap=StrokeCap.Round)); points.forEachIndexed{i,p->val x=hp+w*i/d;val y=vp+h-(p.sales/max).toFloat()*h;drawCircle(color,3.dp.toPx(),Offset(x,y))} }; TrendLabels(points) } }
+@Composable
+private fun ComparisonCard(analytics: AnalyticsSnapshot) {
+    Section("مقایسه با دوره قبل", "همان بازه زمانی قبل.") {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            GrowthRow("فروش", analytics.salesGrowthPercent)
+            GrowthRow("تعداد سفارش", analytics.orderGrowthPercent)
+            GrowthRow("میانگین ارزش سفارش", analytics.averageOrderGrowthPercent)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                MetricCard("فروش دوره قبل", formatNumber(analytics.previousSales), Modifier.weight(1f))
+                MetricCard("سفارش دوره قبل", analytics.previousOrders.toString(), Modifier.weight(1f))
+            }
+        }
+    }
+}
 
-@Composable private fun OrderTrendChart(points: List<AnalyticsTrendPoint>) { if(points.isEmpty()) return; val max=points.maxOfOrNull{it.orders}?.takeIf{it>0}?:1; val color=MaterialTheme.colorScheme.secondary; GlassCard(Modifier.fillMaxWidth()){ Canvas(Modifier.fillMaxWidth().height(160.dp)){val hp=14.dp.toPx();val vp=18.dp.toPx();val w=size.width-hp*2;val h=size.height-vp*2;val d=points.lastIndex.coerceAtLeast(1);val path=Path();points.forEachIndexed{i,p->val x=hp+w*i/d;val y=vp+h-(p.orders.toFloat()/max)*h;if(i==0)path.moveTo(x,y)else path.lineTo(x,y)};drawPath(path,color=color,style=Stroke(4.dp.toPx(),cap=StrokeCap.Round))};TrendLabels(points)} }
+@Composable
+private fun GrowthRow(label: String, value: Double?) {
+    GlassCard(Modifier.fillMaxWidth()) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Column(Modifier.weight(1f)) {
+                Text(label, fontWeight = FontWeight.SemiBold)
+                Text("نسبت به دوره قبل", color = GlassTokens.muted, style = MaterialTheme.typography.labelSmall)
+            }
+            Text(formatPercent(value), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+        }
+    }
+}
 
-@Composable private fun TrendLabels(points: List<AnalyticsTrendPoint>){Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween){Text(points.first().label,color=GlassTokens.muted,style=MaterialTheme.typography.labelSmall);Text(points[points.size/2].label,color=GlassTokens.muted,style=MaterialTheme.typography.labelSmall);Text(points.last().label,color=GlassTokens.muted,style=MaterialTheme.typography.labelSmall)}}
-@Composable private fun MetricGrid(metrics: List<Pair<String,String>>){Column(verticalArrangement=Arrangement.spacedBy(8.dp)){metrics.chunked(2).forEach{row->Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(8.dp)){row.forEach{(l,v)->MetricCard(l,v,Modifier.weight(1f))};if(row.size==1)Spacer(Modifier.weight(1f))}}}}
-@Composable private fun MetricCard(label:String,value:String,modifier:Modifier=Modifier){GlassCard(modifier){Text(value,style=MaterialTheme.typography.titleLarge,fontWeight=FontWeight.Bold);Text(label,color=GlassTokens.muted,style=MaterialTheme.typography.bodySmall)}}
-@Composable private fun MetricRow(label:String,value:String){Row(Modifier.fillMaxWidth().padding(vertical=3.dp),horizontalArrangement=Arrangement.SpaceBetween,verticalAlignment=Alignment.CenterVertically){Text(label,color=GlassTokens.muted,modifier=Modifier.weight(1f));Spacer(Modifier.width(8.dp));Text(value,fontWeight=FontWeight.Bold)}}
-private fun formatNumber(value:Double):String{val rounded=value.roundToLong();val sign=if(rounded<0)"-" else "";val digits=rounded.toString().removePrefix("-");return sign+digits.reversed().chunked(3).joinToString(",").reversed()}
-private fun formatPercent(value:Double?):String=value?.let{"${if(it>0)"+" else ""}${it.roundToInt()}٪"}?:"—"
+@Composable
+private fun TrendSection(analytics: AnalyticsSnapshot) {
+    Section("روند فروش", "فروش روزانه سفارش‌های تکمیل‌شده.") { SalesTrendChart(analytics.trend) }
+    Section("روند سفارش‌ها", "تعداد سفارش‌های تکمیل‌شده در هر روز.") { OrderTrendChart(analytics.trend) }
+}
+
+@Composable
+private fun CompletionCard(analytics: AnalyticsSnapshot) {
+    Section("نرخ تکمیل سفارش", "سهم سفارش‌های تکمیل‌شده از کل سفارش‌های بازه.") {
+        GlassCard(Modifier.fillMaxWidth()) {
+            Text("${analytics.completionRate.roundToInt()}٪", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(8.dp))
+            ProgressBar(analytics.completionRate / 100.0)
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "${analytics.completedOrders} سفارش از ${analytics.totalOrders} سفارش تکمیل شده است.",
+                color = GlassTokens.muted,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+    }
+}
+
+@Composable
+private fun StatusBreakdownCard(analytics: AnalyticsSnapshot) {
+    if (analytics.statusCounts.isEmpty()) return
+    Section("تفکیک وضعیت سفارش‌ها", "تعداد، سهم و مبلغ سفارش‌ها بر اساس وضعیت.") {
+        val maxCount = analytics.statusCounts.values.maxOrNull()?.coerceAtLeast(1) ?: 1
+        GlassCard(Modifier.fillMaxWidth()) {
+            analytics.statusCounts.entries.sortedByDescending { it.value }.forEachIndexed { index, (status, count) ->
+                val share = if (analytics.totalOrders == 0) 0.0 else count * 100.0 / analytics.totalOrders
+                StatusBreakdownRow(
+                    label = status.faLabel(),
+                    count = count,
+                    share = share,
+                    amount = analytics.statusRevenue[status] ?: 0.0,
+                    relative = count.toDouble() / maxCount,
+                )
+                if (index < analytics.statusCounts.size - 1) Spacer(Modifier.height(10.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusBreakdownRow(label: String, count: Int, share: Double, amount: Double, relative: Double) {
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+            Text(label, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+            Text("$count سفارش", color = GlassTokens.muted, style = MaterialTheme.typography.labelSmall)
+        }
+        Spacer(Modifier.height(5.dp))
+        ProgressBar(relative)
+        Spacer(Modifier.height(4.dp))
+        Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+            Text("${share.roundToInt()}٪", color = GlassTokens.muted, style = MaterialTheme.typography.labelSmall)
+            Text(formatNumber(amount), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+        }
+    }
+}
+
+@Composable
+private fun ProductBreakdownCard(analytics: AnalyticsSnapshot) {
+    if (analytics.productAnalytics.isEmpty()) return
+    Section("محصولات برتر", "رتبه‌بندی بر اساس درآمد و سهم از فروش.") {
+        GlassCard(Modifier.fillMaxWidth()) {
+            analytics.productAnalytics.take(10).forEachIndexed { index, product ->
+                RankedRow(
+                    rank = index + 1,
+                    title = product.name,
+                    subtitle = "${formatNumber(product.quantity)} عدد",
+                    value = formatNumber(product.revenue),
+                    share = product.sharePercent / 100.0,
+                )
+                if (index < analytics.productAnalytics.take(10).lastIndex) Spacer(Modifier.height(10.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun CustomerInsightsCard(analytics: AnalyticsSnapshot) {
+    if (analytics.customerAnalytics.isEmpty()) return
+    Section("بینش مشتری‌ها", "مشتریان جدید، تکراری و ارزش خرید.") {
+        MetricGrid(
+            listOf(
+                "تعداد مشتریان" to analytics.uniqueCustomers.toString(),
+                "مشتریان جدید" to analytics.newCustomers.toString(),
+                "مشتریان تکراری" to analytics.repeatCustomers.toString(),
+                "میانگین خرید مشتری" to formatNumber(analytics.averageCustomerSpend),
+            )
+        )
+        Spacer(Modifier.height(8.dp))
+        GlassCard(Modifier.fillMaxWidth()) {
+            analytics.customerAnalytics.take(10).forEachIndexed { index, customer ->
+                RankedRow(
+                    rank = index + 1,
+                    title = customer.name + if (customer.isNew) " • جدید" else "",
+                    subtitle = "${customer.orderCount} سفارش",
+                    value = formatNumber(customer.totalSpent),
+                )
+                if (index < analytics.customerAnalytics.take(10).lastIndex) Spacer(Modifier.height(10.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun CouponPerformanceCard(analytics: AnalyticsSnapshot) {
+    if (analytics.couponAnalytics.isEmpty()) return
+    Section("عملکرد کوپن‌ها", "استفاده، تخفیف و فروش ایجادشده.") {
+        analytics.couponAnalytics.maxByOrNull { it.generatedSales }?.let {
+            GlassCard(Modifier.fillMaxWidth()) {
+                Text("پربازده‌ترین کوپن", color = GlassTokens.muted, style = MaterialTheme.typography.labelSmall)
+                Spacer(Modifier.height(3.dp))
+                Text(it.code, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                Text(formatNumber(it.generatedSales), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("فروش ایجادشده", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        GlassCard(Modifier.fillMaxWidth()) {
+            val maxSales = analytics.couponAnalytics.maxOfOrNull { it.generatedSales }?.coerceAtLeast(1.0) ?: 1.0
+            analytics.couponAnalytics.take(10).forEachIndexed { index, coupon ->
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                        Text("${index + 1}. ${coupon.code}", fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                        Text(formatNumber(coupon.generatedSales), fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(Modifier.height(5.dp))
+                    ProgressBar(coupon.generatedSales / maxSales)
+                    Spacer(Modifier.height(3.dp))
+                    Text(
+                        "${coupon.usageCount} استفاده • تخفیف ${formatNumber(coupon.discountTotal)}",
+                        color = GlassTokens.muted,
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
+                if (index < analytics.couponAnalytics.take(10).lastIndex) Spacer(Modifier.height(10.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun InventoryHealthCard(analytics: AnalyticsSnapshot) {
+    Section("سلامت موجودی", "وضعیت کلی موجودی محصولات.") {
+        GlassCard(Modifier.fillMaxWidth()) {
+            HealthRow("کل محصولات", analytics.inventoryProducts, analytics.inventoryProducts.coerceAtLeast(1), false)
+            Spacer(Modifier.height(10.dp))
+            HealthRow("موجودی کم", analytics.lowStockProducts, analytics.inventoryProducts.coerceAtLeast(1), true)
+            Spacer(Modifier.height(10.dp))
+            HealthRow("ناموجود", analytics.outOfStockProducts, analytics.inventoryProducts.coerceAtLeast(1), true)
+        }
+    }
+}
+
+@Composable
+private fun HealthRow(label: String, value: Int, total: Int, warning: Boolean) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.weight(1f)) {
+            Text(label, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(4.dp))
+            ProgressBar(value.toDouble() / total.coerceAtLeast(1))
+        }
+        Spacer(Modifier.width(12.dp))
+        Text(value.toString(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun ProgressBar(fraction: Double) {
+    val safe = fraction.coerceIn(0.0, 1.0).toFloat()
+    Canvas(Modifier.fillMaxWidth().height(7.dp)) {
+        val radius = size.height / 2f
+        drawRoundRect(
+            color = GlassTokens.divider,
+            topLeft = Offset.Zero,
+            size = androidx.compose.ui.geometry.Size(size.width, size.height),
+            cornerRadius = androidx.compose.ui.geometry.CornerRadius(radius, radius),
+        )
+        if (safe > 0f) {
+            drawRoundRect(
+                color = MaterialTheme.colorScheme.primary,
+                topLeft = Offset.Zero,
+                size = androidx.compose.ui.geometry.Size(size.width * safe, size.height),
+                cornerRadius = androidx.compose.ui.geometry.CornerRadius(radius, radius),
+            )
+        }
+    }
+}
+
+@Composable
+private fun RankedRow(rank: Int, title: String, subtitle: String, value: String, share: Double? = null) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+        Text("$rank", fontWeight = FontWeight.Bold, modifier = Modifier.width(28.dp))
+        Column(Modifier.weight(1f)) {
+            Text(title, fontWeight = FontWeight.SemiBold)
+            Text(subtitle, color = GlassTokens.muted, style = MaterialTheme.typography.labelSmall)
+            if (share != null) {
+                Spacer(Modifier.height(5.dp))
+                ProgressBar(share)
+            }
+        }
+        Spacer(Modifier.width(10.dp))
+        Text(value, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+    }
+}
+
+@Composable
+private fun RangeSelector(selected: AnalyticsRange, onSelect: (AnalyticsRange) -> Unit) {
+    GlassCard(Modifier.fillMaxWidth()) {
+        Text("بازه تحلیل", fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(8.dp))
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            AnalyticsRange.values().forEach { range ->
+                FilterChip(
+                    selected = range == selected,
+                    onClick = { onSelect(range) },
+                    label = { Text(range.label) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SalesTrendChart(points: List<AnalyticsTrendPoint>) {
+    if (points.isEmpty()) return
+    val max = points.maxOfOrNull { it.sales }?.takeIf { it > 0 } ?: 1.0
+    val color = MaterialTheme.colorScheme.primary
+    GlassCard(Modifier.fillMaxWidth()) {
+        Canvas(Modifier.fillMaxWidth().height(190.dp)) {
+            val hp = 14.dp.toPx()
+            val vp = 18.dp.toPx()
+            val width = size.width - hp * 2
+            val height = size.height - vp * 2
+            val divisor = points.lastIndex.coerceAtLeast(1)
+            val path = Path()
+            points.forEachIndexed { index, point ->
+                val x = hp + width * index / divisor
+                val y = vp + height - (point.sales / max).toFloat() * height
+                if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+            }
+            drawPath(path, color = color, style = Stroke(4.dp.toPx(), cap = StrokeCap.Round))
+            points.forEachIndexed { index, point ->
+                val x = hp + width * index / divisor
+                val y = vp + height - (point.sales / max).toFloat() * height
+                drawCircle(color, 3.dp.toPx(), Offset(x, y))
+            }
+        }
+        TrendLabels(points)
+    }
+}
+
+@Composable
+private fun OrderTrendChart(points: List<AnalyticsTrendPoint>) {
+    if (points.isEmpty()) return
+    val max = points.maxOfOrNull { it.orders }?.takeIf { it > 0 } ?: 1
+    val color = MaterialTheme.colorScheme.secondary
+    GlassCard(Modifier.fillMaxWidth()) {
+        Canvas(Modifier.fillMaxWidth().height(160.dp)) {
+            val hp = 14.dp.toPx()
+            val vp = 18.dp.toPx()
+            val width = size.width - hp * 2
+            val height = size.height - vp * 2
+            val divisor = points.lastIndex.coerceAtLeast(1)
+            val path = Path()
+            points.forEachIndexed { index, point ->
+                val x = hp + width * index / divisor
+                val y = vp + height - (point.orders.toFloat() / max) * height
+                if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+            }
+            drawPath(path, color = color, style = Stroke(4.dp.toPx(), cap = StrokeCap.Round))
+        }
+        TrendLabels(points)
+    }
+}
+
+@Composable
+private fun TrendLabels(points: List<AnalyticsTrendPoint>) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(points.first().label, color = GlassTokens.muted, style = MaterialTheme.typography.labelSmall)
+        Text(points[points.size / 2].label, color = GlassTokens.muted, style = MaterialTheme.typography.labelSmall)
+        Text(points.last().label, color = GlassTokens.muted, style = MaterialTheme.typography.labelSmall)
+    }
+}
+
+@Composable
+private fun MetricGrid(metrics: List<Pair<String, String>>) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        metrics.chunked(2).forEach { row ->
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                row.forEach { (label, value) -> MetricCard(label, value, Modifier.weight(1f)) }
+                if (row.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun MetricCard(label: String, value: String, modifier: Modifier = Modifier) {
+    GlassCard(modifier) {
+        Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+        Text(label, color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+private fun formatNumber(value: Double): String {
+    val rounded = value.roundToLong()
+    val sign = if (rounded < 0) "-" else ""
+    val digits = rounded.toString().removePrefix("-")
+    return sign + digits.reversed().chunked(3).joinToString(",").reversed()
+}
+
+private fun formatPercent(value: Double?): String = value?.let {
+    "${if (it > 0) "+" else ""}${it.roundToInt()}٪"
+} ?: "—"
