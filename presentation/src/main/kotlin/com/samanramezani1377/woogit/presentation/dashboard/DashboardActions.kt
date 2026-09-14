@@ -14,11 +14,11 @@ import androidx.compose.ui.unit.dp
 internal fun DashboardActions(
     onOrdersClick: () -> Unit,
     onProductsClick: () -> Unit,
-    onBarcodeClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onSyncClick: () -> Unit,
     onConflictsClick: () -> Unit,
     onCommerceClick: () -> Unit = {},
+    onBarcodeClick: () -> Unit = onCommerceClick,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxWidth().padding(vertical = 2.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
