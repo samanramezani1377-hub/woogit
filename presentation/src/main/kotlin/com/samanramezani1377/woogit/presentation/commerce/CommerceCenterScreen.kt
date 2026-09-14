@@ -1,5 +1,8 @@
 package com.samanramezani1377.woogit.presentation.commerce
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,6 +23,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -27,21 +31,8 @@ import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.core.domain.model.OrderStatus
 import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
 
-internal enum class CommerceFeature {
-    BARCODE,
-    BULK_ORDERS,
-    INVENTORY,
-    CUSTOMERS,
-    ANALYTICS,
-    COUPONS,
-    INVOICE,
-}
-
-private data class CommerceFeatureUiModel(
-    val feature: CommerceFeature,
-    val title: String,
-    val description: String,
-)
+internal enum class CommerceFeature { BARCODE, BULK_ORDERS, INVENTORY, CUSTOMERS, ANALYTICS, COUPONS, INVOICE }
+private data class CommerceFeatureUiModel(val feature: CommerceFeature, val title: String, val description: String)
 
 @Composable
 internal fun CommerceCenterScreen(
@@ -52,13 +43,9 @@ internal fun CommerceCenterScreen(
     onOpenOrder: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val vm: CommerceViewModel = viewModel(
-        key = "commerce-${storeId.value}",
-        factory = CommerceViewModelFactory(dependencies, storeId),
-    )
+    val vm: CommerceViewModel = viewModel(key = "commerce-${storeId.value}", factory = CommerceViewModelFactory(dependencies, storeId))
     val state by vm.state.collectAsStateWithLifecycle()
     var selected by remember { mutableStateOf<CommerceFeature?>(null) }
-
     LaunchedEffect(storeId) { vm.load() }
 
     Column(modifier = modifier.fillMaxSize().padding(16.dp)) {
@@ -66,46 +53,28 @@ internal fun CommerceCenterScreen(
             Text("مرکز یکپارچه Commerce")
             TextButton(onClick = onBack) { Text("بازگشت") }
         }
-
         state.error?.let { Text(it, modifier = Modifier.padding(vertical = 8.dp)) }
         state.message?.let { Text(it, modifier = Modifier.padding(vertical = 8.dp)) }
-
         if (selected == null) {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(
-                    listOf(
-                        CommerceFeatureUiModel(CommerceFeature.BARCODE, "اسکن بارکد و SKU", "جستجوی SKU و شماره سفارش."),
-                        CommerceFeatureUiModel(CommerceFeature.BULK_ORDERS, "عملیات گروهی سفارش‌ها", "تغییر وضعیت چند سفارش تا سقف ۱۰۰ مورد."),
-                        CommerceFeatureUiModel(CommerceFeature.INVENTORY, "مرکز موجودی", "فیلتر موجودی، کمبود و ناموجود."),
-                        CommerceFeatureUiModel(CommerceFeature.CUSTOMERS, "مدیریت مشتریان", "مشتریان واقعی WooCommerce و عملیات گروهی."),
-                        CommerceFeatureUiModel(CommerceFeature.ANALYTICS, "تحلیل فروش", "فروش، سفارش، مشتری و محصول بر اساس داده واقعی."),
-                        CommerceFeatureUiModel(CommerceFeature.COUPONS, "مدیریت کوپن‌ها", "کوپن‌ها، usage analytics و عملیات گروهی."),
-                        CommerceFeatureUiModel(CommerceFeature.INVOICE, "فاکتور و رسید PDF", "ساخت سند فاکتور از سفارش واقعی."),
-                    ),
-                ) { item ->
+                items(listOf(
+                    CommerceFeatureUiModel(CommerceFeature.BARCODE, "اسکن بارکد و SKU", "جستجوی SKU و شماره سفارش."),
+                    CommerceFeatureUiModel(CommerceFeature.BULK_ORDERS, "عملیات گروهی سفارش‌ها", "تغییر وضعیت چند سفارش تا سقف ۱۰۰ مورد."),
+                    CommerceFeatureUiModel(CommerceFeature.INVENTORY, "مرکز موجودی", "فیلتر موجودی، کمبود و ناموجود."),
+                    CommerceFeatureUiModel(CommerceFeature.CUSTOMERS, "مدیریت مشتریان", "مشتریان واقعی WooCommerce و عملیات گروهی."),
+                    CommerceFeatureUiModel(CommerceFeature.ANALYTICS, "تحلیل فروش", "فروش، سفارش، مشتری و محصول بر اساس داده واقعی."),
+                    CommerceFeatureUiModel(CommerceFeature.COUPONS, "مدیریت کوپن‌ها", "کوپن‌ها، usage analytics و عملیات گروهی."),
+                    CommerceFeatureUiModel(CommerceFeature.INVOICE, "فاکتور و رسید PDF", "ساخت و ذخیره سند PDF از سفارش واقعی."),
+                )) { item ->
                     Column(modifier = Modifier.fillMaxWidth().padding(8.dp)) {
-                        Text(item.title)
-                        Text(item.description)
-                        Button(onClick = { selected = item.feature }, modifier = Modifier.padding(top = 6.dp)) {
-                            Text("باز کردن")
-                        }
+                        Text(item.title); Text(item.description)
+                        Button(onClick = { selected = item.feature }, modifier = Modifier.padding(top = 6.dp)) { Text("باز کردن") }
                     }
                 }
             }
         } else {
             TextButton(onClick = { selected = null }) { Text("← همه ابزارها") }
-            CommerceFeatureContent(
-                feature = selected!!,
-                state = state,
-                onBarcode = vm::resolveBarcode,
-                onInventoryFilter = vm::filterInventory,
-                onBulkOrder = vm::bulkOrderStatus,
-                onBulkCustomer = vm::bulkCustomerRole,
-                onBulkCoupon = vm::bulkCouponAmount,
-                onInvoice = vm::prepareInvoice,
-                onProduct = onOpenProduct,
-                onOrder = onOpenOrder,
-            )
+            CommerceFeatureContent(selected!!, state, vm::resolveBarcode, vm::filterInventory, vm::bulkOrderStatus, vm::bulkCustomerRole, vm::bulkCouponAmount, vm::prepareInvoice, onOpenProduct, onOpenOrder)
         }
     }
 }
@@ -123,91 +92,56 @@ private fun CommerceFeatureContent(
     onProduct: (String) -> Unit,
     onOrder: (String) -> Unit,
 ) {
+    val context = LocalContext.current
+    val renderer = remember { InvoicePdfRenderer() }
     var input by remember(feature) { mutableStateOf("") }
     var lowStock by remember(feature) { mutableStateOf(false) }
     var outOfStock by remember(feature) { mutableStateOf(false) }
     var selectedIds by remember(feature) { mutableStateOf(emptySet<String>()) }
     var selectedLongIds by remember(feature) { mutableStateOf(emptySet<Long>()) }
+    val pdfLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri: Uri? ->
+        val invoice = state.invoice ?: return@rememberLauncherForActivityResult
+        if (uri != null) runCatching { context.contentResolver.openOutputStream(uri)?.use { it.write(renderer.render(invoice)) } }
+    }
 
     LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         when (feature) {
-            CommerceFeature.BARCODE -> {
-                item {
-                    TextField(input, { input = it }, label = { Text("SKU یا شماره سفارش") }, modifier = Modifier.fillMaxWidth())
-                    Button(onClick = { onBarcode(input) }) { Text("Resolve") }
-                    state.barcodeResult?.let { result ->
-                        Text("نتیجه: ${result.kind} / ${result.value}")
-                        result.productId?.let { id -> Button(onClick = { onProduct(id) }) { Text("باز کردن محصول") } }
-                        result.orderId?.let { id -> Button(onClick = { onOrder(id) }) { Text("باز کردن سفارش") } }
-                    }
+            CommerceFeature.BARCODE -> item {
+                TextField(input, { input = it }, label = { Text("SKU یا شماره سفارش") }, modifier = Modifier.fillMaxWidth())
+                Button(onClick = { onBarcode(input) }) { Text("Resolve") }
+                state.barcodeResult?.let { result ->
+                    Text("نتیجه: ${result.kind} / ${result.value}")
+                    result.productId?.let { id -> Button(onClick = { onProduct(id) }) { Text("باز کردن محصول") } }
+                    result.orderId?.let { id -> Button(onClick = { onOrder(id) }) { Text("باز کردن سفارش") } }
                 }
             }
             CommerceFeature.BULK_ORDERS -> {
                 item { Text("انتخاب سفارش‌ها و تغییر وضعیت") }
-                items(state.orders) { order ->
-                    val id = order.id.value
-                    OutlinedButton(onClick = { selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id }) {
-                        Text("${if (id in selectedIds) "✓ " else ""}#${order.number} · ${order.status}")
-                    }
-                }
-                item {
-                    Button(onClick = { onBulkOrder(selectedIds, OrderStatus.COMPLETED) }) { Text("تکمیل‌شده") }
-                    Button(onClick = { onBulkOrder(selectedIds, OrderStatus.PROCESSING) }) { Text("در حال پردازش") }
-                }
+                items(state.orders) { order -> val id = order.id.value; OutlinedButton(onClick = { selectedIds = if (id in selectedIds) selectedIds - id else selectedIds + id }) { Text("${if (id in selectedIds) "✓ " else ""}#${order.number} · ${order.status}") } }
+                item { Button(onClick = { onBulkOrder(selectedIds, OrderStatus.COMPLETED) }) { Text("تکمیل‌شده") }; Button(onClick = { onBulkOrder(selectedIds, OrderStatus.PROCESSING) }) { Text("در حال پردازش") } }
             }
             CommerceFeature.INVENTORY -> {
-                item {
-                    TextField(input, { input = it; onInventoryFilter(it, lowStock, outOfStock) }, label = { Text("نام یا SKU") }, modifier = Modifier.fillMaxWidth())
-                    Row {
-                        OutlinedButton(onClick = { lowStock = !lowStock; onInventoryFilter(input, lowStock, outOfStock) }) { Text("کم‌موجودی") }
-                        OutlinedButton(onClick = { outOfStock = !outOfStock; onInventoryFilter(input, lowStock, outOfStock) }) { Text("ناموجود") }
-                    }
-                }
+                item { TextField(input, { input = it; onInventoryFilter(it, lowStock, outOfStock) }, label = { Text("نام یا SKU") }, modifier = Modifier.fillMaxWidth()); Row { OutlinedButton(onClick = { lowStock = !lowStock; onInventoryFilter(input, lowStock, outOfStock) }) { Text("کم‌موجودی") }; OutlinedButton(onClick = { outOfStock = !outOfStock; onInventoryFilter(input, lowStock, outOfStock) }) { Text("ناموجود") } } }
                 items(state.inventory) { product -> Text("${product.name} · SKU ${product.sku.orEmpty()} · ${product.stock?.quantity ?: 0}") }
             }
             CommerceFeature.CUSTOMERS -> {
                 item { Text("${state.customers.size} مشتری · انتخاب و تغییر role") }
-                items(state.customers) { customer ->
-                    val id = customer.id
-                    OutlinedButton(onClick = { selectedLongIds = if (id in selectedLongIds) selectedLongIds - id else selectedLongIds + id }) {
-                        Text("${if (id in selectedLongIds) "✓ " else ""}${customer.first_name.orEmpty()} ${customer.last_name.orEmpty()} · ${customer.email.orEmpty()}")
-                    }
-                }
+                items(state.customers) { customer -> val id = customer.id; OutlinedButton(onClick = { selectedLongIds = if (id in selectedLongIds) selectedLongIds - id else selectedLongIds + id }) { Text("${if (id in selectedLongIds) "✓ " else ""}${customer.first_name.orEmpty()} ${customer.last_name.orEmpty()} · ${customer.email.orEmpty()}") } }
                 item { Button(onClick = { onBulkCustomer(selectedLongIds, "customer") }) { Text("تبدیل گروهی به Customer") } }
             }
-            CommerceFeature.ANALYTICS -> {
-                item {
-                    state.analytics?.let { a ->
-                        Text("فروش تکمیل‌شده: ${a.sales}")
-                        Text("سفارش‌های تکمیل‌شده: ${a.completedOrders}")
-                        Text("کل سفارش‌ها: ${a.totalOrders}")
-                        Text("میانگین سفارش: ${a.averageOrderValue}")
-                        Text("محصولات موجود در کاتالوگ: ${a.inventoryProducts}")
-                    }
-                    Text("مشتریان تجمیع‌شده: ${state.customerAggregation.size}")
-                    Text("کوپن‌های استفاده‌شده: ${state.couponAnalytics.size}")
-                }
+            CommerceFeature.ANALYTICS -> item {
+                state.analytics?.let { a -> Text("فروش تکمیل‌شده: ${a.sales}"); Text("سفارش‌های تکمیل‌شده: ${a.completedOrders}"); Text("کل سفارش‌ها: ${a.totalOrders}"); Text("میانگین سفارش: ${a.averageOrderValue}"); Text("محصولات موجود در کاتالوگ: ${a.inventoryProducts}") }
+                Text("مشتریان تجمیع‌شده: ${state.customerAggregation.size}"); Text("کوپن‌های استفاده‌شده: ${state.couponAnalytics.size}")
             }
             CommerceFeature.COUPONS -> {
                 item { Text("${state.coupons.size} کوپن · انتخاب و تغییر مبلغ") }
-                items(state.coupons) { coupon ->
-                    val id = coupon.id
-                    OutlinedButton(onClick = { selectedLongIds = if (id in selectedLongIds) selectedLongIds - id else selectedLongIds + id }) {
-                        Text("${if (id in selectedLongIds) "✓ " else ""}${coupon.code} · ${coupon.amount} · usage ${coupon.usage_count}")
-                    }
-                }
-                item {
-                    TextField(input, { input = it }, label = { Text("مبلغ جدید") })
-                    Button(onClick = { onBulkCoupon(selectedLongIds, input) }) { Text("ذخیره گروهی") }
-                    state.couponAnalytics.take(10).forEach { Text("${it.code}: ${it.usageCount} استفاده · ${it.discountTotal} تخفیف") }
-                }
+                items(state.coupons) { coupon -> val id = coupon.id; OutlinedButton(onClick = { selectedLongIds = if (id in selectedLongIds) selectedLongIds - id else selectedLongIds + id }) { Text("${if (id in selectedLongIds) "✓ " else ""}${coupon.code} · ${coupon.amount} · usage ${coupon.usage_count}") } }
+                item { TextField(input, { input = it }, label = { Text("مبلغ جدید") }); Button(onClick = { onBulkCoupon(selectedLongIds, input) }) { Text("ذخیره گروهی") }; state.couponAnalytics.take(10).forEach { Text("${it.code}: ${it.usageCount} استفاده · ${it.discountTotal} تخفیف") } }
             }
             CommerceFeature.INVOICE -> {
                 item { Text("ساخت فاکتور از سفارش واقعی") }
-                items(state.orders) { order ->
-                    Button(onClick = { onInvoice(order.id.value) }) { Text("فاکتور #${order.number}") }
-                }
-                item { state.invoice?.let { Text("فاکتور #${it.orderNumber} آماده رندر PDF است.") } }
+                items(state.orders) { order -> Button(onClick = { onInvoice(order.id.value) }) { Text("فاکتور #${order.number}") } }
+                state.invoice?.let { invoice -> item { Text("فاکتور #${invoice.orderNumber} آماده است."); Button(onClick = { pdfLauncher.launch("invoice-${invoice.orderNumber}.pdf") }) { Text("ذخیره PDF") } } }
             }
         }
     }
