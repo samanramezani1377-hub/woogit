@@ -24,7 +24,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.presentation.GlassCard
-import com.samanramezani1377.woogit.presentation.GlassEmptyState
 import com.samanramezani1377.woogit.presentation.GlassErrorState
 import com.samanramezani1377.woogit.presentation.GlassLoading
 import com.samanramezani1377.woogit.presentation.GlassOutlinedButton
@@ -36,11 +35,7 @@ import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
 
 internal enum class CommerceFeature { BARCODE, BULK_ORDERS, INVENTORY, CUSTOMERS, ANALYTICS, COUPONS, INVOICE }
 
-private data class CommerceFeatureUiModel(
-    val feature: CommerceFeature,
-    val title: String,
-    val description: String,
-)
+private data class CommerceFeatureUiModel(val feature: CommerceFeature, val title: String, val description: String)
 
 @Composable
 internal fun CommerceCenterScreen(
@@ -53,10 +48,7 @@ internal fun CommerceCenterScreen(
     initialFeature: CommerceFeature? = null,
     modifier: Modifier = Modifier,
 ) {
-    val vm: CommerceViewModel = viewModel(
-        key = "commerce-${storeId.value}",
-        factory = CommerceViewModelFactory(dependencies, storeId),
-    )
+    val vm: CommerceViewModel = viewModel(key = "commerce-${storeId.value}", factory = CommerceViewModelFactory(dependencies, storeId))
     val state by vm.state.collectAsStateWithLifecycle()
     var selected by remember { mutableStateOf(initialFeature?.takeIf { it == CommerceFeature.CUSTOMERS || it == CommerceFeature.COUPONS }) }
     LaunchedEffect(storeId) { vm.load() }
@@ -79,41 +71,19 @@ internal fun CommerceCenterScreen(
     }
 
     GlassScaffold(modifier) { padding ->
-        Column(
-            Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            GlassTopBar(
-                title = "مرکز تجارت",
-                subtitle = "ابزارهای مدیریتی فروشگاه در یکجا",
-                actions = { GlassOutlinedButton("بازگشت", onBack) },
-            )
-
+        Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            GlassTopBar(title = "مرکز تجارت", subtitle = "ابزارهای مدیریتی فروشگاه در یکجا", actions = { GlassOutlinedButton("بازگشت", onBack) })
             GlassCard {
                 GlassText("مدیریت حرفه‌ای فروشگاه", style = MaterialTheme.typography.titleMedium)
-                GlassText(
-                    "عملیات گروهی، موجودی، تحلیل فروش، مشتریان، کوپن، بارکد و فاکتور را از همین‌جا اجرا کنید.",
-                    style = MaterialTheme.typography.bodyMedium.copy(color = GlassTokens.muted),
-                )
+                GlassText("عملیات گروهی، موجودی، تحلیل فروش، مشتریان، کوپن، بارکد و فاکتور را از همین‌جا اجرا کنید.", style = MaterialTheme.typography.bodyMedium.copy(color = GlassTokens.muted))
             }
-
             when {
                 state.loading -> GlassLoading("در حال آماده‌سازی ابزارهای تجارت…")
-                state.error != null -> GlassErrorState(state.error!!, onRetry = { vm.load() })
-                else -> LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    contentPadding = PaddingValues(bottom = 110.dp),
-                ) {
+                state.error != null -> GlassErrorState(state.error!!, { vm.load() })
+                else -> LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 110.dp)) {
                     items(featureModels, key = { it.feature.name }) { item ->
-                        GlassCard(
-                            Modifier.fillMaxWidth().clickable { onOpenFeature(item.feature) },
-                        ) {
-                            Row(
-                                Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
+                        GlassCard(Modifier.fillMaxWidth().clickable { onOpenFeature(item.feature) }) {
+                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     GlassText(item.title, style = MaterialTheme.typography.titleMedium)
                                     GlassText(item.description, style = MaterialTheme.typography.bodySmall.copy(color = GlassTokens.muted))
