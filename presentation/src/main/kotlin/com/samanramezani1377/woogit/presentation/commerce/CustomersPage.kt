@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
@@ -49,7 +48,12 @@ internal fun CustomersPage(
     }
     FeatureBody {
         Section("انتخاب مشتریان", "مشتریان را جستجو کنید و فقط گروه موردنظر را انتخاب کنید.") {
-            GlassSearchField(query, { query = it }, "نام یا ایمیل", Modifier.fillMaxWidth())
+            GlassSearchField(
+                value = query,
+                onValueChange = { query = it },
+                placeholder = "نام یا ایمیل",
+                modifier = Modifier.fillMaxWidth(),
+            )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 GlassOutlinedButton("انتخاب نتایج", { selected = selected + visible.map { it.id }.toSet() })
                 GlassOutlinedButton("پاک کردن", { selected = emptySet() })
@@ -57,7 +61,12 @@ internal fun CustomersPage(
             }
         }
         Section("عملیات گروهی") {
-            GlassSearchField(role, { role = it }, "نقش جدید", Modifier.fillMaxWidth())
+            GlassSearchField(
+                value = role,
+                onValueChange = { role = it },
+                placeholder = "نقش جدید",
+                modifier = Modifier.fillMaxWidth(),
+            )
             GlassPrimaryAction("اعمال روی انتخاب‌ها", { confirm = true }, enabled = selected.isNotEmpty() && role.isNotBlank())
         }
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
