@@ -19,7 +19,7 @@ object OrderRepositoryV1Mapper {
             "failed" -> OrderStatus.FAILED
             else -> OrderStatus.OTHER
         },
-        v.customer_id.takeIf { it != 0L }?.let { Customer(EntityId(it.toString()), listOfNotNull(v.billing?.first_name, v.billing?.last_name).joinToString(" "), v.billing?.phone) },
+        v.customer_id.takeIf { it != 0L }?.let { Customer(EntityId(it.toString()), listOfNotNull(v.billing?.first_name, v.billing?.last_name).joinToString(" "), v.billing?.email) },
         v.billing?.let { Address(it.first_name, it.last_name, it.company, it.address_1, it.address_2, it.city, it.state, it.postcode, it.country, it.phone) },
         v.shipping?.let { Address(it.first_name, it.last_name, it.company, it.address_1, it.address_2, it.city, it.state, it.postcode, it.country, it.phone) },
         Payment(v.payment_method, v.payment_method_title, v.transaction_id, v.date_paid_gmt?.isNotBlank() == true),
