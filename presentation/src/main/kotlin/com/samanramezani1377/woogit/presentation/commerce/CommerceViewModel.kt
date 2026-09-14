@@ -16,6 +16,8 @@ import com.samanramezani1377.woogit.data.network.WooCouponCommerceDto
 import com.samanramezani1377.woogit.data.network.WooCustomerCommerceDto
 import com.samanramezani1377.woogit.data.network.WooCouponCommerceWriteDto
 import com.samanramezani1377.woogit.data.network.WooCustomerCommerceWriteDto
+import com.samanramezani1377.woogit.presentation.PresentationErrorMapper
+import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -167,7 +169,7 @@ internal class CommerceViewModel(
             if (response.statusCode in 200..299) succeeded += chunk.size else failed += chunk.size
         }
         _state.value = _state.value.copy(
-            message = "وضعیت $succeeded سفارش به‌روزرسانی شد${if (failed > 0) ویرگول("؛ $failed مورد ناموفق") else ""}.",
+            message = "وضعیت $succeeded سفارش به‌روزرسانی شد${if (failed > 0) "؛ $failed مورد ناموفق" else ""}.",
             error = if (failed > 0) "بخشی از عملیات سفارش‌ها ناموفق بود." else null,
         )
         load()
@@ -247,8 +249,6 @@ internal class CommerceViewModel(
             else -> { fail("اتصال Commerce برقرار نیست."); null }
         }
     }
-
-    private fun ویرگول(text: String) = text
 
     private fun fail(message: String) {
         _state.value = _state.value.copy(loading = false, error = message)
