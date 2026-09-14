@@ -13,6 +13,7 @@ import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.presentation.GlassScaffold
 import com.samanramezani1377.woogit.presentation.GlassTokens
 import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
+import com.samanramezani1377.woogit.presentation.analytics.AnalyticsRouteScreen
 
 @Composable
 internal fun CommerceFeatureRouteScreen(
@@ -23,6 +24,11 @@ internal fun CommerceFeatureRouteScreen(
     onOpenProduct: (String) -> Unit,
     onOpenOrder: (String) -> Unit,
 ) {
+    if (feature == CommerceFeature.ANALYTICS) {
+        AnalyticsRouteScreen(storeId = storeId, onBack = onBack)
+        return
+    }
+
     val vm: CommerceViewModel = viewModel(
         key = "commerce-feature-${storeId.value}-${feature.name}",
         factory = CommerceViewModelFactory(dependencies, storeId),
@@ -30,7 +36,7 @@ internal fun CommerceFeatureRouteScreen(
     val state by vm.state.collectAsStateWithLifecycle()
 
     LaunchedEffect(storeId, feature) {
-        vm.load(loadRemoteCommerceData = feature != CommerceFeature.ANALYTICS)
+        vm.load()
     }
 
     if (feature == CommerceFeature.BARCODE) {
