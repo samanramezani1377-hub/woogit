@@ -19,6 +19,7 @@ import com.samanramezani1377.woogit.data.local.*
 import com.samanramezani1377.woogit.data.sync.*
 import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
 import com.samanramezani1377.woogit.presentation.analytics.AnalyticsRuntime
+import com.samanramezani1377.woogit.presentation.customers.CustomerRuntime
 import com.samanramezani1377.woogit.presentation.account.AccountSetupGateway
 import com.samanramezani1377.woogit.presentation.settings.BillingRuntime
 import kotlinx.coroutines.*
@@ -37,6 +38,7 @@ class AppComposition(context: Context) {
     private val accountSetupClient = AccountSetupClient(network.httpClient, BuildConfig.WOOGIT_BACKEND_BASE_URL, sessions, BuildConfig.VERSION_NAME, announcementCenter) { storeId -> reauthenticateBilling(storeId) }
     private val orderLocal = SqlOrderDataSource(db)
     private val productLocal = SqlProductDataSource(db)
+    private val customerLocal = SqlCustomerDataSource(db)
     private val storeLocal = SqlStoreDataSource(db)
     private val variationLocal = SqlVariationDataSource(db)
     private val attributeLocal = SqlAttributeDataSource(db)
@@ -47,6 +49,7 @@ class AppComposition(context: Context) {
     private val imageFetcher = DirectCustomerImageFetcher(db, secure, network.httpClient)
     private val mutationCoordinator = SqlMutationCoordinator(db)
     private val localAnalyticsRepository = LocalAnalyticsRepository(orderLocal, productLocal)
+    private val customerRepository = CustomerRepositoryV1Impl(customerLocal, provider, scope)
 
     private val restoredStoreId: String? = run {
         val savedId = prefs.getString("active_store_id", null)
@@ -64,9 +67,7 @@ class AppComposition(context: Context) {
         override suspend fun setupWebPassword(storeId: String, password: String, confirmation: String): CoreResult<Unit> = accountSetupClient.setupWebPassword(storeId, password, confirmation)
     }
     val orderRepository = OrderRepositoryV1Impl(orderLocal, provider, mutationCoordinator, pending, scope)
-    val productRepository = ProductRepositoryV1Impl(productLocal, provider, mutationCoordinator, pending) { storeId ->
-        ProductCatalogSyncWorker.scheduleNow(appContext, storeId.value)
-    }
+    val productRepository = ProductRepositoryV1Impl(productLocal, provider, mutationCoordinator, pending) { storeId -> ProductCatalogSyncWorker.scheduleNow(appContext, storeId.value) }
     val productCategoryRepository = ProductCategoryRepositoryImpl(provider)
     val variationRepository = VariationRepositoryImpl(variationLocal, provider, mutationCoordinator, pending)
     val attributeRepository = AttributeRepositoryImpl(attributeLocal, provider, mutationCoordinator, pending)
@@ -123,10 +124,7 @@ class AppComposition(context: Context) {
     private val resolveConflictFn: suspend (StoreId, com.samanramezani1377.woogit.core.domain.entity.EntityId, ConflictResolution) -> CoreResult<Unit> = { id, c, r -> resolveConflict(id, c, r) }
 
     private suspend fun reauthenticateBilling(storeId: StoreId): Boolean {
-        val store = when (val result = storeRepository.get(storeId)) {
-            is CoreResult.Success -> result.value
-            is CoreResult.Failure -> return false
-        }
+        val store = when (val result = storeRepository.get(storeId)) { is CoreResult.Success -> result.value; is CoreResult.Failure -> return false }
         val reference = store.credentialReference ?: return false
         val pair = secure.get(reference) ?: return false
         return backend.verifySite(storeId.value, "${store.baseUrl}?woogit_session_refresh=${System.currentTimeMillis()}", pair).isSuccess
@@ -144,25 +142,12 @@ class AppComposition(context: Context) {
     init {
         BillingRuntime.gateway = billingClient
         AnalyticsRuntime.loader = { storeId, range -> localAnalyticsRepository.get(storeId, range) }
+        CustomerRuntime.listLoader = { storeId, page, perPage, search -> customerRepository.list(storeId, page, perPage, search) }
+        CustomerRuntime.detailLoader = { storeId, id -> customerRepository.get(storeId, id) }
         restoredStoreId?.let(::startBackgroundWork)
     }
 
-    fun startBackgroundWork(storeId: String) {
-        if (ForceUpdateController.isActive(appContext)) return
-        OrderPollingWorker.schedule(appContext, storeId)
-        ProductCatalogSyncWorker.schedule(appContext, storeId)
-    }
-
-    fun cancelBackgroundWork(storeId: String) {
-        OrderPollingWorker.cancel(appContext, storeId)
-        ProductCatalogSyncWorker.cancel(appContext, storeId)
-    }
-
-    fun close() {
-        BillingRuntime.gateway = null
-        AnalyticsRuntime.loader = null
-        announcementCenter.dispose()
-        scope.cancel()
-        network.close()
-    }
+    fun startBackgroundWork(storeId: String) { if (ForceUpdateController.isActive(appContext)) return; OrderPollingWorker.schedule(appContext, storeId); ProductCatalogSyncWorker.schedule(appContext, storeId) }
+    fun cancelBackgroundWork(storeId: String) { OrderPollingWorker.cancel(appContext, storeId); ProductCatalogSyncWorker.cancel(appContext, storeId) }
+    fun close() { BillingRuntime.gateway = null; AnalyticsRuntime.loader = null; CustomerRuntime.listLoader = null; CustomerRuntime.detailLoader = null; announcementCenter.dispose(); scope.cancel(); network.close() }
 }
