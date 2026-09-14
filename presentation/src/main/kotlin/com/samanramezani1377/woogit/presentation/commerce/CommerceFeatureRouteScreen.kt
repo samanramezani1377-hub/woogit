@@ -11,15 +11,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.presentation.GlassScaffold
+import com.samanramezani1377.woogit.presentation.GlassTokens
 import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
 
-/**
- * Hosts one Commerce capability as a real E11 destination.
- *
- * Each capability keeps its own workflow/content, while the presentation shell
- * stays on WooGit's shared Glass design system. Barcode/SKU has a dedicated
- * screen because it is a scan-first workflow rather than a generic feature card.
- */
 @Composable
 internal fun CommerceFeatureRouteScreen(
     storeId: StoreId,
@@ -38,19 +32,10 @@ internal fun CommerceFeatureRouteScreen(
     LaunchedEffect(storeId) { vm.load() }
 
     if (feature == CommerceFeature.BARCODE) {
-        BarcodeScannerScreen(
-            state = state,
-            onResolve = vm::resolveBarcode,
-            onProduct = onOpenProduct,
-            onBack = onBack,
-        )
+        BarcodeScannerScreen(state = state, onResolve = vm::resolveBarcode, onProduct = onOpenProduct, onBack = onBack)
     } else {
         GlassScaffold {
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = com.samanramezani1377.woogit.presentation.GlassTokens.spacingSm),
-            ) {
+            Box(Modifier.fillMaxSize().padding(horizontal = GlassTokens.spacingSm)) {
                 CommerceFeaturePage(
                     feature = feature,
                     state = state,
@@ -62,7 +47,6 @@ internal fun CommerceFeatureRouteScreen(
                     onBulkCoupon = vm::bulkCouponAmount,
                     onInvoice = vm::prepareInvoice,
                     onProduct = onOpenProduct,
-                    onOrder = onOpenOrder,
                 )
             }
         }
