@@ -65,7 +65,24 @@ The App must never silently treat an operational session as a billing session or
 
 `BillingClient.status -> expired -> E11AppNavigation billingLocked -> SubscriptionExpiredScreen -> plans/status -> checkout -> payment result -> status -> activateOperationalSession`
 
-## 6. AI Agent execution
+## 6. Commerce feature execution
+
+Commerce features use the existing authenticated WooCommerce transport rather than introducing a second store credential/session path:
+
+`Commerce UI/ViewModel -> WooCommerceClientProvider.commerceClient -> WooCommerceCommerceApi -> BackendClient.forward -> /wp-json/wc/v3/*`
+
+The commerce API currently covers:
+
+- Customers: list, detail, create, update and delete.
+- Coupons: list, detail, create, update and delete.
+- Bulk order status updates through `/orders/batch` with per-order result mapping.
+- Barcode resolution against the local product/order model; the Android scanner uses CameraX + ML Kit and returns the scanned value to the commerce flow.
+- Inventory and analytics calculations through `CommerceFeatureEngine`, using existing product/order models as inputs.
+- Invoice document construction through `InvoiceDocumentFactory`; Android PDF bytes are rendered by `InvoicePdfRenderer` without changing the backend contract.
+
+Commerce writes continue to use the current BackendClient/session/credential path and idempotency support. The WooCommerce REST API v3 batch endpoints are bounded operations; callers must preserve per-entity outcomes rather than assuming that a batch response is all-or-nothing.
+
+## 7. AI Agent execution
 
 The AI write flow is confirmation-first and keeps the model as the source of the user-facing result:
 
@@ -83,27 +100,27 @@ The model must report every item in its normal assistant response. The UI displa
 
 `AiWorkingMemoryStore` is the recovery/audit source for execution state. It records batch item status and result, preserves `IN_FLIGHT` checkpoints, and prevents a resumed execution from treating an interrupted write as verified without checking the real store state first.
 
-## 7. AI image operations
+## 8. AI image operations
 
 `WooGitToolExecutor.products_image_add` accepts an `AiAttachment`, uploads it through the WooGit media path, updates the product, then rereads the product and requires verification before returning success. A batch image operation therefore follows the same `execute -> reread -> verified` rule as other writes.
 
 A single selected image may intentionally be reused for multiple product image-add calls. Multiple simultaneous source images must not be guessed or silently distributed across products when the mapping is ambiguous; the Agent prompt requires clarification rather than unsafe attachment reuse. The executor currently consumes the first attachment supplied to an image-add call, so explicit mapping is required before introducing automatic multi-image fan-out.
 
-## 8. Reauthentication invariant
+## 9. Reauthentication invariant
 
 When an authenticated request receives a session-invalidating response, the App may remove the affected session and invoke the configured reauthentication path. Reauthentication must call the existing verification/login contract; it must not fabricate or locally mint a session.
 
-## 9. Logout / disconnect
+## 10. Logout / disconnect
 
 `Logout/Disconnect -> revoke operational session -> revoke billing session -> clear local session/credential state according to disconnect policy -> return to connection/login state`
 
 Both session classes are part of the disconnect contract.
 
-## 10. Background operations
+## 11. Background operations
 
 Background workers include order polling, product catalog synchronization, announcements and force-update checks. Any worker that reaches WooCommerce through the backend must resolve the correct store/session context before issuing an operational request.
 
-## 11. Source-of-truth files
+## 12. Source-of-truth files
 
 - App session contract: `data/.../BackendSessionStore.kt` and `app/.../security/AndroidBackendSessionStore.kt`.
 - Backend transport: `BackendClient.kt`.
@@ -112,6 +129,9 @@ Background workers include order polling, product catalog synchronization, annou
 - Navigation/billing gate: `E11AppNavigation.kt`.
 - Dashboard concurrency/readiness: `DashboardViewModel.kt`.
 - Credential persistence: `AndroidSecureCredentialStore.kt`.
+- Commerce transport: `data/.../CommerceWooCommerceApi.kt`, `WooCommerceClientProvider.kt`.
+- Commerce domain calculations: `core/.../commerce/CommerceFeatureEngine.kt`, `BarcodeResolver.kt`, `InvoiceDocumentFactory.kt`.
+- Commerce Android integration: `app/.../commerce/BarcodeScannerScreen.kt`, `InvoicePdfRenderer.kt`.
 - AI execution: `presentation/.../ai/AiAgent.kt`, `AiWorkingMemoryStore.kt`, `AiViewModel.kt`.
 - AI tool execution: `presentation/.../ai/WooGitToolExecutor.kt`.
 - AI confirmation UI: `presentation/.../ai/AiScreen.kt`.
