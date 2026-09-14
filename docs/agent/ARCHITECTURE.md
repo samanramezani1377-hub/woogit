@@ -68,20 +68,24 @@ The App must never silently treat an operational session as a billing session or
 
 ## 6. Commerce feature execution
 
-Commerce features use the existing authenticated WooCommerce transport rather than introducing a second store credential/session path:
+Commerce is now a real E11 navigation surface rather than an unconnected route constant:
 
-`Commerce UI/ViewModel -> CommerceRuntime.provider -> WooCommerceClientProvider.commerceClient -> WooCommerceCommerceApi -> BackendClient.forward -> /wp-json/wc/v3/*`
+`Dashboard quick action -> E11Routes.COMMERCE -> CommerceCenterScreen -> CommerceViewModel -> CommerceRuntime.provider -> WooCommerceClientProvider.commerceClient -> WooCommerceCommerceApi -> BackendClient.forward -> /wp-json/wc/v3/*`
 
-The commerce API currently covers:
+The Commerce center exposes seven functional flows:
 
-- Customers: list, detail, create, update and delete.
-- Coupons: list, detail, create, update and delete.
-- Bulk order status updates through `/orders/batch` with per-order result mapping.
-- Barcode resolution against the local product/order model; the Android scanner uses CameraX + ML Kit and returns the scanned value to the commerce flow.
-- Inventory and analytics calculations through `CommerceFeatureEngine`, using existing product/order models as inputs.
-- Invoice document construction through `InvoiceDocumentFactory`; Android PDF bytes are rendered by `InvoicePdfRenderer` without changing the backend contract.
+- **Barcode / SKU Scanner:** CameraX + ML Kit returns a barcode to the Commerce screen; `BarcodeResolver` resolves product SKU or order number against loaded store data.
+- **Bulk Order Status:** selected orders are planned by `CommerceFeatureEngine` and sent through `/orders/batch`, bounded to 100 entities.
+- **Bulk Customer Operations:** selected customers can be updated through the WooCommerce customers batch endpoint using write-only DTOs.
+- **Inventory Filtering:** product name/SKU, low-stock and out-of-stock filtering is calculated by `CommerceFeatureEngine`.
+- **Customer Aggregation:** order-derived customer counts/spend are calculated from the existing order model.
+- **Coupon Usage Analytics / Bulk Coupon Operations:** coupon usage is aggregated from orders and selected coupons can be batch-updated through `/coupons/batch`.
+- **Advanced Sales Analytics:** completed sales, completed/total orders, average order value, status counts, top products/customers and inventory coverage are calculated from the current product/order dataset.
+- **Invoice:** `InvoiceDocumentFactory` creates the domain invoice and the presentation-layer `InvoicePdfRenderer` renders it; the UI uses Android `CreateDocument` to save the generated PDF.
 
-Commerce writes continue to use the current BackendClient/session/credential path and idempotency support. The WooCommerce REST API v3 batch endpoints are bounded operations; callers must preserve per-entity outcomes rather than assuming that a batch response is all-or-nothing.
+Commerce read DTOs and write DTOs remain separate so WooCommerce read-only fields are not sent back in mutations. Batch callers preserve the WooCommerce v3 limit of 100 items.
+
+No Commerce feature creates a second credential or session path. It uses the same authenticated `WooCommerceClientProvider` installed by `MainActivity`.
 
 ## 7. AI Agent execution
 
@@ -131,12 +135,12 @@ Background workers include order polling, product catalog synchronization, annou
 - Dashboard concurrency/readiness: `DashboardViewModel.kt`.
 - Credential persistence: `AndroidSecureCredentialStore.kt`.
 - Commerce runtime: `presentation/.../commerce/CommerceRuntime.kt`.
+- Commerce navigation/UI: `presentation/.../commerce/CommerceCenterScreen.kt`, `CommerceViewModel.kt`.
 - Commerce transport: `data/.../CommerceWooCommerceApi.kt`, `WooCommerceClientProvider.kt`.
 - Commerce domain calculations: `core/.../commerce/CommerceFeatureEngine.kt`, `BarcodeResolver.kt`, `InvoiceDocumentFactory.kt`.
-- Commerce Android integration: `app/.../commerce/BarcodeScannerScreen.kt`, `InvoicePdfRenderer.kt`.
+- Commerce Android scanner: `app/.../commerce/BarcodeScannerScreen.kt`, `CommerceScannerActivity.kt`.
+- Commerce PDF rendering: `presentation/.../commerce/InvoicePdfRenderer.kt`.
 - AI execution: `presentation/.../ai/AiAgent.kt`, `AiWorkingMemoryStore.kt`, `AiViewModel.kt`.
 - AI tool execution: `presentation/.../ai/WooGitToolExecutor.kt`.
 - AI confirmation UI: `presentation/.../ai/AiScreen.kt`.
 - AI safety/reporting rules: `presentation/.../ai/AiAgentPrompt.kt`.
-
-Always verify current paths/symbols before editing; this map is an index, not a substitute for source inspection.
