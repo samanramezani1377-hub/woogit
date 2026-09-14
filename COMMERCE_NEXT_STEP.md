@@ -1,0 +1,1 @@
+The commerce feature implementation must continue by wiring these contracts into the existing modules after verifying the exact current module graph and persistence schema. This file is intentionally temporary implementation guidance and must be removed once the feature wiring is complete.
