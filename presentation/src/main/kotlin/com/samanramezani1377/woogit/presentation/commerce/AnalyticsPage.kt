@@ -97,8 +97,8 @@ private fun GrowthRow(label: String, value: Double?) {
 
 @Composable
 private fun TrendSection(analytics: AnalyticsSnapshot) {
-    Section("روند فروش", "فروش روزانه سفارش‌های تکمیل‌شده.") { SalesTrendChart(analytics.trend) }
-    Section("روند سفارش‌ها", "تعداد سفارش‌های تکمیل‌شده در هر روز.") { OrderTrendChart(analytics.trend) }
+    Section("روند فروش", "مقایسه روزبه‌روز دوره فعلی با دوره قبل.") { ComparisonTrendChart(analytics.currentTrend, analytics.previousTrend, sales = true) }
+    Section("روند سفارش‌ها", "مقایسه روزبه‌روز تعداد سفارش‌های فعلی با دوره قبل.") { ComparisonTrendChart(analytics.currentTrend, analytics.previousTrend, sales = false) }
 }
 
 @Composable
@@ -109,11 +109,7 @@ private fun CompletionCard(analytics: AnalyticsSnapshot) {
             Spacer(Modifier.height(8.dp))
             ProgressBar(analytics.completionRate / 100.0)
             Spacer(Modifier.height(8.dp))
-            Text(
-                "${analytics.completedOrders} سفارش از ${analytics.totalOrders} سفارش تکمیل شده است.",
-                color = GlassTokens.muted,
-                style = MaterialTheme.typography.bodySmall,
-            )
+            Text("${analytics.completedOrders} سفارش از ${analytics.totalOrders} سفارش تکمیل شده است.", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
         }
     }
 }
@@ -126,13 +122,7 @@ private fun StatusBreakdownCard(analytics: AnalyticsSnapshot) {
         GlassCard(Modifier.fillMaxWidth()) {
             analytics.statusCounts.entries.sortedByDescending { it.value }.forEachIndexed { index, (status, count) ->
                 val share = if (analytics.totalOrders == 0) 0.0 else count * 100.0 / analytics.totalOrders
-                StatusBreakdownRow(
-                    label = status.faLabel(),
-                    count = count,
-                    share = share,
-                    amount = analytics.statusRevenue[status] ?: 0.0,
-                    relative = count.toDouble() / maxCount,
-                )
+                StatusBreakdownRow(status.faLabel(), count, share, analytics.statusRevenue[status] ?: 0.0, count.toDouble() / maxCount)
                 if (index < analytics.statusCounts.size - 1) Spacer(Modifier.height(10.dp))
             }
         }
@@ -162,13 +152,7 @@ private fun ProductBreakdownCard(analytics: AnalyticsSnapshot) {
     Section("محصولات برتر", "رتبه‌بندی بر اساس درآمد و سهم از فروش.") {
         GlassCard(Modifier.fillMaxWidth()) {
             analytics.productAnalytics.take(10).forEachIndexed { index, product ->
-                RankedRow(
-                    rank = index + 1,
-                    title = product.name,
-                    subtitle = "${formatNumber(product.quantity)} عدد",
-                    value = formatNumber(product.revenue),
-                    share = product.sharePercent / 100.0,
-                )
+                RankedRow(index + 1, product.name, "${formatNumber(product.quantity)} عدد", formatNumber(product.revenue), product.sharePercent / 100.0)
                 if (index < analytics.productAnalytics.take(10).lastIndex) Spacer(Modifier.height(10.dp))
             }
         }
@@ -179,23 +163,11 @@ private fun ProductBreakdownCard(analytics: AnalyticsSnapshot) {
 private fun CustomerInsightsCard(analytics: AnalyticsSnapshot) {
     if (analytics.customerAnalytics.isEmpty()) return
     Section("بینش مشتری‌ها", "مشتریان جدید، تکراری و ارزش خرید.") {
-        MetricGrid(
-            listOf(
-                "تعداد مشتریان" to analytics.uniqueCustomers.toString(),
-                "مشتریان جدید" to analytics.newCustomers.toString(),
-                "مشتریان تکراری" to analytics.repeatCustomers.toString(),
-                "میانگین خرید مشتری" to formatNumber(analytics.averageCustomerSpend),
-            )
-        )
+        MetricGrid(listOf("تعداد مشتریان" to analytics.uniqueCustomers.toString(), "مشتریان جدید" to analytics.newCustomers.toString(), "مشتریان تکراری" to analytics.repeatCustomers.toString(), "میانگین خرید مشتری" to formatNumber(analytics.averageCustomerSpend)))
         Spacer(Modifier.height(8.dp))
         GlassCard(Modifier.fillMaxWidth()) {
             analytics.customerAnalytics.take(10).forEachIndexed { index, customer ->
-                RankedRow(
-                    rank = index + 1,
-                    title = customer.name + if (customer.isNew) " • جدید" else "",
-                    subtitle = "${customer.orderCount} سفارش",
-                    value = formatNumber(customer.totalSpent),
-                )
+                RankedRow(index + 1, customer.name + if (customer.isNew) " • جدید" else "", "${customer.orderCount} سفارش", formatNumber(customer.totalSpent))
                 if (index < analytics.customerAnalytics.take(10).lastIndex) Spacer(Modifier.height(10.dp))
             }
         }
@@ -227,11 +199,7 @@ private fun CouponPerformanceCard(analytics: AnalyticsSnapshot) {
                     Spacer(Modifier.height(5.dp))
                     ProgressBar(coupon.generatedSales / maxSales)
                     Spacer(Modifier.height(3.dp))
-                    Text(
-                        "${coupon.usageCount} استفاده • تخفیف ${formatNumber(coupon.discountTotal)}",
-                        color = GlassTokens.muted,
-                        style = MaterialTheme.typography.labelSmall,
-                    )
+                    Text("${coupon.usageCount} استفاده • تخفیف ${formatNumber(coupon.discountTotal)}", color = GlassTokens.muted, style = MaterialTheme.typography.labelSmall)
                 }
                 if (index < analytics.couponAnalytics.take(10).lastIndex) Spacer(Modifier.height(10.dp))
             }
@@ -243,17 +211,17 @@ private fun CouponPerformanceCard(analytics: AnalyticsSnapshot) {
 private fun InventoryHealthCard(analytics: AnalyticsSnapshot) {
     Section("سلامت موجودی", "وضعیت کلی موجودی محصولات.") {
         GlassCard(Modifier.fillMaxWidth()) {
-            HealthRow("کل محصولات", analytics.inventoryProducts, analytics.inventoryProducts.coerceAtLeast(1), false)
+            HealthRow("کل محصولات", analytics.inventoryProducts, analytics.inventoryProducts.coerceAtLeast(1))
             Spacer(Modifier.height(10.dp))
-            HealthRow("موجودی کم", analytics.lowStockProducts, analytics.inventoryProducts.coerceAtLeast(1), true)
+            HealthRow("موجودی کم", analytics.lowStockProducts, analytics.inventoryProducts.coerceAtLeast(1))
             Spacer(Modifier.height(10.dp))
-            HealthRow("ناموجود", analytics.outOfStockProducts, analytics.inventoryProducts.coerceAtLeast(1), true)
+            HealthRow("ناموجود", analytics.outOfStockProducts, analytics.inventoryProducts.coerceAtLeast(1))
         }
     }
 }
 
 @Composable
-private fun HealthRow(label: String, value: Int, total: Int, warning: Boolean) {
+private fun HealthRow(label: String, value: Int, total: Int) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.weight(1f)) {
             Text(label, fontWeight = FontWeight.SemiBold)
@@ -270,20 +238,8 @@ private fun ProgressBar(fraction: Double) {
     val safe = fraction.coerceIn(0.0, 1.0).toFloat()
     Canvas(Modifier.fillMaxWidth().height(7.dp)) {
         val radius = size.height / 2f
-        drawRoundRect(
-            color = GlassTokens.divider,
-            topLeft = Offset.Zero,
-            size = androidx.compose.ui.geometry.Size(size.width, size.height),
-            cornerRadius = androidx.compose.ui.geometry.CornerRadius(radius, radius),
-        )
-        if (safe > 0f) {
-            drawRoundRect(
-                color = MaterialTheme.colorScheme.primary,
-                topLeft = Offset.Zero,
-                size = androidx.compose.ui.geometry.Size(size.width * safe, size.height),
-                cornerRadius = androidx.compose.ui.geometry.CornerRadius(radius, radius),
-            )
-        }
+        drawRoundRect(color = GlassTokens.divider, topLeft = Offset.Zero, size = androidx.compose.ui.geometry.Size(size.width, size.height), cornerRadius = androidx.compose.ui.geometry.CornerRadius(radius, radius))
+        if (safe > 0f) drawRoundRect(color = MaterialTheme.colorScheme.primary, topLeft = Offset.Zero, size = androidx.compose.ui.geometry.Size(size.width * safe, size.height), cornerRadius = androidx.compose.ui.geometry.CornerRadius(radius, radius))
     }
 }
 
@@ -294,13 +250,71 @@ private fun RankedRow(rank: Int, title: String, subtitle: String, value: String,
         Column(Modifier.weight(1f)) {
             Text(title, fontWeight = FontWeight.SemiBold)
             Text(subtitle, color = GlassTokens.muted, style = MaterialTheme.typography.labelSmall)
-            if (share != null) {
-                Spacer(Modifier.height(5.dp))
-                ProgressBar(share)
-            }
+            if (share != null) { Spacer(Modifier.height(5.dp)); ProgressBar(share) }
         }
         Spacer(Modifier.width(10.dp))
         Text(value, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelSmall)
+    }
+}
+
+@Composable
+private fun ComparisonTrendChart(current: List<AnalyticsTrendPoint>, previous: List<AnalyticsTrendPoint>, sales: Boolean) {
+    if (current.isEmpty()) return
+    val currentValues = if (sales) current.map { it.sales } else current.map { it.orders.toDouble() }
+    val previousValues = if (sales) previous.map { it.sales } else previous.map { it.orders.toDouble() }
+    val count = minOf(currentValues.size, previousValues.size)
+    if (count == 0) return
+    val max = maxOf(currentValues.take(count).maxOrNull() ?: 0.0, previousValues.take(count).maxOrNull() ?: 0.0).takeIf { it > 0 } ?: 1.0
+    val currentColor = MaterialTheme.colorScheme.primary
+    val previousColor = MaterialTheme.colorScheme.secondary
+    GlassCard(Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
+            LegendDot(currentColor, "دوره فعلی")
+            LegendDot(previousColor, "دوره قبل")
+        }
+        Spacer(Modifier.height(10.dp))
+        Canvas(Modifier.fillMaxWidth().height(if (sales) 190.dp else 170.dp)) {
+            val hp = 14.dp.toPx()
+            val vp = 18.dp.toPx()
+            val width = size.width - hp * 2
+            val height = size.height - vp * 2
+            val divisor = (count - 1).coerceAtLeast(1)
+            fun drawSeries(values: List<Double>, color: androidx.compose.ui.graphics.Color) {
+                val path = Path()
+                values.take(count).forEachIndexed { index, value ->
+                    val x = hp + width * index / divisor
+                    val y = vp + height - (value / max).toFloat() * height
+                    if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                }
+                drawPath(path, color = color, style = Stroke(4.dp.toPx(), cap = StrokeCap.Round))
+                values.take(count).forEachIndexed { index, value ->
+                    val x = hp + width * index / divisor
+                    val y = vp + height - (value / max).toFloat() * height
+                    drawCircle(color, 3.dp.toPx(), Offset(x, y))
+                }
+            }
+            drawSeries(currentValues, currentColor)
+            drawSeries(previousValues, previousColor)
+        }
+        TrendLabels(current)
+    }
+}
+
+@Composable
+private fun LegendDot(color: androidx.compose.ui.graphics.Color, label: String) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Canvas(Modifier.size(9.dp)) { drawCircle(color, radius = size.minDimension / 2f) }
+        Text(label, color = GlassTokens.muted, style = MaterialTheme.typography.labelSmall)
+    }
+}
+
+@Composable
+private fun TrendLabels(points: List<AnalyticsTrendPoint) {
+    if (points.isEmpty()) return
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(points.first().label, color = GlassTokens.muted, style = MaterialTheme.typography.labelSmall)
+        Text(points[points.size / 2].label, color = GlassTokens.muted, style = MaterialTheme.typography.labelSmall)
+        Text(points.last().label, color = GlassTokens.muted, style = MaterialTheme.typography.labelSmall)
     }
 }
 
@@ -309,80 +323,9 @@ private fun RangeSelector(selected: AnalyticsRange, onSelect: (AnalyticsRange) -
     GlassCard(Modifier.fillMaxWidth()) {
         Text("بازه تحلیل", fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(8.dp))
-        Row(
-            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-        ) {
-            AnalyticsRange.values().forEach { range ->
-                FilterChip(
-                    selected = range == selected,
-                    onClick = { onSelect(range) },
-                    label = { Text(range.label) },
-                )
-            }
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            AnalyticsRange.values().forEach { range -> FilterChip(selected = range == selected, onClick = { onSelect(range) }, label = { Text(range.label) }) }
         }
-    }
-}
-
-@Composable
-private fun SalesTrendChart(points: List<AnalyticsTrendPoint>) {
-    if (points.isEmpty()) return
-    val max = points.maxOfOrNull { it.sales }?.takeIf { it > 0 } ?: 1.0
-    val color = MaterialTheme.colorScheme.primary
-    GlassCard(Modifier.fillMaxWidth()) {
-        Canvas(Modifier.fillMaxWidth().height(190.dp)) {
-            val hp = 14.dp.toPx()
-            val vp = 18.dp.toPx()
-            val width = size.width - hp * 2
-            val height = size.height - vp * 2
-            val divisor = points.lastIndex.coerceAtLeast(1)
-            val path = Path()
-            points.forEachIndexed { index, point ->
-                val x = hp + width * index / divisor
-                val y = vp + height - (point.sales / max).toFloat() * height
-                if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
-            }
-            drawPath(path, color = color, style = Stroke(4.dp.toPx(), cap = StrokeCap.Round))
-            points.forEachIndexed { index, point ->
-                val x = hp + width * index / divisor
-                val y = vp + height - (point.sales / max).toFloat() * height
-                drawCircle(color, 3.dp.toPx(), Offset(x, y))
-            }
-        }
-        TrendLabels(points)
-    }
-}
-
-@Composable
-private fun OrderTrendChart(points: List<AnalyticsTrendPoint>) {
-    if (points.isEmpty()) return
-    val max = points.maxOfOrNull { it.orders }?.takeIf { it > 0 } ?: 1
-    val color = MaterialTheme.colorScheme.secondary
-    GlassCard(Modifier.fillMaxWidth()) {
-        Canvas(Modifier.fillMaxWidth().height(160.dp)) {
-            val hp = 14.dp.toPx()
-            val vp = 18.dp.toPx()
-            val width = size.width - hp * 2
-            val height = size.height - vp * 2
-            val divisor = points.lastIndex.coerceAtLeast(1)
-            val path = Path()
-            points.forEachIndexed { index, point ->
-                val x = hp + width * index / divisor
-                val y = vp + height - (point.orders.toFloat() / max) * height
-                if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
-            }
-            drawPath(path, color = color, style = Stroke(4.dp.toPx(), cap = StrokeCap.Round))
-        }
-        TrendLabels(points)
-    }
-}
-
-@Composable
-private fun TrendLabels(points: List<AnalyticsTrendPoint>) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(points.first().label, color = GlassTokens.muted, style = MaterialTheme.typography.labelSmall)
-        Text(points[points.size / 2].label, color = GlassTokens.muted, style = MaterialTheme.typography.labelSmall)
-        Text(points.last().label, color = GlassTokens.muted, style = MaterialTheme.typography.labelSmall)
     }
 }
 
@@ -413,6 +356,4 @@ private fun formatNumber(value: Double): String {
     return sign + digits.reversed().chunked(3).joinToString(",").reversed()
 }
 
-private fun formatPercent(value: Double?): String = value?.let {
-    "${if (it > 0) "+" else ""}${it.roundToInt()}٪"
-} ?: "—"
+private fun formatPercent(value: Double?): String = value?.let { "${if (it > 0) "+" else ""}${it.roundToInt()}٪" } ?: "—"
