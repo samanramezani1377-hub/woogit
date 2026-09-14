@@ -121,8 +121,8 @@ internal fun InventoryPage(
                             Modifier.fillMaxWidth().clickable(enabled = !isEditing) { onProduct(product.id.value) },
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            ProductThumbnail(product)
-                            Spacer(Modifier.size(10.dp))
+                            InventoryProductImage(product)
+                            Spacer(Modifier.size(12.dp))
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                 Text(product.name, fontWeight = FontWeight.SemiBold)
                                 Text(
@@ -195,31 +195,34 @@ internal fun InventoryPage(
 }
 
 @Composable
-private fun ProductThumbnail(product: Product) {
-    val image = product.images.firstOrNull { it.src.isNotBlank() }
-    Surface(
-        modifier = Modifier
-            .size(58.dp)
-            .clip(RoundedCornerShape(14.dp)),
-        color = GlassTokens.card,
-    ) {
-        if (image != null) {
-            AsyncImage(
-                model = image.src,
-                contentDescription = image.alt ?: product.name,
-                modifier = Modifier.fillMaxWidth(),
-                contentScale = ContentScale.Crop,
-            )
-        } else {
-            Column(
-                Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                Text("—", color = GlassTokens.muted, fontWeight = FontWeight.Bold)
-            }
+private fun InventoryProductImage(product: Product) {
+    val imageUrl = product.images.firstOrNull()?.src
+    if (imageUrl.isNullOrBlank()) {
+        Surface(
+            modifier = Modifier.size(58.dp),
+            shape = RoundedCornerShape(14.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+        ) {
+            BoxPlaceholder()
         }
+    } else {
+        AsyncImage(
+            model = imageUrl,
+            contentDescription = product.name,
+            modifier = Modifier.size(58.dp).clip(RoundedCornerShape(14.dp)),
+            contentScale = ContentScale.Crop,
+        )
     }
+}
+
+@Composable
+private fun BoxPlaceholder() {
+    BoxPlaceholderMark()
+}
+
+@Composable
+private fun BoxPlaceholderMark() {
+    Surface(modifier = Modifier.fillMaxWidth().height(58.dp), color = MaterialTheme.colorScheme.surfaceVariant) {}
 }
 
 private enum class InventoryFilter { ALL, IN, LOW, OUT }
@@ -235,7 +238,7 @@ private fun InventorySummaryRow(total: Int, low: Int, out: Int) {
 
 @Composable
 private fun InventoryMetric(label: String, value: Int, modifier: Modifier = Modifier) {
-    Surface(modifier = modifier, shape = RoundedCornerShape(14.dp), color = GlassTokens.card) {
+    Surface(modifier = modifier, shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
         Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(value.toString(), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Text(label, color = GlassTokens.muted, style = MaterialTheme.typography.labelSmall)
