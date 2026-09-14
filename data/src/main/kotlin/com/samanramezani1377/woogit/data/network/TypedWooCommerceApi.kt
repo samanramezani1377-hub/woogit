@@ -71,7 +71,7 @@ class TypedWooCommerceApi(private val raw: WooCommerceApi) {
     suspend fun media(b:String,p:Int,n:Int,s:String?) = decode(raw.listMedia(b,p,n,s)) { typedJson.decodeFromString<List<WooMediaDto>>(it) }
     suspend fun downloadMedia(b:String,sourceUrl:String) = runCatching { raw.downloadMedia(b,sourceUrl) }
     suspend fun uploadMedia(b:String,f:String,bytes:ByteArray,m:String,idempotencyKey:String?=null) = decode(raw.uploadMedia(b,f,bytes,m,idempotencyKey)) { typedJson.decodeFromString<WooMediaDto>(it) }
-    suspend fun deleteMedia(b:String,id:Long,idempotencyKey:String?=null) = decode(raw.deleteMedia(b,idempotencyKey)) { Unit }
+    suspend fun deleteMedia(b:String,id:Long,idempotencyKey:String?=null) = decode(raw.deleteMedia(b,id,true,idempotencyKey)) { Unit }
 }
 
 data class HttpApiException(val statusCode:Int,val body:String):Exception("WooCommerce HTTP $statusCode")
