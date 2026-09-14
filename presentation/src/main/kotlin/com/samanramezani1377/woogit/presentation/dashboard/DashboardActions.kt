@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.dp
 internal fun DashboardActions(
     onOrdersClick: () -> Unit,
     onProductsClick: () -> Unit,
+    onBarcodeClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onSyncClick: () -> Unit,
     onConflictsClick: () -> Unit,
@@ -24,7 +25,8 @@ internal fun DashboardActions(
         Text("اقدامات سریع", style = MaterialTheme.typography.titleMedium)
         DashboardQuickAction("سفارش‌ها", "مدیریت سفارش‌های فروشگاه", onClick = onOrdersClick)
         DashboardQuickAction("محصولات", "مدیریت محصولات و موجودی", onClick = onProductsClick)
-        DashboardQuickAction("Commerce", "بارکد، عملیات گروهی، تحلیل و فاکتور", onClick = onCommerceClick)
+        DashboardQuickAction("بارکد و SKU", "جستجوی سریع محصول یا سفارش با بارکد و SKU", onClick = onBarcodeClick)
+        DashboardQuickAction("تجارت", "مشتریان، تحلیل فروش و کوپن‌ها", onClick = onCommerceClick)
         DashboardQuickAction("همگام‌سازی", "همگام‌سازی داده‌های فروشگاه", onClick = onSyncClick)
         DashboardQuickAction("تعارض‌ها", "بررسی و حل تعارض‌های داده", onClick = onConflictsClick)
         DashboardQuickAction("تنظیمات فروشگاه", "اتصال، حساب و مدیریت فروشگاه", onClick = onSettingsClick)
