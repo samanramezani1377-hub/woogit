@@ -69,6 +69,7 @@ object CommerceFeatureEngine {
         val previousOrders = orders.filter { it.analyticsDate()?.let { date -> date >= previousStart && date < currentStart } == true }
         val completed = currentOrders.filter { it.status == OrderStatus.COMPLETED }
         val previousCompleted = previousOrders.filter { it.status == OrderStatus.COMPLETED }
+        val allCompleted = orders.filter { it.status == OrderStatus.COMPLETED }
         val sales = completed.sumOf { it.total?.toDoubleOrNull() ?: 0.0 }
         val previousSales = previousCompleted.sumOf { it.total?.toDoubleOrNull() ?: 0.0 }
         val averageOrderValue = if (completed.isEmpty()) 0.0 else sales / completed.size
@@ -82,7 +83,7 @@ object CommerceFeatureEngine {
             rows.sumOf { it.total?.toDoubleOrNull() ?: 0.0 }
         }
         val productMap = products.associateBy { it.id.value }
-        val productAnalytics = completed.flatMap { it.items }
+        val allProductAnalytics = completed.flatMap { it.items }
             .groupBy { it.productId?.value ?: it.name }
             .map { (id, items) ->
                 val quantity = items.sumOf { it.quantity }
@@ -90,21 +91,26 @@ object CommerceFeatureEngine {
                 AnalyticsProductInsight(id, productMap[id]?.name ?: items.firstOrNull()?.name ?: id, quantity, revenue, 0.0)
             }
             .sortedByDescending { it.revenue }
+        val totalProductRevenue = allProductAnalytics.sumOf { it.revenue }
+        val productAnalytics = allProductAnalytics
             .take(10)
-            .let { rows ->
-                val total = rows.sumOf { it.revenue }
-                rows.map { it.copy(sharePercent = if (total == 0.0) 0.0 else it.revenue * 100.0 / total) }
-            }
+            .map { it.copy(sharePercent = if (totalProductRevenue == 0.0) 0.0 else it.revenue * 100.0 / totalProductRevenue) }
 
         val customerRows = completed.mapNotNull { order ->
             val customer = order.customer ?: return@mapNotNull null
             val key = customer.id?.value ?: customer.email ?: customer.name
             key to order
         }.groupBy { it.first }
+        val customerFirstDates = allCompleted.mapNotNull { order ->
+            val customer = order.customer ?: return@mapNotNull null
+            val key = customer.id?.value ?: customer.email ?: customer.name
+            val date = order.analyticsDate() ?: return@mapNotNull null
+            key to date
+        }.groupBy({ it.first }, { it.second }).mapValues { (_, dates) -> dates.minOrNull() }
         val customerAnalytics = customerRows.map { (key, rows) ->
             val spent = rows.sumOf { it.second.total?.toDoubleOrNull() ?: 0.0 }
-            val firstDate = rows.mapNotNull { it.second.analyticsDate() }.minOrNull()
-            val newCustomer = firstDate?.let { it >= currentStart && it <= now } == true
+            val firstDate = customerFirstDates[key]
+            val newCustomer = firstDate?.let { it >= currentStart && it < now } == true
             AnalyticsCustomerInsight(
                 key = key,
                 name = rows.first().second.customer?.name.orEmpty().ifBlank { "مشتری $key" },
