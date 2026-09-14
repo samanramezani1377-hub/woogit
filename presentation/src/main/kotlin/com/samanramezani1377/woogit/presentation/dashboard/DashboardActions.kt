@@ -19,6 +19,7 @@ internal fun DashboardActions(
     onConflictsClick: () -> Unit,
     onCommerceClick: () -> Unit = {},
     onBarcodeClick: () -> Unit = onCommerceClick,
+    onAnalyticsClick: () -> Unit = onCommerceClick,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier.fillMaxWidth().padding(vertical = 2.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -26,7 +27,8 @@ internal fun DashboardActions(
         DashboardQuickAction("سفارش‌ها", "مدیریت سفارش‌های فروشگاه", onClick = onOrdersClick)
         DashboardQuickAction("محصولات", "مدیریت محصولات و موجودی", onClick = onProductsClick)
         DashboardQuickAction("بارکد و SKU", "جستجوی سریع محصول یا سفارش با بارکد و SKU", onClick = onBarcodeClick)
-        DashboardQuickAction("تجارت", "مشتریان، تحلیل فروش و کوپن‌ها", onClick = onCommerceClick)
+        DashboardQuickAction("تحلیل فروش", "بررسی فروش، درآمد، سفارش‌ها و شاخص‌های عملکرد فروشگاه", onClick = onAnalyticsClick)
+        DashboardQuickAction("تجارت", "مدیریت مشتریان و کوپن‌ها", onClick = onCommerceClick)
         DashboardQuickAction("همگام‌سازی", "همگام‌سازی داده‌های فروشگاه", onClick = onSyncClick)
         DashboardQuickAction("تعارض‌ها", "بررسی و حل تعارض‌های داده", onClick = onConflictsClick)
         DashboardQuickAction("تنظیمات فروشگاه", "اتصال، حساب و مدیریت فروشگاه", onClick = onSettingsClick)
