@@ -2,6 +2,7 @@ package com.samanramezani1377.woogit
 
 import android.content.Context
 import com.samanramezani1377.woogit.background.ForceUpdateController
+import com.samanramezani1377.woogit.background.OrderCatalogSyncWorker
 import com.samanramezani1377.woogit.background.OrderPollingWorker
 import com.samanramezani1377.woogit.background.ProductCatalogSyncWorker
 import com.samanramezani1377.woogit.debug.AppTechnicalErrorReporter
@@ -147,7 +148,19 @@ class AppComposition(context: Context) {
         restoredStoreId?.let(::startBackgroundWork)
     }
 
-    fun startBackgroundWork(storeId: String) { if (ForceUpdateController.isActive(appContext)) return; OrderPollingWorker.schedule(appContext, storeId); ProductCatalogSyncWorker.schedule(appContext, storeId) }
-    fun cancelBackgroundWork(storeId: String) { OrderPollingWorker.cancel(appContext, storeId); ProductCatalogSyncWorker.cancel(appContext, storeId) }
+    fun startBackgroundWork(storeId: String) {
+        if (ForceUpdateController.isActive(appContext)) return
+        OrderPollingWorker.schedule(appContext, storeId)
+        OrderCatalogSyncWorker.schedule(appContext, storeId)
+        OrderCatalogSyncWorker.scheduleNow(appContext, storeId)
+        ProductCatalogSyncWorker.schedule(appContext, storeId)
+    }
+
+    fun cancelBackgroundWork(storeId: String) {
+        OrderPollingWorker.cancel(appContext, storeId)
+        OrderCatalogSyncWorker.cancel(appContext, storeId)
+        ProductCatalogSyncWorker.cancel(appContext, storeId)
+    }
+
     fun close() { BillingRuntime.gateway = null; AnalyticsRuntime.loader = null; CustomerRuntime.listLoader = null; CustomerRuntime.detailLoader = null; announcementCenter.dispose(); scope.cancel(); network.close() }
 }
