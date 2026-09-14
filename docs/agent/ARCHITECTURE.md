@@ -68,24 +68,28 @@ The App must never silently treat an operational session as a billing session or
 
 ## 6. Commerce feature execution
 
-Commerce is now a real E11 navigation surface rather than an unconnected route constant:
+Commerce is a real E11 navigation surface:
 
 `Dashboard quick action -> E11Routes.COMMERCE -> CommerceCenterScreen -> CommerceViewModel -> CommerceRuntime.provider -> WooCommerceClientProvider.commerceClient -> WooCommerceCommerceApi -> BackendClient.forward -> /wp-json/wc/v3/*`
 
-The Commerce center exposes seven functional flows:
+The Commerce center exposes these flows:
 
-- **Barcode / SKU Scanner:** CameraX + ML Kit returns a barcode to the Commerce screen; `BarcodeResolver` resolves product SKU or order number against loaded store data.
-- **Bulk Order Status:** selected orders are planned by `CommerceFeatureEngine` and sent through `/orders/batch`, bounded to 100 entities.
-- **Bulk Customer Operations:** selected customers can be updated through the WooCommerce customers batch endpoint using write-only DTOs.
+- **Barcode / SKU Scanner:** CameraX + ML Kit returns a barcode to the Commerce screen; `BarcodeResolver` resolves product SKU or order number against the loaded catalog/order set.
+- **Bulk Order Status:** selected orders are planned by `CommerceFeatureEngine` and sent in WooCommerce batch requests, chunked at 100 items so the endpoint limit is never exceeded.
+- **Bulk Customer Operations:** selected customers can be updated through the WooCommerce customers batch endpoint using write-only DTOs and 100-item chunks.
 - **Inventory Filtering:** product name/SKU, low-stock and out-of-stock filtering is calculated by `CommerceFeatureEngine`.
-- **Customer Aggregation:** order-derived customer counts/spend are calculated from the existing order model.
-- **Coupon Usage Analytics / Bulk Coupon Operations:** coupon usage is aggregated from orders and selected coupons can be batch-updated through `/coupons/batch`.
-- **Advanced Sales Analytics:** completed sales, completed/total orders, average order value, status counts, top products/customers and inventory coverage are calculated from the current product/order dataset.
+- **Customer Aggregation:** order-derived customer counts/spend are calculated from the complete Commerce order dataset loaded through pagination.
+- **Coupon Usage Analytics / Bulk Coupon Operations:** coupon usage is aggregated from orders and selected coupons can be batch-updated through `/coupons/batch`, chunked at 100.
+- **Advanced Sales Analytics:** completed sales, completed/total orders, average order value, status counts, top products/customers and inventory coverage are calculated from the complete paginated product/order dataset.
 - **Invoice:** `InvoiceDocumentFactory` creates the domain invoice and the presentation-layer `InvoicePdfRenderer` renders it; the UI uses Android `CreateDocument` to save the generated PDF.
 
-Commerce read DTOs and write DTOs remain separate so WooCommerce read-only fields are not sent back in mutations. Batch callers preserve the WooCommerce v3 limit of 100 items.
+Commerce reads are paginated in 100-item pages with a safety ceiling of 10,000 records per entity to avoid unbounded memory/network loops. Results are deduplicated by entity ID before analytics and UI use.
 
-No Commerce feature creates a second credential or session path. It uses the same authenticated `WooCommerceClientProvider` installed by `MainActivity`.
+Commerce read DTOs and write DTOs remain separate so WooCommerce read-only fields are not sent back in mutations. No Commerce feature creates a second credential or session path; it uses the same authenticated `WooCommerceClientProvider` installed by `MainActivity`.
+
+The Commerce UI now exposes loading/retry states, selection counts, select-all/clear-selection actions and confirmation dialogs for destructive/group mutations. Partial batch failures are reported separately from successful operations.
+
+Core Commerce calculations have dedicated common tests in `core/src/commonTest/kotlin/com/samanramezani1377/woogit/core/CommerceFeatureEngineTest.kt` covering barcode classification and sales/status analytics.
 
 ## 7. AI Agent execution
 
@@ -140,6 +144,7 @@ Background workers include order polling, product catalog synchronization, annou
 - Commerce domain calculations: `core/.../commerce/CommerceFeatureEngine.kt`, `BarcodeResolver.kt`, `InvoiceDocumentFactory.kt`.
 - Commerce Android scanner: `app/.../commerce/BarcodeScannerScreen.kt`, `CommerceScannerActivity.kt`.
 - Commerce PDF rendering: `presentation/.../commerce/InvoicePdfRenderer.kt`.
+- Commerce tests: `core/src/commonTest/kotlin/com/samanramezani1377/woogit/core/CommerceFeatureEngineTest.kt`.
 - AI execution: `presentation/.../ai/AiAgent.kt`, `AiWorkingMemoryStore.kt`, `AiViewModel.kt`.
 - AI tool execution: `presentation/.../ai/WooGitToolExecutor.kt`.
 - AI confirmation UI: `presentation/.../ai/AiScreen.kt`.
