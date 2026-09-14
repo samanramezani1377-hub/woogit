@@ -78,13 +78,13 @@ internal fun CommerceCenterScreen(
 
     GlassScaffold(modifier) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            GlassTopBar(title = "مرکز تجارت", subtitle = "ابزارهای مدیریتی فروشگاه در یکجا", actions = { GlassOutlinedButton("بازگشت", onBack) })
+            GlassTopBar(title = "مرکز تجارت", subtitle = "مدیریت مشتریان و کوپن‌های فروشگاه", actions = { GlassOutlinedButton("بازگشت", onBack) })
             GlassCard {
-                GlassText("مدیریت حرفه‌ای فروشگاه", style = MaterialTheme.typography.titleMedium)
-                GlassText("عملیات گروهی، موجودی، تحلیل فروش، مشتریان، کوپن، بارکد و فاکتور را از همین‌جا اجرا کنید.", style = MaterialTheme.typography.bodyMedium.copy(color = GlassTokens.muted))
+                GlassText("مشتریان و کوپن‌ها", style = MaterialTheme.typography.titleMedium)
+                GlassText("مدیریت گروهی مشتریان و کوپن‌ها از این بخش انجام می‌شود. سایر ابزارهای تجارت از صفحات مرتبط خود اپ در دسترس هستند.", style = MaterialTheme.typography.bodyMedium.copy(color = GlassTokens.muted))
             }
             when {
-                state.loading -> GlassLoading("در حال آماده‌سازی ابزارهای تجارت…")
+                state.loading -> GlassLoading("در حال آماده‌سازی…")
                 state.error != null -> GlassErrorState(state.error!!, { vm.load() })
                 else -> LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 110.dp)) {
                     items(featureModels, key = { it.feature.name }) { item ->
@@ -105,11 +105,6 @@ internal fun CommerceCenterScreen(
 }
 
 private val featureModels = listOf(
-    CommerceFeatureUiModel(CommerceFeature.BARCODE, "بارکد و SKU", "پیدا کردن سریع محصول با دوربین یا SKU."),
-    CommerceFeatureUiModel(CommerceFeature.BULK_ORDERS, "عملیات گروهی سفارش‌ها", "انتخاب چند سفارش و تغییر وضعیت هم‌زمان."),
-    CommerceFeatureUiModel(CommerceFeature.INVENTORY, "مدیریت موجودی", "فیلتر کالاهای کم‌موجودی و ناموجود و ورود سریع به محصول."),
     CommerceFeatureUiModel(CommerceFeature.CUSTOMERS, "مدیریت مشتریان", "انتخاب و مدیریت گروهی مشتریان و نقش‌ها."),
-    CommerceFeatureUiModel(CommerceFeature.ANALYTICS, "تحلیل فروش", "نمایش شاخص‌ها و تحلیل عملکرد فروشگاه."),
-    CommerceFeatureUiModel(CommerceFeature.COUPONS, "مدیریت کوپن‌ها", "مدیریت گروهی کوپن‌ها و آمار استفاده."),
-    CommerceFeatureUiModel(CommerceFeature.INVOICE, "فاکتور سفارش", "ساخت فاکتور برای سفارش و آماده‌سازی PDF."),
+    CommerceFeatureUiModel(CommerceFeature.COUPONS, "مدیریت کوپن‌ها", "مدیریت گروهی کوپن‌ها و مشاهده آمار استفاده."),
 )
