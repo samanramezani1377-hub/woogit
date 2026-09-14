@@ -10,7 +10,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalContext
-import com.samanramezani1377.woogit.commerce.CommerceScannerActivity
+
+private const val SCANNER_ACTIVITY_CLASS = "com.samanramezani1377.woogit.commerce.CommerceScannerActivity"
+private const val EXTRA_BARCODE = "commerce_scanner_barcode"
 
 @Composable
 internal fun CommerceCameraScanButton(onDetected: (String) -> Unit) {
@@ -21,7 +23,7 @@ internal fun CommerceCameraScanButton(onDetected: (String) -> Unit) {
     ) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
             result.data
-                ?.getStringExtra(CommerceScannerActivity.EXTRA_BARCODE)
+                ?.getStringExtra(EXTRA_BARCODE)
                 ?.takeIf { it.isNotBlank() }
                 ?.let(latestOnDetected)
         }
@@ -29,9 +31,11 @@ internal fun CommerceCameraScanButton(onDetected: (String) -> Unit) {
 
     Button(
         onClick = {
-            // The scanner Activity is not exported and intentionally has no
-            // external intent-filter, so it must be launched explicitly.
-            launcher.launch(Intent(context, CommerceScannerActivity::class.java))
+            // The scanner Activity lives in the app module, so presentation
+            // must not create a compile-time app -> presentation dependency.
+            // setClassName still creates an explicit, package-local launch.
+            val intent = Intent().setClassName(context, SCANNER_ACTIVITY_CLASS)
+            launcher.launch(intent)
         },
     ) {
         Text("اسکن با دوربین")
