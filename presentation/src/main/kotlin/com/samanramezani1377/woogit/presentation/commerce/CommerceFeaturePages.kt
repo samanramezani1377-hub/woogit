@@ -4,10 +4,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.core.domain.model.OrderStatus
 
 @Composable
 internal fun CommerceFeaturePage(
+    storeId: StoreId,
     feature: CommerceFeature,
     state: CommerceUiState,
     onBack: () -> Unit,
@@ -24,7 +26,7 @@ internal fun CommerceFeaturePage(
             CommerceFeature.BARCODE -> BarcodePage(state, onBarcode, onProduct)
             CommerceFeature.BULK_ORDERS -> BulkOrdersPage(state, onBulkOrder)
             CommerceFeature.INVENTORY -> InventoryPage(state, onInventoryFilter, onProduct)
-            CommerceFeature.CUSTOMERS -> CustomersPage(state)
+            CommerceFeature.CUSTOMERS -> CustomersPage(storeId = storeId, state = state)
             CommerceFeature.ANALYTICS -> Unit
             CommerceFeature.COUPONS -> CouponsPage(state, onBulkCoupon)
             CommerceFeature.INVOICE -> InvoicePage(state, onInvoice)
