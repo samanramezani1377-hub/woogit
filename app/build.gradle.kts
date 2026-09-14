@@ -43,10 +43,22 @@ android {
 kotlin { jvmToolchain(17) }
 
 dependencies {
-    implementation(project(":core")); implementation(project(":data")); implementation(project(":presentation"))
-    implementation(libs.androidx.work.runtime.ktx); implementation(libs.androidx.core.ktx)
-    implementation(platform(libs.androidx.compose.bom)); implementation(libs.androidx.compose.ui); implementation(libs.androidx.compose.material3); implementation(libs.androidx.activity.compose)
+    implementation(project(":core"))
+    implementation(project(":data"))
+    implementation(project(":presentation"))
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.core.ktx)
+    implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.compose.material3)
+    implementation(libs.androidx.activity.compose)
     implementation(libs.kotlinx.datetime)
     implementation(libs.kotlinx.serialization.json)
-    implementation(libs.ktor.client.core); implementation(libs.ktor.client.android)
+    implementation(libs.ktor.client.core)
+    implementation(libs.ktor.client.android)
+    implementation(libs.androidx.camera.core)
+    implementation(libs.androidx.camera.camera2)
+    implementation(libs.androidx.camera.lifecycle)
+    implementation(libs.androidx.camera.view)
+    implementation(libs.mlkit.barcode)
 }
