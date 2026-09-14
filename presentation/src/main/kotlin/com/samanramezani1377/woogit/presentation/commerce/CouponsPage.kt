@@ -49,7 +49,7 @@ internal fun CouponsPage(
             GlassSearchField(
                 value = query,
                 onValueChange = { query = it },
-                placeholder = "کد کوپن",
+                label = "کد کوپن",
                 modifier = Modifier.fillMaxWidth(),
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -62,7 +62,7 @@ internal fun CouponsPage(
             GlassSearchField(
                 value = amount,
                 onValueChange = { amount = it },
-                placeholder = "مبلغ جدید",
+                label = "مبلغ جدید",
                 modifier = Modifier.fillMaxWidth(),
             )
             GlassPrimaryAction("ذخیره تغییرات", { confirm = true }, enabled = selected.isNotEmpty() && amount.isNotBlank())
