@@ -9,7 +9,6 @@ import com.samanramezani1377.woogit.core.domain.commerce.CouponUsageSnapshot
 import com.samanramezani1377.woogit.core.domain.commerce.AnalyticsSnapshot
 import com.samanramezani1377.woogit.core.domain.commerce.CustomerSnapshot
 import com.samanramezani1377.woogit.core.domain.commerce.InvoiceDocumentFactory
-import com.samanramezani1377.woogit.core.domain.entity.EntityId
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.core.domain.error.CoreResult
 import com.samanramezani1377.woogit.core.domain.model.*
@@ -42,20 +41,20 @@ internal class CommerceViewModel(
     private val dependencies: V1PresentationDependencies,
     private val storeId: StoreId,
 ) : ViewModel() {
+    companion object {
+        private const val PAGE_SIZE = 100
+        private const val MAX_READ_ITEMS = 10_000
+        private const val BATCH_SIZE = 100
+    }
+
     private val _state = MutableStateFlow(CommerceUiState())
     val state: StateFlow<CommerceUiState> = _state.asStateFlow()
 
     fun load() = viewModelScope.launch {
-        _state.value = _state.value.copy(loading = true, error = null)
+        _state.value = _state.value.copy(loading = true, error = null, message = null)
         try {
-            val products = when (val result = dependencies.getProducts(storeId, 1, 100, null)) {
-                is CoreResult.Success -> result.value
-                is CoreResult.Failure -> return@launch fail(PresentationErrorMapper.message(result.error))
-            }
-            val orders = when (val result = dependencies.getOrders(storeId, 1, 100, null, null)) {
-                is CoreResult.Success -> result.value
-                is CoreResult.Failure -> return@launch fail(PresentationErrorMapper.message(result.error))
-            }
+            val products = readAllProducts()
+            val orders = readAllOrders()
             val analytics = CommerceFeatureEngine.analytics(orders, products)
             _state.value = _state.value.copy(
                 loading = false,
@@ -72,14 +71,63 @@ internal class CommerceViewModel(
         }
     }
 
+    private suspend fun readAllProducts(): List<Product> {
+        val all = mutableListOf<Product>()
+        var page = 1
+        while (all.size < MAX_READ_ITEMS) {
+            when (val result = dependencies.getProducts(storeId, page, PAGE_SIZE, null)) {
+                is CoreResult.Success -> {
+                    all += result.value
+                    if (result.value.size < PAGE_SIZE) break
+                }
+                is CoreResult.Failure -> throw IllegalStateException(PresentationErrorMapper.message(result.error))
+            }
+            page++
+        }
+        return all.distinctBy { it.id.value }
+    }
+
+    private suspend fun readAllOrders(): List<Order> {
+        val all = mutableListOf<Order>()
+        var page = 1
+        while (all.size < MAX_READ_ITEMS) {
+            when (val result = dependencies.getOrders(storeId, page, PAGE_SIZE, null, null)) {
+                is CoreResult.Success -> {
+                    all += result.value
+                    if (result.value.size < PAGE_SIZE) break
+                }
+                is CoreResult.Failure -> throw IllegalStateException(PresentationErrorMapper.message(result.error))
+            }
+            page++
+        }
+        return all.distinctBy { it.id.value }
+    }
+
     private suspend fun loadCustomersAndCoupons() {
         val provider = CommerceRuntime.provider ?: return
         when (val client = provider.commerceClient(storeId)) {
             is CoreResult.Success -> {
                 val api = client.value.second
-                val customers = api.decodeCustomers(api.listCustomers(1, 100)).getOrElse { emptyList() }
-                val coupons = api.decodeCoupons(api.listCoupons(1, 100)).getOrElse { emptyList() }
-                _state.value = _state.value.copy(customers = customers, coupons = coupons)
+                val customers = mutableListOf<WooCustomerCommerceDto>()
+                val coupons = mutableListOf<WooCouponCommerceDto>()
+                var page = 1
+                while (customers.size < MAX_READ_ITEMS) {
+                    val pageItems = api.decodeCustomers(api.listCustomers(page, PAGE_SIZE)).getOrElse { break }
+                    customers += pageItems
+                    if (pageItems.size < PAGE_SIZE) break
+                    page++
+                }
+                page = 1
+                while (coupons.size < MAX_READ_ITEMS) {
+                    val pageItems = api.decodeCoupons(api.listCoupons(page, PAGE_SIZE)).getOrElse { break }
+                    coupons += pageItems
+                    if (pageItems.size < PAGE_SIZE) break
+                    page++
+                }
+                _state.value = _state.value.copy(
+                    customers = customers.distinctBy { it.id },
+                    coupons = coupons.distinctBy { it.id },
+                )
             }
             is CoreResult.Failure -> Unit
         }
@@ -89,6 +137,7 @@ internal class CommerceViewModel(
         _state.value = _state.value.copy(
             barcodeResult = BarcodeResolver.resolve(value, _state.value.products, _state.value.orders),
             message = null,
+            error = null,
         )
     }
 
@@ -107,21 +156,26 @@ internal class CommerceViewModel(
         if (selectedIds.isEmpty()) return@launch
         val plan = CommerceFeatureEngine.planBulkOrderStatusUpdate(_state.value.orders, selectedIds, target)
         if (plan.isEmpty()) return@launch
-        val client = CommerceRuntime.provider?.commerceClient(storeId)
-        if (client !is CoreResult.Success) return@launch fail("اتصال Commerce برقرار نیست.")
-        val response = client.value.second.batchUpdateOrderStatuses(
-            plan.map { it.orderId.toLongOrNull() to it.targetStatus.name.lowercase() }
-                .mapNotNull { (id, status) -> id?.let { it to status } },
-            "commerce-orders-${System.currentTimeMillis()}",
+        val client = commerceClientOrFail() ?: return@launch
+        var succeeded = 0
+        var failed = 0
+        plan.chunked(BATCH_SIZE).forEach { chunk ->
+            val response = client.batchUpdateOrderStatuses(
+                chunk.mapNotNull { it.orderId.toLongOrNull()?.let { id -> id to it.targetStatus.name.lowercase() } },
+                "commerce-orders-${System.currentTimeMillis()}",
+            )
+            if (response.statusCode in 200..299) succeeded += chunk.size else failed += chunk.size
+        }
+        _state.value = _state.value.copy(
+            message = "وضعیت $succeeded سفارش به‌روزرسانی شد${if (failed > 0) ویرگول("؛ $failed مورد ناموفق") else ""}.",
+            error = if (failed > 0) "بخشی از عملیات سفارش‌ها ناموفق بود." else null,
         )
-        if (response.statusCode !in 200..299) fail("تغییر گروهی وضعیت سفارش‌ها ناموفق بود.")
-        else _state.value = _state.value.copy(message = "وضعیت ${plan.size} سفارش به‌روزرسانی شد.")
         load()
     }
 
     fun bulkCustomerRole(selectedIds: Set<Long>, role: String) = viewModelScope.launch {
-        val client = CommerceRuntime.provider?.commerceClient(storeId)
-        if (client !is CoreResult.Success) return@launch fail("اتصال Commerce برقرار نیست.")
+        if (selectedIds.isEmpty()) return@launch
+        val client = commerceClientOrFail() ?: return@launch
         val updates = _state.value.customers.filter { it.id in selectedIds }.map {
             it.id to WooCustomerCommerceWriteDto(
                 email = it.email,
@@ -134,15 +188,22 @@ internal class CommerceViewModel(
             )
         }
         if (updates.isEmpty()) return@launch
-        val response = client.value.second.batchUpdateCustomers(updates, "commerce-customers-${System.currentTimeMillis()}")
-        if (response.statusCode !in 200..299) fail("عملیات گروهی مشتریان ناموفق بود.")
-        else _state.value = _state.value.copy(message = "${updates.size} مشتری به‌روزرسانی شد.")
+        var succeeded = 0
+        var failed = 0
+        updates.chunked(BATCH_SIZE).forEach { chunk ->
+            val response = client.batchUpdateCustomers(chunk, "commerce-customers-${System.currentTimeMillis()}")
+            if (response.statusCode in 200..299) succeeded += chunk.size else failed += chunk.size
+        }
+        _state.value = _state.value.copy(
+            message = "$succeeded مشتری به‌روزرسانی شد${if (failed > 0) "؛ $failed مورد ناموفق" else ""}.",
+            error = if (failed > 0) "بخشی از عملیات مشتریان ناموفق بود." else null,
+        )
         loadCustomersAndCoupons()
     }
 
     fun bulkCouponAmount(selectedIds: Set<Long>, amount: String) = viewModelScope.launch {
-        val client = CommerceRuntime.provider?.commerceClient(storeId)
-        if (client !is CoreResult.Success) return@launch fail("اتصال Commerce برقرار نیست.")
+        if (selectedIds.isEmpty()) return@launch
+        val client = commerceClientOrFail() ?: return@launch
         val updates = _state.value.coupons.filter { it.id in selectedIds }.map {
             it.id to WooCouponCommerceWriteDto(
                 code = it.code,
@@ -160,9 +221,16 @@ internal class CommerceViewModel(
             )
         }
         if (updates.isEmpty()) return@launch
-        val response = client.value.second.batchUpdateCoupons(updates, "commerce-coupons-${System.currentTimeMillis()}")
-        if (response.statusCode !in 200..299) fail("عملیات گروهی کوپن‌ها ناموفق بود.")
-        else _state.value = _state.value.copy(message = "${updates.size} کوپن به‌روزرسانی شد.")
+        var succeeded = 0
+        var failed = 0
+        updates.chunked(BATCH_SIZE).forEach { chunk ->
+            val response = client.batchUpdateCoupons(chunk, "commerce-coupons-${System.currentTimeMillis()}")
+            if (response.statusCode in 200..299) succeeded += chunk.size else failed += chunk.size
+        }
+        _state.value = _state.value.copy(
+            message = "$succeeded کوپن به‌روزرسانی شد${if (failed > 0) "؛ $failed مورد ناموفق" else ""}.",
+            error = if (failed > 0) "بخشی از عملیات کوپن‌ها ناموفق بود." else null,
+        )
         loadCustomersAndCoupons()
     }
 
@@ -172,6 +240,15 @@ internal class CommerceViewModel(
     }
 
     fun clearMessage() { _state.value = _state.value.copy(message = null, error = null) }
+
+    private suspend fun commerceClientOrFail(): com.samanramezani1377.woogit.data.network.WooCommerceCommerceApi? {
+        return when (val result = CommerceRuntime.provider?.commerceClient(storeId)) {
+            is CoreResult.Success -> result.value.second
+            else -> { fail("اتصال Commerce برقرار نیست."); null }
+        }
+    }
+
+    private fun ویرگول(text: String) = text
 
     private fun fail(message: String) {
         _state.value = _state.value.copy(loading = false, error = message)
