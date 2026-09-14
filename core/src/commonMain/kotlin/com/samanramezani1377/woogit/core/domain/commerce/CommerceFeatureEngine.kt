@@ -142,16 +142,8 @@ object CommerceFeatureEngine {
             )
         }.sortedByDescending { it.generatedSales }
 
-        val trendDays = range.days.coerceIn(7, 365)
-        val trend = (0 until trendDays).map { offset ->
-            val date = now.minus(offset.days).toLocalDateTime(TimeZone.UTC).date
-            val dayOrders = completed.filter { it.analyticsDate()?.toLocalDateTime(TimeZone.UTC)?.date == date }
-            AnalyticsTrendPoint(
-                label = date.toString().removePrefix("20"),
-                sales = dayOrders.sumOf { it.total?.toDoubleOrNull() ?: 0.0 },
-                orders = dayOrders.size,
-            )
-        }.reversed()
+        val currentTrend = buildTrend(completed, now, range.days, 0)
+        val previousTrend = buildTrend(previousCompleted, currentStart, range.days, range.days)
 
         val completionRate = if (currentOrders.isEmpty()) 0.0 else completed.size.toDouble() / currentOrders.size * 100.0
         return AnalyticsSnapshot(
@@ -179,7 +171,9 @@ object CommerceFeatureEngine {
             outOfStockProducts = products.count { product ->
                 product.stock?.status == StockStatus.OUT_OF_STOCK || product.stock?.quantity == 0.0
             },
-            trend = trend,
+            trend = currentTrend,
+            currentTrend = currentTrend,
+            previousTrend = previousTrend,
             current7Sales = sales,
             previous7Sales = previousSales,
             salesGrowthPercent = salesGrowth,
@@ -218,6 +212,25 @@ object CommerceFeatureEngine {
         currency = order.currency.orEmpty(),
     )
 
+    private fun buildTrend(
+        orders: List<Order>,
+        periodEnd: Instant,
+        days: Int,
+        labelOffsetDays: Int,
+    ): List<AnalyticsTrendPoint> {
+        val periodStart = periodEnd - days.days
+        return (0 until days.coerceIn(7, 365)).map { offset ->
+            val date = periodStart.plus((offset + 1).days).toLocalDateTime(TimeZone.UTC).date
+            val dayOrders = orders.filter { it.analyticsDate()?.toLocalDateTime(TimeZone.UTC)?.date == date }
+            AnalyticsTrendPoint(
+                label = date.toString().removePrefix("20"),
+                sales = dayOrders.sumOf { it.total?.toDoubleOrNull() ?: 0.0 },
+                orders = dayOrders.size,
+                periodOffset = labelOffsetDays,
+            )
+        }
+    }
+
     private fun rangeStart(range: AnalyticsRange, now: Instant): Instant = now - range.days.days
 
     private fun rangeDuration(range: AnalyticsRange, now: Instant): kotlin.time.Duration = range.days.days
@@ -253,6 +266,8 @@ data class AnalyticsSnapshot(
     val lowStockProducts: Int,
     val outOfStockProducts: Int,
     val trend: List<AnalyticsTrendPoint>,
+    val currentTrend: List<AnalyticsTrendPoint>,
+    val previousTrend: List<AnalyticsTrendPoint>,
     val current7Sales: Double,
     val previous7Sales: Double,
     val salesGrowthPercent: Double?,
@@ -267,7 +282,7 @@ data class AnalyticsSnapshot(
 data class AnalyticsProductInsight(val id: String, val name: String, val quantity: Double, val revenue: Double, val sharePercent: Double)
 data class AnalyticsCustomerInsight(val key: String, val name: String, val orderCount: Int, val totalSpent: Double, val isNew: Boolean)
 data class CouponInsight(val code: String, val usageCount: Int, val discountTotal: Double, val generatedSales: Double)
-data class AnalyticsTrendPoint(val label: String, val sales: Double, val orders: Int)
+data class AnalyticsTrendPoint(val label: String, val sales: Double, val orders: Int, val periodOffset: Int = 0)
 data class CustomerSnapshot(val key: String, val customer: Customer, val orderCount: Int, val totalSpent: Double, val phone: String?)
 data class CouponUsageSnapshot(val code: String, val usageCount: Int, val discountTotal: Double)
 data class InvoiceDocumentModel(val storeName: String, val orderNumber: String, val customerName: String, val customerEmail: String?, val customerPhone: String?, val items: List<InvoiceLineModel>, val discounts: Double, val shipping: Double, val total: Double, val currency: String)
