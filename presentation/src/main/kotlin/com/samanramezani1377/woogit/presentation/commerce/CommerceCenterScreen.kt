@@ -27,7 +27,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
-import com.samanramezani1377.woogit.core.domain.model.OrderStatus
 import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
 
 internal enum class CommerceFeature { BARCODE, BULK_ORDERS, INVENTORY, CUSTOMERS, ANALYTICS, COUPONS, INVOICE }
@@ -45,7 +44,7 @@ internal fun CommerceCenterScreen(
 ) {
     val vm: CommerceViewModel = viewModel(key = "commerce-${storeId.value}", factory = CommerceViewModelFactory(dependencies, storeId))
     val state by vm.state.collectAsStateWithLifecycle()
-    var selected by remember { mutableStateOf(initialFeature) }
+    var selected by remember { mutableStateOf(initialFeature?.takeIf { it == CommerceFeature.CUSTOMERS || it == CommerceFeature.COUPONS }) }
     LaunchedEffect(storeId) { vm.load() }
 
     if (selected != null) {
@@ -69,7 +68,7 @@ internal fun CommerceCenterScreen(
         Row(Modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 8.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("مرکز تجارت", style = MaterialTheme.typography.headlineSmall)
-                Text("ابزارهای عملیاتی فروشگاه", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("مشتریان و کوپن‌های فروشگاه", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             TextButton(onClick = onBack) { Text("بازگشت") }
         }
@@ -95,11 +94,6 @@ internal fun CommerceCenterScreen(
 }
 
 private val featureModels = listOf(
-    CommerceFeatureUiModel(CommerceFeature.BARCODE, "بارکد و SKU", "جستجوی سریع محصول و سفارش با ورود دستی یا دوربین."),
-    CommerceFeatureUiModel(CommerceFeature.BULK_ORDERS, "عملیات گروهی سفارش‌ها", "انتخاب چند سفارش و تغییر وضعیت در یک عملیات کنترل‌شده."),
-    CommerceFeatureUiModel(CommerceFeature.INVENTORY, "موجودی محصولات", "جستجو و کنترل کم‌موجودی و محصولات ناموجود."),
     CommerceFeatureUiModel(CommerceFeature.CUSTOMERS, "مدیریت مشتریان", "انتخاب و تغییر گروهی نقش مشتریان."),
-    CommerceFeatureUiModel(CommerceFeature.ANALYTICS, "تحلیل فروش", "نمای خوانا از فروش، سفارش‌ها، محصولات و مشتریان."),
     CommerceFeatureUiModel(CommerceFeature.COUPONS, "مدیریت کوپن‌ها", "مدیریت و ویرایش گروهی کوپن‌ها و آمار استفاده."),
-    CommerceFeatureUiModel(CommerceFeature.INVOICE, "فاکتور سفارش", "ساخت فاکتور از سفارش واقعی و ذخیره PDF."),
 )
