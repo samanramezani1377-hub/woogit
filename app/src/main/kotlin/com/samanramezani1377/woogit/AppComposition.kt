@@ -95,7 +95,7 @@ class AppComposition(context: Context) {
     val getVariations = GetVariationsUseCase(variationRepository)
     val getVariation = GetVariationUseCase(variationRepository)
     val createVariation = CreateVariationUseCase(variationRepository)
-    val updateVariation = UpdateVariationUseCase(variationRepository)
+    val updateVariation = UpdateVariationUseCase(updateVariationRepository = variationRepository)
     val deleteVariation = DeleteVariationUseCase(variationRepository)
     val getAttributes = GetAttributesUseCase(attributeRepository)
     val getAttribute = GetAttributeUseCase(attributeRepository)
@@ -104,7 +104,7 @@ class AppComposition(context: Context) {
     val deleteAttribute = DeleteAttributeUseCase(attributeRepository)
     val getTerms = GetTermsUseCase(termRepository)
     val getTerm = GetTermUseCase(termRepository)
-    val createTerm = CreateTermUseCase(createTermRepository = termRepository)
+    val createTerm = CreateTermUseCase(termRepository)
     val updateTerm = UpdateTermUseCase(termRepository)
     val deleteTerm = DeleteTermUseCase(termRepository)
     val uploadMedia = UploadMediaUseCase(mediaRepository)
@@ -138,3 +138,4 @@ class AppComposition(context: Context) {
         uploadMedia, deleteMedia, getConnectionState, getSyncState, getPending, getConflictsFn, resolveConflictFn,
         syncPending, restoredStoreId, ::rememberStore, ::forgetStore
     )
+}
