@@ -13,7 +13,7 @@ import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.core.domain.model.*
 import com.samanramezani1377.woogit.presentation.account.*
 import com.samanramezani1377.woogit.presentation.ai.AiScreen
-import com.samanramezani1377.woogit.presentation.commerce.CommerceCenterScreen
+import com.samanramezani1377.woogit.presentation.commerce.*
 import com.samanramezani1377.woogit.presentation.connection.ConnectionScreen
 import com.samanramezani1377.woogit.presentation.dashboard.*
 import com.samanramezani1377.woogit.presentation.order.*
@@ -116,6 +116,7 @@ internal fun E11AppNavigation(
                         { vm.refresh() },
                         state.loading,
                         { navController.navigate(E11Routes.COMMERCE) },
+                        { navController.navigate(E11Routes.COMMERCE_BARCODE) },
                     )
                 }
             }
@@ -130,6 +131,31 @@ internal fun E11AppNavigation(
                     onOpenProduct = { id -> navController.navigate(E11Routes.product(id)) },
                     onOpenOrder = { id -> navController.navigate(E11Routes.order(id)) },
                 )
+            }
+        }
+        composable(E11Routes.COMMERCE_BARCODE) {
+            activeStore?.let { store ->
+                CommerceFeatureRouteScreen(StoreId(store), dependencies, CommerceFeature.BARCODE, { navController.popBackStack() }, { id -> navController.navigate(E11Routes.product(id)) }, { id -> navController.navigate(E11Routes.order(id)) })
+            }
+        }
+        composable(E11Routes.COMMERCE_BULK_ORDERS) {
+            activeStore?.let { store ->
+                CommerceFeatureRouteScreen(StoreId(store), dependencies, CommerceFeature.BULK_ORDERS, { navController.popBackStack() }, { id -> navController.navigate(E11Routes.product(id)) }, { id -> navController.navigate(E11Routes.order(id)) })
+            }
+        }
+        composable(E11Routes.COMMERCE_INVENTORY) {
+            activeStore?.let { store ->
+                CommerceFeatureRouteScreen(StoreId(store), dependencies, CommerceFeature.INVENTORY, { navController.popBackStack() }, { id -> navController.navigate(E11Routes.product(id)) }, { id -> navController.navigate(E11Routes.order(id)) })
+            }
+        }
+        composable(E11Routes.COMMERCE_ANALYTICS) {
+            activeStore?.let { store ->
+                CommerceFeatureRouteScreen(StoreId(store), dependencies, CommerceFeature.ANALYTICS, { navController.popBackStack() }, { id -> navController.navigate(E11Routes.product(id)) }, { id -> navController.navigate(E11Routes.order(id)) })
+            }
+        }
+        composable(E11Routes.COMMERCE_INVOICE) {
+            activeStore?.let { store ->
+                CommerceFeatureRouteScreen(StoreId(store), dependencies, CommerceFeature.INVOICE, { navController.popBackStack() }, { id -> navController.navigate(E11Routes.product(id)) }, { id -> navController.navigate(E11Routes.order(id)) })
             }
         }
         composable(E11Routes.DEBUG_LOGS) { DebugLogsScreen { navController.popBackStack() } }
@@ -149,6 +175,6 @@ internal fun E11AppNavigation(
     }
 }
 
-private fun mapOrdersState(state: FeatureUiState<List<Order>>, hasMore: Boolean): OrdersUiState = when (state) { FeatureUiState.Loading, FeatureUiState.Pending -> OrdersUiState.Loading; FeatureUiState.Empty -> OrdersUiState.Empty; is FeatureUiState.Error -> OrdersUiState.Error(state.message, state.retryable); FeatureUiState.Offline -> OrdersUiState.Offline(); is FeatureUiState.Conflict -> OrdersUiState.Error("تعارض در داده‌های سفارش وجود دارد.", false); is FeatureUiState.Success -> OrdersUiState.Content(state.value.map { order -> OrderRowUiModel(order.number, order.customer?.name.orEmpty(), order.customer?.email.orEmpty(), order.status.name, formatMoney(order.total), order.payment?.methodTitle.orEmpty(), order.modifiedAt?.toString().orEmpty()) }, hasMore) }
+private fun mapOrdersState(state: FeatureUiState<List<Order>>, hasMore: Boolean): OrdersUiState = when (state) { FeatureUiState.Loading, FeatureUiState.Pending -> OrdersUiState.Loading; FeatureUiState.Empty -> OrdersUiState.Empty; is FeatureUiState.Error -> OrdersUiState.Error(state.message, state.retryable); FeatureUiState.Offline -> OrdersUiState.Offline(); is FeatureUiState.Conflict -> OrdersUiState.Error("تعارض در وضعیت سفارش وجود دارد.", false); is FeatureUiState.Success -> OrdersUiState.Content(state.value.map { order -> OrderRowUiModel(order.number, order.customer?.name.orEmpty(), order.customer?.email.orEmpty(), order.status.name, formatMoney(order.total), order.payment?.methodTitle.orEmpty(), order.modifiedAt?.toString().orEmpty()) }, hasMore) }
 private fun mapOrderDetailState(state: FeatureUiState<Order>): OrderDetailUiState = when (state) { FeatureUiState.Loading, FeatureUiState.Pending -> OrderDetailUiState.Loading; FeatureUiState.Empty -> OrderDetailUiState.NotFound; is FeatureUiState.Error -> OrderDetailUiState.Error(state.message); FeatureUiState.Offline -> OrderDetailUiState.Error("سفارش در حالت آفلاین در دسترس نیست."); is FeatureUiState.Conflict -> OrderDetailUiState.Error("تعارض در وضعیت سفارش."); is FeatureUiState.Success -> OrderDetailUiState.Content(state.value) }
 private fun mapSyncState(state: FeatureUiState<SyncMetadata>): SyncUiState = when (state) { FeatureUiState.Loading, FeatureUiState.Pending -> SyncUiState.Running; FeatureUiState.Empty -> SyncUiState.Idle; is FeatureUiState.Success -> SyncUiState.Success("وضعیت همگام‌سازی فروشگاه با موفقیت دریافت شد."); is FeatureUiState.Error -> SyncUiState.Error(state.message); FeatureUiState.Offline -> SyncUiState.Error("فروشگاه در حالت آفلاین در دسترس نیست"); is FeatureUiState.Conflict -> SyncUiState.Error("تعارض در وضعیت همگام‌سازی.") }
