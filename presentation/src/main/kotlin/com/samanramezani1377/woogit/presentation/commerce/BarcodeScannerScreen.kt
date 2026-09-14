@@ -101,6 +101,10 @@ internal fun BarcodeScannerScreen(
                                             ?: product.pricing.regular?.takeIf { it.isNotBlank() }?.toPersianPrice()?.let { "$it تومان" }
                                             ?: "قیمت ثبت نشده است."
                                     )
+                                    GlassText(
+                                        "موجودی: ${product.stock?.quantity?.toString()?.removeSuffix(".0") ?: "—"}",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                    )
                                     GlassText("برای مشاهده و مدیریت محصول ضربه بزنید.", style = MaterialTheme.typography.bodyMedium)
                                 }
                             }
