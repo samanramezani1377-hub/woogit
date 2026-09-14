@@ -1,11 +1,14 @@
 package com.samanramezani1377.woogit.presentation.commerce
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -14,7 +17,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import com.samanramezani1377.woogit.presentation.GlassCard
 import com.samanramezani1377.woogit.presentation.GlassEmptyState
 import com.samanramezani1377.woogit.presentation.GlassErrorState
@@ -25,6 +31,7 @@ import com.samanramezani1377.woogit.presentation.GlassSearchField
 import com.samanramezani1377.woogit.presentation.GlassScaffold
 import com.samanramezani1377.woogit.presentation.GlassText
 import com.samanramezani1377.woogit.presentation.GlassTopBar
+import com.samanramezani1377.woogit.presentation.toPersianPrice
 
 @Composable
 internal fun BarcodeScannerScreen(
@@ -74,13 +81,30 @@ internal fun BarcodeScannerScreen(
                 state.barcodeResult != null -> {
                     val result = state.barcodeResult!!
                     result.productId?.let { productId ->
-                        GlassCard {
-                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                GlassText("محصول پیدا شد", style = MaterialTheme.typography.titleMedium)
-                                GlassText("ورودی: ${result.value}")
-                                GlassPrimaryAction("باز کردن محصول", { onProduct(productId) }, modifier = Modifier.fillMaxWidth())
+                        state.products.firstOrNull { it.id.value == productId }?.let { product ->
+                            GlassCard(
+                                modifier = Modifier.fillMaxWidth().clickable { onProduct(productId) },
+                            ) {
+                                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                    product.images.firstOrNull()?.let { image ->
+                                        AsyncImage(
+                                            model = image.src,
+                                            contentDescription = image.alt ?: image.name,
+                                            modifier = Modifier.fillMaxWidth().height(180.dp).clip(RoundedCornerShape(14.dp)),
+                                            contentScale = ContentScale.Crop,
+                                        )
+                                    }
+                                    GlassText(product.name, style = MaterialTheme.typography.titleMedium)
+                                    GlassText("SKU: ${product.sku ?: "—"}")
+                                    GlassText(
+                                        product.pricing.sale?.takeIf { it.isNotBlank() }?.toPersianPrice()?.let { "$it تومان" }
+                                            ?: product.pricing.regular?.takeIf { it.isNotBlank() }?.toPersianPrice()?.let { "$it تومان" }
+                                            ?: "قیمت ثبت نشده است."
+                                    )
+                                    GlassText("برای مشاهده و مدیریت محصول ضربه بزنید.", style = MaterialTheme.typography.bodyMedium)
+                                }
                             }
-                        }
+                        } ?: GlassEmptyState("محصول پیدا شد اما اطلاعات آن در فهرست فعلی در دسترس نیست.")
                     } ?: GlassEmptyState("محصولی با این SKU یا بارکد پیدا نشد.")
                 }
                 else -> GlassCard {
