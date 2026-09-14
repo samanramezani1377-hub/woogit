@@ -3,7 +3,9 @@ package com.samanramezani1377.woogit.presentation.commerce
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -15,19 +17,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,6 +32,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.samanramezani1377.woogit.core.domain.model.OrderStatus
+import com.samanramezani1377.woogit.presentation.GlassCard
+import com.samanramezani1377.woogit.presentation.GlassLoading
+import com.samanramezani1377.woogit.presentation.GlassOutlinedButton
+import com.samanramezani1377.woogit.presentation.GlassPrimaryAction
+import com.samanramezani1377.woogit.presentation.GlassSearchField
+import com.samanramezani1377.woogit.presentation.GlassTopBar
 
 @Composable
 internal fun CommerceFeaturePage(
@@ -70,47 +69,35 @@ internal fun CommerceFeaturePage(
 
 @Composable
 private fun FeatureHeader(title: String, subtitle: String, onBack: () -> Unit) {
-    Surface(shadowElevation = 0.dp) {
-        Row(
-            Modifier.fillMaxWidth().padding(start = 18.dp, end = 10.dp, top = 12.dp, bottom = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            TextButton(onClick = onBack) { Text("بازگشت") }
-        }
-    }
+    GlassTopBar(
+        title = title,
+        subtitle = subtitle,
+        actions = { GlassOutlinedButton("بازگشت", onBack) },
+        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+    )
 }
 
 @Composable
 private fun FeatureBody(content: @Composable ColumnScope.() -> Unit) {
     Column(
-        Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 10.dp),
+        Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) { content() }
 }
 
 @Composable
 private fun Section(title: String, description: String? = null, content: @Composable () -> Unit) {
-    Card(
-        Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .55f)),
-    ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-            description?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
-            content()
-        }
+    GlassCard {
+        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        description?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
+        content()
     }
 }
 
 @Composable
 private fun SelectionSummary(count: Int, total: Int) {
-    Surface(shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.primaryContainer) {
-        Text("$count انتخاب از $total", Modifier.padding(horizontal = 12.dp, vertical = 8.dp), color = MaterialTheme.colorScheme.onPrimaryContainer, fontWeight = FontWeight.SemiBold)
+    GlassCard(Modifier.fillMaxWidth()) {
+        Text("$count انتخاب از $total", fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -119,24 +106,34 @@ private fun BarcodePage(state: CommerceUiState, onBarcode: (String) -> Unit, onP
     var query by rememberSaveable { mutableStateOf("") }
     FeatureBody {
         Section("جستجوی سریع", "بارکد، SKU یا شماره سفارش را وارد کنید یا با دوربین اسکن کنید.") {
-            TextField(query, { query = it }, label = { Text("بارکد / SKU / شماره سفارش") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            GlassSearchField(query, { query = it }, "بارکد / SKU / شماره سفارش", Modifier.fillMaxWidth())
             Spacer(Modifier.height(2.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Button(enabled = query.isNotBlank(), onClick = { onBarcode(query.trim()) }) { Text("جستجو") }
-                CommerceCameraScanButton(onDetected = { query = it; onBarcode(it) })
+                GlassPrimaryAction("جستجو", { onBarcode(query.trim()) }, enabled = query.isNotBlank())
+                com.samanramezani1377.woogit.presentation.commerce.CommerceCameraScanButton(onDetected = { query = it; onBarcode(it) })
             }
         }
         state.barcodeResult?.let { result ->
             Section("نتیجه پیدا شد", "برای ادامه، مستقیماً وارد رکورد مرتبط شوید.") {
                 Text("${result.kind}  •  ${result.value}", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    result.productId?.let { Button(onClick = { onProduct(it) }) { Text("باز کردن محصول") } }
-                    result.orderId?.let { OutlinedButton(onClick = { onOrder(it) }) { Text("باز کردن سفارش") } }
+                    result.productId?.let { GlassPrimaryAction("باز کردن محصول", { onProduct(it) }) }
+                    result.orderId?.let { GlassOutlinedButton("باز کردن سفارش", { onOrder(it) }) }
                 }
             }
         }
     }
 }
+
+private val bulkOrderFilterStatuses = listOf(
+    OrderStatus.PENDING,
+    OrderStatus.PROCESSING,
+    OrderStatus.ON_HOLD,
+    OrderStatus.COMPLETED,
+    OrderStatus.CANCELLED,
+    OrderStatus.REFUNDED,
+    OrderStatus.FAILED,
+)
 
 @Composable
 private fun BulkOrdersPage(state: CommerceUiState, onBulkOrder: (Set<String>, OrderStatus) -> Unit) {
@@ -147,47 +144,111 @@ private fun BulkOrdersPage(state: CommerceUiState, onBulkOrder: (Set<String>, Or
     val visible = state.orders.filter { order ->
         order.number.contains(query.trim(), true) && (filter == null || order.status == filter)
     }
+    val selectedVisibleCount = visible.count { it.id.value in selected }
+    val effectiveSelectedCount = target?.let { status -> state.orders.count { it.id.value in selected && it.status != status } } ?: 0
+
     target?.let { status ->
         AlertDialog(
-            onDismissRequest = { target = null },
+            onDismissRequest = { if (!state.loading) target = null },
             title = { Text("تأیید عملیات") },
-            text = { Text("${selected.size} سفارش به «${status.faLabel()}» تغییر می‌کند.") },
-            confirmButton = { Button(onClick = { onBulkOrder(selected, status); selected = emptySet(); target = null }) { Text("اعمال") } },
-            dismissButton = { TextButton(onClick = { target = null }) { Text("لغو") } },
+            text = { Text("$effectiveSelectedCount سفارش به «${status.faLabel()}» تغییر می‌کند.") },
+            confirmButton = {
+                GlassPrimaryAction(
+                    "اعمال",
+                    onClick = {
+                        onBulkOrder(selected, status)
+                        target = null
+                    },
+                    enabled = !state.loading && effectiveSelectedCount > 0,
+                )
+            },
+            dismissButton = { TextButton(enabled = !state.loading, onClick = { target = null }) { Text("لغو") } },
         )
     }
+
     FeatureBody {
-        Section("فیلتر و انتخاب", "ابتدا نتایج را محدود کنید؛ سپس سفارش‌های موردنظر را انتخاب کنید.") {
-            TextField(query, { query = it }, label = { Text("شماره سفارش") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(filter == null, { filter = null }, label = { Text("همه") })
-                FilterChip(filter == OrderStatus.PROCESSING, { filter = OrderStatus.PROCESSING }, label = { Text("پردازش") })
-                FilterChip(filter == OrderStatus.COMPLETED, { filter = OrderStatus.COMPLETED }, label = { Text("تکمیل") })
+        Section("فیلتر و انتخاب", "انتخاب‌ها با تغییر فیلتر حفظ می‌شوند تا بتوانید چند گروه را پشت سر هم انتخاب کنید.") {
+            GlassSearchField(query, { query = it }, "شماره سفارش", Modifier.fillMaxWidth())
+            LazyColumn(
+                horizontalAlignment = Alignment.Start,
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.height(48.dp),
+            ) {
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        GlassOutlinedButton(if (filter == null) "✓ همه" else "همه", { filter = null })
+                        bulkOrderFilterStatuses.forEach { status ->
+                            GlassOutlinedButton(
+                                if (filter == status) "✓ ${status.faLabel()}" else status.faLabel(),
+                                { filter = status },
+                            )
+                        }
+                    }
+                }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                OutlinedButton(onClick = { selected = visible.map { it.id.value }.toSet() }) { Text("انتخاب نتایج") }
-                TextButton(onClick = { selected = emptySet() }) { Text("پاک کردن") }
-                SelectionSummary(selected.size, visible.size)
+                GlassOutlinedButton("انتخاب نتایج", { selected = selected + visible.map { it.id.value }.toSet() })
+                GlassOutlinedButton("پاک کردن", { selected = emptySet() })
+            }
+            Text("$selectedVisibleCount انتخاب از $visible.size نتیجهٔ قابل‌مشاهده", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+
+        Section("عملیات روی انتخاب‌ها", "فقط وضعیت‌های استاندارد WooCommerce قابل انتخاب هستند؛ «OTHER» عمداً به API ارسال نمی‌شود.") {
+            LazyColumn(
+                horizontalAlignment = Alignment.Start,
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.height(48.dp),
+            ) {
+                item {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        bulkOrderFilterStatuses.forEach { status ->
+                            GlassOutlinedButton(
+                                status.faLabel(),
+                                { target = status },
+                                enabled = selected.isNotEmpty() && !state.loading,
+                            )
+                        }
+                    }
+                }
+            }
+            if (state.loading) GlassLoading("در حال به‌روزرسانی وضعیت سفارش‌ها…")
+            state.bulkOrderResults.takeIf { it.isNotEmpty() }?.let { results ->
+                val successCount = results.count { it.succeeded }
+                val failed = results.filterNot { it.succeeded }
+                GlassCard {
+                    Text("نتیجه عملیات", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("موفق: $successCount  •  ناموفق: ${failed.size}")
+                    failed.take(10).forEach { result ->
+                        Text("#${result.orderId.value}: ${result.error.orEmpty()}", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (failed.isNotEmpty() && state.bulkOrderTarget != null) {
+                        GlassPrimaryAction(
+                            "تلاش دوباره برای ${failed.size} سفارش ناموفق",
+                            { onBulkOrder(failed.map { it.orderId.value }.toSet(), state.bulkOrderTarget!!) },
+                            enabled = !state.loading,
+                        )
+                    }
+                }
             }
         }
-        Section("عملیات روی انتخاب‌ها") {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(enabled = selected.isNotEmpty(), onClick = { target = OrderStatus.PROCESSING }) { Text("در حال پردازش") }
-                OutlinedButton(enabled = selected.isNotEmpty(), onClick = { target = OrderStatus.COMPLETED }) { Text("تکمیل‌شده") }
-            }
-        }
+
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
             items(visible, key = { it.id.value }) { order ->
                 val id = order.id.value
                 val chosen = id in selected
-                Card(
-                    onClick = { selected = if (chosen) selected - id else selected + id },
-                    shape = RoundedCornerShape(18.dp),
-                    colors = CardDefaults.cardColors(containerColor = if (chosen) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .42f)),
+                GlassCard(
+                    Modifier.clickable { selected = if (chosen) selected - id else selected + id },
                 ) {
-                    Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) { Text("#${order.number}", fontWeight = FontWeight.SemiBold); Text(order.status.faLabel(), color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                        Text(if (chosen) "انتخاب شد" else "انتخاب", color = if (chosen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("#${order.number}", fontWeight = FontWeight.SemiBold)
+                            Text(order.status.faLabel(), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Text(
+                            if (chosen) "انتخاب شد" else "انتخاب",
+                            color = if (chosen) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.SemiBold,
+                        )
                     }
                 }
             }
@@ -202,17 +263,17 @@ private fun InventoryPage(state: CommerceUiState, onFilter: (String, Boolean, Bo
     var out by rememberSaveable { mutableStateOf(false) }
     FeatureBody {
         Section("کنترل موجودی", "کالاهای کم‌موجودی یا ناموجود را پیدا کنید و برای ویرایش وارد صفحه محصول شوید.") {
-            TextField(query, { query = it; onFilter(it, low, out) }, label = { Text("نام محصول یا SKU") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            GlassSearchField(query, { query = it; onFilter(it, low, out) }, "نام محصول یا SKU", Modifier.fillMaxWidth())
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(low, { low = !low; onFilter(query, low, out) }, label = { Text("کم‌موجودی") })
-                FilterChip(out, { out = !out; onFilter(query, low, out) }, label = { Text("ناموجود") })
+                GlassOutlinedButton(if (low) "✓ کم‌موجودی" else "کم‌موجودی", { low = !low; onFilter(query, low, out) })
+                GlassOutlinedButton(if (out) "✓ ناموجود" else "ناموجود", { out = !out; onFilter(query, low, out) })
             }
             Text("${state.inventory.size} محصول", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
             items(state.inventory, key = { it.id.value }) { product ->
-                Card(onClick = { onProduct(product.id.value) }, shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .42f))) {
-                    Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+                GlassCard(Modifier.clickable { onProduct(product.id.value) }) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
                             Text(product.name, fontWeight = FontWeight.SemiBold)
                             Text("SKU: ${product.sku.orEmpty().ifBlank { "بدون SKU" }}", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
@@ -235,25 +296,25 @@ private fun CustomersPage(state: CommerceUiState, onBulkCustomer: (Set<Long>, St
     var query by rememberSaveable { mutableStateOf("") }
     var confirm by remember { mutableStateOf(false) }
     val visible = state.customers.filter { "${it.first_name.orEmpty()} ${it.last_name.orEmpty()} ${it.email.orEmpty()}".contains(query.trim(), true) }
-    if (confirm) AlertDialog(onDismissRequest = { confirm = false }, title = { Text("تأیید تغییر مشتریان") }, text = { Text("${selected.size} مشتری به نقش «$role» تغییر می‌کنند.") }, confirmButton = { Button(onClick = { onBulkCustomer(selected, role); selected = emptySet(); confirm = false }) { Text("اعمال") } }, dismissButton = { TextButton(onClick = { confirm = false }) { Text("لغو") } })
+    if (confirm) AlertDialog(onDismissRequest = { confirm = false }, title = { Text("تأیید تغییر مشتریان") }, text = { Text("${selected.size} مشتری به نقش «$role» تغییر می‌کنند.") }, confirmButton = { GlassPrimaryAction("اعمال", { onBulkCustomer(selected, role); selected = emptySet(); confirm = false }) }, dismissButton = { TextButton(onClick = { confirm = false }) { Text("لغو") } })
     FeatureBody {
         Section("انتخاب مشتریان", "مشتریان را جستجو کنید و فقط گروه موردنظر را انتخاب کنید.") {
-            TextField(query, { query = it }, label = { Text("نام یا ایمیل") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            GlassSearchField(query, { query = it }, "نام یا ایمیل", Modifier.fillMaxWidth())
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                OutlinedButton(onClick = { selected = visible.map { it.id }.toSet() }) { Text("انتخاب نتایج") }
-                TextButton(onClick = { selected = emptySet() }) { Text("پاک کردن") }
+                GlassOutlinedButton("انتخاب نتایج", { selected = selected + visible.map { it.id }.toSet() })
+                GlassOutlinedButton("پاک کردن", { selected = emptySet() })
                 SelectionSummary(selected.size, visible.size)
             }
         }
         Section("عملیات گروهی") {
-            TextField(role, { role = it }, label = { Text("نقش جدید") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            Button(enabled = selected.isNotEmpty() && role.isNotBlank(), onClick = { confirm = true }) { Text("اعمال روی انتخاب‌ها") }
+            GlassSearchField(role, { role = it }, "نقش جدید", Modifier.fillMaxWidth())
+            GlassPrimaryAction("اعمال روی انتخاب‌ها", { confirm = true }, enabled = selected.isNotEmpty() && role.isNotBlank())
         }
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
             items(visible, key = { it.id }) { customer ->
                 val chosen = customer.id in selected
-                Card(onClick = { selected = if (chosen) selected - customer.id else selected + customer.id }, shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = if (chosen) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .42f))) {
-                    Column(Modifier.fillMaxWidth().padding(14.dp)) { Text("${customer.first_name.orEmpty()} ${customer.last_name.orEmpty()}".trim().ifBlank { "مشتری بدون نام" }, fontWeight = FontWeight.SemiBold); Text(customer.email.orEmpty(), color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                GlassCard(Modifier.clickable { selected = if (chosen) selected - customer.id else selected + customer.id }) {
+                    Column(Modifier.fillMaxWidth()) { Text("${customer.first_name.orEmpty()} ${customer.last_name.orEmpty()}".trim().ifBlank { "مشتری بدون نام" }, fontWeight = FontWeight.SemiBold); Text(customer.email.orEmpty(), color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 }
             }
         }
@@ -296,25 +357,25 @@ private fun CouponsPage(state: CommerceUiState, onBulkCoupon: (Set<Long>, String
     var query by rememberSaveable { mutableStateOf("") }
     var confirm by remember { mutableStateOf(false) }
     val visible = state.coupons.filter { it.code.contains(query.trim(), true) }
-    if (confirm) AlertDialog(onDismissRequest = { confirm = false }, title = { Text("تأیید تغییر کوپن‌ها") }, text = { Text("مبلغ $amount برای ${selected.size} کوپن ثبت می‌شود.") }, confirmButton = { Button(onClick = { onBulkCoupon(selected, amount); selected = emptySet(); confirm = false }) { Text("ذخیره") } }, dismissButton = { TextButton(onClick = { confirm = false }) { Text("لغو") } })
+    if (confirm) AlertDialog(onDismissRequest = { confirm = false }, title = { Text("تأیید تغییر کوپن‌ها") }, text = { Text("مبلغ $amount برای ${selected.size} کوپن ثبت می‌شود.") }, confirmButton = { GlassPrimaryAction("ذخیره", { onBulkCoupon(selected, amount); selected = emptySet(); confirm = false }) }, dismissButton = { TextButton(onClick = { confirm = false }) { Text("لغو") } })
     FeatureBody {
         Section("پیدا کردن و انتخاب", "کوپن‌ها را جستجو کنید، موارد موردنظر را انتخاب و سپس تغییر را اعمال کنید.") {
-            TextField(query, { query = it }, label = { Text("کد کوپن") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+            GlassSearchField(query, { query = it }, "کد کوپن", Modifier.fillMaxWidth())
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                OutlinedButton(onClick = { selected = visible.map { it.id }.toSet() }) { Text("انتخاب نتایج") }
-                TextButton(onClick = { selected = emptySet() }) { Text("پاک کردن") }
+                GlassOutlinedButton("انتخاب نتایج", { selected = selected + visible.map { it.id }.toSet() })
+                GlassOutlinedButton("پاک کردن", { selected = emptySet() })
                 SelectionSummary(selected.size, visible.size)
             }
         }
         Section("ویرایش گروهی") {
-            TextField(amount, { amount = it }, label = { Text("مبلغ جدید") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-            Button(enabled = selected.isNotEmpty() && amount.isNotBlank(), onClick = { confirm = true }) { Text("ذخیره تغییرات") }
+            GlassSearchField(amount, { amount = it }, "مبلغ جدید", Modifier.fillMaxWidth())
+            GlassPrimaryAction("ذخیره تغییرات", { confirm = true }, enabled = selected.isNotEmpty() && amount.isNotBlank())
         }
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
             items(visible, key = { it.id }) { coupon ->
                 val chosen = coupon.id in selected
-                Card(onClick = { selected = if (chosen) selected - coupon.id else selected + coupon.id }, shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = if (chosen) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .42f))) {
-                    Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                GlassCard(Modifier.clickable { selected = if (chosen) selected - coupon.id else selected + coupon.id }) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) { Text(coupon.code, fontWeight = FontWeight.SemiBold); Text("مبلغ: ${coupon.amount}", color = MaterialTheme.colorScheme.onSurfaceVariant) }
                         Text("${coupon.usage_count} استفاده", color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall)
                     }
@@ -332,10 +393,10 @@ private fun InvoicePage(state: CommerceUiState, onInvoice: (String) -> Unit) {
         }
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.weight(1f)) {
             items(state.orders, key = { it.id.value }) { order ->
-                Card(onClick = { onInvoice(order.id.value) }, shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .42f))) {
-                    Row(Modifier.fillMaxWidth().padding(14.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                GlassCard(Modifier.clickable { onInvoice(order.id.value) }) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Column { Text("فاکتور #${order.number}", fontWeight = FontWeight.SemiBold); Text(order.status.faLabel(), color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                        OutlinedButton(onClick = { onInvoice(order.id.value) }) { Text("آماده‌سازی") }
+                        GlassOutlinedButton("آماده‌سازی", { onInvoice(order.id.value) })
                     }
                 }
             }
@@ -348,7 +409,7 @@ private fun InvoicePage(state: CommerceUiState, onInvoice: (String) -> Unit) {
                 val launcher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri: Uri? ->
                     if (uri != null) runCatching { context.contentResolver.openOutputStream(uri)?.use { output -> output.write(renderer.render(invoice)) } }
                 }
-                Button(onClick = { launcher.launch("invoice-${invoice.orderNumber}.pdf") }) { Text("ذخیره PDF") }
+                GlassPrimaryAction("ذخیره PDF", { launcher.launch("invoice-${invoice.orderNumber}.pdf") })
             }
         }
     }
@@ -377,9 +438,10 @@ private fun CommerceFeature.subtitleFa(): String = when (this) {
 private fun OrderStatus.faLabel(): String = when (this) {
     OrderStatus.PENDING -> "در انتظار"
     OrderStatus.PROCESSING -> "در حال پردازش"
+    OrderStatus.ON_HOLD -> "در انتظار بررسی"
     OrderStatus.COMPLETED -> "تکمیل‌شده"
     OrderStatus.CANCELLED -> "لغو شده"
     OrderStatus.REFUNDED -> "مسترد شده"
     OrderStatus.FAILED -> "ناموفق"
-    else -> name
+    OrderStatus.OTHER -> "سایر"
 }
