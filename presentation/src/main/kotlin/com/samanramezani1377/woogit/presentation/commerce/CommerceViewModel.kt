@@ -2,19 +2,20 @@ package com.samanramezani1377.woogit.presentation.commerce
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.samanramezani1377.woogit.core.domain.commerce.AnalyticsSnapshot
 import com.samanramezani1377.woogit.core.domain.commerce.BarcodeLookupResult
 import com.samanramezani1377.woogit.core.domain.commerce.BarcodeResolver
 import com.samanramezani1377.woogit.core.domain.commerce.CommerceFeatureEngine
 import com.samanramezani1377.woogit.core.domain.commerce.CouponUsageSnapshot
-import com.samanramezani1377.woogit.core.domain.commerce.AnalyticsSnapshot
 import com.samanramezani1377.woogit.core.domain.commerce.CustomerSnapshot
 import com.samanramezani1377.woogit.core.domain.commerce.InvoiceDocumentFactory
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.core.domain.error.CoreResult
 import com.samanramezani1377.woogit.core.domain.model.*
+import com.samanramezani1377.woogit.data.network.BulkOrderStatusMapper
 import com.samanramezani1377.woogit.data.network.WooCouponCommerceDto
-import com.samanramezani1377.woogit.data.network.WooCustomerCommerceDto
 import com.samanramezani1377.woogit.data.network.WooCouponCommerceWriteDto
+import com.samanramezani1377.woogit.data.network.WooCustomerCommerceDto
 import com.samanramezani1377.woogit.data.network.WooCustomerCommerceWriteDto
 import com.samanramezani1377.woogit.presentation.PresentationErrorMapper
 import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
@@ -35,6 +36,8 @@ internal data class CommerceUiState(
     val inventory: List<Product> = emptyList(),
     val barcodeResult: BarcodeLookupResult? = null,
     val invoice: InvoiceDocument? = null,
+    val bulkOrderResults: List<BulkOrderStatusResult> = emptyList(),
+    val bulkOrderTarget: OrderStatus? = null,
     val message: String? = null,
     val error: String? = null,
 )
@@ -57,16 +60,7 @@ internal class CommerceViewModel(
         try {
             val products = readAllProducts()
             val orders = readAllOrders()
-            val analytics = CommerceFeatureEngine.analytics(orders, products)
-            _state.value = _state.value.copy(
-                loading = false,
-                products = products,
-                orders = orders,
-                inventory = products,
-                analytics = analytics,
-                customerAggregation = CommerceFeatureEngine.customersFromOrders(orders),
-                couponAnalytics = CommerceFeatureEngine.couponsFromOrders(orders),
-            )
+            applyProductAndOrderState(products, orders)
             loadCustomersAndCoupons()
         } catch (t: Throwable) {
             fail("بارگذاری ابزارهای Commerce ناموفق بود: ${t.message.orEmpty()}")
@@ -103,6 +97,23 @@ internal class CommerceViewModel(
             page++
         }
         return all.distinctBy { it.id.value }
+    }
+
+    private fun applyProductAndOrderState(products: List<Product>, orders: List<Order>) {
+        _state.value = _state.value.copy(
+            loading = false,
+            products = products,
+            orders = orders,
+            inventory = products,
+            analytics = CommerceFeatureEngine.analytics(orders, products),
+            customerAggregation = CommerceFeatureEngine.customersFromOrders(orders),
+            couponAnalytics = CommerceFeatureEngine.couponsFromOrders(orders),
+        )
+    }
+
+    private suspend fun refreshOrders() {
+        val orders = readAllOrders()
+        applyProductAndOrderState(_state.value.products, orders)
     }
 
     private suspend fun loadCustomersAndCoupons() {
@@ -155,24 +166,62 @@ internal class CommerceViewModel(
     }
 
     fun bulkOrderStatus(selectedIds: Set<String>, target: OrderStatus) = viewModelScope.launch {
-        if (selectedIds.isEmpty()) return@launch
+        if (selectedIds.isEmpty() || target == OrderStatus.OTHER) return@launch
         val plan = CommerceFeatureEngine.planBulkOrderStatusUpdate(_state.value.orders, selectedIds, target)
-        if (plan.isEmpty()) return@launch
-        val client = commerceClientOrFail() ?: return@launch
-        var succeeded = 0
-        var failed = 0
-        plan.chunked(BATCH_SIZE).forEach { chunk ->
-            val response = client.batchUpdateOrderStatuses(
-                chunk.mapNotNull { it.orderId.toLongOrNull()?.let { id -> id to it.targetStatus.name.lowercase() } },
-                "commerce-orders-${System.currentTimeMillis()}",
+        if (plan.isEmpty()) {
+            _state.value = _state.value.copy(
+                bulkOrderResults = emptyList(),
+                bulkOrderTarget = target,
+                message = "همه سفارش‌های انتخاب‌شده از قبل در وضعیت «${target.faLabel()}» هستند.",
+                error = null,
             )
-            if (response.statusCode in 200..299) succeeded += chunk.size else failed += chunk.size
+            return@launch
         }
+        val client = commerceClientOrFail() ?: return@launch
+        _state.value = _state.value.copy(loading = true, error = null, message = null, bulkOrderTarget = target)
+
+        val operationId = "commerce-orders-${System.currentTimeMillis()}"
+        val results = mutableListOf<BulkOrderStatusResult>()
+        plan.chunked(BATCH_SIZE).forEachIndexed { chunkIndex, chunk ->
+            val numericIds = mutableListOf<Long>()
+            chunk.forEach { item ->
+                val numericId = item.orderId.toLongOrNull()
+                if (numericId == null) {
+                    results += BulkOrderStatusResult(
+                        orderId = item.orderId.let(::com.samanramezani1377.woogit.core.domain.entity.EntityId),
+                        succeeded = false,
+                        error = "شناسه سفارش نامعتبر است.",
+                    )
+                } else {
+                    numericIds += numericId
+                }
+            }
+            if (numericIds.isEmpty()) return@forEachIndexed
+            val response = client.batchUpdateOrderStatuses(
+                numericIds.map { it to target.name.lowercase() },
+                "$operationId-$chunkIndex",
+            )
+            results += BulkOrderStatusMapper.map(response, numericIds)
+        }
+
+        val succeeded = results.count { it.succeeded }
+        val failed = results.count { !it.succeeded }
         _state.value = _state.value.copy(
+            loading = false,
+            bulkOrderResults = results,
+            bulkOrderTarget = target,
             message = "وضعیت $succeeded سفارش به‌روزرسانی شد${if (failed > 0) "؛ $failed مورد ناموفق" else ""}.",
-            error = if (failed > 0) "بخشی از عملیات سفارش‌ها ناموفق بود." else null,
+            error = if (failed > 0) "بخشی از عملیات ناموفق بود. سفارش‌های ناموفق را بررسی یا دوباره تلاش کنید." else null,
         )
-        load()
+        if (succeeded > 0) {
+            runCatching { refreshOrders() }.onFailure { fail("به‌روزرسانی فهرست سفارش‌ها ناموفق بود: ${it.message.orEmpty()}") }
+        }
+    }
+
+    fun retryFailedBulkOrderStatus() {
+        val target = _state.value.bulkOrderTarget ?: return
+        val failedIds = _state.value.bulkOrderResults.filterNot { it.succeeded }.map { it.orderId.value }.toSet()
+        if (failedIds.isNotEmpty()) bulkOrderStatus(failedIds, target)
     }
 
     fun bulkCustomerRole(selectedIds: Set<Long>, role: String) = viewModelScope.launch {
