@@ -51,7 +51,7 @@ internal fun CustomersPage(
             GlassSearchField(
                 value = query,
                 onValueChange = { query = it },
-                placeholder = "نام یا ایمیل",
+                label = "نام یا ایمیل",
                 modifier = Modifier.fillMaxWidth(),
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -64,7 +64,7 @@ internal fun CustomersPage(
             GlassSearchField(
                 value = role,
                 onValueChange = { role = it },
-                placeholder = "نقش جدید",
+                label = "نقش جدید",
                 modifier = Modifier.fillMaxWidth(),
             )
             GlassPrimaryAction("اعمال روی انتخاب‌ها", { confirm = true }, enabled = selected.isNotEmpty() && role.isNotBlank())
