@@ -21,6 +21,7 @@ import com.samanramezani1377.woogit.data.sync.*
 import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
 import com.samanramezani1377.woogit.presentation.analytics.AnalyticsRuntime
 import com.samanramezani1377.woogit.presentation.customers.CustomerRuntime
+import com.samanramezani1377.woogit.presentation.commerce.InventoryRuntime
 import com.samanramezani1377.woogit.presentation.account.AccountSetupGateway
 import com.samanramezani1377.woogit.presentation.settings.BillingRuntime
 import kotlinx.coroutines.*
@@ -145,6 +146,7 @@ class AppComposition(context: Context) {
         AnalyticsRuntime.loader = { storeId, range -> localAnalyticsRepository.get(storeId, range) }
         CustomerRuntime.listLoader = { storeId, page, perPage, search -> customerRepository.list(storeId, page, perPage, search) }
         CustomerRuntime.detailLoader = { storeId, id -> customerRepository.get(storeId, id) }
+        InventoryRuntime.updateProduct = { storeId, product -> updateProduct(storeId, product.id, product) }
         restoredStoreId?.let(::startBackgroundWork)
     }
 
@@ -162,5 +164,5 @@ class AppComposition(context: Context) {
         ProductCatalogSyncWorker.cancel(appContext, storeId)
     }
 
-    fun close() { BillingRuntime.gateway = null; AnalyticsRuntime.loader = null; CustomerRuntime.listLoader = null; CustomerRuntime.detailLoader = null; announcementCenter.dispose(); scope.cancel(); network.close() }
+    fun close() { BillingRuntime.gateway = null; AnalyticsRuntime.loader = null; CustomerRuntime.listLoader = null; CustomerRuntime.detailLoader = null; InventoryRuntime.updateProduct = null; announcementCenter.dispose(); scope.cancel(); network.close() }
 }
