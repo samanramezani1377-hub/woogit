@@ -1,0 +1,25 @@
+CREATE TABLE customer_entity (
+    id TEXT NOT NULL,
+    store_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    email TEXT,
+    role TEXT,
+    modified_at TEXT,
+    payload_json TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (id, store_id)
+);
+
+selectById:
+SELECT * FROM customer_entity WHERE id = ? AND store_id = ?;
+
+selectByStore:
+SELECT * FROM customer_entity WHERE store_id = ? ORDER BY name COLLATE NOCASE ASC, id ASC;
+
+upsert:
+INSERT OR REPLACE INTO customer_entity(id, store_id, name, email, role, modified_at, payload_json, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+deleteById:
+DELETE FROM customer_entity WHERE id = ? AND store_id = ?;
