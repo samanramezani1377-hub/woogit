@@ -29,7 +29,9 @@ internal fun CommerceFeatureRouteScreen(
     )
     val state by vm.state.collectAsStateWithLifecycle()
 
-    LaunchedEffect(storeId) { vm.load() }
+    LaunchedEffect(storeId, feature) {
+        vm.load(loadRemoteCommerceData = feature != CommerceFeature.ANALYTICS)
+    }
 
     if (feature == CommerceFeature.BARCODE) {
         BarcodeScannerScreen(state = state, onResolve = vm::resolveBarcode, onProduct = onOpenProduct, onBack = onBack)
