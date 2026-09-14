@@ -25,7 +25,7 @@ internal fun CommerceFeaturePage(
         when (feature) {
             CommerceFeature.BARCODE -> BarcodePage(state, onBarcode, onProduct)
             CommerceFeature.BULK_ORDERS -> BulkOrdersPage(state, onBulkOrder)
-            CommerceFeature.INVENTORY -> InventoryPage(state, onInventoryFilter, onProduct)
+            CommerceFeature.INVENTORY -> InventoryPage(storeId, state, onInventoryFilter, onProduct)
             CommerceFeature.CUSTOMERS -> CustomersPage(storeId = storeId, state = state)
             CommerceFeature.ANALYTICS -> Unit
             CommerceFeature.COUPONS -> CouponsPage(state, onBulkCoupon)
