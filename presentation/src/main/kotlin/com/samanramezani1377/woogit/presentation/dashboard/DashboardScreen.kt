@@ -56,7 +56,6 @@ internal fun DashboardScreen(
     onRecentOrderClick: () -> Unit,
     onOrdersClick: () -> Unit,
     onProductsClick: () -> Unit,
-    onBarcodeClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onSyncClick: () -> Unit,
     onConflictsClick: () -> Unit,
@@ -66,6 +65,7 @@ internal fun DashboardScreen(
     onRefresh: () -> Unit,
     refreshing: Boolean = false,
     onCommerceClick: () -> Unit = {},
+    onBarcodeClick: () -> Unit = onCommerceClick,
     modifier: Modifier = Modifier,
 ) {
     val scrollState = rememberScrollState()
@@ -111,7 +111,7 @@ internal fun DashboardScreen(
         Box(Modifier.weight(1f).fillMaxSize()) {
             Column(Modifier.fillMaxSize().verticalScroll(scrollState).padding(bottom = 8.dp)) {
                 DashboardContent(storeName, connected, orders, products, revenue, pending, recentOrderId, recentCustomer, recentTotal, recentStatus, onRecentOrderClick)
-                DashboardActions(onOrdersClick, onProductsClick, onBarcodeClick, onSettingsClick, onSyncClick, onConflictsClick, onCommerceClick, Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+                DashboardActions(onOrdersClick, onProductsClick, onSettingsClick, onSyncClick, onConflictsClick, onCommerceClick, onBarcodeClick, Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
             }
             val indicatorProgress = (pullDistance / pullThreshold).coerceIn(0f, 1f)
             if (pullDistance > 0f || refreshing) {
