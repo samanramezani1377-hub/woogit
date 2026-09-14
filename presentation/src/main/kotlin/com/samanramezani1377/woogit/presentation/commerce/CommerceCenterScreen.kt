@@ -80,7 +80,7 @@ internal fun CommerceCenterScreen(
             GlassTopBar(title = "مرکز تجارت", subtitle = "مشتریان و کوپن‌های فروشگاه", actions = { GlassOutlinedButton("بازگشت", onBack) })
             GlassCard {
                 GlassText("ابزارهای مدیریت فروشگاه", style = MaterialTheme.typography.titleMedium)
-                GlassText("این مرکز فقط برای مشتریان و کوپن‌هاست. ابزارهای سفارش، موجودی، تحلیل، فاکتور و بارکد از صفحات مرتبط خود اپ در دسترس هستند.", style = MaterialTheme.typography.bodyMedium.copy(color = GlassTokens.muted))
+                GlassText("این مرکز فقط برای مشتریان و کوپن‌هاست. ابزارهای سفارش، موجودی، تحلیل، فاکتور و بارکد از صفحات مرتبط خود اپ در دسترس هستند.")
             }
             when {
                 state.loading -> GlassLoading("در حال آماده‌سازی…")
@@ -91,9 +91,9 @@ internal fun CommerceCenterScreen(
                             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                     GlassText(item.title, style = MaterialTheme.typography.titleMedium)
-                                    GlassText(item.description, style = MaterialTheme.typography.bodySmall.copy(color = GlassTokens.muted))
+                                    GlassText(item.description)
                                 }
-                                GlassOutlinedButton("ورود") { openFeature(item.feature) }
+                                GlassOutlinedButton("ورود", { openFeature(item.feature) })
                             }
                         }
                     }
