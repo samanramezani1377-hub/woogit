@@ -11,6 +11,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.view.WindowCompat
 import com.samanramezani1377.woogit.presentation.E11ReleaseApp
 import com.samanramezani1377.woogit.presentation.WooGitTheme
+import com.samanramezani1377.woogit.presentation.commerce.CommerceRuntime
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -28,6 +29,7 @@ class MainActivity : ComponentActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, true)
         notificationOrderId.value = intentOrderId(intent)
         val composition = (application as WooGitApplication).composition
+        CommerceRuntime.provider = composition.commerceClientProvider
         announcementCenter = composition.announcementCenter
         forceUpdateUrl.value = announcementCenter.forceUpdateUrl.value
         observeAnnouncementCenter()
