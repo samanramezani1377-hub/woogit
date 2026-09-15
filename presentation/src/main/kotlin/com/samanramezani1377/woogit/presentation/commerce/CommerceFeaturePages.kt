@@ -21,6 +21,7 @@ internal fun CommerceFeaturePage(
     onProduct: (String) -> Unit,
     onEditCoupon: (Long, WooCouponCommerceWriteDto) -> Unit,
     onCreateCoupon: (WooCouponCommerceWriteDto) -> Unit,
+    onDeleteCoupon: (Long) -> Unit,
 ) {
     Column(Modifier.fillMaxSize()) {
         FeatureHeader(feature.titleFa(), feature.subtitleFa(), onBack)
@@ -30,7 +31,7 @@ internal fun CommerceFeaturePage(
             CommerceFeature.INVENTORY -> InventoryPage(storeId, state, onInventoryFilter, onProduct)
             CommerceFeature.CUSTOMERS -> CustomersPage(storeId = storeId, state = state)
             CommerceFeature.ANALYTICS -> Unit
-            CommerceFeature.COUPONS -> CouponsPage(state, onEditCoupon, onCreateCoupon)
+            CommerceFeature.COUPONS -> CouponsPage(state, onEditCoupon, onCreateCoupon, onDeleteCoupon)
             CommerceFeature.INVOICE -> InvoicePage(state, onInvoice)
         }
     }
