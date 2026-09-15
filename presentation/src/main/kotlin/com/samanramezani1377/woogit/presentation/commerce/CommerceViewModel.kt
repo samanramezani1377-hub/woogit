@@ -207,16 +207,29 @@ internal class CommerceViewModel(
 
         val succeeded = results.count { it.succeeded }
         val failed = results.count { !it.succeeded }
+        val succeededIds = results.asSequence()
+            .filter { it.succeeded }
+            .map { it.orderId.value }
+            .toSet()
+        val updatedOrders = if (succeededIds.isEmpty()) {
+            _state.value.orders
+        } else {
+            _state.value.orders.map { order ->
+                if (order.id.value in succeededIds) order.copy(status = target) else order
+            }
+        }
+
         _state.value = _state.value.copy(
             loading = false,
+            orders = updatedOrders,
+            analytics = CommerceFeatureEngine.analytics(updatedOrders, _state.value.products),
+            customerAggregation = CommerceFeatureEngine.customersFromOrders(updatedOrders),
+            couponAnalytics = CommerceFeatureEngine.couponsFromOrders(updatedOrders),
             bulkOrderResults = results,
             bulkOrderTarget = target,
             message = "وضعیت $succeeded سفارش به‌روزرسانی شد${if (failed > 0) "؛ $failed مورد ناموفق" else ""}.",
             error = if (failed > 0) "بخشی از عملیات ناموفق بود. سفارش‌های ناموفق را بررسی یا دوباره تلاش کنید." else null,
         )
-        if (succeeded > 0) {
-            runCatching { refreshOrders() }.onFailure { fail("به‌روزرسانی فهرست سفارش‌ها ناموفق بود: ${it.message.orEmpty()}") }
-        }
     }
 
     fun retryFailedBulkOrderStatus() {
