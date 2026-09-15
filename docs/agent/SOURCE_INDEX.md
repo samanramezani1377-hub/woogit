@@ -22,6 +22,10 @@ This is the source-of-truth locator for agent work. The contract maps in this di
 | WooCommerce transport facade | `data/src/main/kotlin/com/samanramezani1377/woogit/data/network/WooCommerceApi.kt` |
 | WooCommerce provider/session boundary | `data/src/main/kotlin/com/samanramezani1377/woogit/data/network/WooCommerceClientProvider.kt` |
 | Store persistence/repository | `data/src/main/kotlin/com/samanramezani1377/woogit/data/repository/StoreRepositoryImpl.kt` |
+| Customer repository and remote CRUD | `data/src/main/kotlin/com/samanramezani1377/woogit/data/repository/CustomerRepositoryV1Impl.kt` |
+| Customer WooCommerce API contract | `data/src/main/kotlin/com/samanramezani1377/woogit/data/network/CommerceWooCommerceApi.kt` — customer list/detail/create/update/delete/batch endpoints |
+| Customer domain contract | `core/src/commonMain/kotlin/com/samanramezani1377/woogit/core/domain/repository/Repositories.kt` — `CustomerRepository` |
+| Customer presentation bridge | `presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/customers/CustomerRuntime.kt` |
 | Session persistence | `app/src/main/kotlin/com/samanramezani1377/woogit/security/AndroidBackendSessionStore.kt` |
 | Secure credentials | `app/src/main/kotlin/com/samanramezani1377/woogit/security/AndroidSecureCredentialStore.kt` |
 | Disconnect policy | `app/src/main/kotlin/com/samanramezani1377/woogit/security/AndroidDisconnectPolicy.kt` |
@@ -39,7 +43,7 @@ This is the source-of-truth locator for agent work. The contract maps in this di
 | Commerce barcode UI | `presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/commerce/BarcodePage.kt` |
 | Commerce bulk order UI | `presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/commerce/BulkOrdersPage.kt` |
 | Commerce inventory UI | `presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/commerce/InventoryPage.kt` |
-| Commerce customer UI | `presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/commerce/CustomersPage.kt` |
+| Commerce customer UI | `presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/commerce/CustomersPage.kt` — paginated search, customer detail, create/update/delete and immediate local UI reconciliation |
 | Commerce analytics UI | `presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/commerce/AnalyticsPage.kt` |
 | Commerce coupon UI | `presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/commerce/CouponsPage.kt` |
 | Commerce invoice UI | `presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/commerce/InvoicePage.kt` |
@@ -53,6 +57,10 @@ This is the source-of-truth locator for agent work. The contract maps in this di
 `AiAgent` owns the execution lifecycle. `AiScreen` owns selection only. `AiWorkingMemoryStore` persists per-item status/result and recovery checkpoints. `WooGitToolExecutor` is the store-side write executor and requires reread/verification before a write is reported as successful.
 
 After batch confirmation, the Agent injects a complete internal per-item outcome into the model context. The model, not the UI, produces the final user-facing report. Every batch item must be reported as `VERIFIED`, `FAILED`, or `REJECTED_BY_USER` according to persisted execution state.
+
+## Customer management contract
+
+Customer management is an individual-customer flow, not a bulk-operation UI. `CustomersPage` owns debounced search, pagination, selection, detail presentation, create/edit/delete dialogs and immediate local list reconciliation. `CustomerRuntime` bridges those UI mutations to `CustomerRepositoryV1Impl`. The repository uses WooCommerce customer REST endpoints and persists successful mutations to the local customer data source.
 
 ## Line-addressable contract entries
 - `BackendClient.kt` → `revokeSession(storeId)` delegates to `revokeToken(sessions.get(storeId))` and clears the operational session after a successful revoke.
