@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.samanramezani1377.woogit.core.domain.commerce.AnalyticsSnapshot
 import com.samanramezani1377.woogit.core.domain.commerce.BarcodeLookupResult
-import com.samanramezani1377-hub.woogit.core.domain.commerce.BarcodeResolver
+import com.samanramezani1377.woogit.core.domain.commerce.BarcodeResolver
 import com.samanramezani1377.woogit.core.domain.commerce.CommerceFeatureEngine
 import com.samanramezani1377.woogit.core.domain.commerce.CouponUsageSnapshot
 import com.samanramezani1377.woogit.core.domain.commerce.CustomerSnapshot
@@ -180,7 +180,6 @@ internal class CommerceViewModel(
         }
         val client = commerceClientOrFail() ?: return@launch
         _state.value = _state.value.copy(loading = true, error = null, message = null, bulkOrderTarget = target)
-
         val operationId = "commerce-orders-${System.currentTimeMillis()}"
         val results = mutableListOf<BulkOrderStatusResult>()
         plan.chunked(BATCH_SIZE).forEachIndexed { chunkIndex, chunk ->
@@ -188,32 +187,17 @@ internal class CommerceViewModel(
             chunk.forEach { item ->
                 val numericId = item.orderId.toLongOrNull()
                 if (numericId == null) {
-                    results += BulkOrderStatusResult(
-                        orderId = EntityId(item.orderId),
-                        succeeded = false,
-                        error = "شناسه سفارش نامعتبر است.",
-                    )
-                } else {
-                    numericIds += numericId
-                }
+                    results += BulkOrderStatusResult(EntityId(item.orderId), false, "شناسه سفارش نامعتبر است.")
+                } else numericIds += numericId
             }
             if (numericIds.isEmpty()) return@forEachIndexed
-            val response = client.batchUpdateOrderStatuses(
-                numericIds.map { it to target.name.lowercase() },
-                "$operationId-$chunkIndex",
-            )
+            val response = client.batchUpdateOrderStatuses(numericIds.map { it to target.name.lowercase() }, "$operationId-$chunkIndex")
             results += BulkOrderStatusMapper.map(response, numericIds)
         }
-
         val succeeded = results.count { it.succeeded }
         val failed = results.count { !it.succeeded }
         val succeededIds = results.asSequence().filter { it.succeeded }.map { it.orderId.value }.toSet()
-        val updatedOrders = if (succeededIds.isEmpty()) {
-            _state.value.orders
-        } else {
-            _state.value.orders.map { order -> if (order.id.value in succeededIds) order.copy(status = target) else order }
-        }
-
+        val updatedOrders = _state.value.orders.map { order -> if (order.id.value in succeededIds) order.copy(status = target) else order }
         _state.value = _state.value.copy(
             loading = false,
             orders = updatedOrders,
@@ -238,13 +222,8 @@ internal class CommerceViewModel(
         val client = commerceClientOrFail() ?: return@launch
         val updates = _state.value.customers.filter { it.id in selectedIds }.map {
             it.id to WooCustomerCommerceWriteDto(
-                email = it.email,
-                username = it.username,
-                first_name = it.first_name,
-                last_name = it.last_name,
-                role = role,
-                billing = it.billing,
-                shipping = it.shipping,
+                email = it.email, username = it.username, first_name = it.first_name, last_name = it.last_name,
+                role = role, billing = it.billing, shipping = it.shipping,
             )
         }
         if (updates.isEmpty()) return@launch
@@ -280,22 +259,15 @@ internal class CommerceViewModel(
             )
         }
         if (optimistic == previous) return@launch
-
-        // Local-first: render the complete edit immediately, then reconcile with WooCommerce.
         _state.value = _state.value.copy(coupons = optimistic, loading = true, error = null, message = null)
         val client = commerceClientOrFail()
         if (client == null) {
             _state.value = _state.value.copy(coupons = previous, loading = false)
             return@launch
         }
-
         val response = client.updateCoupon(id, coupon, "commerce-coupon-$id-${System.currentTimeMillis()}")
         if (response.statusCode in 200..299) {
-            _state.value = _state.value.copy(
-                loading = false,
-                message = "کوپن «${coupon.code}» به‌روزرسانی شد.",
-                error = null,
-            )
+            _state.value = _state.value.copy(loading = false, message = "کوپن «${coupon.code}» به‌روزرسانی شد.", error = null)
             loadCustomersAndCoupons()
         } else {
             _state.value = _state.value.copy(
@@ -312,18 +284,10 @@ internal class CommerceViewModel(
         val client = commerceClientOrFail() ?: return@launch
         val updates = _state.value.coupons.filter { it.id in selectedIds }.map {
             it.id to WooCouponCommerceWriteDto(
-                code = it.code,
-                amount = amount,
-                discount_type = it.discount_type,
-                description = it.description,
-                date_expires = it.date_expires,
-                individual_use = it.individual_use,
-                free_shipping = it.free_shipping,
-                usage_limit = it.usage_limit,
-                usage_limit_per_user = it.usage_limit_per_user,
-                minimum_amount = it.minimum_amount,
-                maximum_amount = it.maximum_amount,
-                exclude_sale_items = it.exclude_sale_items,
+                code = it.code, amount = amount, discount_type = it.discount_type, description = it.description,
+                date_expires = it.date_expires, individual_use = it.individual_use, free_shipping = it.free_shipping,
+                usage_limit = it.usage_limit, usage_limit_per_user = it.usage_limit_per_user,
+                minimum_amount = it.minimum_amount, maximum_amount = it.maximum_amount, exclude_sale_items = it.exclude_sale_items,
             )
         }
         if (updates.isEmpty()) return@launch
