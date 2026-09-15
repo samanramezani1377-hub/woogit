@@ -4,12 +4,13 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.items
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -138,7 +139,7 @@ internal fun InventoryPage(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             InventoryProductImage(product)
-                            androidx.compose.foundation.layout.Spacer(Modifier.size(12.dp))
+                            Spacer(Modifier.size(12.dp))
                             Column(
                                 Modifier.weight(1f),
                                 verticalArrangement = Arrangement.spacedBy(3.dp),
@@ -181,7 +182,7 @@ internal fun InventoryPage(
                         }
 
                         if (isEditing) {
-                            androidx.compose.foundation.layout.Spacer(Modifier.height(8.dp))
+                            Spacer(Modifier.height(8.dp))
                             QuickStockEditor(
                                 quantity = editingQuantity,
                                 onQuantityChange = { editingQuantity = it },
@@ -279,8 +280,12 @@ private fun InventoryMetric(
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(value.toString(), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
-            androidx.compose.foundation.layout.Spacer(Modifier.size(5.dp))
+            Text(
+                value.toString(),
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.titleSmall,
+            )
+            Spacer(Modifier.size(5.dp))
             Text(
                 label,
                 color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else GlassTokens.muted,
