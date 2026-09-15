@@ -118,18 +118,20 @@ class CustomerRepositoryV1Impl(
 
     override suspend fun list(storeId: StoreId,page: Int,perPage: Int,search: String?): CoreResult<List<Customer>> {
         val normalized = search?.trim()?.takeIf { it.isNotEmpty() }
-        val cached = local.list(storeId)
-        if (page == 1 && cached is CoreResult.Success) {
-            val filtered = cached.value.filter { customer ->
-                normalized == null || listOf(customer.name,customer.email,customer.username,customer.phone)
-                    .filterNotNull().any { it.contains(normalized, ignoreCase = true) }
-            }
-            if (filtered.isNotEmpty()) {
-                refreshScope.launch { refresh(storeId,1,perPage,normalized) }
-                return CoreResult.Success(filtered.take(perPage))
+        return when (val remote = refresh(storeId,page,perPage,normalized)) {
+            is CoreResult.Success -> remote
+            is CoreResult.Failure -> {
+                if (page == 1) {
+                    when (val cached = local.list(storeId)) {
+                        is CoreResult.Success -> CoreResult.Success(cached.value.filter { customer ->
+                            normalized == null || listOf(customer.name,customer.email,customer.username,customer.phone)
+                                .filterNotNull().any { it.contains(normalized, ignoreCase = true) }
+                        }.take(perPage))
+                        is CoreResult.Failure -> remote
+                    }
+                } else remote
             }
         }
-        return refresh(storeId,page,perPage,normalized)
     }
 
     override suspend fun refresh(storeId: StoreId,page: Int,perPage: Int,search: String?): CoreResult<List<Customer>> = when (val client = provider.commerceClient(storeId)) {
@@ -144,9 +146,7 @@ class CustomerRepositoryV1Impl(
                 onFailure = { CoreResult.Failure(it.toDomain()) },
             )
         }
-        is CoreResult.Failure -> {
-            if (page == 1) local.list(storeId) else CoreResult.Failure(DomainError.Network("ارتباط با فروشگاه برقرار نشد."))
-        }
+        is CoreResult.Failure -> CoreResult.Failure(DomainError.Network("ارتباط با فروشگاه برقرار نشد."))
     }
 }
 
@@ -154,7 +154,7 @@ private fun Throwable.toDomain(): DomainError = when (this) {
     is HttpApiException -> when (statusCode) {
         401 -> DomainError.Authentication("احراز هویت مدیریت مشتریان ناموفق بود.")
         403 -> DomainError.Permission("دسترسی مدیریت مشتریان مجاز نیست.")
-        404 -> DomainError.NotFound("customer", "مشتری پیدا نشد.")
+        404 -> DomainError.NotFound("customer", "not-found")
         409 -> DomainError.Conflict("تعارض در اطلاعات مشتری.")
         400,405,415,422 -> DomainError.Validation("اطلاعات مشتری نامعتبر است.")
         429 -> DomainError.RateLimited("درخواست‌های مشتریان بیش از حد مجاز است.")
