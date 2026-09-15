@@ -75,6 +75,3 @@ When a new runtime source file is added, add it to the appropriate section of th
 
 ## Direction of authority
 `source code -> agent map`. The map never overrides executable code. A map-only change is documentation and does not require code changes.
-
-## AI response policy
-Fixed user-facing status and mandatory fallback replies are removed; status/continuation requests use the normal model response path while Working Memory remains internal.
