@@ -56,6 +56,7 @@ internal fun CommerceFeatureRouteScreen(
                     onProduct = onOpenProduct,
                     onEditCoupon = vm::updateCoupon,
                     onCreateCoupon = vm::createCoupon,
+                    onDeleteCoupon = vm::deleteCoupon,
                 )
             }
         }
