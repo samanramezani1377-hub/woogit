@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   verify-map-sync:
@@ -30,4 +30,26 @@ jobs:
           else
             BASE=$(git rev-parse "$GITHUB_SHA^" 2>/dev/null || true)
             if [[ -n "$BASE" ]]; then bash .github/agent-map-guard.sh "$BASE" "$GITHUB_SHA"; else echo 'Initial commit: no previous tree to compare.'; fi
+
+  ai-static-cleanup:
+    name: One-time AI static reply cleanup
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Run cleanup only when marker exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -f .github/AI_CLEANUP_TRIGGER ]]; then
+            echo 'No cleanup marker; nothing to do.'
+            exit 0
           fi
+          python3 scripts/cleanup_ai_static_replies.py
+          rm -f scripts/cleanup_ai_static_replies.py .github/AI_CLEANUP_TRIGGER
+          git config user.name 'samanramezani1377-hub'
+          git config user.email 'saman.ramezani1377@gmail.com'
+          git add -A
+          git commit -m 'Remove fixed AI user-facing replies'
+          git push origin main
