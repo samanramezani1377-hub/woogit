@@ -9,4 +9,7 @@ import com.samanramezani1377.woogit.core.domain.model.Customer
 object CustomerRuntime {
     var listLoader: (suspend (StoreId, Int, Int, String?) -> CoreResult<List<Customer>>)? = null
     var detailLoader: (suspend (StoreId, EntityId) -> CoreResult<Customer>)? = null
+    var createCustomer: (suspend (StoreId, Customer) -> CoreResult<Customer>)? = null
+    var updateCustomer: (suspend (StoreId, EntityId, Customer) -> CoreResult<Customer>)? = null
+    var deleteCustomer: (suspend (StoreId, EntityId) -> CoreResult<Unit>)? = null
 }
