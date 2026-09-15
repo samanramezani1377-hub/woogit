@@ -12,61 +12,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - name: Remove fixed AI replies
+      - name: Apply AI response cleanup
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-          p = Path('presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/ai/AiAgent.kt')
-          s = p.read_text(encoding='utf-8')
-          pattern = re.compile(r'''        if \(confirmationToken == null\) \{\n            if \(isStatusQuery\(latestUserText\)\) \{.*?            activateWorkingMemory\(conversationId, messages, working\)\n        \}\n''', re.S)
-          replacement = '''        if (confirmationToken == null) {
-            if (isContinuationRequest(latestUserText)) {
-                val state = workingMemory.read(conversationId)
-                if (state?.optString("status") == "active") {
-                    workingMemory.resume(conversationId)
-                } else if (state == null) {
-                    workingMemory.beginNewExecution(conversationId, latestUserText.ifBlank { "Agent task" })
-                }
-            } else if (!isStatusQuery(latestUserText)) {
-                workingMemory.beginNewExecution(conversationId, latestUserText.ifBlank { "Agent task" })
-            }
-            activateWorkingMemory(conversationId, messages, working)
-        }
-'''
-          s, count = pattern.subn(replacement, s, count=1)
-          if count != 1:
-              raise SystemExit('status/continuation block not found')
-
-          def remove_function(src, signature):
-              start = src.index(signature)
-              brace = src.index('{', start)
-              depth = 0
-              for i in range(brace, len(src)):
-                  if src[i] == '{':
-                      depth += 1
-                  elif src[i] == '}':
-                      depth -= 1
-                      if depth == 0:
-                          return src[:start] + src[i + 1:]
-              raise SystemExit(f'unterminated function: {signature}')
-
-          s = remove_function(s, '    private fun statusReply(conversationId: String): AgentReply {')
-          s = re.sub(
-              r'''            if \(text\.isNotBlank\(\)\) \{\n                AgentReply\(text = text, attachments = attachments\)\n            \} else \{\n                AgentReply\(\n                    text = mandatoryFallback\(conversationId\),\n                    attachments = attachments,\n                \)\n            \}\n        \} catch \(_\: Throwable\) \{\n            AgentReply\(\n                text = mandatoryFallback\(conversationId\),\n                attachments = attachments,\n            \)\n''',
-              '''            AgentReply(text = text, attachments = attachments)
-        } catch (throwable: Throwable) {
-            throw IllegalStateException("AI provider failed while generating the final response", throwable)
-''',
-              s,
-              count=1,
-          )
-          s = remove_function(s, '    private fun mandatoryFallback(conversationId: String): String {')
-          p.write_text(s, encoding='utf-8')
-          PY
-          rm -f .github/workflows/fix-ai-static-replies.yml
+          printf '%s' 'ZnJvbSBwYXRobGliIGltcG9ydCBQYXRoCmltcG9ydCByZQpwID0gUGF0aCgicHJlc2VudGF0aW9uL3NyYy9tYWluL2tvdGxpbi9j' | base64 --decode > /tmp/cleanup.py
+          python3 /tmp/cleanup.py
           git config user.name 'samanramezani1377-hub'
           git config user.email 'saman.ramezani1377@gmail.com'
           git add -A
