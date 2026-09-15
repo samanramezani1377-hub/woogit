@@ -22,6 +22,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.samanramezani1377.woogit.presentation.GlassOutlinedButton
 import com.samanramezani1377.woogit.presentation.GlassTextField
 import com.samanramezani1377.woogit.presentation.GlassTokens
@@ -66,12 +67,18 @@ internal fun formatToolArguments(raw: String): String = runCatching {
 private fun markdownLine(line: String): String {
     Regex("^\\s*[-*+]\\s+(.*)$").find(line)?.let { return "• ${it.groupValues[1]}" }
     Regex("^\\s*(\\d+)[.)]\\s+(.*)$").find(line)?.let { return "${it.groupValues[1]}. ${it.groupValues[2]}" }
+    Regex("^\\s*>\\s?(.*)$").find(line)?.let { return "│ ${it.groupValues[1]}" }
     return line
 }
 
 private fun markdownAnnotated(text: String): AnnotatedString {
     val builder = AnnotatedString.Builder()
-    val matches = (Regex("\\*\\*(.+?)\\*\\*").findAll(text).map { it to SpanStyle(fontWeight = FontWeight.Bold) } + Regex("`([^`]+)`").findAll(text).map { it to SpanStyle(fontFamily = FontFamily.Monospace) }).sortedBy { it.first.range.first }
+    val matches = sequenceOf(
+        Regex("\\*\\*(.+?)\\*\\*").findAll(text).map { it to SpanStyle(fontWeight = FontWeight.Bold) },
+        Regex("~~(.+?)~~").findAll(text).map { it to SpanStyle(textDecoration = androidx.compose.ui.text.style.TextDecoration.LineThrough) },
+        Regex("`([^`]+)`").findAll(text).map { it to SpanStyle(fontFamily = FontFamily.Monospace) },
+        Regex("(?<!\\*)\\*([^*]+)\\*(?!\\*)").findAll(text).map { it to SpanStyle(fontWeight = FontWeight.SemiBold) },
+    ).flatMap { it.asIterable() }.sortedBy { it.first.range.first }
     var cursor = 0
     for ((match, style) in matches) {
         if (match.range.first < cursor) continue
@@ -87,28 +94,51 @@ private fun markdownAnnotated(text: String): AnnotatedString {
 
 @Composable
 private fun MarkdownMessage(text: String) {
-    val lines = text.replace("\\r\\n", "\\n").replace("\\r", "\\n").split('\n')
+    val lines = text.replace("\r\n", "\n").replace("\r", "\n").split('\n')
     var inCode = false
     var code = StringBuilder()
     Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
         lines.forEach { raw ->
             val line = raw.trimEnd()
-            if (line.trimStart().startsWith("```") ) {
+            val fence = line.trimStart()
+            if (fence.startsWith("```") || fence.startsWith(":```") ) {
                 if (inCode) {
                     Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Color.Black.copy(alpha = .07f)).padding(10.dp)) {
                         Text(code.toString().trimEnd(), color = GlassTokens.ink, fontFamily = FontFamily.Monospace)
                     }
                     code = StringBuilder()
                     inCode = false
-                } else inCode = true
+                } else {
+                    inCode = true
+                }
                 return@forEach
             }
             if (inCode) {
                 code.append(line).append('\n')
                 return@forEach
             }
-            if (line.isBlank()) Spacer(Modifier.height(4.dp))
-            else Text(markdownAnnotated(markdownLine(line)), color = GlassTokens.ink)
+            if (line.isBlank()) {
+                Spacer(Modifier.height(4.dp))
+                return@forEach
+            }
+            if (Regex("^\\s*#{1,6}\\s+.+$").matches(line)) {
+                val heading = line.trimStart()
+                val level = heading.takeWhile { it == '#' }.length
+                val content = heading.drop(level).trim()
+                Text(
+                    markdownAnnotated(content),
+                    color = GlassTokens.ink,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = when (level) { 1 -> 24.sp; 2 -> 21.sp; 3 -> 18.sp; 4 -> 17.sp; else -> 16.sp },
+                    modifier = Modifier.padding(top = if (level <= 2) 5.dp else 2.dp),
+                )
+                return@forEach
+            }
+            if (Regex("^\\s*(-{3,}|_{3,}|\\*{3,})\\s*$").matches(line)) {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 5.dp), color = Color.Black.copy(alpha = .12f))
+                return@forEach
+            }
+            Text(markdownAnnotated(markdownLine(line)), color = GlassTokens.ink)
         }
         if (inCode && code.isNotEmpty()) {
             Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Color.Black.copy(alpha = .07f)).padding(10.dp)) {
