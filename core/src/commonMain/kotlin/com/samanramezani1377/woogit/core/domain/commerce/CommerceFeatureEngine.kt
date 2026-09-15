@@ -7,10 +7,7 @@ import com.samanramezani1377.woogit.core.domain.model.Product
 import com.samanramezani1377.woogit.core.domain.model.StockStatus
 import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
-import kotlinx.datetime.LocalDate
-import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
-import kotlinx.datetime.toInstant
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Duration.Companion.days
 
@@ -64,12 +61,17 @@ object CommerceFeatureEngine {
         now: Instant = Clock.System.now(),
     ): AnalyticsSnapshot {
         val currentStart = rangeStart(range, now)
-        val previousStart = currentStart - rangeDuration(range, now)
-        val currentOrders = orders.filter { it.analyticsDate()?.let { date -> date >= currentStart && date < now } == true }
-        val previousOrders = orders.filter { it.analyticsDate()?.let { date -> date >= previousStart && date < currentStart } == true }
+        val previousStart = currentStart - rangeDuration(range)
+
+        val datedOrders = orders.mapNotNull { order ->
+            order.analyticsDate()?.let { date -> order to date }
+        }
+        val currentOrders = datedOrders.filter { (_, date) -> date >= currentStart && date < now }.map { it.first }
+        val previousOrders = datedOrders.filter { (_, date) -> date >= previousStart && date < currentStart }.map { it.first }
         val completed = currentOrders.filter { it.status == OrderStatus.COMPLETED }
         val previousCompleted = previousOrders.filter { it.status == OrderStatus.COMPLETED }
-        val allCompleted = orders.filter { it.status == OrderStatus.COMPLETED }
+        val allCompleted = orders.asSequence().filter { it.status == OrderStatus.COMPLETED }.toList()
+
         val sales = completed.sumOf { it.total?.toDoubleOrNull() ?: 0.0 }
         val previousSales = previousCompleted.sumOf { it.total?.toDoubleOrNull() ?: 0.0 }
         val averageOrderValue = if (completed.isEmpty()) 0.0 else sales / completed.size
@@ -82,8 +84,10 @@ object CommerceFeatureEngine {
         val statusRevenue = currentOrders.groupBy { it.status }.mapValues { (_, rows) ->
             rows.sumOf { it.total?.toDoubleOrNull() ?: 0.0 }
         }
+
         val productMap = products.associateBy { it.id.value }
-        val allProductAnalytics = completed.flatMap { it.items }
+        val allProductAnalytics = completed.asSequence()
+            .flatMap { it.items.asSequence() }
             .groupBy { it.productId?.value ?: it.name }
             .map { (id, items) ->
                 val quantity = items.sumOf { it.quantity }
@@ -124,15 +128,16 @@ object CommerceFeatureEngine {
         val repeatCustomers = customerAnalytics.count { it.orderCount > 1 }
         val averageCustomerSpend = if (uniqueCustomers == 0) 0.0 else customerAnalytics.sumOf { it.totalSpent } / uniqueCustomers
 
-        val couponRows = currentOrders.flatMap { order ->
-            order.discounts.map { discount ->
-                val code = discount.code.trim().lowercase()
-                code to order
+        val couponRows = currentOrders.asSequence().flatMap { order ->
+            order.discounts.asSequence().map { discount ->
+                discount.code.trim().lowercase() to order
             }
         }.filter { it.first.isNotBlank() }.groupBy { it.first }
         val couponAnalytics = couponRows.map { (code, rows) ->
             val discountTotal = rows.sumOf { row ->
-                row.second.discounts.filter { it.code.trim().lowercase() == code }.sumOf { it.total.toDoubleOrNull() ?: 0.0 }
+                row.second.discounts.asSequence()
+                    .filter { it.code.trim().lowercase() == code }
+                    .sumOf { it.total.toDoubleOrNull() ?: 0.0 }
             }
             CouponInsight(
                 code = code,
@@ -218,10 +223,18 @@ object CommerceFeatureEngine {
         days: Int,
         labelOffsetDays: Int,
     ): List<AnalyticsTrendPoint> {
+        val bucketCount = days.coerceIn(7, 365)
         val periodStart = periodEnd - days.days
-        return (0 until days.coerceIn(7, 365)).map { offset ->
+        val buckets = LinkedHashMap<kotlinx.datetime.LocalDate, MutableList<Order>>(bucketCount)
+        for (offset in 0 until bucketCount) {
             val date = periodStart.plus((offset + 1).days).toLocalDateTime(TimeZone.UTC).date
-            val dayOrders = orders.filter { it.analyticsDate()?.toLocalDateTime(TimeZone.UTC)?.date == date }
+            buckets[date] = mutableListOf()
+        }
+        orders.forEach { order ->
+            val date = order.analyticsDate()?.toLocalDateTime(TimeZone.UTC)?.date ?: return@forEach
+            buckets[date]?.add(order)
+        }
+        return buckets.map { (date, dayOrders) ->
             AnalyticsTrendPoint(
                 label = date.toString().removePrefix("20"),
                 sales = dayOrders.sumOf { it.total?.toDoubleOrNull() ?: 0.0 },
@@ -233,7 +246,7 @@ object CommerceFeatureEngine {
 
     private fun rangeStart(range: AnalyticsRange, now: Instant): Instant = now - range.days.days
 
-    private fun rangeDuration(range: AnalyticsRange, now: Instant): kotlin.time.Duration = range.days.days
+    private fun rangeDuration(range: AnalyticsRange): kotlin.time.Duration = range.days.days
 
     private fun growthPercent(current: Double, previous: Double): Double? =
         if (previous == 0.0) null else ((current - previous) / previous) * 100.0
