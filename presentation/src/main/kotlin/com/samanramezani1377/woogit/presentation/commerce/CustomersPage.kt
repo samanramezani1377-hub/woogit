@@ -18,6 +18,7 @@ import com.samanramezani1377.woogit.core.domain.error.DomainError
 import com.samanramezani1377.woogit.core.domain.model.Address
 import com.samanramezani1377.woogit.core.domain.model.Customer
 import com.samanramezani1377.woogit.core.domain.model.Order
+import com.samanramezani1377.woogit.presentation.AppBackgroundThemeStore
 import com.samanramezani1377.woogit.presentation.GlassCard
 import com.samanramezani1377.woogit.presentation.GlassEmptyState
 import com.samanramezani1377.woogit.presentation.GlassOutlinedButton
@@ -69,29 +70,31 @@ internal fun CustomersPage(storeId: StoreId, state: CommerceUiState) {
 
     val selectedCustomer = selected
     val selectedOrders = selectedCustomer?.id?.value?.let { id -> state.orders.filter { it.customer?.id?.value == id } }.orEmpty()
-    Box(Modifier.fillMaxSize()) {
-        FeatureBody {
-            Spacer(Modifier.height(78.dp))
-            Row(Modifier.fillMaxWidth().padding(top = 2.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) { Text("مشتریان", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold); Text("${customers.size} مشتری در این صفحه", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall) }
-                if (loading) CircularProgressIndicator(modifier = Modifier.padding(4.dp))
-            }
-            error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            operationMessage?.let { Text(it, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium) }
-            if (!loading && customers.isEmpty()) GlassEmptyState(if (query.isBlank()) "هنوز مشتری‌ای برای نمایش وجود ندارد." else "مشتری مطابق جستجو پیدا نشد.") else if (customers.isNotEmpty()) {
-                Section("فهرست مشتریان") {
-                    customers.forEach { customer ->
-                        val customerId = customer.id?.value; val isSelected = customerId != null && customerId == selectedId; val customerOrders = customerId?.let { id -> state.orders.filter { it.customer?.id?.value == id } }.orEmpty()
-                        CustomerRow(customer = customer, orders = customerOrders, selected = isSelected, onClick = { if (isSelected) { selectedId = null; selected = null } else { selectedId = customerId; selected = customer } })
-                        AnimatedVisibility(visible = isSelected && selectedCustomer != null) { CustomerDetailsCard(customer = selectedCustomer ?: customer, orders = selectedOrders, onEdit = { editorCustomer = selectedCustomer ?: customer }, onDelete = { deleteTarget = selectedCustomer ?: customer }, onClose = { selectedId = null; selected = null }) }
-                    }
-                    if (hasMore) GlassOutlinedButton(if (loadingMore) "در حال بارگذاری…" else "نمایش مشتریان بیشتر", onClick = ::loadMore, modifier = Modifier.fillMaxWidth())
+    Surface(modifier = Modifier.fillMaxSize(), color = AppBackgroundThemeStore.selected.color) {
+        Box(Modifier.fillMaxSize()) {
+            FeatureBody {
+                Spacer(Modifier.height(78.dp))
+                Row(Modifier.fillMaxWidth().padding(top = 2.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) { Text("مشتریان", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold); Text("${customers.size} مشتری در این صفحه", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall) }
+                    if (loading) CircularProgressIndicator(modifier = Modifier.padding(4.dp))
                 }
+                error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                operationMessage?.let { Text(it, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium) }
+                if (!loading && customers.isEmpty()) GlassEmptyState(if (query.isBlank()) "هنوز مشتری‌ای برای نمایش وجود ندارد." else "مشتری مطابق جستجو پیدا نشد.") else if (customers.isNotEmpty()) {
+                    Section("فهرست مشتریان") {
+                        customers.forEach { customer ->
+                            val customerId = customer.id?.value; val isSelected = customerId != null && customerId == selectedId; val customerOrders = customerId?.let { id -> state.orders.filter { it.customer?.id?.value == id } }.orEmpty()
+                            CustomerRow(customer = customer, orders = customerOrders, selected = isSelected, onClick = { if (isSelected) { selectedId = null; selected = null } else { selectedId = customerId; selected = customer } })
+                            AnimatedVisibility(visible = isSelected && selectedCustomer != null) { CustomerDetailsCard(customer = selectedCustomer ?: customer, orders = selectedOrders, onEdit = { editorCustomer = selectedCustomer ?: customer }, onDelete = { deleteTarget = selectedCustomer ?: customer }, onClose = { selectedId = null; selected = null }) }
+                        }
+                        if (hasMore) GlassOutlinedButton(if (loadingMore) "در حال بارگذاری…" else "نمایش مشتریان بیشتر", onClick = ::loadMore, modifier = Modifier.fillMaxWidth())
+                    }
+                }
+                Spacer(Modifier.height(92.dp))
             }
-            Spacer(Modifier.height(92.dp))
+            GlassCard(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).align(Alignment.TopCenter)) { GlassSearchField(value = query, onValueChange = { query = it }, label = "جستجوی نام، ایمیل، نام کاربری یا تلفن", modifier = Modifier.fillMaxWidth()) }
+            GlassCard(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp).align(Alignment.BottomCenter)) { GlassOutlinedButton("مشتری جدید", onClick = { showCreate = true }, modifier = Modifier.fillMaxWidth()) }
         }
-        GlassCard(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).align(Alignment.TopCenter)) { GlassSearchField(value = query, onValueChange = { query = it }, label = "جستجوی نام، ایمیل، نام کاربری یا تلفن", modifier = Modifier.fillMaxWidth()) }
-        GlassCard(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp).align(Alignment.BottomCenter)) { GlassOutlinedButton("مشتری جدید", onClick = { showCreate = true }, modifier = Modifier.fillMaxWidth()) }
     }
     if (showCreate) CustomerEditorDialog(Customer(id = null, name = "", email = null), "مشتری جدید", operationLoading, { if (!operationLoading) showCreate = false }) { saveCustomer(it, true) }
     editorCustomer?.let { customer -> CustomerEditorDialog(customer, "ویرایش مشتری", operationLoading, { if (!operationLoading) editorCustomer = null }) { saveCustomer(it, false) } }
