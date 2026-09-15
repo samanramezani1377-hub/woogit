@@ -71,7 +71,9 @@ internal fun CouponsPage(
         }.distinctBy { it.first }
     }
     val categories = remember(state.products) {
-        state.products.flatMap { it.categories }.map { it.id.value to it.name }.distinctBy { it.first }
+        state.products.flatMap { it.categories }
+            .mapNotNull { category -> category.id.value.toLongOrNull()?.let { it to category.name } }
+            .distinctBy { it.first }
     }
 
     if (creating) {
