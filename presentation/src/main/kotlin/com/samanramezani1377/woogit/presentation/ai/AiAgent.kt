@@ -88,28 +88,15 @@ internal class AiAgent(
         val latestUserText = latestUserText(messages)
 
         if (confirmationToken == null) {
-            if (isStatusQuery(latestUserText)) {
-                return statusReply(conversationId)
-            }
-
             if (isContinuationRequest(latestUserText)) {
                 val state = workingMemory.read(conversationId)
-                    ?: return AgentReply(
-                        text = "کار ناتمامی برای ادامه پیدا نشد. درخواست جدید خودت را بگو تا از ابتدا انجامش بدهم.",
-                    )
-                val progress = state.optJSONObject("progress")
-                val remaining = progress?.optInt("remaining", 0) ?: 0
-                if (state.optString("status") == "completed" && remaining <= 0) {
-                    return AgentReply(
-                        text = "کار قبلی طبق Working Memory کامل شده است؛ چیزی برای ادامه باقی نمانده است.",
-                    )
+                if (state?.optString("status") == "active") {
+                    workingMemory.resume(conversationId)
+                } else if (state == null) {
+                    workingMemory.beginNewExecution(conversationId, latestUserText.ifBlank { "Agent task" })
                 }
-                workingMemory.resume(conversationId)
-            } else {
-                workingMemory.beginNewExecution(
-                    conversationId,
-                    latestUserText.ifBlank { "Agent task" },
-                )
+            } else if (!isStatusQuery(latestUserText)) {
+                workingMemory.beginNewExecution(conversationId, latestUserText.ifBlank { "Agent task" })
             }
             activateWorkingMemory(conversationId, messages, working)
         }
@@ -581,47 +568,7 @@ $outcome""".trimIndent(),
         )
     }
 
-    private fun statusReply(conversationId: String): AgentReply {
-        val state = workingMemory.read(conversationId)
-            ?: return AgentReply(text = "هنوز اجرای ذخیره‌شده‌ای برای این گفتگو ندارم.")
-        val progress = state.optJSONObject("progress")
-        val completed = progress?.optInt("completed", 0) ?: 0
-        val total = progress?.optInt("total", 0) ?: 0
-        val remaining = progress?.optInt("remaining", 0) ?: 0
-        val summary = state.optString("summary").trim()
-        val status = state.optString("status")
-        val checkpointStatus = state
-            .optJSONObject("checkpoint")
-            ?.optString("status")
-            .orEmpty()
-        val checkpointText = if (checkpointStatus == "in_flight") {
-            " آخرین عملیات هنوز نتیجه نهاییِ ذخیره‌شده ندارد و قبل از تکرار باید وضعیت واقعی فروشگاه بررسی شود."
-        } else {
-            ""
-        }
-        val progressText = if (total > 0) {
-            "$completed از $total مورد انجام شده و $remaining مورد باقی مانده"
-        } else if (remaining > 0) {
-            "$remaining مورد باقی مانده"
-        } else {
-            "مقدار دقیق باقی‌مانده ثبت نشده است"
-        }
-        return AgentReply(
-            text = when {
-                status == "completed" && remaining <= 0 && summary.isNotBlank() ->
-                    "آخرین اجرای ثبت‌شده کامل شده است. $summary$checkpointText"
 
-                status == "active" ->
-                    "کار در حال پیگیری است: $progressText.${if (summary.isNotBlank()) " آخرین جمع‌بندی: $summary" else ""}$checkpointText"
-
-                summary.isNotBlank() ->
-                    "آخرین وضعیت: $summary؛ $progressText.$checkpointText"
-
-                else ->
-                    "آخرین وضعیت Working Memory: $progressText.$checkpointText"
-            },
-        )
-    }
 
     private fun activateWorkingMemory(
         conversationId: String,
@@ -752,41 +699,13 @@ $context""".trimIndent(),
                 ?.optJSONObject(0)
                 ?.optJSONObject("message")
             val text = message?.optString("content")?.trim().orEmpty()
-            if (text.isNotBlank()) {
-                AgentReply(text = text, attachments = attachments)
-            } else {
-                AgentReply(
-                    text = mandatoryFallback(conversationId),
-                    attachments = attachments,
-                )
-            }
-        } catch (_: Throwable) {
-            AgentReply(
-                text = mandatoryFallback(conversationId),
-                attachments = attachments,
-            )
+            AgentReply(text = text, attachments = attachments)
+        } catch (throwable: Throwable) {
+            throw IllegalStateException("AI provider failed while generating the final response", throwable)
         }
     }
 
-    private fun mandatoryFallback(conversationId: String): String {
-        val state = workingMemory.read(conversationId)
-        val progress = state?.optJSONObject("progress")
-        val completed = progress?.optInt("completed", -1) ?: -1
-        val total = progress?.optInt("total", -1) ?: -1
-        val inFlight = state
-            ?.optJSONObject("checkpoint")
-            ?.optString("status") == "in_flight"
-        val suffix = if (inFlight) {
-            " آخرین عملیات قبل از تکمیل checkpoint متوقف شده و قبل از تکرار باید وضعیت واقعی فروشگاه بررسی شود."
-        } else {
-            ""
-        }
-        return if (completed >= 0 && total > 0) {
-            "بخشی از کار انجام شد و اجرای ابزارها به سقف این مرحله رسید: $completed از $total مورد تکمیل شده است. وضعیت کار ذخیره شده و می‌توان با گفتن «ادامه بده» از همین نقطه ادامه داد.$suffix"
-        } else {
-            "بخشی از کار انجام شد، اما سقف اجرای ابزارها در این مرحله رسید. نتیجه‌های انجام‌شده حفظ شده‌اند و می‌توان با گفتن «ادامه بده» کار را از وضعیت فعلی ادامه داد.$suffix"
-        }
-    }
+
 
     private suspend fun executeTool(
         name: String,
