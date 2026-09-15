@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.samanramezani1377.woogit.core.domain.commerce.AnalyticsSnapshot
 import com.samanramezani1377.woogit.core.domain.commerce.BarcodeLookupResult
-import com.samanramezani1377.woogit.core.domain.commerce.BarcodeResolver
+import com.samanramezani1377-hub.woogit.core.domain.commerce.BarcodeResolver
 import com.samanramezani1377.woogit.core.domain.commerce.CommerceFeatureEngine
 import com.samanramezani1377.woogit.core.domain.commerce.CouponUsageSnapshot
 import com.samanramezani1377.woogit.core.domain.commerce.CustomerSnapshot
@@ -207,16 +207,11 @@ internal class CommerceViewModel(
 
         val succeeded = results.count { it.succeeded }
         val failed = results.count { !it.succeeded }
-        val succeededIds = results.asSequence()
-            .filter { it.succeeded }
-            .map { it.orderId.value }
-            .toSet()
+        val succeededIds = results.asSequence().filter { it.succeeded }.map { it.orderId.value }.toSet()
         val updatedOrders = if (succeededIds.isEmpty()) {
             _state.value.orders
         } else {
-            _state.value.orders.map { order ->
-                if (order.id.value in succeededIds) order.copy(status = target) else order
-            }
+            _state.value.orders.map { order -> if (order.id.value in succeededIds) order.copy(status = target) else order }
         }
 
         _state.value = _state.value.copy(
@@ -264,6 +259,52 @@ internal class CommerceViewModel(
             error = if (failed > 0) "بخشی از عملیات مشتریان ناموفق بود." else null,
         )
         loadCustomersAndCoupons()
+    }
+
+    fun updateCoupon(id: Long, coupon: WooCouponCommerceWriteDto) = viewModelScope.launch {
+        val previous = _state.value.coupons
+        val optimistic = previous.map { current ->
+            if (current.id != id) current else current.copy(
+                code = coupon.code,
+                amount = coupon.amount,
+                discount_type = coupon.discount_type,
+                description = coupon.description,
+                date_expires = coupon.date_expires,
+                individual_use = coupon.individual_use,
+                free_shipping = coupon.free_shipping,
+                usage_limit = coupon.usage_limit,
+                usage_limit_per_user = coupon.usage_limit_per_user,
+                minimum_amount = coupon.minimum_amount,
+                maximum_amount = coupon.maximum_amount,
+                exclude_sale_items = coupon.exclude_sale_items,
+            )
+        }
+        if (optimistic == previous) return@launch
+
+        // Local-first: render the complete edit immediately, then reconcile with WooCommerce.
+        _state.value = _state.value.copy(coupons = optimistic, loading = true, error = null, message = null)
+        val client = commerceClientOrFail()
+        if (client == null) {
+            _state.value = _state.value.copy(coupons = previous, loading = false)
+            return@launch
+        }
+
+        val response = client.updateCoupon(id, coupon, "commerce-coupon-$id-${System.currentTimeMillis()}")
+        if (response.statusCode in 200..299) {
+            _state.value = _state.value.copy(
+                loading = false,
+                message = "کوپن «${coupon.code}» به‌روزرسانی شد.",
+                error = null,
+            )
+            loadCustomersAndCoupons()
+        } else {
+            _state.value = _state.value.copy(
+                coupons = previous,
+                loading = false,
+                message = null,
+                error = "به‌روزرسانی کوپن انجام نشد؛ تغییرات محلی به حالت قبل برگشت.",
+            )
+        }
     }
 
     fun bulkCouponAmount(selectedIds: Set<Long>, amount: String) = viewModelScope.launch {
@@ -323,6 +364,5 @@ internal class CommerceViewModelFactory(
     private val storeId: StoreId,
 ) : androidx.lifecycle.ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
-    override fun <T : ViewModel> create(modelClass: Class<T>): T =
-        CommerceViewModel(dependencies, storeId) as T
+    override fun <T : ViewModel> create(modelClass: Class<T>): T = CommerceViewModel(dependencies, storeId) as T
 }
