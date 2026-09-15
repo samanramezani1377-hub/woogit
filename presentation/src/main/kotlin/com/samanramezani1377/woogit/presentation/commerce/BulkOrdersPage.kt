@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -19,7 +18,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,15 +32,7 @@ import com.samanramezani1377.woogit.presentation.GlassPrimaryAction
 import com.samanramezani1377.woogit.presentation.GlassSearchField
 import com.samanramezani1377.woogit.presentation.GlassTokens
 
-private val bulkOrderStatuses = listOf(
-    OrderStatus.PENDING,
-    OrderStatus.PROCESSING,
-    OrderStatus.ON_HOLD,
-    OrderStatus.COMPLETED,
-    OrderStatus.CANCELLED,
-    OrderStatus.REFUNDED,
-    OrderStatus.FAILED,
-)
+private val bulkOrderStatuses = listOf(OrderStatus.PENDING, OrderStatus.PROCESSING, OrderStatus.ON_HOLD, OrderStatus.COMPLETED, OrderStatus.CANCELLED, OrderStatus.REFUNDED, OrderStatus.FAILED)
 
 @Composable
 internal fun BulkOrdersPage(state: CommerceUiState, onBulkOrder: (Set<String>, OrderStatus) -> Unit) {
@@ -55,35 +45,17 @@ internal fun BulkOrdersPage(state: CommerceUiState, onBulkOrder: (Set<String>, O
     val selectedVisible = visible.count { it.id.value in selected }
     val effectiveCount = target?.let { status -> selected.count { id -> state.orders.any { it.id.value == id && it.status != status } } } ?: 0
 
-    if (showStatusPicker) {
-        AlertDialog(
-            onDismissRequest = { if (!state.loading) showStatusPicker = false },
-            title = { Text("تغییر وضعیت سفارش‌ها") },
-            text = { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { bulkOrderStatuses.forEach { status -> TextButton(onClick = { showStatusPicker = false; target = status }, enabled = !state.loading, modifier = Modifier.fillMaxWidth()) { Text(status.faLabel(), modifier = Modifier.fillMaxWidth()) } } } },
-            confirmButton = {},
-        )
-    }
+    if (showStatusPicker) AlertDialog(onDismissRequest = { if (!state.loading) showStatusPicker = false }, title = { Text("تغییر وضعیت سفارش‌ها") }, text = { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { bulkOrderStatuses.forEach { status -> TextButton(onClick = { showStatusPicker = false; target = status }, enabled = !state.loading, modifier = Modifier.fillMaxWidth()) { Text(status.faLabel(), modifier = Modifier.fillMaxWidth()) } } } }, confirmButton = {})
 
-    target?.let { status ->
-        AlertDialog(
-            onDismissRequest = { if (!state.loading) target = null },
-            title = { Text("تأیید تغییر وضعیت") },
-            text = { Text("$effectiveCount سفارش به «${status.faLabel()}» تغییر می‌کند.") },
-            confirmButton = { GlassPrimaryAction("اعمال", { onBulkOrder(selected, status); target = null }, enabled = !state.loading && effectiveCount > 0) },
-            dismissButton = { TextButton(enabled = !state.loading, onClick = { target = null }) { Text("لغو") } },
-        )
-    }
+    target?.let { status -> AlertDialog(onDismissRequest = { if (!state.loading) target = null }, title = { Text("تأیید تغییر وضعیت") }, text = { Text("$effectiveCount سفارش به «${status.faLabel()}» تغییر می‌کند.") }, confirmButton = { GlassPrimaryAction("اعمال", { onBulkOrder(selected, status); target = null }, enabled = !state.loading && effectiveCount > 0) }, dismissButton = { TextButton(enabled = !state.loading, onClick = { target = null }) { Text("لغو") } }) }
 
     FeatureBody {
         GlassSearchField(value = query, onValueChange = { query = it }, label = "شماره سفارش", modifier = Modifier.fillMaxWidth())
-
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             item { GlassOutlinedButton("همه", { filter = null }) }
             itemsIndexed(bulkOrderStatuses) { _, status -> GlassOutlinedButton(if (filter == status) "✓ ${status.faLabel()}" else status.faLabel(), { filter = status }) }
         }
-
         if (state.loading) GlassLoading("در حال به‌روزرسانی سفارش‌ها…")
-
         state.bulkOrderResults.takeIf { it.isNotEmpty() }?.let { results ->
             val success = results.count { it.succeeded }
             val failed = results.filterNot { it.succeeded }
@@ -93,28 +65,15 @@ internal fun BulkOrdersPage(state: CommerceUiState, onBulkOrder: (Set<String>, O
                 if (failed.isNotEmpty() && state.bulkOrderTarget != null) GlassPrimaryAction("تلاش دوباره برای موارد ناموفق", { onBulkOrder(failed.map { it.orderId.value }.toSet(), state.bulkOrderTarget!!) }, modifier = Modifier.fillMaxWidth(), enabled = !state.loading)
             }
         }
-
-        if (visible.isEmpty()) {
-            GlassEmptyState("سفارشی با این فیلتر پیدا نشد.")
-        } else {
-            LazyColumn(
-                Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
+        if (visible.isEmpty()) GlassEmptyState("سفارشی با این فیلتر پیدا نشد.") else {
+            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 item {
-                    Row(
-                        Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
+                    Row(Modifier.fillMaxWidth().padding(vertical = 2.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Text("${visible.size} سفارش", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
-                        GlassOutlinedButton(
-                            if (selectedVisible == visible.size) "✓" else "☐",
-                            {
-                                val visibleIds = visible.map { it.id.value }.toSet()
-                                selected = if (selectedVisible == visible.size) selected - visibleIds else selected + visibleIds
-                            },
-                        )
+                        GlassOutlinedButton(if (selectedVisible == visible.size) "✓" else "☐", {
+                            val visibleIds = visible.map { it.id.value }.toSet()
+                            selected = if (selectedVisible == visible.size) selected - visibleIds else selected + visibleIds
+                        })
                     }
                 }
                 items(visible, key = { it.id.value }) { order ->
@@ -123,7 +82,7 @@ internal fun BulkOrdersPage(state: CommerceUiState, onBulkOrder: (Set<String>, O
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                 Text("#${order.number}", fontWeight = FontWeight.Bold)
-                                Text("${order.billing.firstName} ${order.billing.lastName}".trim().ifEmpty { "مشتری نامشخص" }, style = MaterialTheme.typography.bodySmall)
+                                Text(order.customerName.ifBlank { "مشتری نامشخص" }, style = MaterialTheme.typography.bodySmall)
                                 Text("${order.lineItems.size} قلم · ${order.total}", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
                                 Text(order.status.faLabel(), color = GlassTokens.muted, style = MaterialTheme.typography.labelSmall)
                             }
@@ -133,9 +92,6 @@ internal fun BulkOrdersPage(state: CommerceUiState, onBulkOrder: (Set<String>, O
                 }
             }
         }
-
-        if (selected.isNotEmpty()) {
-            GlassPrimaryAction("تغییر وضعیت (${selected.size})", { showStatusPicker = true }, modifier = Modifier.fillMaxWidth(), enabled = !state.loading)
-        }
+        if (selected.isNotEmpty()) GlassPrimaryAction("تغییر وضعیت (${selected.size})", { showStatusPicker = true }, modifier = Modifier.fillMaxWidth(), enabled = !state.loading)
     }
 }
