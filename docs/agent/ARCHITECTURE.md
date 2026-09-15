@@ -88,7 +88,9 @@ Commerce execution remains:
 The Commerce center exposes only these flows:
 
 - **Customer operations:** selected customers can be updated through the WooCommerce customers batch endpoint using write-only DTOs and 100-item chunks.
-- **Coupon usage analytics / coupon operations:** coupon usage is aggregated from orders and selected coupons can be batch-updated through `/coupons/batch`, chunked at 100.
+- **Coupon management:** coupons are displayed from the Commerce read state and edited individually. There is no bulk-edit UI in Coupon Management.
+- **Coupon individual write:** the editor sends the existing `WooCouponCommerceWriteDto` through the existing `updateCoupon(id, ...)` endpoint. The presentation state is updated optimistically first (local-first), then reconciled from WooCommerce after a successful write. A failed write restores the previous local coupon state and reports the failure; no separate backend contract or server-side cache is introduced.
+- **Coupon fields:** individual editing covers discount type, amount, description, expiry, global/per-user usage limits, minimum/maximum order amount, individual-use, free-shipping and sale-item exclusion. Coupon code remains read-only in this form.
 
 The independent operational flows are:
 
@@ -152,7 +154,7 @@ Background workers include order polling, product catalog synchronization, annou
 - Dashboard concurrency/readiness: `DashboardViewModel.kt`.
 - Credential persistence: `AndroidSecureCredentialStore.kt`.
 - Commerce runtime: `presentation/.../commerce/CommerceRuntime.kt`.
-- Commerce navigation/UI: `presentation/.../commerce/CommerceCenterScreen.kt`, `CommerceFeatureRouteScreen.kt`, `CommerceFeaturePages.kt`, `CommerceViewModel.kt`.
+- Commerce navigation/UI: `presentation/.../commerce/CommerceCenterScreen.kt`, `CommerceFeatureRouteScreen.kt`, `CommerceFeaturePages.kt`, `CommerceViewModel.kt`, `CouponsPage.kt`.
 - Commerce transport: `data/.../CommerceWooCommerceApi.kt`, `WooCommerceClientProvider.kt`.
 - Commerce domain calculations: `core/.../commerce/CommerceFeatureEngine.kt`, `BarcodeResolver.kt`, `InvoiceDocumentFactory.kt`.
 - Commerce Android scanner: `app/.../commerce/BarcodeScannerScreen.kt`, `CommerceScannerActivity.kt`.
