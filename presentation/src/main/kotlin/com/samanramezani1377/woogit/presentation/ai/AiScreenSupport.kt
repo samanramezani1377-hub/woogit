@@ -132,6 +132,26 @@ private fun MarkdownMessage(text: String) {
         lines.forEach { raw ->
             val line = raw.trimEnd()
             val fence = line.trimStart()
+
+            // Handle a complete fenced block that starts and ends on the same line,
+            // e.g. ```text...content...```. Some providers emit this form when they
+            // are asked to return a copyable code block.
+            if (!inCode && fence.startsWith("```") && fence.drop(3).contains("```")) {
+                val body = fence.drop(3)
+                    .let { value ->
+                        val firstNewline = value.indexOf('\\n')
+                        if (firstNewline >= 0 && value.substring(0, firstNewline).trim().matches(Regex("^[A-Za-z0-9_+-]+$"))) {
+                            value.substring(firstNewline + 1)
+                        } else {
+                            value
+                        }
+                    }
+                    .substringBeforeLast("```")
+                    .trimEnd()
+                if (body.isNotBlank()) CodeBlock(body)
+                return@forEach
+            }
+
             if (fence.startsWith("```") || fence.startsWith(":```") ) {
                 if (inCode) {
                     CodeBlock(code.toString().trimEnd())
@@ -139,11 +159,25 @@ private fun MarkdownMessage(text: String) {
                     inCode = false
                 } else {
                     inCode = true
+                    // Preserve content after the opening fence when a provider emits
+                    // ```text followed immediately by content instead of a newline.
+                    val opening = if (fence.startsWith(":```")) fence.drop(4) else fence.drop(3)
+                    val firstNewline = opening.indexOf('\\n')
+                    if (firstNewline >= 0) {
+                        val header = opening.substring(0, firstNewline).trim()
+                        if (header.isBlank() || header.matches(Regex("^[A-Za-z0-9_+-]+$"))) {
+                            code.append(opening.substring(firstNewline + 1)).append('\\n')
+                        } else {
+                            code.append(opening).append('\\n')
+                        }
+                    } else if (opening.isNotBlank() && !opening.matches(Regex("^[A-Za-z0-9_+-]+$"))) {
+                        code.append(opening).append('\\n')
+                    }
                 }
                 return@forEach
             }
             if (inCode) {
-                code.append(line).append('\n')
+                code.append(line).append('\\n')
                 return@forEach
             }
             if (line.isBlank()) {
