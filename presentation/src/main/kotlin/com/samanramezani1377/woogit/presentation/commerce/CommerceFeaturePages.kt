@@ -16,7 +16,6 @@ internal fun CommerceFeaturePage(
     onBarcode: (String) -> Unit,
     onInventoryFilter: (String, Boolean, Boolean) -> Unit,
     onBulkOrder: (Set<String>, OrderStatus) -> Unit,
-    onBulkCoupon: (Set<Long>, String) -> Unit,
     onInvoice: (String) -> Unit,
     onProduct: (String) -> Unit,
 ) {
@@ -28,7 +27,7 @@ internal fun CommerceFeaturePage(
             CommerceFeature.INVENTORY -> InventoryPage(storeId, state, onInventoryFilter, onProduct)
             CommerceFeature.CUSTOMERS -> CustomersPage(storeId = storeId, state = state)
             CommerceFeature.ANALYTICS -> Unit
-            CommerceFeature.COUPONS -> CouponsPage(state, onBulkCoupon)
+            CommerceFeature.COUPONS -> CouponsPage(state)
             CommerceFeature.INVOICE -> InvoicePage(state, onInvoice)
         }
     }
