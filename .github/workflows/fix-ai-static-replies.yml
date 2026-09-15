@@ -1,13 +1,15 @@
 name: Fix AI static replies
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [main]
 
 permissions:
   contents: write
 
 jobs:
   fix:
+    if: github.actor == 'samanramezani1377-hub'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
