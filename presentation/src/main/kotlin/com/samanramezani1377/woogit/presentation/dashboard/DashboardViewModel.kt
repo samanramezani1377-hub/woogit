@@ -122,8 +122,9 @@ internal class DashboardViewModel(private val dependencies: V1PresentationDepend
 
     private suspend fun refreshInternal() {
         try {
-            // Do the connection/readiness check first. BackendClient.forward remains strict:
-            // dashboard data is never allowed to run before the backend session is ready.
+            // Readiness is still checked first because BackendClient.forward requires the
+            // backend session to be ready. Once that is true, the first useful dashboard
+            // data is shown immediately; secondary metrics continue in the background.
             val connectionState = checkConnection(allowDuringRefresh = true)
             if (connectionState != ConnectionState.CONNECTED) {
                 _uiState.value = _uiState.value.copy(connectionState = connectionState, loading = false)
@@ -158,7 +159,17 @@ internal class DashboardViewModel(private val dependencies: V1PresentationDepend
                 }
             }
 
-            _uiState.value = _uiState.value.copy(orders = orders, products = products, connectionState = connectionState, error = null)
+            // Do not make the user wait for four additional network requests before seeing
+            // the dashboard. The recent orders/products are already enough to render the
+            // main screen; exact totals and revenue are filled in immediately afterwards.
+            val immediateState = _uiState.value.copy(
+                orders = orders,
+                products = products,
+                connectionState = connectionState,
+                error = null,
+                loading = false,
+            )
+            _uiState.value = immediateState
 
             val metrics = coroutineScope {
                 awaitAll(
