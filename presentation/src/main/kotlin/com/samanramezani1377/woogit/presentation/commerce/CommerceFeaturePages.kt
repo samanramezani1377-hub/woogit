@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.core.domain.model.OrderStatus
+import com.samanramezani1377.woogit.data.network.WooCouponCommerceWriteDto
 
 @Composable
 internal fun CommerceFeaturePage(
@@ -18,7 +19,7 @@ internal fun CommerceFeaturePage(
     onBulkOrder: (Set<String>, OrderStatus) -> Unit,
     onInvoice: (String) -> Unit,
     onProduct: (String) -> Unit,
-    onEditCouponAmount: (Long, String) -> Unit,
+    onEditCoupon: (Long, WooCouponCommerceWriteDto) -> Unit,
 ) {
     Column(Modifier.fillMaxSize()) {
         FeatureHeader(feature.titleFa(), feature.subtitleFa(), onBack)
@@ -28,7 +29,7 @@ internal fun CommerceFeaturePage(
             CommerceFeature.INVENTORY -> InventoryPage(storeId, state, onInventoryFilter, onProduct)
             CommerceFeature.CUSTOMERS -> CustomersPage(storeId = storeId, state = state)
             CommerceFeature.ANALYTICS -> Unit
-            CommerceFeature.COUPONS -> CouponsPage(state, onEditCouponAmount)
+            CommerceFeature.COUPONS -> CouponsPage(state, onEditCoupon)
             CommerceFeature.INVOICE -> InvoicePage(state, onInvoice)
         }
     }
