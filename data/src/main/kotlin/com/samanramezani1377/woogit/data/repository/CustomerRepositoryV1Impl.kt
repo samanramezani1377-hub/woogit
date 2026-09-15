@@ -97,7 +97,7 @@ class CustomerRepositoryV1Impl(
                     local.delete(storeId,id)
                     CoreResult.Success(Unit)
                 } else {
-                    CoreResult.Failure(Throwable.toDomain(HttpApiException(response.statusCode, response.body)))
+                    CoreResult.Failure(HttpApiException(response.statusCode, response.body).toDomain())
                 }
             }
             is CoreResult.Failure -> CoreResult.Failure(client.error)
