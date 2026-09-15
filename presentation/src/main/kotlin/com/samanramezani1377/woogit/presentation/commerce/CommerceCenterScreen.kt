@@ -23,7 +23,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
-import com.samanramezani1377.woogit.data.network.WooCouponCommerceWriteDto
 import com.samanramezani1377.woogit.presentation.GlassCard
 import com.samanramezani1377.woogit.presentation.GlassErrorState
 import com.samanramezani1377.woogit.presentation.GlassLoading
@@ -65,6 +64,7 @@ internal fun CommerceCenterScreen(
             onProduct = onOpenProduct,
             onEditCoupon = vm::updateCoupon,
             onCreateCoupon = vm::createCoupon,
+            onDeleteCoupon = vm::deleteCoupon,
         )
         return
     }
