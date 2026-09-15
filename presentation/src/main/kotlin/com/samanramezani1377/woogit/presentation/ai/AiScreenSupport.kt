@@ -119,9 +119,27 @@ private fun fencedBody(line: String): String? {
         val header = beforeClose.substring(0, firstNewline).trim()
         if (header.isBlank() || header.matches(Regex("^[A-Za-z0-9_+-]+$"))) beforeClose.substring(firstNewline + 1) else beforeClose
     } else {
-        beforeClose
+        val firstSpace = beforeClose.indexOfAny(charArrayOf(' ', '\t'))
+        if (firstSpace > 0 && beforeClose.substring(0, firstSpace).matches(Regex("^[A-Za-z0-9_+-]+$"))) beforeClose.substring(firstSpace + 1) else beforeClose
     }
     return body.trimEnd().takeIf { it.isNotBlank() }
+}
+
+private fun inlineFenceParts(line: String): Triple<String, String, String>? {
+    val open = line.indexOf("```")
+    if (open < 0) return null
+    val close = line.indexOf("```", open + 3)
+    if (close < 0) return null
+    val prefix = line.substring(0, open)
+    val payload = line.substring(open + 3, close)
+    val body = payload.trimStart().let { value ->
+        val language = value.takeWhile { it.isLetterOrDigit() || it == '_' || it == '+' || it == '-' }
+        if (language.isNotEmpty()) {
+            val remainder = value.drop(language.length)
+            if (remainder.isNotEmpty() && (remainder.first() == ' ' || remainder.first() == '\t')) remainder.trimStart() else if (remainder.isEmpty()) "" else value
+        } else value
+    }
+    return Triple(prefix, body, line.substring(close + 3))
 }
 
 @Composable
@@ -134,9 +152,15 @@ private fun MarkdownMessage(text: String) {
             val line = raw.trimEnd()
             val fence = line.trimStart()
             if (!inCode) {
+                inlineFenceParts(line)?.let { (prefix, body, suffix) ->
+                    if (prefix.isNotBlank()) Text(markdownAnnotated(markdownLine(prefix.trimEnd())), color = GlassTokens.ink)
+                    if (body.isNotBlank()) CodeBlock(body)
+                    if (suffix.isNotBlank()) Text(markdownAnnotated(markdownLine(suffix.trimStart())), color = GlassTokens.ink)
+                    return@forEach
+                }
                 fencedBody(line)?.let { body -> CodeBlock(body); return@forEach }
             }
-            if (fence.startsWith("```") || fence.startsWith(":```") ) {
+            if (fence.startsWith("```") || fence.startsWith(":```")) {
                 if (inCode) {
                     CodeBlock(code.toString().trimEnd())
                     code = StringBuilder()
