@@ -11,7 +11,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -93,6 +96,34 @@ private fun markdownAnnotated(text: String): AnnotatedString {
 }
 
 @Composable
+private fun CodeBlock(code: String) {
+    val context = LocalContext.current
+    var copied by remember(code) { mutableStateOf(false) }
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color.Black.copy(alpha = .07f))
+            .padding(8.dp),
+    ) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            TextButton(onClick = {
+                copyToClipboard(context, code)
+                copied = true
+            }) {
+                Text(if (copied) "کپی شد" else "کپی")
+            }
+        }
+        Text(
+            code,
+            color = GlassTokens.ink,
+            fontFamily = FontFamily.Monospace,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 2.dp),
+        )
+    }
+}
+
+@Composable
 private fun MarkdownMessage(text: String) {
     val lines = text.replace("\r\n", "\n").replace("\r", "\n").split('\n')
     var inCode = false
@@ -103,9 +134,7 @@ private fun MarkdownMessage(text: String) {
             val fence = line.trimStart()
             if (fence.startsWith("```") || fence.startsWith(":```") ) {
                 if (inCode) {
-                    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Color.Black.copy(alpha = .07f)).padding(10.dp)) {
-                        Text(code.toString().trimEnd(), color = GlassTokens.ink, fontFamily = FontFamily.Monospace)
-                    }
+                    CodeBlock(code.toString().trimEnd())
                     code = StringBuilder()
                     inCode = false
                 } else {
@@ -141,9 +170,7 @@ private fun MarkdownMessage(text: String) {
             Text(markdownAnnotated(markdownLine(line)), color = GlassTokens.ink)
         }
         if (inCode && code.isNotEmpty()) {
-            Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Color.Black.copy(alpha = .07f)).padding(10.dp)) {
-                Text(code.toString().trimEnd(), color = GlassTokens.ink, fontFamily = FontFamily.Monospace)
-            }
+            CodeBlock(code.toString().trimEnd())
         }
     }
 }
