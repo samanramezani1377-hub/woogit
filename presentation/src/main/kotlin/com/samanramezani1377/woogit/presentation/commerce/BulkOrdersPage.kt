@@ -82,10 +82,14 @@ internal fun BulkOrdersPage(state: CommerceUiState, onBulkOrder: (Set<String>, O
                 }
                 items(visible, key = { it.id.value }) { order ->
                     val chosen = order.id.value in selected
+                    val customerName = order.customer?.name?.takeIf { it.isNotBlank() } ?: "مشتری نامشخص"
+                    val itemCount = order.items.size
                     GlassCard(Modifier.fillMaxWidth().clickable { selected = if (chosen) selected - order.id.value else selected + order.id.value }) {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                 Text("#${order.number}", fontWeight = FontWeight.Bold)
+                                Text(customerName, style = MaterialTheme.typography.bodySmall)
+                                Text("$itemCount قلم · ${order.total} ${order.currency}", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
                                 Text(order.status.faLabel(), color = GlassTokens.muted, style = MaterialTheme.typography.labelSmall)
                             }
                             Text(if (chosen) "✓" else "☐", color = if (chosen) MaterialTheme.colorScheme.primary else GlassTokens.muted, fontWeight = FontWeight.SemiBold)
