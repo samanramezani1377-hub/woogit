@@ -52,9 +52,10 @@ internal fun CommerceFeatureRouteScreen(
                     onBarcode = vm::resolveBarcode,
                     onInventoryFilter = vm::filterInventory,
                     onBulkOrder = vm::bulkOrderStatus,
-                    onBulkCoupon = vm::bulkCouponAmount,
                     onInvoice = vm::prepareInvoice,
                     onProduct = onOpenProduct,
+                    onEditCoupon = vm::updateCoupon,
+                    onCreateCoupon = vm::createCoupon,
                 )
             }
         }
