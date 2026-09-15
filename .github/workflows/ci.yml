@@ -248,7 +248,7 @@ jobs:
 
   ai-static-reply-cleanup:
     name: One-time AI response cleanup
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.sha == '2576608f20b1eb2b08dbdd096736949e00aa3ace'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.event.before == '8e0b61e1e8684980035d9b19ece8974c75a5e9'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
