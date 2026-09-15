@@ -4,7 +4,15 @@ sealed interface DomainError {
     val recoverable: Boolean
 
     data class Validation(val reason: String) : DomainError { override val recoverable = false }
-    data class NotFound(val entity: String, val id: String) : DomainError { override val recoverable = false }
+    data class NotFound(val entity: String, val id: String) : DomainError {
+        override val recoverable = false
+        val reason: String get() = when (entity) {
+            "customer" -> "مشتری پیدا نشد."
+            "order" -> "سفارش پیدا نشد."
+            "product" -> "محصول پیدا نشد."
+            else -> "مورد درخواستی پیدا نشد."
+        }
+    }
     data class Conflict(val reason: String) : DomainError { override val recoverable = true }
     data class Network(val reason: String) : DomainError { override val recoverable = true }
     data class Authentication(val reason: String) : DomainError { override val recoverable = false }
