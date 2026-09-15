@@ -4,12 +4,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.samanramezani1377.woogit.core.domain.commerce.AnalyticsRange
 import com.samanramezani1377.woogit.core.domain.commerce.AnalyticsSnapshot
-import com.samanramezani1377.woogit.core.domain.error.CoreResult
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
+import com.samanramezani1377.woogit.core.domain.error.CoreResult
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 internal data class AnalyticsUiState(
     val loading: Boolean = false,
@@ -23,26 +26,35 @@ internal class AnalyticsViewModel(
 ) : ViewModel() {
     private val _state = MutableStateFlow(AnalyticsUiState())
     val state: StateFlow<AnalyticsUiState> = _state.asStateFlow()
+    private var loadJob: Job? = null
 
-    fun load(range: AnalyticsRange = _state.value.range) = viewModelScope.launch {
-        val loader = AnalyticsRuntime.loader
-        _state.value = _state.value.copy(loading = true, range = range, error = null)
-        if (loader == null) {
-            _state.value = _state.value.copy(loading = false, error = "منبع تحلیل محلی آماده نیست.")
-            return@launch
-        }
-        when (val result = loader(storeId, range)) {
-            is CoreResult.Success -> _state.value = _state.value.copy(
-                loading = false,
-                range = range,
-                analytics = result.value,
-                error = null,
-            )
-            is CoreResult.Failure -> _state.value = _state.value.copy(
-                loading = false,
-                range = range,
-                error = result.error.toString(),
-            )
+    fun load(range: AnalyticsRange = _state.value.range) {
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
+            val loader = AnalyticsRuntime.loader
+            _state.value = _state.value.copy(loading = true, range = range, error = null)
+            if (loader == null) {
+                _state.value = _state.value.copy(loading = false, error = "منبع تحلیل محلی آماده نیست.")
+                return@launch
+            }
+
+            val result = withContext(Dispatchers.Default) {
+                loader(storeId, range)
+            }
+
+            when (result) {
+                is CoreResult.Success -> _state.value = _state.value.copy(
+                    loading = false,
+                    range = range,
+                    analytics = result.value,
+                    error = null,
+                )
+                is CoreResult.Failure -> _state.value = _state.value.copy(
+                    loading = false,
+                    range = range,
+                    error = result.error.toString(),
+                )
+            }
         }
     }
 }
