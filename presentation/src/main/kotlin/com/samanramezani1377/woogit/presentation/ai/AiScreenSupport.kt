@@ -164,7 +164,13 @@ private fun MarkdownMessage(text: String) {
                 return@forEach
             }
             if (Regex("^\\s*(-{3,}|_{3,}|\\*{3,})\\s*$").matches(line)) {
-                HorizontalDivider(modifier = Modifier.padding(vertical = 5.dp), color = Color.Black.copy(alpha = .12f))
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 5.dp)
+                        .height(1.dp)
+                        .background(Color.Black.copy(alpha = .12f)),
+                )
                 return@forEach
             }
             Text(markdownAnnotated(markdownLine(line)), color = GlassTokens.ink)
