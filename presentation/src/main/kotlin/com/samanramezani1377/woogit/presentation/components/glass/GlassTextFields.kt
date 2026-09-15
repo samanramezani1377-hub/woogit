@@ -57,7 +57,7 @@ fun GlassPasswordField(value: String, onValueChange: (String) -> Unit, label: St
 @Composable
 fun GlassSearchField(value: String, onValueChange: (String) -> Unit, label: String = "جستجو", modifier: Modifier = Modifier, onClear: (() -> Unit)? = null) {
     val shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
-    Box(modifier = modifier.fillMaxWidth().heightIn(min = 64.dp).liquidGlass(shape = shape, surface = AppBackgroundThemeStore.selected.color, blurRadius = 9f, lensHeight = 14f, lensAmount = 10f, shadowElevation = 4f)) {
+    Box(modifier = modifier.fillMaxWidth().heightIn(min = 64.dp).liquidGlass(shape = shape, surface = MaterialTheme.colorScheme.surface, blurRadius = 9f, lensHeight = 14f, lensAmount = 10f, shadowElevation = 4f)) {
         OutlinedTextField(value = value, onValueChange = onValueChange, modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp), singleLine = true, textStyle = GlassFieldTextStyle, label = { Text(label) }, trailingIcon = { if (value.isNotEmpty()) TextButton(onClick = { onClear?.invoke() ?: onValueChange("") }) { Text("پاک", color = GlassTokens.accent) } }, shape = shape, colors = OutlinedTextFieldDefaults.colors(unfocusedContainerColor = Color.Transparent, focusedContainerColor = Color.Transparent, unfocusedBorderColor = Color.Transparent, focusedBorderColor = GlassTokens.accent))
     }
 }
