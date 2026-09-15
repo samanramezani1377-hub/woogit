@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
+import com.samanramezani1377.woogit.data.network.WooCouponCommerceWriteDto
 import com.samanramezani1377.woogit.presentation.GlassCard
 import com.samanramezani1377.woogit.presentation.GlassErrorState
 import com.samanramezani1377.woogit.presentation.GlassLoading
@@ -31,7 +32,6 @@ import com.samanramezani1377.woogit.presentation.GlassScaffold
 import com.samanramezani1377.woogit.presentation.GlassText
 import com.samanramezani1377.woogit.presentation.GlassTopBar
 import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
-import com.samanramezani1377.woogit.data.network.WooCouponCommerceWriteDto
 
 internal enum class CommerceFeature { BARCODE, BULK_ORDERS, INVENTORY, CUSTOMERS, ANALYTICS, COUPONS, INVOICE }
 private data class CommerceFeatureUiModel(val feature: CommerceFeature, val title: String, val description: String)
@@ -64,6 +64,7 @@ internal fun CommerceCenterScreen(
             onInvoice = vm::prepareInvoice,
             onProduct = onOpenProduct,
             onEditCoupon = vm::updateCoupon,
+            onCreateCoupon = vm::createCoupon,
         )
         return
     }
@@ -105,5 +106,5 @@ internal fun CommerceCenterScreen(
 
 private val featureModels = listOf(
     CommerceFeatureUiModel(CommerceFeature.CUSTOMERS, "مدیریت مشتریان", "مدیریت مشتریان، پرونده خرید و اطلاعات حساب."),
-    CommerceFeatureUiModel(CommerceFeature.COUPONS, "مدیریت کوپن‌ها", "مشاهده و بررسی کوپن‌های فروشگاه و آمار استفاده."),
+    CommerceFeatureUiModel(CommerceFeature.COUPONS, "مدیریت کوپن‌ها", "ساخت، ویرایش تکی و بررسی کوپن‌های فروشگاه."),
 )
