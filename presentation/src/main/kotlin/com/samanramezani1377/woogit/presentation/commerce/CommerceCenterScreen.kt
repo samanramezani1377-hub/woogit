@@ -62,6 +62,7 @@ internal fun CommerceCenterScreen(
             onBulkOrder = vm::bulkOrderStatus,
             onInvoice = vm::prepareInvoice,
             onProduct = onOpenProduct,
+            onEditCouponAmount = { couponId, amount -> vm.bulkCouponAmount(setOf(couponId), amount) },
         )
         return
     }
