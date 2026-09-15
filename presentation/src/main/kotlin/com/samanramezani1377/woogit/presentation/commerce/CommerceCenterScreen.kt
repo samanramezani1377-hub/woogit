@@ -31,6 +31,7 @@ import com.samanramezani1377.woogit.presentation.GlassScaffold
 import com.samanramezani1377.woogit.presentation.GlassText
 import com.samanramezani1377.woogit.presentation.GlassTopBar
 import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
+import com.samanramezani1377.woogit.data.network.WooCouponCommerceWriteDto
 
 internal enum class CommerceFeature { BARCODE, BULK_ORDERS, INVENTORY, CUSTOMERS, ANALYTICS, COUPONS, INVOICE }
 private data class CommerceFeatureUiModel(val feature: CommerceFeature, val title: String, val description: String)
@@ -62,7 +63,7 @@ internal fun CommerceCenterScreen(
             onBulkOrder = vm::bulkOrderStatus,
             onInvoice = vm::prepareInvoice,
             onProduct = onOpenProduct,
-            onEditCouponAmount = { couponId, amount -> vm.bulkCouponAmount(setOf(couponId), amount) },
+            onEditCoupon = vm::updateCoupon,
         )
         return
     }
