@@ -56,6 +56,11 @@ data class WooCouponCommerceDto(
     val minimum_amount: String = "",
     val maximum_amount: String = "",
     val exclude_sale_items: Boolean = false,
+    val product_ids: List<Long> = emptyList(),
+    val excluded_product_ids: List<Long> = emptyList(),
+    val product_categories: List<Long> = emptyList(),
+    val excluded_product_categories: List<Long> = emptyList(),
+    val email_restrictions: List<String> = emptyList(),
 )
 
 @Serializable
@@ -72,6 +77,11 @@ data class WooCouponCommerceWriteDto(
     val minimum_amount: String = "",
     val maximum_amount: String = "",
     val exclude_sale_items: Boolean = false,
+    val product_ids: List<Long> = emptyList(),
+    val excluded_product_ids: List<Long> = emptyList(),
+    val product_categories: List<Long> = emptyList(),
+    val excluded_product_categories: List<Long> = emptyList(),
+    val email_restrictions: List<String> = emptyList(),
 )
 
 data class WooCommerceCommerceApi(
@@ -79,258 +89,112 @@ data class WooCommerceCommerceApi(
     private val storeId: String,
     private val credentials: CredentialPair,
 ) {
-    suspend fun listCustomers(
-        page: Int = 1,
-        perPage: Int = 20,
-        search: String? = null,
-    ): ApiResponse = get(
-        "/wp-json/wc/v3/customers",
-        pageQuery(page, perPage, search),
+    suspend fun listCustomers(page: Int = 1, perPage: Int = 20, search: String? = null): ApiResponse = get(
+        "/wp-json/wc/v3/customers", pageQuery(page, perPage, search),
     )
 
-    suspend fun getCustomer(id: Long): ApiResponse = get(
-        "/wp-json/wc/v3/customers/$id",
+    suspend fun getCustomer(id: Long): ApiResponse = get("/wp-json/wc/v3/customers/$id")
+
+    suspend fun createCustomer(customer: WooCustomerCommerceWriteDto, idempotencyKey: String? = null): ApiResponse = mutate(
+        "/wp-json/wc/v3/customers", "POST", commerceJson.encodeToString(customer), idempotencyKey,
     )
 
-    suspend fun createCustomer(
-        customer: WooCustomerCommerceWriteDto,
-        idempotencyKey: String? = null,
-    ): ApiResponse = mutate(
-        "/wp-json/wc/v3/customers",
-        "POST",
-        commerceJson.encodeToString(customer),
-        idempotencyKey,
+    suspend fun updateCustomer(id: Long, customer: WooCustomerCommerceWriteDto, idempotencyKey: String? = null): ApiResponse = mutate(
+        "/wp-json/wc/v3/customers/$id", "PUT", commerceJson.encodeToString(customer), idempotencyKey,
     )
 
-    suspend fun updateCustomer(
-        id: Long,
-        customer: WooCustomerCommerceWriteDto,
-        idempotencyKey: String? = null,
-    ): ApiResponse = mutate(
-        "/wp-json/wc/v3/customers/$id",
-        "PUT",
-        commerceJson.encodeToString(customer),
-        idempotencyKey,
+    suspend fun deleteCustomer(id: Long, force: Boolean = true, idempotencyKey: String? = null): ApiResponse = mutate(
+        "/wp-json/wc/v3/customers/$id", "DELETE", null, idempotencyKey, mapOf("force" to force),
     )
 
-    suspend fun deleteCustomer(
-        id: Long,
-        force: Boolean = true,
-        idempotencyKey: String? = null,
-    ): ApiResponse = mutate(
-        "/wp-json/wc/v3/customers/$id",
-        "DELETE",
-        null,
-        idempotencyKey,
-        mapOf("force" to force),
-    )
-
-    suspend fun batchUpdateCustomers(
-        updates: List<Pair<Long, WooCustomerCommerceWriteDto>>,
-        idempotencyKey: String? = null,
-    ): ApiResponse {
-        require(updates.isNotEmpty()) {
-            "At least one customer update is required"
-        }
-        require(updates.size <= MAX_BATCH_SIZE) {
-            "WooCommerce customer batches are limited to $MAX_BATCH_SIZE items"
-        }
-
+    suspend fun batchUpdateCustomers(updates: List<Pair<Long, WooCustomerCommerceWriteDto>>, idempotencyKey: String? = null): ApiResponse {
+        require(updates.isNotEmpty()) { "At least one customer update is required" }
+        require(updates.size <= MAX_BATCH_SIZE) { "WooCommerce customer batches are limited to $MAX_BATCH_SIZE items" }
         val payload = buildString {
             append("{\"update\":[")
             updates.forEachIndexed { index, update ->
-                if (index > 0) {
-                    append(',')
-                }
-                append("{\"id\":")
-                append(update.first)
-                append(',')
+                if (index > 0) append(',')
+                append("{\"id\":").append(update.first).append(',')
                 append(commerceJson.encodeToString(update.second).removePrefix("{").removeSuffix("}"))
                 append('}')
             }
             append("]}")
         }
-        return mutate(
-            "/wp-json/wc/v3/customers/batch",
-            "POST",
-            payload,
-            idempotencyKey,
-        )
+        return mutate("/wp-json/wc/v3/customers/batch", "POST", payload, idempotencyKey)
     }
 
-    suspend fun listCoupons(
-        page: Int = 1,
-        perPage: Int = 20,
-        search: String? = null,
-    ): ApiResponse = get(
-        "/wp-json/wc/v3/coupons",
-        pageQuery(page, perPage, search),
+    suspend fun listCoupons(page: Int = 1, perPage: Int = 20, search: String? = null): ApiResponse = get(
+        "/wp-json/wc/v3/coupons", pageQuery(page, perPage, search),
     )
 
-    suspend fun getCoupon(id: Long): ApiResponse = get(
-        "/wp-json/wc/v3/coupons/$id",
+    suspend fun getCoupon(id: Long): ApiResponse = get("/wp-json/wc/v3/coupons/$id")
+
+    suspend fun createCoupon(coupon: WooCouponCommerceWriteDto, idempotencyKey: String? = null): ApiResponse = mutate(
+        "/wp-json/wc/v3/coupons", "POST", commerceJson.encodeToString(coupon), idempotencyKey,
     )
 
-    suspend fun createCoupon(
-        coupon: WooCouponCommerceWriteDto,
-        idempotencyKey: String? = null,
-    ): ApiResponse = mutate(
-        "/wp-json/wc/v3/coupons",
-        "POST",
-        commerceJson.encodeToString(coupon),
-        idempotencyKey,
+    suspend fun updateCoupon(id: Long, coupon: WooCouponCommerceWriteDto, idempotencyKey: String? = null): ApiResponse = mutate(
+        "/wp-json/wc/v3/coupons/$id", "PUT", commerceJson.encodeToString(coupon), idempotencyKey,
     )
 
-    suspend fun updateCoupon(
-        id: Long,
-        coupon: WooCouponCommerceWriteDto,
-        idempotencyKey: String? = null,
-    ): ApiResponse = mutate(
-        "/wp-json/wc/v3/coupons/$id",
-        "PUT",
-        commerceJson.encodeToString(coupon),
-        idempotencyKey,
+    suspend fun deleteCoupon(id: Long, force: Boolean = true, idempotencyKey: String? = null): ApiResponse = mutate(
+        "/wp-json/wc/v3/coupons/$id", "DELETE", null, idempotencyKey, mapOf("force" to force),
     )
 
-    suspend fun deleteCoupon(
-        id: Long,
-        force: Boolean = true,
-        idempotencyKey: String? = null,
-    ): ApiResponse = mutate(
-        "/wp-json/wc/v3/coupons/$id",
-        "DELETE",
-        null,
-        idempotencyKey,
-        mapOf("force" to force),
-    )
-
-    suspend fun batchUpdateCoupons(
-        updates: List<Pair<Long, WooCouponCommerceWriteDto>>,
-        idempotencyKey: String? = null,
-    ): ApiResponse {
-        require(updates.isNotEmpty()) {
-            "At least one coupon update is required"
-        }
-        require(updates.size <= MAX_BATCH_SIZE) {
-            "WooCommerce coupon batches are limited to $MAX_BATCH_SIZE items"
-        }
-
+    suspend fun batchUpdateCoupons(updates: List<Pair<Long, WooCouponCommerceWriteDto>>, idempotencyKey: String? = null): ApiResponse {
+        require(updates.isNotEmpty()) { "At least one coupon update is required" }
+        require(updates.size <= MAX_BATCH_SIZE) { "WooCommerce coupon batches are limited to $MAX_BATCH_SIZE items" }
         val payload = buildString {
             append("{\"update\":[")
             updates.forEachIndexed { index, update ->
-                if (index > 0) {
-                    append(',')
-                }
-                append("{\"id\":")
-                append(update.first)
-                append(',')
+                if (index > 0) append(',')
+                append("{\"id\":").append(update.first).append(',')
                 append(commerceJson.encodeToString(update.second).removePrefix("{").removeSuffix("}"))
                 append('}')
             }
             append("]}")
         }
-        return mutate(
-            "/wp-json/wc/v3/coupons/batch",
-            "POST",
-            payload,
-            idempotencyKey,
-        )
+        return mutate("/wp-json/wc/v3/coupons/batch", "POST", payload, idempotencyKey)
     }
 
-    suspend fun batchUpdateOrderStatuses(
-        updates: List<Pair<Long, String>>,
-        idempotencyKey: String? = null,
-    ): ApiResponse {
-        require(updates.isNotEmpty()) {
-            "At least one order update is required"
-        }
-        require(updates.size <= MAX_BATCH_SIZE) {
-            "WooCommerce order batches are limited to $MAX_BATCH_SIZE items"
-        }
-
+    suspend fun batchUpdateOrderStatuses(updates: List<Pair<Long, String>>, idempotencyKey: String? = null): ApiResponse {
+        require(updates.isNotEmpty()) { "At least one order update is required" }
+        require(updates.size <= MAX_BATCH_SIZE) { "WooCommerce order batches are limited to $MAX_BATCH_SIZE items" }
         val payload = buildString {
             append("{\"update\":[")
             updates.forEachIndexed { index, update ->
-                if (index > 0) {
-                    append(',')
-                }
-                append("{\"id\":")
-                append(update.first)
-                append(",\"status\":\"")
+                if (index > 0) append(',')
+                append("{\"id\":").append(update.first).append(",\"status\":\"")
                 append(update.second.replace("\\", "\\\\").replace("\"", "\\\""))
                 append("\"}")
             }
             append("]}")
         }
-        return mutate(
-            "/wp-json/wc/v3/orders/batch",
-            "POST",
-            payload,
-            idempotencyKey,
-        )
+        return mutate("/wp-json/wc/v3/orders/batch", "POST", payload, idempotencyKey)
     }
 
-    suspend fun decodeCustomers(response: ApiResponse): Result<List<WooCustomerCommerceDto>> =
-        decode(response)
+    suspend fun decodeCustomers(response: ApiResponse): Result<List<WooCustomerCommerceDto>> = decode(response)
+    suspend fun decodeCustomer(response: ApiResponse): Result<WooCustomerCommerceDto> = decode(response)
+    suspend fun decodeCoupons(response: ApiResponse): Result<List<WooCouponCommerceDto>> = decode(response)
+    suspend fun decodeCoupon(response: ApiResponse): Result<WooCouponCommerceDto> = decode(response)
 
-    suspend fun decodeCustomer(response: ApiResponse): Result<WooCustomerCommerceDto> =
-        decode(response)
-
-    suspend fun decodeCoupons(response: ApiResponse): Result<List<WooCouponCommerceDto>> =
-        decode(response)
-
-    suspend fun decodeCoupon(response: ApiResponse): Result<WooCouponCommerceDto> =
-        decode(response)
-
-    private suspend fun get(
-        path: String,
-        query: Map<String, Any> = emptyMap(),
-    ): ApiResponse = backend.forward(
-        storeId,
-        path,
-        "GET",
-        credentials,
-        query,
+    private suspend fun get(path: String, query: Map<String, Any> = emptyMap()): ApiResponse = backend.forward(
+        storeId, path, "GET", credentials, query,
     )
 
-    private suspend fun mutate(
-        path: String,
-        method: String,
-        body: String?,
-        idempotencyKey: String? = null,
-        query: Map<String, Any> = emptyMap(),
-    ): ApiResponse = backend.forward(
-        storeId,
-        path,
-        method,
-        credentials,
-        query,
-        body,
-        idempotencyKey,
+    private suspend fun mutate(path: String, method: String, body: String?, idempotencyKey: String? = null, query: Map<String, Any> = emptyMap()): ApiResponse = backend.forward(
+        storeId, path, method, credentials, query, body, idempotencyKey,
     )
 
-    private fun pageQuery(
-        page: Int,
-        perPage: Int,
-        search: String?,
-    ): Map<String, Any> = buildMap {
+    private fun pageQuery(page: Int, perPage: Int, search: String?): Map<String, Any> = buildMap {
         put("page", page)
         put("per_page", perPage)
-        if (!search.isNullOrBlank()) {
-            put("search", search)
-        }
+        if (!search.isNullOrBlank()) put("search", search)
     }
 
     private inline fun <reified T> decode(response: ApiResponse): Result<T> =
-        if (response.statusCode in 200..299) {
-            runCatching {
-                commerceJson.decodeFromString<T>(response.body)
-            }
-        } else {
-            Result.failure(HttpApiException(response.statusCode, response.body))
-        }
+        if (response.statusCode in 200..299) runCatching { commerceJson.decodeFromString<T>(response.body) }
+        else Result.failure(HttpApiException(response.statusCode, response.body))
 
-    private companion object {
-        const val MAX_BATCH_SIZE = 100
-    }
+    private companion object { const val MAX_BATCH_SIZE = 100 }
 }
