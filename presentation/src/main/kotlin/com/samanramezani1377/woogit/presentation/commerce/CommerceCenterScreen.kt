@@ -60,7 +60,6 @@ internal fun CommerceCenterScreen(
             onBarcode = vm::resolveBarcode,
             onInventoryFilter = vm::filterInventory,
             onBulkOrder = vm::bulkOrderStatus,
-            onBulkCoupon = vm::bulkCouponAmount,
             onInvoice = vm::prepareInvoice,
             onProduct = onOpenProduct,
         )
@@ -104,5 +103,5 @@ internal fun CommerceCenterScreen(
 
 private val featureModels = listOf(
     CommerceFeatureUiModel(CommerceFeature.CUSTOMERS, "مدیریت مشتریان", "مدیریت مشتریان، پرونده خرید و اطلاعات حساب."),
-    CommerceFeatureUiModel(CommerceFeature.COUPONS, "مدیریت کوپن‌ها", "مدیریت گروهی کوپن‌ها و مشاهده آمار استفاده."),
+    CommerceFeatureUiModel(CommerceFeature.COUPONS, "مدیریت کوپن‌ها", "مشاهده و بررسی کوپن‌های فروشگاه و آمار استفاده."),
 )
