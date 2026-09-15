@@ -26,3 +26,11 @@ The Dashboard `بارکد و SKU` quick action navigates directly to `E11Routes.
 - Invoice: independent route owned by E11 navigation.
 - Customers: Commerce center.
 - Coupons: Commerce center.
+
+## Coupon management
+
+Coupon management is intentionally individual-only. The coupon page does not expose multi-selection, bulk editing, bulk save, or bulk-edit controls.
+
+Selecting a coupon opens an individual edit dialog for its discount amount. The existing Commerce coupon batch endpoint is reused with a single coupon ID, so this does not introduce a new API contract or a bulk-edit UX.
+
+Coupon cards expose the fields already supplied by `WooCouponCommerceDto`: code, amount, discount type, expiry, total usage, usage limit, and per-user usage limit.
