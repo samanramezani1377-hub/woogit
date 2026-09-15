@@ -70,7 +70,7 @@ internal fun CustomersPage(storeId: StoreId, state: CommerceUiState) {
 
     val selectedCustomer = selected
     val selectedOrders = selectedCustomer?.id?.value?.let { id -> state.orders.filter { it.customer?.id?.value == id } }.orEmpty()
-    Surface(modifier = Modifier.fillMaxSize(), color = AppBackgroundThemeStore.selected.color) {
+    Surface(modifier = Modifier.fillMaxSize(), color = androidx.compose.ui.graphics.Color.Transparent) {
         Box(Modifier.fillMaxSize()) {
             FeatureBody {
                 Spacer(Modifier.height(78.dp))
@@ -122,6 +122,7 @@ private fun Double.toDisplayAmount(): String = if (this % 1.0 == 0.0) toLong().t
 @Composable private fun FormField(label: String, value: String, onValueChange: (String) -> Unit) = OutlinedTextField(value = value, onValueChange = onValueChange, label = { Text(label) }, modifier = Modifier.fillMaxWidth(), singleLine = true)
 
 @Composable private fun AddressSummary(title: String, address: Address?) { Text(title, fontWeight = FontWeight.SemiBold); if (address == null || listOf(address.address1,address.address2,address.city,address.state,address.postcode,address.country).all { it.isNullOrBlank() }) Text("ثبت نشده", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall) else Text(listOf(address.address1,address.address2,address.city,address.state,address.postcode,address.country).filter { !it.isNullOrBlank() }.joinToString("، "), color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall) }
-@Composable private fun InfoLine(label: String, value: String) { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) { Text(label, color = GlassTokens.muted, modifier = Modifier.weight(0.35f)); Text(value, modifier = Modifier.weight(0.65f), fontWeight = FontWeight.Medium) } }
+@Composable private fun InfoLine(label: String, value: String) { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) { Text(label, color = GlassTokens.muted, modifier = Modifier.weight(0.35f)); Text(value, modifier = Modifier.weight(0.65f), fontWeight = FontWeight.Medium) }
+}
 @Composable private fun OrderSummary(order: Order) { GlassCard(Modifier.fillMaxWidth()) { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("#${order.number}", fontWeight = FontWeight.SemiBold); Text(order.status.faLabel(), color = GlassTokens.muted) }; val total = order.total ?: "0"; Text(if (!order.currency.isNullOrBlank()) "$total ${order.currency}" else total, color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall) } }
 private fun DomainError.customerMessage(): String = when (this) { is DomainError.Validation -> reason; is DomainError.NotFound -> "مشتری پیدا نشد."; is DomainError.Conflict -> reason; is DomainError.Network -> reason; is DomainError.Authentication -> reason; is DomainError.Permission -> reason; is DomainError.RateLimited -> reason; is DomainError.Server -> reason; is DomainError.Unknown -> reason }
