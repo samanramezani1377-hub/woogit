@@ -45,6 +45,7 @@ private val bulkOrderStatuses = listOf(
 internal fun BulkOrdersPage(state: CommerceUiState, onBulkOrder: (Set<String>, OrderStatus) -> Unit) {
     var selected by rememberSaveable { mutableStateOf(emptySet<String>()) }
     var target by rememberSaveable { mutableStateOf<OrderStatus?>(null) }
+    var showStatusPicker by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
     var filter by rememberSaveable { mutableStateOf<OrderStatus?>(null) }
     val visible = state.orders.filter { it.number.contains(query.trim(), true) && (filter == null || it.status == filter) }
@@ -53,10 +54,34 @@ internal fun BulkOrdersPage(state: CommerceUiState, onBulkOrder: (Set<String>, O
         selected.count { id -> state.orders.any { it.id.value == id && it.status != status } }
     } ?: 0
 
+    if (showStatusPicker) {
+        AlertDialog(
+            onDismissRequest = { if (!state.loading) showStatusPicker = false },
+            title = { Text("تغییر وضعیت سفارش‌ها") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    bulkOrderStatuses.forEach { status ->
+                        TextButton(
+                            onClick = {
+                                showStatusPicker = false
+                                target = status
+                            },
+                            enabled = !state.loading,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(status.faLabel(), modifier = Modifier.fillMaxWidth())
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+        )
+    }
+
     target?.let { status ->
         AlertDialog(
             onDismissRequest = { if (!state.loading) target = null },
-            title = { Text("تغییر وضعیت سفارش‌ها") },
+            title = { Text("تأیید تغییر وضعیت") },
             text = { Text("$effectiveCount سفارش به «${status.faLabel()}» تغییر می‌کند.") },
             confirmButton = {
                 GlassPrimaryAction(
@@ -89,56 +114,6 @@ internal fun BulkOrdersPage(state: CommerceUiState, onBulkOrder: (Set<String>, O
             }
         }
 
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            GlassOutlinedButton(
-                "انتخاب نتایج",
-                { selected = selected + visible.map { it.id.value }.toSet() },
-                modifier = Modifier.weight(1f),
-            )
-            GlassOutlinedButton(
-                "پاک کردن",
-                { selected = emptySet() },
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                "$selectedVisible/${visible.size}",
-                color = GlassTokens.muted,
-                style = MaterialTheme.typography.bodySmall,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
-
-        if (selected.isNotEmpty()) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    "تغییر وضعیت",
-                    color = GlassTokens.muted,
-                    style = MaterialTheme.typography.bodySmall,
-                    fontWeight = FontWeight.SemiBold,
-                )
-                LazyRow(
-                    modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    itemsIndexed(bulkOrderStatuses) { _, status ->
-                        GlassOutlinedButton(
-                            status.faLabel(),
-                            { target = status },
-                            enabled = !state.loading,
-                        )
-                    }
-                }
-            }
-        }
-
         if (state.loading) GlassLoading("در حال به‌روزرسانی سفارش‌ها…")
 
         state.bulkOrderResults.takeIf { it.isNotEmpty() }?.let { results ->
@@ -167,6 +142,30 @@ internal fun BulkOrdersPage(state: CommerceUiState, onBulkOrder: (Set<String>, O
         if (visible.isEmpty()) {
             GlassEmptyState("سفارشی با این فیلتر پیدا نشد.")
         } else {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "${visible.size} سفارش",
+                    color = GlassTokens.muted,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                GlassOutlinedButton(
+                    if (selectedVisible == visible.size) "✓" else "☐",
+                    {
+                        val visibleIds = visible.map { it.id.value }.toSet()
+                        selected = if (selectedVisible == visible.size) {
+                            selected - visibleIds
+                        } else {
+                            selected + visibleIds
+                        }
+                    },
+                )
+            }
+
             LazyColumn(
                 Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -190,7 +189,7 @@ internal fun BulkOrdersPage(state: CommerceUiState, onBulkOrder: (Set<String>, O
                                 )
                             }
                             Text(
-                                if (chosen) "✓ انتخاب شده" else "انتخاب",
+                                if (chosen) "✓" else "☐",
                                 color = if (chosen) MaterialTheme.colorScheme.primary else GlassTokens.muted,
                                 fontWeight = FontWeight.SemiBold,
                             )
@@ -198,6 +197,15 @@ internal fun BulkOrdersPage(state: CommerceUiState, onBulkOrder: (Set<String>, O
                     }
                 }
             }
+        }
+
+        if (selected.isNotEmpty()) {
+            GlassPrimaryAction(
+                "تغییر وضعیت (${selected.size})",
+                { showStatusPicker = true },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !state.loading,
+            )
         }
     }
 }
