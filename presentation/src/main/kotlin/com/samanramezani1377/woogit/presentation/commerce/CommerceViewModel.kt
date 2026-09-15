@@ -215,6 +215,22 @@ internal class CommerceViewModel(
         } else _state.value = _state.value.copy(coupons = previous, loading = false, message = null, error = "ساخت کوپن در فروشگاه ناموفق بود؛ تغییر محلی برگشت داده شد.")
     }
 
+    fun deleteCoupon(id: Long) = viewModelScope.launch {
+        val previous = _state.value.coupons
+        if (previous.none { it.id == id }) return@launch
+        _state.value = _state.value.copy(coupons = previous.filterNot { it.id == id }, loading = true, error = null, message = null)
+        val client = commerceClientOrFail() ?: run {
+            _state.value = _state.value.copy(coupons = previous, loading = false)
+            return@launch
+        }
+        val response = client.deleteCoupon(id, force = true, idempotencyKey = "commerce-coupon-delete-$id-${System.currentTimeMillis()}")
+        if (response.statusCode in 200..299) {
+            _state.value = _state.value.copy(loading = false, message = "کوپن حذف شد.", error = null)
+        } else {
+            _state.value = _state.value.copy(coupons = previous, loading = false, message = null, error = "حذف کوپن در فروشگاه ناموفق بود؛ کوپن به لیست بازگردانده شد.")
+        }
+    }
+
     fun bulkCouponAmount(selectedIds: Set<Long>, amount: String) = viewModelScope.launch {
         if (selectedIds.isEmpty()) return@launch
         val client = commerceClientOrFail() ?: return@launch
