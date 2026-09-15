@@ -18,6 +18,7 @@ internal fun CommerceFeaturePage(
     onBulkOrder: (Set<String>, OrderStatus) -> Unit,
     onInvoice: (String) -> Unit,
     onProduct: (String) -> Unit,
+    onEditCouponAmount: (Long, String) -> Unit,
 ) {
     Column(Modifier.fillMaxSize()) {
         FeatureHeader(feature.titleFa(), feature.subtitleFa(), onBack)
@@ -27,7 +28,7 @@ internal fun CommerceFeaturePage(
             CommerceFeature.INVENTORY -> InventoryPage(storeId, state, onInventoryFilter, onProduct)
             CommerceFeature.CUSTOMERS -> CustomersPage(storeId = storeId, state = state)
             CommerceFeature.ANALYTICS -> Unit
-            CommerceFeature.COUPONS -> CouponsPage(state)
+            CommerceFeature.COUPONS -> CouponsPage(state, onEditCouponAmount)
             CommerceFeature.INVOICE -> InvoicePage(state, onInvoice)
         }
     }
