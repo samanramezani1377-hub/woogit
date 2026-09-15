@@ -4,14 +4,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -39,7 +37,6 @@ import com.samanramezani1377.woogit.core.domain.model.Stock
 import com.samanramezani1377.woogit.core.domain.model.StockStatus
 import com.samanramezani1377.woogit.presentation.GlassCard
 import com.samanramezani1377.woogit.presentation.GlassEmptyState
-import com.samanramezani1377.woogit.presentation.GlassOutlinedButton
 import com.samanramezani1377.woogit.presentation.GlassSearchField
 import com.samanramezani1377.woogit.presentation.GlassTokens
 import kotlinx.coroutines.launch
@@ -74,38 +71,55 @@ internal fun InventoryPage(
         onFilter(query, next == InventoryFilter.LOW, next == InventoryFilter.OUT)
     }
 
-    val visibleProducts = if (filter == InventoryFilter.IN) {
-        state.inventory.filter { product ->
-            val quantity = localQuantities[product.id.value] ?: product.stock?.quantity
-            quantity != null && quantity > 0.0 && product.stock?.status != StockStatus.OUT_OF_STOCK
-        }
-    } else {
-        state.inventory
-    }
+    val visibleProducts = state.inventory
 
     FeatureBody {
-        Section("مدیریت موجودی", "وضعیت موجودی را ببینید و بدون باز کردن صفحه محصول، مقدار Stock را سریع تغییر دهید.") {
-            InventorySummaryRow(total = allProducts.size, low = lowCount, out = outCount)
-            Spacer(Modifier.height(10.dp))
-            GlassSearchField(
-                value = query,
-                onValueChange = { query = it; onFilter(it, filter == InventoryFilter.LOW, filter == InventoryFilter.OUT) },
-                label = "جستجوی نام یا SKU",
-                modifier = Modifier.fillMaxWidth(),
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            InventoryMetric(
+                label = "کل",
+                value = allProducts.size,
+                selected = filter == InventoryFilter.ALL,
+                modifier = Modifier.weight(1f),
+                onClick = { applyFilter(InventoryFilter.ALL) },
             )
-            Spacer(Modifier.height(8.dp))
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                item { FilterButton("همه", filter == InventoryFilter.ALL) { applyFilter(InventoryFilter.ALL) } }
-                item { FilterButton("موجود", filter == InventoryFilter.IN) { applyFilter(InventoryFilter.IN) } }
-                item { FilterButton("کم‌موجودی", filter == InventoryFilter.LOW) { applyFilter(InventoryFilter.LOW) } }
-                item { FilterButton("ناموجود", filter == InventoryFilter.OUT) { applyFilter(InventoryFilter.OUT) } }
-            }
+            InventoryMetric(
+                label = "کم‌موجودی",
+                value = lowCount,
+                selected = filter == InventoryFilter.LOW,
+                modifier = Modifier.weight(1f),
+                onClick = { applyFilter(InventoryFilter.LOW) },
+            )
+            InventoryMetric(
+                label = "ناموجود",
+                value = outCount,
+                selected = filter == InventoryFilter.OUT,
+                modifier = Modifier.weight(1f),
+                onClick = { applyFilter(InventoryFilter.OUT) },
+            )
         }
+
+        GlassSearchField(
+            value = query,
+            onValueChange = {
+                query = it
+                onFilter(it, filter == InventoryFilter.LOW, filter == InventoryFilter.OUT)
+            },
+            label = "جستجوی نام یا SKU",
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp),
+        )
 
         if (visibleProducts.isEmpty()) {
             GlassEmptyState("محصولی با این فیلتر پیدا نشد.")
         } else {
-            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyColumn(
+                Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 items(visibleProducts, key = { it.id.value }) { product ->
                     val quantity = localQuantities[product.id.value] ?: product.stock?.quantity ?: 0.0
                     val isEditing = editingId == product.id.value
@@ -118,12 +132,17 @@ internal fun InventoryPage(
 
                     GlassCard(Modifier.fillMaxWidth()) {
                         Row(
-                            Modifier.fillMaxWidth().clickable(enabled = !isEditing) { onProduct(product.id.value) },
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable(enabled = !isEditing) { onProduct(product.id.value) },
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             InventoryProductImage(product)
-                            Spacer(Modifier.size(12.dp))
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            androidx.compose.foundation.layout.Spacer(Modifier.size(12.dp))
+                            Column(
+                                Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(3.dp),
+                            ) {
                                 Text(product.name, fontWeight = FontWeight.SemiBold)
                                 Text(
                                     "SKU: ${product.sku.orEmpty().ifBlank { "بدون SKU" }}",
@@ -146,7 +165,11 @@ internal fun InventoryPage(
                                     style = MaterialTheme.typography.headlineSmall,
                                     fontWeight = FontWeight.Bold,
                                 )
-                                Text("موجودی", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
+                                Text(
+                                    "موجودی",
+                                    color = GlassTokens.muted,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
                                 TextButton(
                                     onClick = {
                                         editingId = product.id.value
@@ -158,7 +181,7 @@ internal fun InventoryPage(
                         }
 
                         if (isEditing) {
-                            Spacer(Modifier.height(8.dp))
+                            androidx.compose.foundation.layout.Spacer(Modifier.height(8.dp))
                             QuickStockEditor(
                                 quantity = editingQuantity,
                                 onQuantityChange = { editingQuantity = it },
@@ -222,33 +245,50 @@ private fun BoxPlaceholder() {
 
 @Composable
 private fun BoxPlaceholderMark() {
-    Surface(modifier = Modifier.fillMaxWidth().height(58.dp), color = MaterialTheme.colorScheme.surfaceVariant) {}
+    Surface(
+        modifier = Modifier.fillMaxWidth().height(58.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+    ) {}
 }
 
-private enum class InventoryFilter { ALL, IN, LOW, OUT }
+private enum class InventoryFilter { ALL, LOW, OUT }
 
 @Composable
-private fun InventorySummaryRow(total: Int, low: Int, out: Int) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        InventoryMetric("کل", total, Modifier.weight(1f))
-        InventoryMetric("کم‌موجودی", low, Modifier.weight(1f))
-        InventoryMetric("ناموجود", out, Modifier.weight(1f))
-    }
-}
-
-@Composable
-private fun InventoryMetric(label: String, value: Int, modifier: Modifier = Modifier) {
-    Surface(modifier = modifier, shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.surfaceVariant) {
-        Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(value.toString(), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text(label, color = GlassTokens.muted, style = MaterialTheme.typography.labelSmall)
+private fun InventoryMetric(
+    label: String,
+    value: Int,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    Surface(
+        modifier = modifier
+            .height(40.dp)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(14.dp),
+        color = if (selected) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant
+        },
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(value.toString(), fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall)
+            androidx.compose.foundation.layout.Spacer(Modifier.size(5.dp))
+            Text(
+                label,
+                color = if (selected) MaterialTheme.colorScheme.onPrimaryContainer else GlassTokens.muted,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            )
         }
     }
-}
-
-@Composable
-private fun FilterButton(label: String, selected: Boolean, onClick: () -> Unit) {
-    GlassOutlinedButton(if (selected) "✓ $label" else label, onClick)
 }
 
 @Composable
