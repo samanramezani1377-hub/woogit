@@ -146,6 +146,9 @@ class AppComposition(context: Context) {
         AnalyticsRuntime.loader = { storeId, range -> localAnalyticsRepository.get(storeId, range) }
         CustomerRuntime.listLoader = { storeId, page, perPage, search -> customerRepository.list(storeId, page, perPage, search) }
         CustomerRuntime.detailLoader = { storeId, id -> customerRepository.get(storeId, id) }
+        CustomerRuntime.createCustomer = { storeId, customer -> customerRepository.create(storeId, customer) }
+        CustomerRuntime.updateCustomer = { storeId, id, customer -> customerRepository.update(storeId, id, customer) }
+        CustomerRuntime.deleteCustomer = { storeId, id -> customerRepository.delete(storeId, id) }
         InventoryRuntime.updateProduct = { storeId, product -> updateProduct(storeId, product.id, product) }
         restoredStoreId?.let(::startBackgroundWork)
     }
@@ -164,5 +167,5 @@ class AppComposition(context: Context) {
         ProductCatalogSyncWorker.cancel(appContext, storeId)
     }
 
-    fun close() { BillingRuntime.gateway = null; AnalyticsRuntime.loader = null; CustomerRuntime.listLoader = null; CustomerRuntime.detailLoader = null; InventoryRuntime.updateProduct = null; announcementCenter.dispose(); scope.cancel(); network.close() }
+    fun close() { BillingRuntime.gateway = null; AnalyticsRuntime.loader = null; CustomerRuntime.listLoader = null; CustomerRuntime.detailLoader = null; CustomerRuntime.createCustomer = null; CustomerRuntime.updateCustomer = null; CustomerRuntime.deleteCustomer = null; InventoryRuntime.updateProduct = null; announcementCenter.dispose(); scope.cancel(); network.close() }
 }
