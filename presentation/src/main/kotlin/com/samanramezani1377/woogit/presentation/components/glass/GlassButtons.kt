@@ -41,10 +41,14 @@ fun GlassSecondaryButton(label: String, onClick: () -> Unit, modifier: Modifier 
 
 @Composable
 fun GlassOutlinedButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
+    if (label == "مشتری جدید") {
+        GlassButton(label, onClick, modifier, enabled)
+        return
+    }
     val shape = RoundedCornerShape(12.dp)
     OutlinedButton(
         onClick = onClick,
-        modifier = modifier.heightIn(min = 52.dp).liquidGlass(shape, surface = Color.White.copy(alpha = .30f), blurRadius = 9f, lensHeight = 14f, lensAmount = 10f, shadowElevation = 4f),
+        modifier = modifier.heightIn(min = 52.dp).liquidGlass(shape, surface = Color.White.copy(alpha = .30f), blurRadius = 9f, lensHeight = 14f, lensAmount = 10f, shadowElevation = 4.dp),
         enabled = enabled,
         shape = shape,
         border = null,
@@ -58,7 +62,7 @@ fun GlassTextButton(label: String, onClick: () -> Unit, modifier: Modifier = Mod
 
 @Composable
 fun GlassIconButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) = IconButton(onClick, modifier.heightIn(min = 48.dp), enabled = enabled) {
-    Box(Modifier.size(44.dp).liquidGlass(RoundedCornerShape(13.dp), surface = Color.White.copy(alpha = .28f), blurRadius = 8f, lensHeight = 12f, lensAmount = 8f, shadowElevation = 3f), contentAlignment = Alignment.Center) { Text(label) }
+    Box(Modifier.size(44.dp).liquidGlass(RoundedCornerShape(13.dp), surface = Color.White.copy(alpha = .28f), blurRadius = 8f, lensHeight = 12f, lensAmount = 8f, shadowElevation = 3.dp), contentAlignment = Alignment.Center) { Text(label) }
 }
 
 @Composable
