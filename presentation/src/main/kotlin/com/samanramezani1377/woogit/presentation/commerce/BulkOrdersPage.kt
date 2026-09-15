@@ -31,7 +31,15 @@ import com.samanramezani1377.woogit.presentation.GlassPrimaryAction
 import com.samanramezani1377.woogit.presentation.GlassSearchField
 import com.samanramezani1377.woogit.presentation.GlassTokens
 
-private val bulkOrderStatuses = listOf(OrderStatus.PENDING, OrderStatus.PROCESSING, OrderStatus.ON_HOLD, OrderStatus.COMPLETED, OrderStatus.CANCELLED, OrderStatus.REFUNDED, OrderStatus.FAILED)
+private val bulkOrderStatuses = listOf(
+    OrderStatus.PENDING,
+    OrderStatus.PROCESSING,
+    OrderStatus.ON_HOLD,
+    OrderStatus.COMPLETED,
+    OrderStatus.CANCELLED,
+    OrderStatus.REFUNDED,
+    OrderStatus.FAILED,
+)
 
 @Composable
 internal fun BulkOrdersPage(state: CommerceUiState, onBulkOrder: (Set<String>, OrderStatus) -> Unit) {
@@ -41,39 +49,91 @@ internal fun BulkOrdersPage(state: CommerceUiState, onBulkOrder: (Set<String>, O
     var filter by rememberSaveable { mutableStateOf<OrderStatus?>(null) }
     val visible = state.orders.filter { it.number.contains(query.trim(), true) && (filter == null || it.status == filter) }
     val selectedVisible = visible.count { it.id.value in selected }
-    val effectiveCount = target?.let { status -> selected.count { id -> state.orders.any { it.id.value == id && it.status != status } } } ?: 0
+    val effectiveCount = target?.let { status ->
+        selected.count { id -> state.orders.any { it.id.value == id && it.status != status } }
+    } ?: 0
 
     target?.let { status ->
         AlertDialog(
             onDismissRequest = { if (!state.loading) target = null },
             title = { Text("تغییر وضعیت سفارش‌ها") },
             text = { Text("$effectiveCount سفارش به «${status.faLabel()}» تغییر می‌کند.") },
-            confirmButton = { GlassPrimaryAction("اعمال", { onBulkOrder(selected, status); target = null }, enabled = !state.loading && effectiveCount > 0) },
+            confirmButton = {
+                GlassPrimaryAction(
+                    "اعمال",
+                    { onBulkOrder(selected, status); target = null },
+                    enabled = !state.loading && effectiveCount > 0,
+                )
+            },
             dismissButton = { TextButton(enabled = !state.loading, onClick = { target = null }) { Text("لغو") } },
         )
     }
 
     FeatureBody {
-        Section("انتخاب سفارش‌ها", "از فیلتر استفاده کنید، سپس سفارش‌ها را انتخاب کنید.") {
-            GlassSearchField(value = query, onValueChange = { query = it }, label = "شماره سفارش", modifier = Modifier.fillMaxWidth())
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                item { GlassOutlinedButton(if (filter == null) "همه" else "همه", { filter = null }) }
-                itemsIndexed(bulkOrderStatuses) { _, status ->
-                    GlassOutlinedButton(if (filter == status) "✓ ${status.faLabel()}" else status.faLabel(), { filter = status })
-                }
+        GlassSearchField(
+            value = query,
+            onValueChange = { query = it },
+            label = "شماره سفارش",
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            item {
+                GlassOutlinedButton("همه", { filter = null })
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                GlassOutlinedButton("انتخاب نتایج", { selected = selected + visible.map { it.id.value }.toSet() }, modifier = Modifier.weight(1f))
-                GlassOutlinedButton("پاک کردن", { selected = emptySet() }, modifier = Modifier.weight(1f))
+            itemsIndexed(bulkOrderStatuses) { _, status ->
+                GlassOutlinedButton(
+                    if (filter == status) "✓ ${status.faLabel()}" else status.faLabel(),
+                    { filter = status },
+                )
             }
-            Text("$selectedVisible از ${visible.size} سفارش نمایش‌داده‌شده انتخاب شده", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
+        }
+
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            GlassOutlinedButton(
+                "انتخاب نتایج",
+                { selected = selected + visible.map { it.id.value }.toSet() },
+                modifier = Modifier.weight(1f),
+            )
+            GlassOutlinedButton(
+                "پاک کردن",
+                { selected = emptySet() },
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                "$selectedVisible/${visible.size}",
+                color = GlassTokens.muted,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.SemiBold,
+            )
         }
 
         if (selected.isNotEmpty()) {
-            Section("تغییر وضعیت", "وضعیت مقصد را انتخاب کنید؛ عملیات بعد از تأیید ارسال می‌شود.") {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "تغییر وضعیت",
+                    color = GlassTokens.muted,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                LazyRow(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
                     itemsIndexed(bulkOrderStatuses) { _, status ->
-                        GlassOutlinedButton(status.faLabel(), { target = status }, enabled = !state.loading)
+                        GlassOutlinedButton(
+                            status.faLabel(),
+                            { target = status },
+                            enabled = !state.loading,
+                        )
                     }
                 }
             }
@@ -86,9 +146,20 @@ internal fun BulkOrdersPage(state: CommerceUiState, onBulkOrder: (Set<String>, O
             val failed = results.filterNot { it.succeeded }
             Section("نتیجه عملیات") {
                 Text("موفق: $success  •  ناموفق: ${failed.size}", fontWeight = FontWeight.SemiBold)
-                failed.take(8).forEach { Text("#${it.orderId.value}: ${it.error.orEmpty()}", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+                failed.take(8).forEach {
+                    Text(
+                        "#${it.orderId.value}: ${it.error.orEmpty()}",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
                 if (failed.isNotEmpty() && state.bulkOrderTarget != null) {
-                    GlassPrimaryAction("تلاش دوباره برای موارد ناموفق", { onBulkOrder(failed.map { it.orderId.value }.toSet(), state.bulkOrderTarget!!) }, modifier = Modifier.fillMaxWidth(), enabled = !state.loading)
+                    GlassPrimaryAction(
+                        "تلاش دوباره برای موارد ناموفق",
+                        { onBulkOrder(failed.map { it.orderId.value }.toSet(), state.bulkOrderTarget!!) },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !state.loading,
+                    )
                 }
             }
         }
@@ -96,16 +167,33 @@ internal fun BulkOrdersPage(state: CommerceUiState, onBulkOrder: (Set<String>, O
         if (visible.isEmpty()) {
             GlassEmptyState("سفارشی با این فیلتر پیدا نشد.")
         } else {
-            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyColumn(
+                Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
                 items(visible, key = { it.id.value }) { order ->
                     val chosen = order.id.value in selected
-                    GlassCard(Modifier.fillMaxWidth().clickable { selected = if (chosen) selected - order.id.value else selected + order.id.value }) {
+                    GlassCard(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                selected = if (chosen) selected - order.id.value else selected + order.id.value
+                            },
+                    ) {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text("#${order.number}", fontWeight = FontWeight.Bold)
-                                Text(order.status.faLabel(), color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
+                                Text(
+                                    order.status.faLabel(),
+                                    color = GlassTokens.muted,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
                             }
-                            Text(if (chosen) "✓ انتخاب شده" else "انتخاب", color = if (chosen) MaterialTheme.colorScheme.primary else GlassTokens.muted, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                if (chosen) "✓ انتخاب شده" else "انتخاب",
+                                color = if (chosen) MaterialTheme.colorScheme.primary else GlassTokens.muted,
+                                fontWeight = FontWeight.SemiBold,
+                            )
                         }
                     }
                 }
