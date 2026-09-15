@@ -99,28 +99,29 @@ private fun markdownAnnotated(text: String): AnnotatedString {
 private fun CodeBlock(code: String) {
     val context = LocalContext.current
     var copied by remember(code) { mutableStateOf(false) }
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .background(Color.Black.copy(alpha = .07f))
-            .padding(8.dp),
-    ) {
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(Color.Black.copy(alpha = .07f)).padding(8.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            TextButton(onClick = {
-                copyToClipboard(context, code)
-                copied = true
-            }) {
-                Text(if (copied) "کپی شد" else "کپی")
-            }
+            TextButton(onClick = { copyToClipboard(context, code); copied = true }) { Text(if (copied) "کپی شد" else "کپی") }
         }
-        Text(
-            code,
-            color = GlassTokens.ink,
-            fontFamily = FontFamily.Monospace,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 2.dp),
-        )
+        Text(code, color = GlassTokens.ink, fontFamily = FontFamily.Monospace, modifier = Modifier.fillMaxWidth().padding(horizontal = 2.dp, vertical = 2.dp))
     }
+}
+
+private fun fencedBody(line: String): String? {
+    val fence = line.trimStart()
+    if (!fence.startsWith("```") || !fence.drop(3).contains("```")) return null
+    val payload = fence.drop(3)
+    val close = payload.lastIndexOf("```")
+    if (close < 0) return null
+    val beforeClose = payload.substring(0, close)
+    val firstNewline = beforeClose.indexOf('\n')
+    val body = if (firstNewline >= 0) {
+        val header = beforeClose.substring(0, firstNewline).trim()
+        if (header.isBlank() || header.matches(Regex("^[A-Za-z0-9_+-]+$"))) beforeClose.substring(firstNewline + 1) else beforeClose
+    } else {
+        beforeClose
+    }
+    return body.trimEnd().takeIf { it.isNotBlank() }
 }
 
 @Composable
@@ -132,26 +133,9 @@ private fun MarkdownMessage(text: String) {
         lines.forEach { raw ->
             val line = raw.trimEnd()
             val fence = line.trimStart()
-
-            // Handle a complete fenced block that starts and ends on the same line,
-            // e.g. ```text...content...```. Some providers emit this form when they
-            // are asked to return a copyable code block.
-            if (!inCode && fence.startsWith("```") && fence.drop(3).contains("```")) {
-                val body = fence.drop(3)
-                    .let { value ->
-                        val firstNewline = value.indexOf('\\n')
-                        if (firstNewline >= 0 && value.substring(0, firstNewline).trim().matches(Regex("^[A-Za-z0-9_+-]+$"))) {
-                            value.substring(firstNewline + 1)
-                        } else {
-                            value
-                        }
-                    }
-                    .substringBeforeLast("```")
-                    .trimEnd()
-                if (body.isNotBlank()) CodeBlock(body)
-                return@forEach
+            if (!inCode) {
+                fencedBody(line)?.let { body -> CodeBlock(body); return@forEach }
             }
-
             if (fence.startsWith("```") || fence.startsWith(":```") ) {
                 if (inCode) {
                     CodeBlock(code.toString().trimEnd())
@@ -159,59 +143,33 @@ private fun MarkdownMessage(text: String) {
                     inCode = false
                 } else {
                     inCode = true
-                    // Preserve content after the opening fence when a provider emits
-                    // ```text followed immediately by content instead of a newline.
                     val opening = if (fence.startsWith(":```")) fence.drop(4) else fence.drop(3)
-                    val firstNewline = opening.indexOf('\\n')
+                    val firstNewline = opening.indexOf('\n')
                     if (firstNewline >= 0) {
                         val header = opening.substring(0, firstNewline).trim()
-                        if (header.isBlank() || header.matches(Regex("^[A-Za-z0-9_+-]+$"))) {
-                            code.append(opening.substring(firstNewline + 1)).append('\\n')
-                        } else {
-                            code.append(opening).append('\\n')
-                        }
+                        if (!header.matches(Regex("^[A-Za-z0-9_+-]+$"))) code.append(opening).append('\n')
+                        else code.append(opening.substring(firstNewline + 1)).append('\n')
                     } else if (opening.isNotBlank() && !opening.matches(Regex("^[A-Za-z0-9_+-]+$"))) {
-                        code.append(opening).append('\\n')
+                        code.append(opening).append('\n')
                     }
                 }
                 return@forEach
             }
             if (inCode) {
-                code.append(line).append('\\n')
+                code.append(line).append('\n')
                 return@forEach
             }
-            if (line.isBlank()) {
-                Spacer(Modifier.height(4.dp))
-                return@forEach
-            }
+            if (line.isBlank()) { Spacer(Modifier.height(4.dp)); return@forEach }
             if (Regex("^\\s*#{1,6}\\s+.+$").matches(line)) {
-                val heading = line.trimStart()
-                val level = heading.takeWhile { it == '#' }.length
-                val content = heading.drop(level).trim()
-                Text(
-                    markdownAnnotated(content),
-                    color = GlassTokens.ink,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = when (level) { 1 -> 24.sp; 2 -> 21.sp; 3 -> 18.sp; 4 -> 17.sp; else -> 16.sp },
-                    modifier = Modifier.padding(top = if (level <= 2) 5.dp else 2.dp),
-                )
-                return@forEach
+                val heading = line.trimStart(); val level = heading.takeWhile { it == '#' }.length; val content = heading.drop(level).trim()
+                Text(markdownAnnotated(content), color = GlassTokens.ink, fontWeight = FontWeight.Bold, fontSize = when (level) { 1 -> 24.sp; 2 -> 21.sp; 3 -> 18.sp; 4 -> 17.sp; else -> 16.sp }, modifier = Modifier.padding(top = if (level <= 2) 5.dp else 2.dp)); return@forEach
             }
             if (Regex("^\\s*(-{3,}|_{3,}|\\*{3,})\\s*$").matches(line)) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 5.dp)
-                        .height(1.dp)
-                        .background(Color.Black.copy(alpha = .12f)),
-                )
-                return@forEach
+                Box(Modifier.fillMaxWidth().padding(vertical = 5.dp).height(1.dp).background(Color.Black.copy(alpha = .12f))); return@forEach
             }
             Text(markdownAnnotated(markdownLine(line)), color = GlassTokens.ink)
         }
-        if (inCode && code.isNotEmpty()) {
-            CodeBlock(code.toString().trimEnd())
-        }
+        if (inCode && code.isNotEmpty()) CodeBlock(code.toString().trimEnd())
     }
 }
 
