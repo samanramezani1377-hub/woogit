@@ -37,6 +37,7 @@ import com.samanramezani1377.woogit.presentation.GlassEmptyState
 import com.samanramezani1377.woogit.presentation.GlassOutlinedButton
 import com.samanramezani1377.woogit.presentation.GlassPrimaryAction
 import com.samanramezani1377.woogit.presentation.GlassSearchField
+import com.samanramezani1377.woogit.presentation.GlassTextButton
 import com.samanramezani1377.woogit.presentation.GlassTokens
 
 @Composable
@@ -44,15 +45,17 @@ internal fun CouponsPage(
     state: CommerceUiState,
     onEditCoupon: (Long, WooCouponCommerceWriteDto) -> Unit,
     onCreateCoupon: (WooCouponCommerceWriteDto) -> Unit,
+    onDeleteCoupon: (Long) -> Unit,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var expandedCouponId by rememberSaveable { mutableStateOf<Long?>(null) }
     var editingCouponId by rememberSaveable { mutableStateOf<Long?>(null) }
     var creating by rememberSaveable { mutableStateOf(false) }
+    var deleteCandidateId by rememberSaveable { mutableStateOf<Long?>(null) }
 
     val normalizedQuery = query.trim()
     val visible = state.coupons.filter { it.code.contains(normalizedQuery, true) }
-    val editingCoupon = state.coupons.firstOrNull { it.id == editingCouponId }
+    val deleteCandidate = state.coupons.firstOrNull { it.id == deleteCandidateId }
 
     if (creating) {
         CouponCreateDialog(
@@ -60,11 +63,23 @@ internal fun CouponsPage(
             onSave = { onCreateCoupon(it); creating = false },
         )
     }
-    if (editingCoupon != null) {
-        CouponEditDialog(
-            coupon = editingCoupon,
-            onDismiss = { editingCouponId = null },
-            onSave = { onEditCoupon(editingCoupon.id, it); editingCouponId = null },
+
+    if (deleteCandidate != null) {
+        AlertDialog(
+            onDismissRequest = { deleteCandidateId = null },
+            title = { Text("حذف کوپن") },
+            text = { Text("آیا از حذف کوپن «${deleteCandidate.code}» مطمئن هستید؟ این عملیات در فروشگاه نیز انجام می‌شود.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onDeleteCoupon(deleteCandidate.id)
+                        deleteCandidateId = null
+                        if (expandedCouponId == deleteCandidate.id) expandedCouponId = null
+                        if (editingCouponId == deleteCandidate.id) editingCouponId = null
+                    },
+                ) { Text("حذف", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Bold) }
+            },
+            dismissButton = { TextButton(onClick = { deleteCandidateId = null }) { Text("لغو") } },
         )
     }
 
@@ -93,9 +108,11 @@ internal fun CouponsPage(
                     }
                     items(visible, key = { it.id }) { coupon ->
                         val isExpanded = expandedCouponId == coupon.id
+                        val isEditing = editingCouponId == coupon.id
                         GlassCard(
                             Modifier.fillMaxWidth().clickable {
                                 expandedCouponId = if (isExpanded) null else coupon.id
+                                if (!isExpanded) editingCouponId = null
                             },
                         ) {
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -103,7 +120,7 @@ internal fun CouponsPage(
                                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                         Text(coupon.code, fontWeight = FontWeight.SemiBold)
                                         Text(
-                                            "مبلغ: ${coupon.amount}  •  ${discountTypeFa(coupon.discount_type)}",
+                                            discountAmountLabel(coupon.amount, coupon.discount_type),
                                             color = GlassTokens.muted,
                                             style = MaterialTheme.typography.bodySmall,
                                         )
@@ -130,25 +147,43 @@ internal fun CouponsPage(
                                 AnimatedVisibility(isExpanded) {
                                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                         HorizontalDivider()
-                                        Text("مشخصات و توضیحات", fontWeight = FontWeight.SemiBold)
-                                        CouponDetailLine("کد", coupon.code)
-                                        CouponDetailLine("نوع تخفیف", discountTypeFa(coupon.discount_type))
-                                        CouponDetailLine("مبلغ تخفیف", coupon.amount)
-                                        CouponDetailLine("توضیحات", coupon.description?.takeIf { it.isNotBlank() } ?: "توضیحی ثبت نشده")
-                                        CouponDetailLine("تاریخ انقضا", coupon.date_expires?.takeIf { it.isNotBlank() } ?: "بدون انقضا")
-                                        CouponDetailLine("سقف استفاده", coupon.usage_limit?.toString() ?: "بدون محدودیت")
-                                        CouponDetailLine("سقف هر کاربر", coupon.usage_limit_per_user?.toString() ?: "بدون محدودیت")
-                                        CouponDetailLine("حداقل مبلغ خرید", coupon.minimum_amount?.takeIf { it.isNotBlank() } ?: "بدون حداقل")
-                                        CouponDetailLine("حداکثر مبلغ خرید", coupon.maximum_amount?.takeIf { it.isNotBlank() } ?: "بدون حداکثر")
-                                        CouponDetailLine("تعداد استفاده", coupon.usage_count.toString())
-                                        CouponDetailLine("استفاده انفرادی", if (coupon.individual_use) "فعال" else "غیرفعال")
-                                        CouponDetailLine("ارسال رایگان", if (coupon.free_shipping) "فعال" else "غیرفعال")
-                                        CouponDetailLine("عدم اعمال روی حراجی", if (coupon.exclude_sale_items) "فعال" else "غیرفعال")
-                                        GlassOutlinedButton(
-                                            "ویرایش کوپن",
-                                            onClick = { editingCouponId = coupon.id },
-                                            modifier = Modifier.fillMaxWidth(),
-                                        )
+                                        if (isEditing) {
+                                            CouponInlineEditor(
+                                                coupon = coupon,
+                                                onSave = { onEditCoupon(coupon.id, it); editingCouponId = null },
+                                                onCancel = { editingCouponId = null },
+                                            )
+                                        } else {
+                                            Text("مشخصات و توضیحات", fontWeight = FontWeight.SemiBold)
+                                            CouponDetailLine("کد", coupon.code)
+                                            CouponDetailLine("نوع تخفیف", discountTypeFa(coupon.discount_type))
+                                            CouponDetailLine("مبلغ تخفیف", discountAmountLabel(coupon.amount, coupon.discount_type))
+                                            CouponDetailLine("توضیحات", coupon.description?.takeIf { it.isNotBlank() } ?: "توضیحی ثبت نشده")
+                                            CouponDetailLine("تاریخ انقضا", coupon.date_expires?.takeIf { it.isNotBlank() } ?: "بدون انقضا")
+                                            CouponDetailLine("سقف استفاده", coupon.usage_limit?.toString() ?: "بدون محدودیت")
+                                            CouponDetailLine("سقف هر کاربر", coupon.usage_limit_per_user?.toString() ?: "بدون محدودیت")
+                                            CouponDetailLine("حداقل مبلغ خرید", coupon.minimum_amount?.takeIf { it.isNotBlank() } ?: "بدون حداقل")
+                                            CouponDetailLine("حداکثر مبلغ خرید", coupon.maximum_amount?.takeIf { it.isNotBlank() } ?: "بدون حداکثر")
+                                            CouponDetailLine("تعداد استفاده", coupon.usage_count.toString())
+                                            CouponDetailLine("استفاده انفرادی", if (coupon.individual_use) "فعال" else "غیرفعال")
+                                            CouponDetailLine("ارسال رایگان", if (coupon.free_shipping) "فعال" else "غیرفعال")
+                                            CouponDetailLine("عدم اعمال روی حراجی", if (coupon.exclude_sale_items) "فعال" else "غیرفعال")
+                                            Row(
+                                                Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                verticalAlignment = Alignment.CenterVertically,
+                                            ) {
+                                                GlassTextButton(
+                                                    "ویرایش کوپن",
+                                                    onClick = { editingCouponId = coupon.id },
+                                                    modifier = Modifier.weight(1f),
+                                                )
+                                                TextButton(
+                                                    onClick = { deleteCandidateId = coupon.id },
+                                                    modifier = Modifier.weight(1f),
+                                                ) { Text("حذف کوپن", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.SemiBold) }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -178,6 +213,71 @@ internal fun CouponsPage(
 }
 
 @Composable
+private fun CouponInlineEditor(
+    coupon: WooCouponCommerceDto,
+    onSave: (WooCouponCommerceWriteDto) -> Unit,
+    onCancel: () -> Unit,
+) {
+    val key = coupon.id
+    var amount by rememberSaveable(key) { mutableStateOf(coupon.amount) }
+    var discountType by rememberSaveable(key) { mutableStateOf(coupon.discount_type) }
+    var description by rememberSaveable(key) { mutableStateOf(coupon.description.orEmpty()) }
+    var expires by rememberSaveable(key) { mutableStateOf(coupon.date_expires.orEmpty()) }
+    var usageLimit by rememberSaveable(key) { mutableStateOf(coupon.usage_limit?.toString().orEmpty()) }
+    var usageLimitPerUser by rememberSaveable(key) { mutableStateOf(coupon.usage_limit_per_user?.toString().orEmpty()) }
+    var minimumAmount by rememberSaveable(key) { mutableStateOf(coupon.minimum_amount) }
+    var maximumAmount by rememberSaveable(key) { mutableStateOf(coupon.maximum_amount) }
+    var individualUse by rememberSaveable(key) { mutableStateOf(coupon.individual_use) }
+    var freeShipping by rememberSaveable(key) { mutableStateOf(coupon.free_shipping) }
+    var excludeSaleItems by rememberSaveable(key) { mutableStateOf(coupon.exclude_sale_items) }
+    var typeMenuExpanded by rememberSaveable(key) { mutableStateOf(false) }
+    var validationError by rememberSaveable(key) { mutableStateOf<String?>(null) }
+
+    Text("ویرایش کوپن", fontWeight = FontWeight.SemiBold, color = GlassTokens.accent)
+    Box {
+        GlassOutlinedButton("نوع تخفیف: ${discountTypeFa(discountType)}", { typeMenuExpanded = true }, Modifier.fillMaxWidth())
+        DropdownMenu(typeMenuExpanded, { typeMenuExpanded = false }) {
+            listOf("percent", "fixed_cart", "fixed_product").forEach { type ->
+                DropdownMenuItem(text = { Text(discountTypeFa(type)) }, onClick = { discountType = type; typeMenuExpanded = false })
+            }
+        }
+    }
+    GlassSearchField(amount, { amount = it }, "مبلغ تخفیف", Modifier.fillMaxWidth())
+    GlassSearchField(description, { description = it }, "توضیحات", Modifier.fillMaxWidth())
+    GlassSearchField(expires, { expires = it }, "تاریخ انقضا (YYYY-MM-DD)؛ خالی = بدون انقضا", Modifier.fillMaxWidth())
+    GlassSearchField(usageLimit, { usageLimit = it.filter(Char::isDigit) }, "سقف استفاده؛ خالی = بدون محدودیت", Modifier.fillMaxWidth())
+    GlassSearchField(usageLimitPerUser, { usageLimitPerUser = it.filter(Char::isDigit) }, "سقف استفاده برای هر کاربر؛ خالی = بدون محدودیت", Modifier.fillMaxWidth())
+    GlassSearchField(minimumAmount, { minimumAmount = it }, "حداقل مبلغ خرید", Modifier.fillMaxWidth())
+    GlassSearchField(maximumAmount, { maximumAmount = it }, "حداکثر مبلغ خرید", Modifier.fillMaxWidth())
+    CouponToggle("استفاده انفرادی", individualUse) { individualUse = it }
+    CouponToggle("ارسال رایگان", freeShipping) { freeShipping = it }
+    CouponToggle("عدم اعمال روی کالاهای حراجی", excludeSaleItems) { excludeSaleItems = it }
+    if (validationError != null) Text(validationError!!, color = MaterialTheme.colorScheme.error)
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        GlassPrimaryAction(
+            "ذخیره تغییرات",
+            {
+                val limit = usageLimit.toIntOrNull()
+                val perUser = usageLimitPerUser.toIntOrNull()
+                validationError = validateCoupon(coupon.code, amount, expires, limit, perUser)
+                if (validationError == null) onSave(
+                    WooCouponCommerceWriteDto(
+                        code = coupon.code.trim(), amount = amount.trim(), discount_type = discountType,
+                        description = description.trim().ifBlank { null }, date_expires = expires.trim().ifBlank { null },
+                        individual_use = individualUse, free_shipping = freeShipping, usage_limit = limit,
+                        usage_limit_per_user = perUser, minimum_amount = minimumAmount.trim(), maximum_amount = maximumAmount.trim(),
+                        exclude_sale_items = excludeSaleItems,
+                    ),
+                )
+            },
+            modifier = Modifier.weight(1f),
+            enabled = amount.isNotBlank(),
+        )
+        TextButton(onClick = onCancel, modifier = Modifier.weight(1f)) { Text("لغو") }
+    }
+}
+
+@Composable
 private fun CouponDetailLine(label: String, value: String) {
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(label, color = GlassTokens.muted, style = MaterialTheme.typography.labelSmall)
@@ -188,10 +288,6 @@ private fun CouponDetailLine(label: String, value: String) {
 @Composable
 private fun CouponCreateDialog(onDismiss: () -> Unit, onSave: (WooCouponCommerceWriteDto) -> Unit) =
     CouponFormDialog("ساخت کوپن جدید", null, onDismiss, onSave)
-
-@Composable
-private fun CouponEditDialog(coupon: WooCouponCommerceDto, onDismiss: () -> Unit, onSave: (WooCouponCommerceWriteDto) -> Unit) =
-    CouponFormDialog("ویرایش کوپن", coupon, onDismiss, onSave)
 
 @Composable
 private fun CouponFormDialog(
@@ -288,4 +384,10 @@ private fun discountTypeFa(type: String): String = when (type) {
     "fixed_cart" -> "مبلغ ثابت سبد"
     "fixed_product" -> "مبلغ ثابت محصول"
     else -> type
+}
+
+private fun discountAmountLabel(amount: String, type: String): String = when (type) {
+    "percent" -> "$amount٪"
+    "fixed_cart", "fixed_product" -> "$amount مبلغ ثابت"
+    else -> amount
 }
