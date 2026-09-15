@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -187,22 +186,15 @@ internal fun CustomersPage(storeId: StoreId, state: CommerceUiState) {
     Box(Modifier.fillMaxSize()) {
         FeatureBody {
             Spacer(Modifier.height(58.dp))
-
-            Row(
-                Modifier.fillMaxWidth().padding(top = 2.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
+            Row(Modifier.fillMaxWidth().padding(top = 2.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text("مشتریان", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                     Text("${customers.size} مشتری در این صفحه", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
                 }
                 if (loading) CircularProgressIndicator(modifier = Modifier.padding(4.dp))
             }
-
             error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             operationMessage?.let { Text(it, color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Medium) }
-
             if (!loading && customers.isEmpty()) {
                 GlassEmptyState(if (query.isBlank()) "هنوز مشتری‌ای برای نمایش وجود ندارد." else "مشتری مطابق جستجو پیدا نشد.")
             } else if (customers.isNotEmpty()) {
@@ -210,93 +202,41 @@ internal fun CustomersPage(storeId: StoreId, state: CommerceUiState) {
                     customers.forEach { customer ->
                         val customerId = customer.id?.value
                         val isSelected = customerId != null && customerId == selectedId
-                        CustomerRow(
-                            customer = customer,
-                            selected = isSelected,
-                            onClick = {
-                                if (isSelected) {
-                                    selectedId = null
-                                    selected = null
-                                } else {
-                                    selectedId = customerId
-                                    selected = customer
-                                }
-                            },
-                        )
+                        val customerOrders = customerId?.let { id -> state.orders.filter { it.customer?.id?.value == id } }.orEmpty()
+                        CustomerRow(customer = customer, orders = customerOrders, selected = isSelected, onClick = {
+                            if (isSelected) {
+                                selectedId = null
+                                selected = null
+                            } else {
+                                selectedId = customerId
+                                selected = customer
+                            }
+                        })
                         AnimatedVisibility(visible = isSelected && selectedCustomer != null) {
                             CustomerDetailsCard(
                                 customer = selectedCustomer ?: customer,
                                 orders = selectedOrders,
                                 onEdit = { editorCustomer = selectedCustomer ?: customer },
                                 onDelete = { deleteTarget = selectedCustomer ?: customer },
-                                onClose = {
-                                    selectedId = null
-                                    selected = null
-                                },
+                                onClose = { selectedId = null; selected = null },
                             )
                         }
                     }
-                    if (hasMore) {
-                        GlassOutlinedButton(
-                            if (loadingMore) "در حال بارگذاری…" else "نمایش مشتریان بیشتر",
-                            onClick = ::loadMore,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
+                    if (hasMore) GlassOutlinedButton(if (loadingMore) "در حال بارگذاری…" else "نمایش مشتریان بیشتر", onClick = ::loadMore, modifier = Modifier.fillMaxWidth())
                 }
             }
-
             Spacer(Modifier.height(92.dp))
         }
-
-        GlassCard(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 4.dp)
-                .align(Alignment.TopCenter),
-        ) {
-            GlassSearchField(
-                value = query,
-                onValueChange = { query = it },
-                label = "جستجوی نام، ایمیل، نام کاربری یا تلفن",
-                modifier = Modifier.fillMaxWidth(),
-            )
+        GlassCard(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).align(Alignment.TopCenter)) {
+            GlassSearchField(value = query, onValueChange = { query = it }, label = "جستجوی نام، ایمیل، نام کاربری یا تلفن", modifier = Modifier.fillMaxWidth())
         }
-
-        GlassCard(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp)
-                .align(Alignment.BottomCenter),
-        ) {
-            GlassOutlinedButton(
-                "مشتری جدید",
-                onClick = { showCreate = true },
-                modifier = Modifier.fillMaxWidth(),
-            )
+        GlassCard(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp).align(Alignment.BottomCenter)) {
+            GlassOutlinedButton("مشتری جدید", onClick = { showCreate = true }, modifier = Modifier.fillMaxWidth())
         }
     }
 
-    if (showCreate) {
-        CustomerEditorDialog(
-            initial = Customer(id = null, name = "", email = null),
-            title = "مشتری جدید",
-            saving = operationLoading,
-            onDismiss = { if (!operationLoading) showCreate = false },
-            onSave = { saveCustomer(it, true) },
-        )
-    }
-
-    editorCustomer?.let { customer ->
-        CustomerEditorDialog(
-            initial = customer,
-            title = "ویرایش مشتری",
-            saving = operationLoading,
-            onDismiss = { if (!operationLoading) editorCustomer = null },
-            onSave = { saveCustomer(it, false) },
-        )
-    }
-
+    if (showCreate) CustomerEditorDialog(Customer(id = null, name = "", email = null), "مشتری جدید", operationLoading, { if (!operationLoading) showCreate = false }) { saveCustomer(it, true) }
+    editorCustomer?.let { customer -> CustomerEditorDialog(customer, "ویرایش مشتری", operationLoading, { if (!operationLoading) editorCustomer = null }) { saveCustomer(it, false) } }
     deleteTarget?.let { customer ->
         AlertDialog(
             onDismissRequest = { if (!operationLoading) deleteTarget = null },
@@ -309,35 +249,39 @@ internal fun CustomersPage(storeId: StoreId, state: CommerceUiState) {
 }
 
 @Composable
-private fun CustomerRow(customer: Customer, selected: Boolean, onClick: () -> Unit) {
+private fun CustomerRow(customer: Customer, orders: List<Order>, selected: Boolean, onClick: () -> Unit) {
+    val orderCount = if (orders.isNotEmpty()) orders.size else customer.ordersCount
+    val totalSpent = if (orders.isNotEmpty()) orders.sumOf { it.total?.toDoubleOrNull() ?: 0.0 }.toDisplayAmount() else customer.totalSpent
+    val currency = orders.firstOrNull { !it.currency.isNullOrBlank() }?.currency
+    val amountText = if (!currency.isNullOrBlank()) "$totalSpent $currency" else totalSpent
     GlassCard(Modifier.fillMaxWidth().clickable(onClick = onClick)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(customer.name.ifBlank { "مشتری بدون نام" }, fontWeight = FontWeight.SemiBold)
                 Text(customer.email ?: "ایمیل ثبت نشده", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
-                Text("${customer.ordersCount} سفارش  •  ${customer.totalSpent}", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
+                Text("$orderCount سفارش  •  $amountText", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
             }
             if (selected) Text("باز", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
         }
     }
 }
 
+private fun Double.toDisplayAmount(): String = if (this % 1.0 == 0.0) toLong().toString() else String.format(java.util.Locale.US, "%.2f", this).trimEnd('0').trimEnd('.')
+
 @Composable
-private fun CustomerDetailsCard(
-    customer: Customer,
-    orders: List<Order>,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit,
-    onClose: () -> Unit,
-) {
+private fun CustomerDetailsCard(customer: Customer, orders: List<Order>, onEdit: () -> Unit, onDelete: () -> Unit, onClose: () -> Unit) {
+    val orderCount = if (orders.isNotEmpty()) orders.size else customer.ordersCount
+    val totalSpent = if (orders.isNotEmpty()) orders.sumOf { it.total?.toDoubleOrNull() ?: 0.0 }.toDisplayAmount() else customer.totalSpent
+    val currency = orders.firstOrNull { !it.currency.isNullOrBlank() }?.currency
+    val amountText = if (!currency.isNullOrBlank()) "$totalSpent $currency" else totalSpent
     Section("پرونده مشتری", "اطلاعات حساب، تماس، آدرس‌ها و سابقه خرید") {
         Text(customer.name.ifBlank { "مشتری بدون نام" }, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
         InfoLine("ایمیل", customer.email ?: "ثبت نشده")
         InfoLine("تلفن", customer.phone ?: "ثبت نشده")
         InfoLine("نام کاربری", customer.username ?: "ثبت نشده")
         InfoLine("نقش", customer.role ?: "مشتری")
-        InfoLine("تعداد سفارش", customer.ordersCount.toString())
-        InfoLine("مجموع خرید", customer.totalSpent)
+        InfoLine("تعداد سفارش", orderCount.toString())
+        InfoLine("مجموع خرید", amountText)
         AddressSummary("آدرس صورتحساب", customer.billing)
         AddressSummary("آدرس ارسال", customer.shipping)
         InfoLine("سفارش‌های محلی", orders.size.toString())
@@ -345,9 +289,7 @@ private fun CustomerDetailsCard(
             Text("سابقه سفارش‌ها", fontWeight = FontWeight.SemiBold)
             orders.take(10).forEach { order -> OrderSummary(order) }
             if (orders.size > 10) Text("۱۰ سفارش اخیر نمایش داده شد.", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
-        } else {
-            Text("هنوز سفارشی برای این مشتری در داده‌های اپ موجود نیست.", color = GlassTokens.muted)
-        }
+        } else Text("هنوز سفارشی برای این مشتری در داده‌های اپ موجود نیست.", color = GlassTokens.muted)
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             GlassOutlinedButton("ویرایش", onEdit, modifier = Modifier.weight(1f))
             GlassOutlinedButton("حذف", onDelete, modifier = Modifier.weight(1f))
@@ -357,13 +299,7 @@ private fun CustomerDetailsCard(
 }
 
 @Composable
-private fun CustomerEditorDialog(
-    initial: Customer,
-    title: String,
-    saving: Boolean,
-    onDismiss: () -> Unit,
-    onSave: (Customer) -> Unit,
-) {
+private fun CustomerEditorDialog(initial: Customer, title: String, saving: Boolean, onDismiss: () -> Unit, onSave: (Customer) -> Unit) {
     var firstName by remember(initial) { mutableStateOf(initial.billing?.firstName ?: initial.name.split(" ").firstOrNull().orEmpty()) }
     var lastName by remember(initial) { mutableStateOf(initial.billing?.lastName ?: initial.name.split(" ").drop(1).joinToString(" ")) }
     var email by remember(initial) { mutableStateOf(initial.email.orEmpty()) }
@@ -373,7 +309,6 @@ private fun CustomerEditorDialog(
     var billing by remember(initial) { mutableStateOf(initial.billing ?: Address(null,null,null,null,null,null,null,null,"IR",phone.takeIf { it.isNotBlank() })) }
     var shipping by remember(initial) { mutableStateOf(initial.shipping ?: Address(null,null,null,null,null,null,null,null,"IR",null)) }
     var formError by remember(initial) { mutableStateOf<String?>(null) }
-
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
@@ -404,45 +339,27 @@ private fun CustomerEditorDialog(
             }
         },
         confirmButton = {
-            Button(
-                enabled = !saving,
-                onClick = {
-                    val normalizedEmail = email.trim().takeIf { it.isNotBlank() }
-                    if (firstName.isBlank() && lastName.isBlank() && normalizedEmail.isNullOrBlank()) {
-                        formError = "نام یا ایمیل مشتری را وارد کنید."
-                    } else {
-                        val composedName = listOf(firstName.trim(), lastName.trim()).filter { it.isNotBlank() }.joinToString(" ")
-                        onSave(initial.copy(
-                            name = composedName.ifBlank { normalizedEmail ?: "مشتری" },
-                            email = normalizedEmail,
-                            username = username.trim().takeIf { it.isNotBlank() },
-                            role = role.trim().ifBlank { "customer" },
-                            phone = phone.trim().takeIf { it.isNotBlank() },
-                            billing = billing.copy(firstName = firstName.trim().takeIf { it.isNotBlank() }, lastName = lastName.trim().takeIf { it.isNotBlank() }, phone = phone.trim().takeIf { it.isNotBlank() }),
-                            shipping = shipping.copy(firstName = firstName.trim().takeIf { it.isNotBlank() }, lastName = lastName.trim().takeIf { it.isNotBlank() }),
-                        ))
-                    }
-                },
-            ) { Text(if (saving) "در حال ذخیره…" else "ذخیره") }
+            Button(enabled = !saving, onClick = {
+                val normalizedEmail = email.trim().takeIf { it.isNotBlank() }
+                if (firstName.isBlank() && lastName.isBlank() && normalizedEmail.isNullOrBlank()) formError = "نام یا ایمیل مشتری را وارد کنید."
+                else {
+                    val composedName = listOf(firstName.trim(), lastName.trim()).filter { it.isNotBlank() }.joinToString(" ")
+                    onSave(initial.copy(name = composedName.ifBlank { normalizedEmail ?: "مشتری" }, email = normalizedEmail, username = username.trim().takeIf { it.isNotBlank() }, role = role.trim().ifBlank { "customer" }, phone = phone.trim().takeIf { it.isNotBlank() }, billing = billing.copy(firstName = firstName.trim().takeIf { it.isNotBlank() }, lastName = lastName.trim().takeIf { it.isNotBlank() }, phone = phone.trim().takeIf { it.isNotBlank() }), shipping = shipping.copy(firstName = firstName.trim().takeIf { it.isNotBlank() }, lastName = lastName.trim().takeIf { it.isNotBlank() })))
+                }
+            }) { Text(if (saving) "در حال ذخیره…" else "ذخیره") }
         },
         dismissButton = { TextButton(onClick = onDismiss, enabled = !saving) { Text("انصراف") } },
     )
 }
 
 @Composable
-private fun FormField(label: String, value: String, onValueChange: (String) -> Unit) {
-    OutlinedTextField(value = value, onValueChange = onValueChange, label = { Text(label) }, modifier = Modifier.fillMaxWidth(), singleLine = true)
-}
+private fun FormField(label: String, value: String, onValueChange: (String) -> Unit) = OutlinedTextField(value = value, onValueChange = onValueChange, label = { Text(label) }, modifier = Modifier.fillMaxWidth(), singleLine = true)
 
 @Composable
 private fun AddressSummary(title: String, address: Address?) {
     Text(title, fontWeight = FontWeight.SemiBold)
-    if (address == null || listOf(address.address1,address.address2,address.city,address.state,address.postcode,address.country).all { it.isNullOrBlank() }) {
-        Text("ثبت نشده", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
-    } else {
-        val parts = listOf(address.address1, address.address2, address.city, address.state, address.postcode, address.country).filter { !it.isNullOrBlank() }
-        Text(parts.joinToString("، "), color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
-    }
+    if (address == null || listOf(address.address1,address.address2,address.city,address.state,address.postcode,address.country).all { it.isNullOrBlank() }) Text("ثبت نشده", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
+    else Text(listOf(address.address1,address.address2,address.city,address.state,address.postcode,address.country).filter { !it.isNullOrBlank() }.joinToString("، "), color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
 }
 
 @Composable
@@ -460,7 +377,8 @@ private fun OrderSummary(order: Order) {
             Text("#${order.number}", fontWeight = FontWeight.SemiBold)
             Text(order.status.faLabel(), color = GlassTokens.muted)
         }
-        Text(order.total ?: "0", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
+        val total = order.total ?: "0"
+        Text(if (!order.currency.isNullOrBlank()) "$total ${order.currency}" else total, color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
     }
 }
 
