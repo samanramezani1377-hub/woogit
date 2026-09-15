@@ -12,7 +12,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: woogit-ci-${{ github.workflow }}-${{ github.ref }}
@@ -245,93 +245,6 @@ jobs:
           cache-cleanup: on-success
       - name: Android lint
         run: gradle lint --console=plain --warning-mode=all --stacktrace
-
-  ai-static-reply-cleanup:
-    name: One-time AI response cleanup
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.event.before == '8e0b61e1e8684980035d9b19ece8974c75a5e9'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-      - name: Remove fixed AI replies and cleanup temporary workflow
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-          p = Path('presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/ai/AiAgent.kt')
-          s = p.read_text(encoding='utf-8')
-          pattern = re.compile(r'''        if \(confirmationToken == null\) \{\n            if \(isStatusQuery\(latestUserText\)\) \{.*?            activateWorkingMemory\(conversationId, messages, working\)\n        \}\n''', re.S)
-          replacement = '''        if (confirmationToken == null) {
-            if (isContinuationRequest(latestUserText)) {
-                val state = workingMemory.read(conversationId)
-                if (state?.optString("status") == "active") {
-                    workingMemory.resume(conversationId)
-                } else if (state == null) {
-                    workingMemory.beginNewExecution(conversationId, latestUserText.ifBlank { "Agent task" })
-                }
-            } else if (!isStatusQuery(latestUserText)) {
-                workingMemory.beginNewExecution(conversationId, latestUserText.ifBlank { "Agent task" })
-            }
-            activateWorkingMemory(conversationId, messages, working)
-        }
-          '''
-          s, count = pattern.subn(replacement, s, count=1)
-          if count != 1:
-              raise SystemExit('status/continuation block not found')
-
-          def remove_function(src, signature):
-              start = src.index(signature)
-              brace = src.index('{', start)
-              depth = 0
-              for i in range(brace, len(src)):
-                  if src[i] == '{':
-                      depth += 1
-                  elif src[i] == '}':
-                      depth -= 1
-                      if depth == 0:
-                          return src[:start] + src[i + 1:]
-              raise SystemExit(f'unterminated function: {signature}')
-
-          s = remove_function(s, '    private fun statusReply(conversationId: String): AgentReply {')
-          s = re.sub(
-              r'''            if \(text\.isNotBlank\(\)\) \{\n                AgentReply\(text = text, attachments = attachments\)\n            \} else \{\n                AgentReply\(\n                    text = mandatoryFallback\(conversationId\),\n                    attachments = attachments,\n                \)\n            \}\n        \} catch \(_\: Throwable\) \{\n            AgentReply\(\n                text = mandatoryFallback\(conversationId\),\n                attachments = attachments,\n            \)\n''',
-              '''            AgentReply(text = text, attachments = attachments)
-        } catch (throwable: Throwable) {
-            throw IllegalStateException("AI provider failed while generating the final response", throwable)
-''',
-              s,
-              count=1,
-          )
-          s = remove_function(s, '    private fun mandatoryFallback(conversationId: String): String {')
-          p.write_text(s, encoding='utf-8')
-
-          workflow = Path('.github/workflows/fix-ai-static-replies.yml')
-          if workflow.exists():
-              workflow.unlink()
-
-          ci = Path('.github/workflows/ci.yml')
-          ci_text = ci.read_text(encoding='utf-8')
-          marker = '\n  ai-static-reply-cleanup:\n'
-          start = ci_text.find(marker)
-          if start != -1:
-              end = ci_text.find('\n  final-gate:', start)
-              if end == -1:
-                  raise SystemExit('final-gate marker not found while cleaning CI')
-              ci.write_text(ci_text[:start] + '\n' + ci_text[end + 1:], encoding='utf-8')
-
-          docs = Path('docs/agent/SOURCE_INDEX.md')
-          if docs.exists():
-              docs_text = docs.read_text(encoding='utf-8')
-              cleanup_text = '''\n## AI response policy\nFixed user-facing status and mandatory fallback replies are removed; status/continuation requests use the normal model response path while Working Memory remains internal.\n\n## Cleanup trigger\nOne-time cleanup workflow is being used only to apply the AI response policy to `AiAgent.kt` and removes itself after execution.\n'''
-              docs.write_text(docs_text.replace(cleanup_text, ''), encoding='utf-8')
-          PY
-          git config user.name 'samanramezani1377-hub'
-          git config user.email 'saman.ramezani1377@gmail.com'
-          git add -A
-          git commit -m 'Remove fixed AI user-facing replies'
-          git push origin main
 
   final-gate:
     name: Final CI gate
