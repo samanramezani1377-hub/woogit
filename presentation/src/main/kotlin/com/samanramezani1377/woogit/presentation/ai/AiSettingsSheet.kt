@@ -38,6 +38,8 @@ private fun varProviderMenu(
     var providerMenuExpanded = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var groqMenuExpanded = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     var cloudflareMenuExpanded = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    val availableProviders = (AI_PROVIDERS + "mistral").distinct()
+
     GlassBottomSheet(show = show, onDismiss = onDismiss) {
         Text("تنظیمات AI", fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(10.dp))
@@ -51,14 +53,14 @@ private fun varProviderMenu(
         Text("سرویس AI", fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(6.dp))
         Box(Modifier.fillMaxWidth()) {
-            GlassOutlinedButton("${providerLabel(providerId)}  ·  ${providerModelLabel(providerId, geminiModel, groqModel, cloudflareModel)}", { providerMenuExpanded.value = true }, Modifier.fillMaxWidth())
+            GlassOutlinedButton("${providerLabel(providerId)}  ·  ${if (providerId == "mistral") vm.mistralModel else providerModelLabel(providerId, geminiModel, groqModel, cloudflareModel)}", { providerMenuExpanded.value = true }, Modifier.fillMaxWidth())
             DropdownMenu(expanded = providerMenuExpanded.value, onDismissRequest = { providerMenuExpanded.value = false }) {
-                AI_PROVIDERS.forEach { provider ->
+                availableProviders.forEach { provider ->
                     DropdownMenuItem(
                         text = {
                             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 Text(providerLabel(provider), fontWeight = if (provider == providerId) FontWeight.SemiBold else FontWeight.Normal)
-                                Text(providerModelLabel(provider, geminiModel, groqModel, cloudflareModel), color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
+                                Text(if (provider == "mistral") vm.mistralModel else providerModelLabel(provider, geminiModel, groqModel, cloudflareModel), color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
                             }
                         },
                         leadingIcon = { Text(if (provider == providerId) "✓" else "", color = GlassTokens.accent, fontWeight = FontWeight.Bold) },
@@ -100,6 +102,12 @@ private fun varProviderMenu(
             }
             Text("مدل انتخاب‌شده برای متن استفاده می‌شود؛ هنگام ارسال تصویر، Agent از مدل Vision مربوط به Cloudflare استفاده می‌کند.", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
         }
+        if (providerId == "mistral") {
+            Spacer(Modifier.height(10.dp)); Text("Mistral", fontWeight = FontWeight.SemiBold)
+            Text("مدل Mistral", color = GlassTokens.muted, style = MaterialTheme.typography.labelSmall)
+            AiField(vm.mistralModel, { vm.saveMistralModel(it) }, "Model ID (پیش‌فرض: mistral-small-2603)")
+            Text("Free mode می‌تواند با همین API استفاده شود و محدودیت مصرف حساب Mistral را اعمال می‌کند.", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
+        }
         Spacer(Modifier.height(12.dp))
         GlassCard(Modifier.fillMaxWidth()) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -120,6 +128,7 @@ private fun varProviderMenu(
             if (providerId == "gemini") vm.saveGeminiModel(geminiModel)
             if (providerId == "groq") vm.saveGroqModel(groqModel)
             if (providerId == "cloudflare") { vm.saveCloudflareModel(cloudflareModel); vm.saveCloudflareAccountId(cloudflareAccountId) }
+            if (providerId == "mistral") vm.saveMistralModel(vm.mistralModel)
             onDismiss()
         })
     }
