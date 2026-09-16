@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,7 +24,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -65,6 +66,7 @@ internal fun ProductsScreen(
 ) {
     var query by remember { mutableStateOf("") }
     var liveProducts by remember { mutableStateOf<List<Product>>(emptyList()) }
+    val listState = rememberLazyListState()
 
     LaunchedEffect(state) {
         liveProducts = (state as? FeatureUiState.Success)?.value.orEmpty()
@@ -72,21 +74,38 @@ internal fun ProductsScreen(
 
     LaunchedEffect(Unit) {
         ProductSyncEvents.updates.collect { update ->
-            val currentById = liveProducts.associateBy { it.id }
-            if (currentById.isNotEmpty()) {
-                val changedById = update.products.associateBy { it.id }
-                val merged = liveProducts.map { changedById[it.id] ?: it }.toMutableList()
+            val current = liveProducts
+            val currentById = current.associateBy { it.id }
+            val changedById = update.products.associateBy { it.id }
 
-                // Keep background reconciliation invisible: update existing rows in place
-                // and append newly discovered products without resetting/loading the list.
-                // Search results must not suddenly gain unrelated products.
-                if (query.isBlank()) {
-                    update.products.forEach { product ->
-                        if (!currentById.containsKey(product.id)) merged += product
-                    }
+            if (current.isEmpty()) {
+                if (query.isBlank() && update.products.isNotEmpty()) {
+                    liveProducts = update.products
                 }
+                return@collect
+            }
 
-                if (merged != liveProducts) liveProducts = merged
+            val newProducts = if (query.isBlank()) {
+                update.products.filterNot { currentById.containsKey(it.id) }
+            } else {
+                emptyList()
+            }
+            val merged = current.map { changedById[it.id] ?: it }
+
+            if (newProducts.isEmpty()) {
+                if (merged != current) liveProducts = merged
+                return@collect
+            }
+
+            val firstVisibleIndex = listState.firstVisibleItemIndex
+            val firstVisibleOffset = listState.firstVisibleItemScrollOffset
+            liveProducts = newProducts + merged
+
+            // When the user is already below the top, compensate for the inserted
+            // rows so the same product remains under their finger/viewport.
+            if (firstVisibleIndex > 0) {
+                withFrameNanos { }
+                listState.scrollToItem(firstVisibleIndex + newProducts.size, firstVisibleOffset)
             }
         }
     }
@@ -104,7 +123,7 @@ internal fun ProductsScreen(
                 FeatureUiState.Pending -> ProductSyncLoading("در حال به‌روزرسانی محصولات…")
                 FeatureUiState.Empty -> GlassEmptyState("محصولی برای نمایش وجود ندارد.")
                 is FeatureUiState.Error -> { GlassErrorState(state.message); if (state.retryable) GlassPrimaryAction("تلاش مجدد", onRetry) }
-                is FeatureUiState.Success -> ProductList(liveProducts, onProductClick, onLoadMore, Modifier.weight(1f))
+                is FeatureUiState.Success -> ProductList(liveProducts, onProductClick, onLoadMore, listState, Modifier.weight(1f))
                 FeatureUiState.Offline -> GlassErrorState("اتصال فروشگاه در دسترس نیست.")
                 is FeatureUiState.Conflict -> GlassErrorState("تعارضی در داده‌های محصولات وجود دارد.")
             }
@@ -124,10 +143,9 @@ private fun ProductSyncLoading(message: String) {
 }
 
 @Composable
-private fun ProductList(products: List<Product>, onProductClick: (String) -> Unit, onLoadMore: () -> Unit, modifier: Modifier) {
-    val listState = rememberLazyListState()
+private fun ProductList(products: List<Product>, onProductClick: (String) -> Unit, onLoadMore: () -> Unit, listState: LazyListState, modifier: Modifier) {
     LaunchedEffect(listState, products.size) {
-        snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
+        kotlinx.coroutines.flow.snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
             .distinctUntilChanged()
             .filter { it >= (products.size - 4).coerceAtLeast(0) }
             .collect { onLoadMore() }
