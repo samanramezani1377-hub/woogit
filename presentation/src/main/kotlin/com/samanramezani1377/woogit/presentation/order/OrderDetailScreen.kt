@@ -19,11 +19,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import com.samanramezani1377.woogit.core.domain.entity.EntityId
 import com.samanramezani1377.woogit.core.domain.model.Address
 import com.samanramezani1377.woogit.core.domain.model.Customer
@@ -38,7 +40,6 @@ import com.samanramezani1377.woogit.presentation.GlassIdentifierField
 import com.samanramezani1377.woogit.presentation.GlassLoading
 import com.samanramezani1377.woogit.presentation.GlassPrimaryAction
 import com.samanramezani1377.woogit.presentation.GlassScaffold
-import com.samanramezani1377.woogit.presentation.GlassSecondaryButton
 import com.samanramezani1377.woogit.presentation.GlassStatusBadge
 import com.samanramezani1377.woogit.presentation.GlassText
 import com.samanramezani1377.woogit.presentation.GlassTextField
@@ -50,7 +51,7 @@ internal fun OrderDetailScreen(
     onRetry: () -> Unit,
     onBack: () -> Unit,
     onSave: (Order) -> Job,
-    onAddNote: (String) -> Unit,
+    onAddNote: (String) -> Job,
     modifier: Modifier = Modifier,
 ) {
     var editing by remember { mutableStateOf(false) }
@@ -81,13 +82,13 @@ internal fun OrderDetailScreen(
 }
 
 @Composable
-private fun OrderEditor(order: Order, screenState: OrderDetailUiState, onBack: () -> Unit, onSave: (Order) -> Job, onAddNote: (String) -> Unit) {
+private fun OrderEditor(order: Order, screenState: OrderDetailUiState, onBack: () -> Unit, onSave: (Order) -> Job, onAddNote: (String) -> Job) {
     var draft by remember(order.id.value) { mutableStateOf(order) }
     var note by remember(order.id.value) { mutableStateOf("") }
-    var addedNotes by remember(order.id.value) { mutableStateOf(emptyList<String>()) }
     var saveJob by remember(order.id.value) { mutableStateOf<Job?>(null) }
     var saveResult by remember(order.id.value) { mutableStateOf<OrderDetailSaveState>(OrderDetailSaveState.Idle) }
     val latestScreenState by rememberUpdatedState(screenState)
+    val scope = rememberCoroutineScope()
     LaunchedEffect(order) { draft = order }
     LaunchedEffect(saveJob) {
         val job = saveJob ?: return@LaunchedEffect
@@ -98,9 +99,10 @@ private fun OrderEditor(order: Order, screenState: OrderDetailUiState, onBack: (
             is OrderDetailUiState.Content -> OrderDetailSaveState.Success
             else -> OrderDetailSaveState.Error("نتیجه ذخیره مشخص نشد.")
         }
+        if (saveResult is OrderDetailSaveState.Success) note = ""
         saveJob = null
     }
-    val hasChanges = draft != order || addedNotes.isNotEmpty()
+    val hasChanges = draft != order || note.trim().isNotEmpty()
     val isSaving = saveResult is OrderDetailSaveState.Saving
 
     Box(Modifier.fillMaxSize()) {
@@ -178,20 +180,18 @@ private fun OrderEditor(order: Order, screenState: OrderDetailUiState, onBack: (
             item {
                 GlassCard {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        GlassText("یادداشت جدید", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-                        GlassTextField(note, { note = it }, "متن یادداشت", singleLine = false, minLines = 3)
-                        GlassSecondaryButton("افزودن یادداشت", {
-                            val content = note.trim()
-                            if (content.isNotBlank()) {
-                                onAddNote(content)
-                                addedNotes = addedNotes + content
-                                note = ""
-                                saveResult = OrderDetailSaveState.Idle
-                            }
-                        })
-                        addedNotes.forEach { GlassText(it) }
-                        order.notes.forEach { GlassText(it.content) }
-                        if (addedNotes.isEmpty() && order.notes.isEmpty()) GlassText("یادداشتی ثبت نشده است.")
+                        GlassText("یادداشت", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                        GlassTextField(
+                            note,
+                            { value -> note = value; saveResult = OrderDetailSaveState.Idle },
+                            "متن یادداشت",
+                            singleLine = false,
+                            minLines = 4,
+                        )
+                        if (order.notes.isNotEmpty()) {
+                            GlassText("یادداشت‌های ثبت‌شده", style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold))
+                            order.notes.forEach { GlassText(it.content) }
+                        }
                     }
                 }
             }
@@ -206,9 +206,15 @@ private fun OrderEditor(order: Order, screenState: OrderDetailUiState, onBack: (
             item {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     GlassButton("${if (isSaving) "در حال ذخیره…" else "ذخیره تغییرات"}", {
-                        if (!isSaving) saveJob = onSave(draft)
+                        if (!isSaving) {
+                            val noteToSave = note.trim()
+                            saveJob = scope.launch {
+                                onSave(draft).join()
+                                if (noteToSave.isNotEmpty()) onAddNote(noteToSave).join()
+                            }
+                        }
                     }, Modifier.weight(1f), enabled = hasChanges && !isSaving)
-                    GlassSecondaryButton("بازگردانی", { draft = order; saveResult = OrderDetailSaveState.Idle }, Modifier.weight(1f))
+                    GlassButton("بازگردانی", { draft = order; note = ""; saveResult = OrderDetailSaveState.Idle }, Modifier.weight(1f), enabled = !isSaving)
                 }
             }
             item {
@@ -223,7 +229,7 @@ private fun OrderEditor(order: Order, screenState: OrderDetailUiState, onBack: (
             }
         }
 
-        GlassSecondaryButton(
+        GlassButton(
             "بازگشت به مشاهده سفارش",
             onBack,
             Modifier
