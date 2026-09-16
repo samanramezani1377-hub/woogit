@@ -75,9 +75,18 @@ internal fun ProductsScreen(
             val currentById = liveProducts.associateBy { it.id }
             if (currentById.isNotEmpty()) {
                 val changedById = update.products.associateBy { it.id }
-                if (changedById.keys.any(currentById::containsKey)) {
-                    liveProducts = liveProducts.map { changedById[it.id] ?: it }
+                val merged = liveProducts.map { changedById[it.id] ?: it }.toMutableList()
+
+                // Keep background reconciliation invisible: update existing rows in place
+                // and append newly discovered products without resetting/loading the list.
+                // Search results must not suddenly gain unrelated products.
+                if (query.isBlank()) {
+                    update.products.forEach { product ->
+                        if (!currentById.containsKey(product.id)) merged += product
+                    }
                 }
+
+                if (merged != liveProducts) liveProducts = merged
             }
         }
     }
