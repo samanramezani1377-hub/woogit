@@ -1,11 +1,13 @@
 package com.samanramezani1377.woogit.presentation.order
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.FilterChip
@@ -17,6 +19,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -100,124 +103,135 @@ private fun OrderEditor(order: Order, screenState: OrderDetailUiState, onBack: (
     val hasChanges = draft != order || addedNotes.isNotEmpty()
     val isSaving = saveResult is OrderDetailSaveState.Saving
 
-    LazyColumn(
-        Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 104.dp),
-    ) {
-        item { GlassSecondaryButton("بازگشت به مشاهده سفارش", onBack, Modifier.fillMaxWidth()) }
-        item {
-            GlassCard {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    GlassText("وضعیت سفارش", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-                    StatusSelector(draft.status) { draft = draft.copy(status = it); saveResult = OrderDetailSaveState.Idle }
-                }
-            }
-        }
-        item {
-            GlassCard {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    GlassText("مشتری", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-                    GlassIdentifierField(
-                        draft.customer?.id?.value.orEmpty(),
-                        { value ->
-                            val id: EntityId? = value.toLongOrNull()?.takeIf { it > 0 }?.let { EntityId(it.toString()) }
-                            draft = draft.copy(customer = (draft.customer ?: Customer(id, "", null)).copy(id = id))
-                            saveResult = OrderDetailSaveState.Idle
-                        },
-                        "شناسه مشتری (خالی = مهمان)",
-                    )
-                    GlassTextField(draft.customer?.email.orEmpty(), { value -> draft = draft.copy(customer = (draft.customer ?: Customer(null, "", null)).copy(email = value)); saveResult = OrderDetailSaveState.Idle }, "ایمیل مشتری")
-                }
-            }
-        }
-        item { AddressEditor("صورتحساب", draft.billing, { value -> draft = draft.copy(billing = value); saveResult = OrderDetailSaveState.Idle }) }
-        item { AddressEditor("ارسال", draft.shipping, { value -> draft = draft.copy(shipping = value); saveResult = OrderDetailSaveState.Idle }) }
-        item {
-            GlassCard {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    GlassText("پرداخت", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-                    GlassTextField(draft.payment?.methodId.orEmpty(), { value -> draft = draft.copy(payment = (draft.payment ?: Payment(null,null,null,false)).copy(methodId = value)); saveResult = OrderDetailSaveState.Idle }, "شناسه روش پرداخت")
-                    GlassTextField(draft.payment?.methodTitle.orEmpty(), { value -> draft = draft.copy(payment = (draft.payment ?: Payment(null,null,null,false)).copy(methodTitle = value)); saveResult = OrderDetailSaveState.Idle }, "عنوان روش پرداخت")
-                    GlassTextField(draft.payment?.transactionId.orEmpty(), { value -> draft = draft.copy(payment = (draft.payment ?: Payment(null,null,null,false)).copy(transactionId = value)); saveResult = OrderDetailSaveState.Idle }, "شناسه تراکنش")
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(selected = draft.payment?.paid == true, onClick = { draft = draft.copy(payment = (draft.payment ?: Payment(null,null,null,false)).copy(paid = true)); saveResult = OrderDetailSaveState.Idle }, label = { GlassText("پرداخت شده") })
-                        FilterChip(selected = draft.payment?.paid != true, onClick = { draft = draft.copy(payment = (draft.payment ?: Payment(null,null,null,false)).copy(paid = false)); saveResult = OrderDetailSaveState.Idle }, label = { GlassText("پرداخت نشده") })
+    Box(Modifier.fillMaxSize()) {
+        LazyColumn(
+            Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 128.dp),
+        ) {
+            item {
+                GlassCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        GlassText("وضعیت سفارش", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                        StatusSelector(draft.status) { draft = draft.copy(status = it); saveResult = OrderDetailSaveState.Idle }
                     }
                 }
             }
-        }
-        item {
-            GlassCard {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    GlassText("اقلام سفارش", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-                    draft.items.forEachIndexed { index, item ->
-                        GlassTextField(item.quantity.toString().removeSuffix(".0"), { value -> value.toDoubleOrNull()?.takeIf { it >= 0.0 }?.let { quantity -> draft = draft.copy(items = draft.items.toMutableList().also { it[index] = item.copy(quantity = quantity) }); saveResult = OrderDetailSaveState.Idle } }, item.name)
-                        GlassText("${formatMoney(item.total)} · شناسه آیتم ${item.id.value}")
+            item {
+                GlassCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        GlassText("مشتری", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                        GlassIdentifierField(
+                            draft.customer?.id?.value.orEmpty(),
+                            { value ->
+                                val id: EntityId? = value.toLongOrNull()?.takeIf { it > 0 }?.let { EntityId(it.toString()) }
+                                draft = draft.copy(customer = (draft.customer ?: Customer(id, "", null)).copy(id = id))
+                                saveResult = OrderDetailSaveState.Idle
+                            },
+                            "شناسه مشتری (خالی = مهمان)",
+                        )
+                        GlassTextField(draft.customer?.email.orEmpty(), { value -> draft = draft.copy(customer = (draft.customer ?: Customer(null, "", null)).copy(email = value)); saveResult = OrderDetailSaveState.Idle }, "ایمیل مشتری")
                     }
-                    if (draft.items.isEmpty()) GlassText("این سفارش آیتمی ندارد.")
                 }
             }
-        }
-        item {
-            GlassCard {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    GlassText("حمل‌ونقل", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-                    draft.shippingLines.forEachIndexed { index, line ->
-                        GlassTextField(line.methodId.orEmpty(), { value -> draft = draft.copy(shippingLines = draft.shippingLines.toMutableList().also { it[index] = line.copy(methodId = value) }); saveResult = OrderDetailSaveState.Idle }, "شناسه روش ارسال")
-                        GlassTextField(line.methodTitle.orEmpty(), { value -> draft = draft.copy(shippingLines = draft.shippingLines.toMutableList().also { it[index] = line.copy(methodTitle = value) }); saveResult = OrderDetailSaveState.Idle }, "عنوان روش ارسال")
-                        GlassTextField(line.total.orEmpty(), { value -> draft = draft.copy(shippingLines = draft.shippingLines.toMutableList().also { it[index] = line.copy(total = value) }); saveResult = OrderDetailSaveState.Idle }, "هزینه ارسال")
-                    }
-                    if (draft.shippingLines.isEmpty()) GlassText("روش ارسالی ثبت نشده است.")
-                }
-            }
-        }
-        item {
-            GlassCard {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    GlassText("یادداشت جدید", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-                    GlassTextField(note, { note = it }, "متن یادداشت", singleLine = false, minLines = 3)
-                    GlassSecondaryButton("افزودن یادداشت", {
-                        val content = note.trim()
-                        if (content.isNotBlank()) {
-                            onAddNote(content)
-                            addedNotes = addedNotes + content
-                            note = ""
-                            saveResult = OrderDetailSaveState.Idle
+            item { AddressEditor("صورتحساب", draft.billing, { value -> draft = draft.copy(billing = value); saveResult = OrderDetailSaveState.Idle }) }
+            item { AddressEditor("ارسال", draft.shipping, { value -> draft = draft.copy(shipping = value); saveResult = OrderDetailSaveState.Idle }) }
+            item {
+                GlassCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        GlassText("پرداخت", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                        GlassTextField(draft.payment?.methodId.orEmpty(), { value -> draft = draft.copy(payment = (draft.payment ?: Payment(null,null,null,false)).copy(methodId = value)); saveResult = OrderDetailSaveState.Idle }, "شناسه روش پرداخت")
+                        GlassTextField(draft.payment?.methodTitle.orEmpty(), { value -> draft = draft.copy(payment = (draft.payment ?: Payment(null,null,null,false)).copy(methodTitle = value)); saveResult = OrderDetailSaveState.Idle }, "عنوان روش پرداخت")
+                        GlassTextField(draft.payment?.transactionId.orEmpty(), { value -> draft = draft.copy(payment = (draft.payment ?: Payment(null,null,null,false)).copy(transactionId = value)); saveResult = OrderDetailSaveState.Idle }, "شناسه تراکنش")
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(selected = draft.payment?.paid == true, onClick = { draft = draft.copy(payment = (draft.payment ?: Payment(null,null,null,false)).copy(paid = true)); saveResult = OrderDetailSaveState.Idle }, label = { GlassText("پرداخت شده") })
+                            FilterChip(selected = draft.payment?.paid != true, onClick = { draft = draft.copy(payment = (draft.payment ?: Payment(null,null,null,false)).copy(paid = false)); saveResult = OrderDetailSaveState.Idle }, label = { GlassText("پرداخت نشده") })
                         }
-                    })
-                    addedNotes.forEach { GlassText(it) }
-                    order.notes.forEach { GlassText(it.content) }
-                    if (addedNotes.isEmpty() && order.notes.isEmpty()) GlassText("یادداشتی ثبت نشده است.")
+                    }
+                }
+            }
+            item {
+                GlassCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        GlassText("اقلام سفارش", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                        draft.items.forEachIndexed { index, item ->
+                            GlassTextField(item.quantity.toString().removeSuffix(".0"), { value -> value.toDoubleOrNull()?.takeIf { it >= 0.0 }?.let { quantity -> draft = draft.copy(items = draft.items.toMutableList().also { it[index] = item.copy(quantity = quantity) }); saveResult = OrderDetailSaveState.Idle } }, item.name)
+                            GlassText("${formatMoney(item.total)} · شناسه آیتم ${item.id.value}")
+                        }
+                        if (draft.items.isEmpty()) GlassText("این سفارش آیتمی ندارد.")
+                    }
+                }
+            }
+            item {
+                GlassCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        GlassText("حمل‌ونقل", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                        draft.shippingLines.forEachIndexed { index, line ->
+                            GlassTextField(line.methodId.orEmpty(), { value -> draft = draft.copy(shippingLines = draft.shippingLines.toMutableList().also { it[index] = line.copy(methodId = value) }); saveResult = OrderDetailSaveState.Idle }, "شناسه روش ارسال")
+                            GlassTextField(line.methodTitle.orEmpty(), { value -> draft = draft.copy(shippingLines = draft.shippingLines.toMutableList().also { it[index] = line.copy(methodTitle = value) }); saveResult = OrderDetailSaveState.Idle }, "عنوان روش ارسال")
+                            GlassTextField(line.total.orEmpty(), { value -> draft = draft.copy(shippingLines = draft.shippingLines.toMutableList().also { it[index] = line.copy(total = value) }); saveResult = OrderDetailSaveState.Idle }, "هزینه ارسال")
+                        }
+                        if (draft.shippingLines.isEmpty()) GlassText("روش ارسالی ثبت نشده است.")
+                    }
+                }
+            }
+            item {
+                GlassCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        GlassText("یادداشت جدید", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                        GlassTextField(note, { note = it }, "متن یادداشت", singleLine = false, minLines = 3)
+                        GlassSecondaryButton("افزودن یادداشت", {
+                            val content = note.trim()
+                            if (content.isNotBlank()) {
+                                onAddNote(content)
+                                addedNotes = addedNotes + content
+                                note = ""
+                                saveResult = OrderDetailSaveState.Idle
+                            }
+                        })
+                        addedNotes.forEach { GlassText(it) }
+                        order.notes.forEach { GlassText(it.content) }
+                        if (addedNotes.isEmpty() && order.notes.isEmpty()) GlassText("یادداشتی ثبت نشده است.")
+                    }
+                }
+            }
+            item {
+                when (val result = saveResult) {
+                    OrderDetailSaveState.Saving -> GlassText("در حال ذخیره تغییرات…")
+                    OrderDetailSaveState.Success -> GlassText("تغییرات با موفقیت ذخیره شد.")
+                    is OrderDetailSaveState.Error -> GlassText("ذخیره تغییرات انجام نشد: ${result.message}")
+                    OrderDetailSaveState.Idle -> Unit
+                }
+            }
+            item {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    GlassButton("${if (isSaving) "در حال ذخیره…" else "ذخیره تغییرات"}", {
+                        if (!isSaving) saveJob = onSave(draft)
+                    }, Modifier.weight(1f), enabled = hasChanges && !isSaving)
+                    GlassSecondaryButton("بازگردانی", { draft = order; saveResult = OrderDetailSaveState.Idle }, Modifier.weight(1f))
+                }
+            }
+            item {
+                GlassCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        GlassText("خلاصه سفارش", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                        GlassText("مبلغ کل: ${formatMoney(draft.total)}")
+                        GlassText("شماره: ${draft.number}")
+                        GlassStatusBadge(draft.status.displayName())
+                    }
                 }
             }
         }
-        item {
-            when (val result = saveResult) {
-                OrderDetailSaveState.Saving -> GlassText("در حال ذخیره تغییرات…")
-                OrderDetailSaveState.Success -> GlassText("تغییرات با موفقیت ذخیره شد.")
-                is OrderDetailSaveState.Error -> GlassText("ذخیره تغییرات انجام نشد: ${result.message}")
-                OrderDetailSaveState.Idle -> Unit
-            }
-        }
-        item {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                GlassButton("${if (isSaving) "در حال ذخیره…" else "ذخیره تغییرات"}", {
-                    if (!isSaving) saveJob = onSave(draft)
-                }, Modifier.weight(1f), enabled = hasChanges && !isSaving)
-                GlassSecondaryButton("بازگردانی", { draft = order; saveResult = OrderDetailSaveState.Idle }, Modifier.weight(1f))
-            }
-        }
-        item {
-            GlassCard {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    GlassText("خلاصه سفارش", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-                    GlassText("مبلغ کل: ${formatMoney(draft.total)}")
-                    GlassText("شماره: ${draft.number}")
-                    GlassStatusBadge(draft.status.displayName())
-                }
-            }
-        }
+
+        GlassSecondaryButton(
+            "بازگشت به مشاهده سفارش",
+            onBack,
+            Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .navigationBarsPadding(),
+        )
     }
 }
 
