@@ -24,6 +24,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -79,17 +80,11 @@ internal fun ProductsScreen(
             val changedById = update.products.associateBy { it.id }
 
             if (current.isEmpty()) {
-                if (query.isBlank() && update.products.isNotEmpty()) {
-                    liveProducts = update.products
-                }
+                if (query.isBlank() && update.products.isNotEmpty()) liveProducts = update.products
                 return@collect
             }
 
-            val newProducts = if (query.isBlank()) {
-                update.products.filterNot { currentById.containsKey(it.id) }
-            } else {
-                emptyList()
-            }
+            val newProducts = if (query.isBlank()) update.products.filterNot { currentById.containsKey(it.id) } else emptyList()
             val merged = current.map { changedById[it.id] ?: it }
 
             if (newProducts.isEmpty()) {
@@ -101,8 +96,6 @@ internal fun ProductsScreen(
             val firstVisibleOffset = listState.firstVisibleItemScrollOffset
             liveProducts = newProducts + merged
 
-            // When the user is already below the top, compensate for the inserted
-            // rows so the same product remains under their finger/viewport.
             if (firstVisibleIndex > 0) {
                 withFrameNanos { }
                 listState.scrollToItem(firstVisibleIndex + newProducts.size, firstVisibleOffset)
@@ -145,7 +138,7 @@ private fun ProductSyncLoading(message: String) {
 @Composable
 private fun ProductList(products: List<Product>, onProductClick: (String) -> Unit, onLoadMore: () -> Unit, listState: LazyListState, modifier: Modifier) {
     LaunchedEffect(listState, products.size) {
-        kotlinx.coroutines.flow.snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
             .distinctUntilChanged()
             .filter { it >= (products.size - 4).coerceAtLeast(0) }
             .collect { onLoadMore() }
