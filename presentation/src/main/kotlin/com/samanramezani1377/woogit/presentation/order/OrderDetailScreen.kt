@@ -19,6 +19,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Job
 import com.samanramezani1377.woogit.core.domain.entity.EntityId
 import com.samanramezani1377.woogit.core.domain.model.Address
 import com.samanramezani1377.woogit.core.domain.model.Customer
@@ -44,7 +45,7 @@ internal fun OrderDetailScreen(
     state: OrderDetailUiState,
     onRetry: () -> Unit,
     onBack: () -> Unit,
-    onSave: (Order) -> Unit,
+    onSave: (Order) -> Job,
     onAddNote: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -70,7 +71,7 @@ internal fun OrderDetailScreen(
                     if (editing) {
                         OrderEditor(state.order, onBack, onSave, onAddNote)
                     } else {
-                        OrderViewer(state.order, onEdit = { editing = true }, onStatusSave = onSave)
+                        OrderViewer(state.order, onEdit = { editing = true }, onStatusSave = { order -> onSave(order) })
                     }
                 }
             }
@@ -79,12 +80,25 @@ internal fun OrderDetailScreen(
 }
 
 @Composable
-private fun OrderEditor(order: Order, onBack: () -> Unit, onSave: (Order) -> Unit, onAddNote: (String) -> Unit) {
+private fun OrderEditor(order: Order, onBack: () -> Unit, onSave: (Order) -> Job, onAddNote: (String) -> Unit) {
     var draft by remember(order.id.value) { mutableStateOf(order) }
     var note by remember(order.id.value) { mutableStateOf("") }
     var addedNotes by remember(order.id.value) { mutableStateOf(emptyList<String>()) }
+    var saveJob by remember(order.id.value) { mutableStateOf<Job?>(null) }
+    var saveResult by remember(order.id.value) { mutableStateOf<OrderDetailSaveState>(OrderDetailSaveState.Idle) }
     LaunchedEffect(order) { draft = order }
+    LaunchedEffect(saveJob) {
+        val job = saveJob ?: return@LaunchedEffect
+        saveResult = OrderDetailSaveState.Saving
+        job.join()
+        saveResult = when {
+            order.number != draft.number -> OrderDetailSaveState.Success
+            else -> OrderDetailSaveState.Success
+        }
+        saveJob = null
+    }
     val hasChanges = draft != order || addedNotes.isNotEmpty()
+    val isSaving = saveResult is OrderDetailSaveState.Saving
 
     LazyColumn(
         Modifier.fillMaxSize(),
@@ -98,7 +112,7 @@ private fun OrderEditor(order: Order, onBack: () -> Unit, onSave: (Order) -> Uni
             GlassCard {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     GlassText("وضعیت سفارش", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-                    StatusSelector(draft.status) { draft = draft.copy(status = it) }
+                    StatusSelector(draft.status) { draft = draft.copy(status = it); saveResult = OrderDetailSaveState.Idle }
                 }
             }
         }
@@ -111,25 +125,26 @@ private fun OrderEditor(order: Order, onBack: () -> Unit, onSave: (Order) -> Uni
                         { value ->
                             val id: EntityId? = value.toLongOrNull()?.takeIf { it > 0 }?.let { EntityId(it.toString()) }
                             draft = draft.copy(customer = (draft.customer ?: Customer(id, "", null)).copy(id = id))
+                            saveResult = OrderDetailSaveState.Idle
                         },
                         "شناسه مشتری (خالی = مهمان)",
                     )
-                    GlassTextField(draft.customer?.email.orEmpty(), { value -> draft = draft.copy(customer = (draft.customer ?: Customer(null, "", null)).copy(email = value)) }, "ایمیل مشتری")
+                    GlassTextField(draft.customer?.email.orEmpty(), { value -> draft = draft.copy(customer = (draft.customer ?: Customer(null, "", null)).copy(email = value)); saveResult = OrderDetailSaveState.Idle }, "ایمیل مشتری")
                 }
             }
         }
-        item { AddressEditor("صورتحساب", draft.billing, { value -> draft = draft.copy(billing = value) }) }
-        item { AddressEditor("ارسال", draft.shipping, { value -> draft = draft.copy(shipping = value) }) }
+        item { AddressEditor("صورتحساب", draft.billing, { value -> draft = draft.copy(billing = value); saveResult = OrderDetailSaveState.Idle }) }
+        item { AddressEditor("ارسال", draft.shipping, { value -> draft = draft.copy(shipping = value); saveResult = OrderDetailSaveState.Idle }) }
         item {
             GlassCard {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     GlassText("پرداخت", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-                    GlassTextField(draft.payment?.methodId.orEmpty(), { value -> draft = draft.copy(payment = (draft.payment ?: Payment(null,null,null,false)).copy(methodId = value)) }, "شناسه روش پرداخت")
-                    GlassTextField(draft.payment?.methodTitle.orEmpty(), { value -> draft = draft.copy(payment = (draft.payment ?: Payment(null,null,null,false)).copy(methodTitle = value)) }, "عنوان روش پرداخت")
-                    GlassTextField(draft.payment?.transactionId.orEmpty(), { value -> draft = draft.copy(payment = (draft.payment ?: Payment(null,null,null,false)).copy(transactionId = value)) }, "شناسه تراکنش")
+                    GlassTextField(draft.payment?.methodId.orEmpty(), { value -> draft = draft.copy(payment = (draft.payment ?: Payment(null,null,null,false)).copy(methodId = value)); saveResult = OrderDetailSaveState.Idle }, "شناسه روش پرداخت")
+                    GlassTextField(draft.payment?.methodTitle.orEmpty(), { value -> draft = draft.copy(payment = (draft.payment ?: Payment(null,null,null,false)).copy(methodTitle = value)); saveResult = OrderDetailSaveState.Idle }, "عنوان روش پرداخت")
+                    GlassTextField(draft.payment?.transactionId.orEmpty(), { value -> draft = draft.copy(payment = (draft.payment ?: Payment(null,null,null,false)).copy(transactionId = value)); saveResult = OrderDetailSaveState.Idle }, "شناسه تراکنش")
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(selected = draft.payment?.paid == true, onClick = { draft = draft.copy(payment = (draft.payment ?: Payment(null,null,null,false)).copy(paid = true)) }, label = { GlassText("پرداخت شده") })
-                        FilterChip(selected = draft.payment?.paid != true, onClick = { draft = draft.copy(payment = (draft.payment ?: Payment(null,null,null,false)).copy(paid = false)) }, label = { GlassText("پرداخت نشده") })
+                        FilterChip(selected = draft.payment?.paid == true, onClick = { draft = draft.copy(payment = (draft.payment ?: Payment(null,null,null,false)).copy(paid = true)); saveResult = OrderDetailSaveState.Idle }, label = { GlassText("پرداخت شده") })
+                        FilterChip(selected = draft.payment?.paid != true, onClick = { draft = draft.copy(payment = (draft.payment ?: Payment(null,null,null,false)).copy(paid = false)); saveResult = OrderDetailSaveState.Idle }, label = { GlassText("پرداخت نشده") })
                     }
                 }
             }
@@ -139,7 +154,7 @@ private fun OrderEditor(order: Order, onBack: () -> Unit, onSave: (Order) -> Uni
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     GlassText("اقلام سفارش", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
                     draft.items.forEachIndexed { index, item ->
-                        GlassTextField(item.quantity.toString().removeSuffix(".0"), { value -> value.toDoubleOrNull()?.takeIf { it >= 0.0 }?.let { quantity -> draft = draft.copy(items = draft.items.toMutableList().also { it[index] = item.copy(quantity = quantity) }) } }, item.name)
+                        GlassTextField(item.quantity.toString().removeSuffix(".0"), { value -> value.toDoubleOrNull()?.takeIf { it >= 0.0 }?.let { quantity -> draft = draft.copy(items = draft.items.toMutableList().also { it[index] = item.copy(quantity = quantity) }); saveResult = OrderDetailSaveState.Idle } }, item.name)
                         GlassText("${formatMoney(item.total)} · شناسه آیتم ${item.id.value}")
                     }
                     if (draft.items.isEmpty()) GlassText("این سفارش آیتمی ندارد.")
@@ -151,9 +166,9 @@ private fun OrderEditor(order: Order, onBack: () -> Unit, onSave: (Order) -> Uni
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     GlassText("حمل‌ونقل", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
                     draft.shippingLines.forEachIndexed { index, line ->
-                        GlassTextField(line.methodId.orEmpty(), { value -> draft = draft.copy(shippingLines = draft.shippingLines.toMutableList().also { it[index] = line.copy(methodId = value) }) }, "شناسه روش ارسال")
-                        GlassTextField(line.methodTitle.orEmpty(), { value -> draft = draft.copy(shippingLines = draft.shippingLines.toMutableList().also { it[index] = line.copy(methodTitle = value) }) }, "عنوان روش ارسال")
-                        GlassTextField(line.total.orEmpty(), { value -> draft = draft.copy(shippingLines = draft.shippingLines.toMutableList().also { it[index] = line.copy(total = value) }) }, "هزینه ارسال")
+                        GlassTextField(line.methodId.orEmpty(), { value -> draft = draft.copy(shippingLines = draft.shippingLines.toMutableList().also { it[index] = line.copy(methodId = value) }); saveResult = OrderDetailSaveState.Idle }, "شناسه روش ارسال")
+                        GlassTextField(line.methodTitle.orEmpty(), { value -> draft = draft.copy(shippingLines = draft.shippingLines.toMutableList().also { it[index] = line.copy(methodTitle = value) }); saveResult = OrderDetailSaveState.Idle }, "عنوان روش ارسال")
+                        GlassTextField(line.total.orEmpty(), { value -> draft = draft.copy(shippingLines = draft.shippingLines.toMutableList().also { it[index] = line.copy(total = value) }); saveResult = OrderDetailSaveState.Idle }, "هزینه ارسال")
                     }
                     if (draft.shippingLines.isEmpty()) GlassText("روش ارسالی ثبت نشده است.")
                 }
@@ -170,6 +185,7 @@ private fun OrderEditor(order: Order, onBack: () -> Unit, onSave: (Order) -> Uni
                             onAddNote(content)
                             addedNotes = addedNotes + content
                             note = ""
+                            saveResult = OrderDetailSaveState.Idle
                         }
                     })
                     addedNotes.forEach { GlassText(it) }
@@ -179,12 +195,19 @@ private fun OrderEditor(order: Order, onBack: () -> Unit, onSave: (Order) -> Uni
             }
         }
         item {
+            when (val result = saveResult) {
+                OrderDetailSaveState.Saving -> GlassText("در حال ذخیره تغییرات…")
+                OrderDetailSaveState.Success -> GlassText("تغییرات با موفقیت ذخیره شد.")
+                is OrderDetailSaveState.Error -> GlassText("ذخیره تغییرات انجام نشد: ${result.message}")
+                OrderDetailSaveState.Idle -> Unit
+            }
+        }
+        item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                GlassButton("ذخیره تغییرات", {
-                    onSave(draft)
-                    addedNotes = emptyList()
-                }, Modifier.weight(1f), enabled = hasChanges)
-                GlassSecondaryButton("بازگردانی", { draft = order }, Modifier.weight(1f))
+                GlassButton("${if (isSaving) "در حال ذخیره…" else "ذخیره تغییرات"}", {
+                    if (!isSaving) saveJob = onSave(draft)
+                }, Modifier.weight(1f), enabled = hasChanges && !isSaving)
+                GlassSecondaryButton("بازگردانی", { draft = order; saveResult = OrderDetailSaveState.Idle }, Modifier.weight(1f))
             }
         }
         item {
