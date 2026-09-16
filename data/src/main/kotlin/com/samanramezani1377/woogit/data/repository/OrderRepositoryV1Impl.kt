@@ -47,7 +47,9 @@ private fun Address.toChangedJson(previous: Address?, email: String? = null): Js
 private fun Order.toUpdateJson(previous: Order?): JsonObject {
     val fields = linkedMapOf<String, kotlinx.serialization.json.JsonElement>()
     if (previous == null || status != previous.status) fields["status"] = JsonPrimitive(status.toWooValue())
-    if (previous != null && customer?.id != previous.customer?.id) fields["customer_id"] = JsonPrimitive(customer?.id?.value?.toLongOrNull() ?: 0L)
+    if (previous != null && customer?.id != previous.customer?.id) {
+        customer?.id?.value?.toLongOrNull()?.takeIf { it > 0L }?.let { fields["customer_id"] = JsonPrimitive(it) }
+    }
     if (billing != previous?.billing || customer?.email != previous?.customer?.email) fields["billing"] = billing?.toChangedJson(previous?.billing, customer?.email) ?: JsonObject(emptyMap())
     if (shipping != previous?.shipping) fields["shipping"] = shipping?.toChangedJson(previous?.shipping) ?: JsonObject(emptyMap())
     if (previous == null || payment != previous.payment) {
