@@ -68,7 +68,7 @@ internal fun OrderDetailScreen(
                 }
                 is OrderDetailUiState.Content -> {
                     if (editing) {
-                        OrderEditor(state.order, onSave, onAddNote)
+                        OrderEditor(state.order, onBack, onSave, onAddNote)
                     } else {
                         OrderViewer(state.order, onEdit = { editing = true }, onStatusSave = onSave)
                     }
@@ -79,9 +79,10 @@ internal fun OrderDetailScreen(
 }
 
 @Composable
-private fun OrderEditor(order: Order, onSave: (Order) -> Unit, onAddNote: (String) -> Unit) {
+private fun OrderEditor(order: Order, onBack: () -> Unit, onSave: (Order) -> Unit, onAddNote: (String) -> Unit) {
     var draft by remember(order.id.value) { mutableStateOf(order) }
     var note by remember(order.id.value) { mutableStateOf("") }
+    var addedNotes by remember(order.id.value) { mutableStateOf(emptyList<String>()) }
     LaunchedEffect(order) { draft = order }
 
     LazyColumn(
@@ -89,6 +90,9 @@ private fun OrderEditor(order: Order, onSave: (Order) -> Unit, onAddNote: (Strin
         verticalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 104.dp),
     ) {
+        item {
+            GlassSecondaryButton("بازگشت به مشاهده سفارش", onBack, Modifier.fillMaxWidth())
+        }
         item {
             GlassCard {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -159,8 +163,17 @@ private fun OrderEditor(order: Order, onSave: (Order) -> Unit, onAddNote: (Strin
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     GlassText("یادداشت جدید", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
                     GlassTextField(note, { note = it }, "متن یادداشت", singleLine = false, minLines = 3)
-                    GlassSecondaryButton("افزودن یادداشت", { if (note.isNotBlank()) { onAddNote(note.trim()); note = "" } })
-                    if (order.notes.isEmpty()) GlassText("یادداشتی ثبت نشده است.") else order.notes.forEach { GlassText(it.content) }
+                    GlassSecondaryButton("افزودن یادداشت", {
+                        val content = note.trim()
+                        if (content.isNotBlank()) {
+                            onAddNote(content)
+                            addedNotes = addedNotes + content
+                            note = ""
+                        }
+                    })
+                    addedNotes.forEach { GlassText(it) }
+                    order.notes.forEach { GlassText(it.content) }
+                    if (addedNotes.isEmpty() && order.notes.isEmpty()) GlassText("یادداشتی ثبت نشده است.")
                 }
             }
         }
