@@ -27,25 +27,38 @@ private fun payloadHash(value: String) = MessageDigest.getInstance("SHA-256").di
 private fun newOperationId(prefix: String) = "$prefix-${UUID.randomUUID()}"
 private fun parseWooInstant(value: String?): Instant? { val raw = value?.trim()?.takeIf { it.isNotEmpty() } ?: return null; return runCatching { Instant.parse(raw) }.getOrNull() ?: runCatching { Instant.parse("${raw}Z") }.getOrNull() }
 private fun OrderStatus.toWooValue(): String = when (this) { OrderStatus.PENDING -> "pending"; OrderStatus.PROCESSING -> "processing"; OrderStatus.ON_HOLD -> "on-hold"; OrderStatus.COMPLETED -> "completed"; OrderStatus.CANCELLED -> "cancelled"; OrderStatus.REFUNDED -> "refunded"; OrderStatus.FAILED -> "failed"; OrderStatus.OTHER -> "pending" }
-private fun WooOrderTypedDto.toDomain(): Order { return Order(EntityId(id.toString()), when (status) { "pending" -> OrderStatus.PENDING; "processing" -> OrderStatus.PROCESSING; "on-hold" -> OrderStatus.ON_HOLD; "completed" -> OrderStatus.COMPLETED; "cancelled" -> OrderStatus.CANCELLED; "refunded" -> OrderStatus.REFUNDED; "failed" -> OrderStatus.FAILED; else -> OrderStatus.OTHER }, customer_id.takeIf { it != 0L }?.let { Customer(EntityId(it.toString()), listOfNotNull(billing?.first_name, billing?.last_name).joinToString(" "), billing?.phone, billing = billing?.let { a -> Address(a.first_name,a.last_name,a.company,a.address_1,a.address_2,a.city,a.state,a.postcode,a.country,a.phone) }, shipping = shipping?.let { a -> Address(a.first_name,a.last_name,a.company,a.address_1,a.address_2,a.city,a.state,a.postcode,a.country,a.phone) }) }, billing?.let { Address(it.first_name,it.last_name,it.company,it.address_1,it.address_2,it.city,it.state,it.postcode,it.country,it.phone) }, shipping?.let { Address(it.first_name,it.last_name,it.company,it.address_1,it.address_2,it.city,it.state,it.postcode,it.country,it.phone) }, Payment(payment_method,payment_method_title,transaction_id,date_paid_gmt?.isNotBlank()==true), shipping_lines.map { ShippingLine(it.method_id,it.method_title,it.total) }, coupon_lines.map { Discount(it.code,it.discount) }, emptyList(), line_items.map { OrderItem(EntityId(it.id.toString()),it.product_id.takeIf{v->v!=0L}?.let{v->EntityId(v.toString())},it.variation_id.takeIf{v->v!=0L}?.let{v->EntityId(v.toString())},it.name,it.quantity,it.subtotal,it.total) }, parseWooInstant(date_modified_gmt), number.ifBlank{id.toString()}, total, currency, createdAt = parseWooInstant(date_created_gmt)) }
+private fun WooOrderTypedDto.toDomain(): Order { return Order(EntityId(id.toString()), when (status) { "pending" -> OrderStatus.PENDING; "processing" -> OrderStatus.PROCESSING; "on-hold" -> OrderStatus.ON_HOLD; "completed" -> OrderStatus.COMPLETED; "cancelled" -> OrderStatus.CANCELLED; "refunded" -> OrderStatus.REFUNDED; "failed" -> OrderStatus.FAILED; else -> OrderStatus.OTHER }, customer_id.takeIf { it != 0L }?.let { Customer(EntityId(it.toString()), listOfNotNull(billing?.first_name, billing?.last_name).joinToString(" "), billing?.email, billing = billing?.let { a -> Address(a.first_name,a.last_name,a.company,a.address_1,a.address_2,a.city,a.state,a.postcode,a.country,a.phone) }, shipping = shipping?.let { a -> Address(a.first_name,a.last_name,a.company,a.address_1,a.address_2,a.city,a.state,a.postcode,a.country,a.phone) }) }, billing?.let { Address(it.first_name,it.last_name,it.company,it.address_1,it.address_2,it.city,it.state,it.postcode,it.country,it.phone) }, shipping?.let { Address(it.first_name,it.last_name,it.company,it.address_1,it.address_2,it.city,it.state,it.postcode,it.country,it.phone) }, Payment(payment_method,payment_method_title,transaction_id,date_paid_gmt?.isNotBlank()==true), shipping_lines.map { ShippingLine(it.method_id,it.method_title,it.total) }, coupon_lines.map { Discount(it.code,it.discount) }, emptyList(), line_items.map { OrderItem(EntityId(it.id.toString()),it.product_id.takeIf{v->v!=0L}?.let{v->EntityId(v.toString())},it.variation_id.takeIf{v->v!=0L}?.let{v->EntityId(v.toString())},it.name,it.quantity,it.subtotal,it.total) }, parseWooInstant(date_modified_gmt), number.ifBlank{id.toString()}, total, currency, createdAt = parseWooInstant(date_created_gmt)) }
 private fun formatWooMoney(value:String,settings:WooSystemStatusSettingsDto):String{val amount=value.toBigDecimalOrNull()?:BigDecimal.ZERO;val symbols=DecimalFormatSymbols().apply{groupingSeparator=settings.thousand_separator.firstOrNull()?:',';decimalSeparator=settings.decimal_separator.firstOrNull()?:'.'};val decimals=settings.number_of_decimals.coerceAtLeast(0);val pattern=if(decimals==0)"#,##0" else "#,##0."+"0".repeat(decimals);val formatted=DecimalFormat(pattern,symbols).format(amount);val symbol=settings.currency_symbol.ifBlank{settings.currency};return when(settings.currency_position){"right"->"$formatted$symbol";"left_space"->"$symbol $formatted";"right_space"->"$formatted $symbol";else->"$symbol$formatted"}}
 
-private fun WooAddressDto.toJson(email: String? = null): JsonObject = JsonObject(buildMap {
-    put("first_name", JsonPrimitive(first_name ?: "")); put("last_name", JsonPrimitive(last_name ?: "")); put("company", JsonPrimitive(company ?: "")); put("address_1", JsonPrimitive(address_1 ?: "")); put("address_2", JsonPrimitive(address_2 ?: "")); put("city", JsonPrimitive(city ?: "")); put("state", JsonPrimitive(state ?: "")); put("postcode", JsonPrimitive(postcode ?: "")); put("country", JsonPrimitive(country ?: "")); put("phone", JsonPrimitive(phone ?: "")); email?.let { put("email", JsonPrimitive(it)) }
-})
-private fun Address.toJson(email: String? = null): JsonObject = JsonObject(buildMap {
-    put("first_name", JsonPrimitive(firstName ?: "")); put("last_name", JsonPrimitive(lastName ?: "")); put("company", JsonPrimitive(company ?: "")); put("address_1", JsonPrimitive(address1 ?: "")); put("address_2", JsonPrimitive(address2 ?: "")); put("city", JsonPrimitive(city ?: "")); put("state", JsonPrimitive(state ?: "")); put("postcode", JsonPrimitive(postcode ?: "")); put("country", JsonPrimitive(country ?: "")); put("phone", JsonPrimitive(phone ?: "")); email?.let { put("email", JsonPrimitive(it)) }
+private fun Address.toChangedJson(previous: Address?, email: String? = null): JsonObject = JsonObject(buildMap {
+    if (previous == null || firstName != previous.firstName) put("first_name", JsonPrimitive(firstName ?: ""))
+    if (previous == null || lastName != previous.lastName) put("last_name", JsonPrimitive(lastName ?: ""))
+    if (previous == null || company != previous.company) put("company", JsonPrimitive(company ?: ""))
+    if (previous == null || address1 != previous.address1) put("address_1", JsonPrimitive(address1 ?: ""))
+    if (previous == null || address2 != previous.address2) put("address_2", JsonPrimitive(address2 ?: ""))
+    if (previous == null || city != previous.city) put("city", JsonPrimitive(city ?: ""))
+    if (previous == null || state != previous.state) put("state", JsonPrimitive(state ?: ""))
+    if (previous == null || postcode != previous.postcode) put("postcode", JsonPrimitive(postcode ?: ""))
+    if (previous == null || country != previous.country) put("country", JsonPrimitive(country ?: ""))
+    if (previous == null || phone != previous.phone) put("phone", JsonPrimitive(phone ?: ""))
+    email?.let { if (previous == null || it != email) put("email", JsonPrimitive(it)) }
 })
 
 private fun Order.toUpdateJson(previous: Order?): JsonObject {
     val fields = linkedMapOf<String, kotlinx.serialization.json.JsonElement>()
     if (previous == null || status != previous.status) fields["status"] = JsonPrimitive(status.toWooValue())
-    if (previous == null || customer?.id != previous.customer?.id) {
-        customer?.id?.value?.toLongOrNull()?.let { fields["customer_id"] = JsonPrimitive(it) }
-        if (customer?.id == null) fields["customer_id"] = JsonPrimitive(0L)
+    // Never resend the cached customer id merely because another order field changed.
+    // If the previous order is unavailable, leave customer_id untouched rather than risking
+    // WooCommerce rejecting an otherwise valid address/status update.
+    if (previous != null && customer?.id != previous.customer?.id) {
+        fields["customer_id"] = JsonPrimitive(customer?.id?.value?.toLongOrNull() ?: 0L)
     }
-    if (previous == null || billing != previous.billing || customer?.email != previous.customer?.email) fields["billing"] = billing?.toJson(customer?.email) ?: JsonObject(emptyMap())
-    if (previous == null || shipping != previous.shipping) fields["shipping"] = shipping?.toJson() ?: JsonObject(emptyMap())
+    if (billing != previous?.billing || (customer?.email != previous?.customer?.email)) {
+        fields["billing"] = billing?.toChangedJson(previous?.billing, customer?.email) ?: JsonObject(emptyMap())
+    }
+    if (shipping != previous?.shipping) {
+        fields["shipping"] = shipping?.toChangedJson(previous?.shipping) ?: JsonObject(emptyMap())
+    }
     if (previous == null || payment != previous.payment) {
         payment?.methodId?.let { fields["payment_method"] = JsonPrimitive(it) }
         payment?.methodTitle?.let { fields["payment_method_title"] = JsonPrimitive(it) }
