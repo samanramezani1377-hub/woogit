@@ -159,6 +159,7 @@ class AppComposition(context: Context) {
         OrderCatalogSyncWorker.schedule(appContext, storeId)
         OrderCatalogSyncWorker.scheduleNow(appContext, storeId)
         ProductCatalogSyncWorker.schedule(appContext, storeId)
+        ProductCatalogSyncWorker.scheduleNow(appContext, storeId)
     }
 
     fun cancelBackgroundWork(storeId: String) {
