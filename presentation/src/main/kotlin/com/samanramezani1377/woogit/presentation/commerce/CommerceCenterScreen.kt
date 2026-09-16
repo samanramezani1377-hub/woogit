@@ -52,20 +52,22 @@ internal fun CommerceCenterScreen(
     LaunchedEffect(storeId) { vm.load() }
 
     if (selected != null) {
-        CommerceFeaturePage(
-            storeId = storeId,
-            feature = selected!!,
-            state = state,
-            onBack = { selected = null },
-            onBarcode = vm::resolveBarcode,
-            onInventoryFilter = vm::filterInventory,
-            onBulkOrder = vm::bulkOrderStatus,
-            onInvoice = vm::prepareInvoice,
-            onProduct = onOpenProduct,
-            onEditCoupon = vm::updateCoupon,
-            onCreateCoupon = vm::createCoupon,
-            onDeleteCoupon = vm::deleteCoupon,
-        )
+        GlassScaffold(modifier) {
+            CommerceFeaturePage(
+                storeId = storeId,
+                feature = selected!!,
+                state = state,
+                onBack = { selected = null },
+                onBarcode = vm::resolveBarcode,
+                onInventoryFilter = vm::filterInventory,
+                onBulkOrder = vm::bulkOrderStatus,
+                onInvoice = vm::prepareInvoice,
+                onProduct = onOpenProduct,
+                onEditCoupon = vm::updateCoupon,
+                onCreateCoupon = vm::createCoupon,
+                onDeleteCoupon = vm::deleteCoupon,
+            )
+        }
         return
     }
 
