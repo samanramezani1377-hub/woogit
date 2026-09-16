@@ -69,7 +69,7 @@ class AppComposition(context: Context) {
         override suspend fun setupWebPassword(storeId: String, password: String, confirmation: String): CoreResult<Unit> = accountSetupClient.setupWebPassword(storeId, password, confirmation)
     }
     val orderRepository = OrderRepositoryV1Impl(orderLocal, provider, mutationCoordinator, pending, scope)
-    val productRepository = ProductRepositoryV1Impl(productLocal, provider, mutationCoordinator, pending) { storeId -> ProductCatalogSyncWorker.scheduleNow(appContext, storeId.value) }
+    val productRepository = ProductRepositoryV1Impl(productLocal, provider, mutationCoordinator, pending) { storeId -> onProductCacheHit(storeId) }
     val productCategoryRepository = ProductCategoryRepositoryImpl(provider)
     val variationRepository = VariationRepositoryImpl(variationLocal, provider, mutationCoordinator, pending)
     val attributeRepository = AttributeRepositoryImpl(attributeLocal, provider, mutationCoordinator, pending)
@@ -119,6 +119,12 @@ class AppComposition(context: Context) {
     val getPending = GetPendingOperationsUseCase(pending)
     val getConflicts = GetConflictsUseCase(syncRepository)
     val resolveConflict = ResolveConflictUseCase(syncRepository)
+
+    private fun onProductCacheHit(storeId: StoreId) {
+        scope.launch {
+            productRepository.refresh(storeId, 1, 30, null)
+        }
+    }
 
     private fun rememberStore(id: String) { prefs.edit().putString("active_store_id", id).apply(); startBackgroundWork(id) }
     private fun forgetStore() { val id = prefs.getString("active_store_id", null); if (id != null) scope.launch { disconnectStore(StoreId(id)) }; prefs.edit().remove("active_store_id").apply(); if (id != null) cancelBackgroundWork(id) }
