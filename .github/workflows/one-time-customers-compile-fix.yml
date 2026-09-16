@@ -1,6 +1,12 @@
 name: One-time Customers compile repair
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/one-time-customers-compile-fix.yml'
+      - 'presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/commerce/CustomersPage.kt'
   workflow_dispatch:
 
 permissions:
