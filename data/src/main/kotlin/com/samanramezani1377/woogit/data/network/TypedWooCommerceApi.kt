@@ -41,6 +41,7 @@ class TypedWooCommerceApi(private val raw: WooCommerceApi) {
     suspend fun ordersTotal(b:String,s:String?,st:String?) = total(raw.listOrders(b,1,1,s,st))
     suspend fun order(b:String,id:Long) = decode(raw.getOrder(b,id)) { typedJson.decodeFromString<WooOrderTypedDto>(it) }
     suspend fun updateOrder(b:String,id:Long,o:WooOrderTypedDto,idempotencyKey:String?=null) = decode(raw.updateOrder(b,id,typedJson.encodeToString(o),idempotencyKey)) { typedJson.decodeFromString<WooOrderTypedDto>(it) }
+    suspend fun updateOrderFields(b:String,id:Long,fields:JsonObject,idempotencyKey:String?=null) = decode(raw.updateOrder(b,id,fields.toString(),idempotencyKey)) { typedJson.decodeFromString<WooOrderTypedDto>(it) }
     suspend fun orderNotes(b:String,id:Long,page:Int=1,perPage:Int=100) = decode(raw.listOrderNotes(b,id,page,perPage)) { typedJson.decodeFromString<List<WooOrderNoteDto>>(it) }
     suspend fun addOrderNote(b:String,id:Long,n:WooOrderNoteDto,idempotencyKey:String?=null) = decode(raw.addOrderNote(b,id,typedJson.encodeToString(n),idempotencyKey)) { typedJson.decodeFromString<WooOrderNoteDto>(it) }
     suspend fun salesReport(b:String,dateMin:String,dateMax:String) = decode(raw.salesReport(b,dateMin,dateMax)) { typedJson.decodeFromString<List<WooSalesReportDto>>(it).firstOrNull() ?: WooSalesReportDto() }
