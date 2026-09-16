@@ -20,12 +20,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.samanramezani1377.woogit.core.domain.model.Order
 import com.samanramezani1377.woogit.core.domain.sync.OrderSyncEvents
 import com.samanramezani1377.woogit.presentation.GlassCard
 import com.samanramezani1377.woogit.presentation.GlassEmptyState
@@ -66,14 +68,8 @@ internal fun OrdersScreen(
             val currentById = current.associateBy { it.id }
             val changed = update.orders.associateBy { it.id.value }
             val merged = current.map { changed[it.id]?.toRowUiModel() ?: it }.toMutableList()
-
-            // Background reconciliation stays invisible: update visible rows in place.
-            // For the unfiltered list, prepend newly discovered orders because WooCommerce
-            // orders are ordered newest-first. Search results only receive existing-row updates.
             update.orders.forEach { order ->
-                if (!currentById.containsKey(order.id.value) && query.isBlank()) {
-                    merged.add(0, order.toRowUiModel())
-                }
+                if (!currentById.containsKey(order.id.value) && query.isBlank()) merged.add(0, order.toRowUiModel())
             }
             if (merged != current) liveOrders = merged.distinctBy { it.id }
         }
@@ -106,12 +102,7 @@ internal fun OrdersScreen(
         when (state) {
             OrdersUiState.Loading -> OrdersSkeleton(Modifier.weight(1f))
             OrdersUiState.Empty -> EmptyState(Modifier.weight(1f))
-            is OrdersUiState.Content -> OrdersList(
-                OrdersUiState.Content(liveOrders, state.hasMore),
-                onOrderClick,
-                onLoadMore,
-                Modifier.weight(1f),
-            )
+            is OrdersUiState.Content -> OrdersList(OrdersUiState.Content(liveOrders, state.hasMore), onOrderClick, onLoadMore, Modifier.weight(1f))
             is OrdersUiState.Error -> if (revealError) ErrorState(state, onRetry, Modifier.weight(1f)) else OrdersSkeleton(Modifier.weight(1f))
             is OrdersUiState.Offline -> Column(Modifier.weight(1f)) {
                 GlassOfflineState()
