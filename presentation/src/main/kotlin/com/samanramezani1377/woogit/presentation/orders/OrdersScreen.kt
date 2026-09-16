@@ -40,6 +40,7 @@ import com.samanramezani1377.woogit.presentation.GlassTokens
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
+import androidx.compose.runtime.withFrameNanos
 
 @Composable
 internal fun OrdersScreen(
@@ -133,6 +134,38 @@ internal fun OrdersScreen(
 @Composable
 private fun OrdersList(state: OrdersUiState.Content, onOrderClick: (String) -> Unit, onLoadMore: () -> Unit, modifier: Modifier) {
     val listState = rememberLazyListState()
+    var previousOrderIds by remember { mutableStateOf<List<String>>(emptyList()) }
+    var anchorOrderId by remember { mutableStateOf<String?>(null) }
+    var anchorOffset by remember { mutableStateOf(0) }
+
+    LaunchedEffect(listState, state.orders) {
+        snapshotFlow {
+            val index = listState.firstVisibleItemIndex
+            state.orders.getOrNull(index)?.id to listState.firstVisibleItemScrollOffset
+        }
+            .distinctUntilChanged()
+            .collect { (id, offset) ->
+                anchorOrderId = id
+                anchorOffset = offset
+            }
+    }
+
+    LaunchedEffect(state.orders.map { it.id }) {
+        val newIds = state.orders.map { it.id }
+        val oldIds = previousOrderIds
+        val anchorId = anchorOrderId
+        if (oldIds.isNotEmpty() && anchorId != null && listState.firstVisibleItemIndex > 0) {
+            val oldIndex = oldIds.indexOf(anchorId)
+            val newIndex = newIds.indexOf(anchorId)
+            val prependedCount = newIndex - oldIndex
+            if (oldIndex >= 0 && newIndex >= 0 && prependedCount > 0) {
+                withFrameNanos { }
+                listState.scrollToItem(newIndex, anchorOffset)
+            }
+        }
+        previousOrderIds = newIds
+    }
+
     LaunchedEffect(listState, state.hasMore, state.orders.size) {
         snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
             .distinctUntilChanged()
