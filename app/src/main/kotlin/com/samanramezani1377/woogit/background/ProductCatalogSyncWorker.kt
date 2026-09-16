@@ -98,7 +98,7 @@ class ProductCatalogSyncWorker(appContext: Context, params: WorkerParameters) : 
         fun scheduleNow(context: Context, storeId: String) {
             if (ForceUpdateController.isActive(context)) return
             val request = OneTimeWorkRequestBuilder<ProductCatalogSyncWorker>().setConstraints(constraints()).setInputData(workDataOf(KEY_STORE_ID to storeId)).build()
-            WorkManager.getInstance(context).enqueueUniqueWork(IMMEDIATE_PREFIX + storeId, ExistingWorkPolicy.KEEP, request)
+            WorkManager.getInstance(context).enqueueUniqueWork(IMMEDIATE_PREFIX + storeId, ExistingWorkPolicy.APPEND_OR_REPLACE, request)
         }
         fun cancel(context: Context, storeId: String) {
             val manager = WorkManager.getInstance(context)
