@@ -29,17 +29,19 @@ class OrderCatalogSyncWorker(appContext: Context, params: WorkerParameters) : Co
         val id = StoreId(storeId)
         return try {
             var page = 1
+            val syncedOrders = mutableListOf<com.samanramezani1377.woogit.core.domain.model.Order>()
             while (true) {
                 when (val result = app.composition.orderRepository.refresh(id, page, PAGE_SIZE)) {
                     is CoreResult.Failure -> return if (result.error.recoverable) Result.retry() else Result.failure()
                     is CoreResult.Success -> {
-                        if (result.value.isNotEmpty()) {
-                            OrderSyncEvents.publish(OrderSyncUpdate(id, result.value))
-                        }
+                        if (result.value.isNotEmpty()) syncedOrders += result.value
                         if (result.value.isEmpty() || result.value.size < PAGE_SIZE) break
                         page++
                     }
                 }
+            }
+            if (syncedOrders.isNotEmpty()) {
+                OrderSyncEvents.publish(OrderSyncUpdate(id, syncedOrders))
             }
             Result.success()
         } catch (_: IOException) {
@@ -88,7 +90,7 @@ class OrderCatalogSyncWorker(appContext: Context, params: WorkerParameters) : Co
                 .build()
             WorkManager.getInstance(context).enqueueUniqueWork(
                 IMMEDIATE_PREFIX + storeId,
-                ExistingWorkPolicy.KEEP,
+                ExistingWorkPolicy.APPEND_OR_REPLACE,
                 request,
             )
         }
