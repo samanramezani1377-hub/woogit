@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -24,7 +25,6 @@ import com.samanramezani1377.woogit.core.domain.model.Order
 import com.samanramezani1377.woogit.core.domain.model.OrderStatus
 import com.samanramezani1377.woogit.presentation.GlassCard
 import com.samanramezani1377.woogit.presentation.GlassPrimaryAction
-import com.samanramezani1377.woogit.presentation.GlassSecondaryButton
 import com.samanramezani1377.woogit.presentation.GlassStatusBadge
 import com.samanramezani1377.woogit.presentation.GlassText
 
@@ -123,6 +123,25 @@ internal fun OrderViewer(
                             GlassText(formatMoney(line.total))
                         }
                         if (order.shippingLines.isEmpty()) GlassText("روش ارسالی ثبت نشده است.")
+                    }
+                }
+            }
+            if (order.notes.isNotEmpty()) {
+                item {
+                    GlassCard {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            GlassText("یادداشت‌های سفارش", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                            order.notes.forEachIndexed { index, note ->
+                                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    GlassText(
+                                        if (note.customerNote) "یادداشت مشتری" else "یادداشت مدیریت",
+                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                                    )
+                                    GlassText(note.content)
+                                }
+                                if (index < order.notes.lastIndex) HorizontalDivider()
+                            }
+                        }
                     }
                 }
             }
