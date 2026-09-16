@@ -1,1 +1,38 @@
-placeholder
+CREATE TABLE order_entity (
+    store_id TEXT NOT NULL,
+    id TEXT NOT NULL,
+    number TEXT NOT NULL,
+    status TEXT NOT NULL,
+    currency TEXT NOT NULL,
+    total_minor INTEGER NOT NULL,
+    customer_id TEXT,
+    customer_name TEXT,
+    customer_email TEXT,
+    billing_json TEXT,
+    shipping_json TEXT,
+    line_items_json TEXT NOT NULL,
+    shipping_lines_json TEXT NOT NULL,
+    payment_method TEXT,
+    payment_method_title TEXT,
+    transaction_id TEXT,
+    date_created TEXT,
+    date_created_gmt TEXT,
+    date_modified TEXT,
+    date_modified_gmt TEXT,
+    PRIMARY KEY (store_id, id)
+);
+
+selectByStore:
+SELECT * FROM order_entity WHERE store_id = ? ORDER BY created_at DESC, id DESC;
+
+selectById:
+SELECT * FROM order_entity WHERE store_id = ? AND id = ?;
+
+insert:
+INSERT OR REPLACE INTO order_entity(store_id, id, number, status, currency, total_minor, customer_id, customer_name, customer_email, billing_json, shipping_json, line_items_json, shipping_lines_json, payment_method, payment_method_title, transaction_id, date_created, date_created_gmt, date_modified, date_modified_gmt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+deleteByStore:
+DELETE FROM order_entity WHERE store_id = ?;
+
+deleteById:
+DELETE FROM order_entity WHERE store_id = ? AND id = ?;
