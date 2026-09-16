@@ -16,6 +16,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -50,50 +51,49 @@ internal fun OrderDetailScreen(
     modifier: Modifier = Modifier,
 ) {
     var editing by remember { mutableStateOf(false) }
+    var lastOrder by remember { mutableStateOf<Order?>(null) }
     LaunchedEffect(state) {
-        if (state !is OrderDetailUiState.Content) editing = false
+        if (state is OrderDetailUiState.Content) lastOrder = state.order
     }
     GlassScaffold(modifier) { paddingValues ->
         Column(Modifier.fillMaxSize().padding(paddingValues), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            val titleOrder = (state as? OrderDetailUiState.Content)?.order ?: lastOrder
             GlassTopBar(
-                title = if (state is OrderDetailUiState.Content) "سفارش #${state.order.number}" else "جزئیات سفارش",
-                subtitle = if (state is OrderDetailUiState.Content && editing) "ویرایش سفارش" else "مشاهده سفارش",
+                title = titleOrder?.let { "سفارش #${it.number}" } ?: "جزئیات سفارش",
+                subtitle = if (editing) "ویرایش سفارش" else "مشاهده سفارش",
                 modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp),
             )
-            when (state) {
-                OrderDetailUiState.Loading -> GlassLoading("در حال بارگذاری سفارش…")
-                OrderDetailUiState.NotFound -> GlassEmptyState("سفارش پیدا نشد.")
-                is OrderDetailUiState.Error -> {
+            when {
+                editing && lastOrder != null -> OrderEditor(lastOrder!!, state, onBack, onSave, onAddNote)
+                state is OrderDetailUiState.Loading -> GlassLoading("در حال بارگذاری سفارش…")
+                state is OrderDetailUiState.NotFound -> GlassEmptyState("سفارش پیدا نشد.")
+                state is OrderDetailUiState.Error -> {
                     GlassErrorState(state.message)
                     GlassPrimaryAction("تلاش مجدد", onRetry, Modifier.padding(horizontal = 18.dp))
                 }
-                is OrderDetailUiState.Content -> {
-                    if (editing) {
-                        OrderEditor(state.order, onBack, onSave, onAddNote)
-                    } else {
-                        OrderViewer(state.order, onEdit = { editing = true }, onStatusSave = { order -> onSave(order) })
-                    }
-                }
+                state is OrderDetailUiState.Content -> OrderViewer(state.order, onEdit = { editing = true }, onStatusSave = { order -> onSave(order) })
             }
         }
     }
 }
 
 @Composable
-private fun OrderEditor(order: Order, onBack: () -> Unit, onSave: (Order) -> Job, onAddNote: (String) -> Unit) {
+private fun OrderEditor(order: Order, screenState: OrderDetailUiState, onBack: () -> Unit, onSave: (Order) -> Job, onAddNote: (String) -> Unit) {
     var draft by remember(order.id.value) { mutableStateOf(order) }
     var note by remember(order.id.value) { mutableStateOf("") }
     var addedNotes by remember(order.id.value) { mutableStateOf(emptyList<String>()) }
     var saveJob by remember(order.id.value) { mutableStateOf<Job?>(null) }
     var saveResult by remember(order.id.value) { mutableStateOf<OrderDetailSaveState>(OrderDetailSaveState.Idle) }
+    val latestScreenState by rememberUpdatedState(screenState)
     LaunchedEffect(order) { draft = order }
     LaunchedEffect(saveJob) {
         val job = saveJob ?: return@LaunchedEffect
         saveResult = OrderDetailSaveState.Saving
         job.join()
-        saveResult = when {
-            order.number != draft.number -> OrderDetailSaveState.Success
-            else -> OrderDetailSaveState.Success
+        saveResult = when (val result = latestScreenState) {
+            is OrderDetailUiState.Error -> OrderDetailSaveState.Error(result.message)
+            is OrderDetailUiState.Content -> OrderDetailSaveState.Success
+            else -> OrderDetailSaveState.Error("نتیجه ذخیره مشخص نشد.")
         }
         saveJob = null
     }
@@ -105,9 +105,7 @@ private fun OrderEditor(order: Order, onBack: () -> Unit, onSave: (Order) -> Job
         verticalArrangement = Arrangement.spacedBy(12.dp),
         contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 104.dp),
     ) {
-        item {
-            GlassSecondaryButton("بازگشت به مشاهده سفارش", onBack, Modifier.fillMaxWidth())
-        }
+        item { GlassSecondaryButton("بازگشت به مشاهده سفارش", onBack, Modifier.fillMaxWidth()) }
         item {
             GlassCard {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
