@@ -20,6 +20,8 @@ import com.samanramezani1377.woogit.data.network.WooCustomerCommerceDto
 import com.samanramezani1377.woogit.data.network.WooCustomerCommerceWriteDto
 import com.samanramezani1377.woogit.presentation.PresentationErrorMapper
 import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -51,10 +53,25 @@ internal class CommerceViewModel(
         private const val PAGE_SIZE = 100
         private const val MAX_READ_ITEMS = 10_000
         private const val BATCH_SIZE = 100
+        private const val SILENT_REFRESH_MS = 60_000L
     }
 
     private val _state = MutableStateFlow(CommerceUiState())
     val state: StateFlow<CommerceUiState> = _state.asStateFlow()
+    private var inventoryQuery = ""
+    private var inventoryLowStock = false
+    private var inventoryOutOfStock = false
+
+    init {
+        viewModelScope.launch {
+            while (isActive) {
+                delay(SILENT_REFRESH_MS)
+                if (_state.value.products.isNotEmpty() || _state.value.coupons.isNotEmpty()) {
+                    refreshSilently()
+                }
+            }
+        }
+    }
 
     fun load(loadRemoteCommerceData: Boolean = true) = viewModelScope.launch {
         _state.value = _state.value.copy(loading = true, error = null, message = null)
@@ -65,6 +82,15 @@ internal class CommerceViewModel(
             if (loadRemoteCommerceData) loadCustomersAndCoupons()
         } catch (t: Throwable) {
             fail("بارگذاری ابزارهای Commerce ناموفق بود: ${t.message.orEmpty()}")
+        }
+    }
+
+    private suspend fun refreshSilently() {
+        runCatching {
+            val products = readAllProducts()
+            val orders = readAllOrders()
+            applyProductAndOrderState(products, orders)
+            loadCustomersAndCoupons()
         }
     }
 
@@ -99,7 +125,7 @@ internal class CommerceViewModel(
             loading = false,
             products = products,
             orders = orders,
-            inventory = products,
+            inventory = CommerceFeatureEngine.filterInventory(products, inventoryQuery, lowStockOnly = inventoryLowStock, outOfStockOnly = inventoryOutOfStock),
             analytics = CommerceFeatureEngine.analytics(orders, products),
             customerAggregation = CommerceFeatureEngine.customersFromOrders(orders),
             couponAnalytics = CommerceFeatureEngine.couponsFromOrders(orders),
@@ -143,6 +169,9 @@ internal class CommerceViewModel(
     }
 
     fun filterInventory(query: String, lowStock: Boolean, outOfStock: Boolean) {
+        inventoryQuery = query
+        inventoryLowStock = lowStock
+        inventoryOutOfStock = outOfStock
         _state.value = _state.value.copy(inventory = CommerceFeatureEngine.filterInventory(_state.value.products, query, lowStockOnly = lowStock, outOfStockOnly = outOfStock))
     }
 
