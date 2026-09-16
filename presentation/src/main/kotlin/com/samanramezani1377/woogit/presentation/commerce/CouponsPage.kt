@@ -47,6 +47,9 @@ import com.samanramezani1377.woogit.presentation.GlassTokens
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.snapshotFlow
 import kotlinx.coroutines.withFrameNanos
 
 @Composable
@@ -68,14 +71,38 @@ internal fun CouponsPage(
     val deleteCandidate = state.coupons.firstOrNull { it.id == deleteCandidateId }
     val products = remember(state.products) { state.products.mapNotNull { product -> product.id.value.toLongOrNull()?.let { it to product.name } }.distinctBy { it.first } }
     val categories = remember(state.products) { state.products.flatMap { it.categories }.mapNotNull { category -> category.id.value.toLongOrNull()?.let { it to category.name } }.distinctBy { it.first } }
+    var previousCouponIds by remember { mutableStateOf<List<Long>>(emptyList()) }
+    var anchorCouponId by remember { mutableStateOf<Long?>(null) }
+    var anchorCouponOffset by remember { mutableStateOf(0) }
+
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+            .distinctUntilChanged()
+            .collect { (firstVisibleIndex, firstVisibleOffset) ->
+                if (firstVisibleIndex <= 0) {
+                    anchorCouponId = null
+                    anchorCouponOffset = 0
+                } else {
+                    val coupon = visible.getOrNull(firstVisibleIndex - 1)
+                    anchorCouponId = coupon?.id
+                    anchorCouponOffset = firstVisibleOffset
+                }
+            }
+    }
 
     LaunchedEffect(visible.map { it.id }, normalizedQuery) {
-        if (normalizedQuery.isBlank() && visible.isNotEmpty() && listState.firstVisibleItemIndex > 0) {
-            val firstVisibleIndex = listState.firstVisibleItemIndex
-            val firstVisibleOffset = listState.firstVisibleItemScrollOffset
-            withFrameNanos { }
-            if (firstVisibleIndex < listState.layoutInfo.totalItemsCount) listState.requestScrollToItem(firstVisibleIndex, firstVisibleOffset)
+        val newIds = visible.map { it.id }
+        val oldIds = previousCouponIds
+        if (normalizedQuery.isBlank() && oldIds.isNotEmpty() && anchorCouponId != null && listState.firstVisibleItemIndex > 1) {
+            val oldIndex = oldIds.indexOf(anchorCouponId)
+            val newIndex = newIds.indexOf(anchorCouponId)
+            val prependedCount = newIndex - oldIndex
+            if (oldIndex >= 0 && newIndex >= 0 && prependedCount > 0) {
+                withFrameNanos { }
+                if (newIndex + 1 < listState.layoutInfo.totalItemsCount) listState.scrollToItem(newIndex + 1, anchorCouponOffset)
+            }
         }
+        previousCouponIds = newIds
     }
 
     if (creating) CouponFormDialog(title = "ساخت کوپن جدید", initial = null, products = products, categories = categories, customers = state.customers, onDismiss = { creating = false }, onSave = { onCreateCoupon(it); creating = false })
