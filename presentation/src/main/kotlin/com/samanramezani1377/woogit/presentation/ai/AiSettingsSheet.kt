@@ -56,13 +56,13 @@ private fun varProviderMenu(
         Text("سرویس AI", fontWeight = FontWeight.SemiBold)
         Spacer(Modifier.height(6.dp))
         Box(Modifier.fillMaxWidth()) {
-            GlassOutlinedButton("${providerLabel(providerId)}  ·  ${if (providerId == "mistral") vm.mistralModel else providerModelLabel(providerId, geminiModel, groqModel, cloudflareModel)}", { providerMenuExpanded.value = true }, Modifier.fillMaxWidth())
+            GlassOutlinedButton("${settingsProviderLabel(providerId)}  ·  ${if (providerId == "mistral") vm.mistralModel else providerModelLabel(providerId, geminiModel, groqModel, cloudflareModel)}", { providerMenuExpanded.value = true }, Modifier.fillMaxWidth())
             DropdownMenu(expanded = providerMenuExpanded.value, onDismissRequest = { providerMenuExpanded.value = false }) {
                 availableProviders.forEach { provider ->
                     DropdownMenuItem(
                         text = {
                             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                Text(providerLabel(provider), fontWeight = if (provider == providerId) FontWeight.SemiBold else FontWeight.Normal)
+                                Text(settingsProviderLabel(provider), fontWeight = if (provider == providerId) FontWeight.SemiBold else FontWeight.Normal)
                                 Text(if (provider == "mistral") vm.mistralModel else providerModelLabel(provider, geminiModel, groqModel, cloudflareModel), color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
                             }
                         },
@@ -127,13 +127,13 @@ private fun varProviderMenu(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(Modifier.fillMaxWidth()) {
                     Column(Modifier.weight(1f)) {
-                        Text("🔐  اعتبارنامه ${providerLabel(providerId)}", fontWeight = FontWeight.Bold)
+                        Text("🔐  اعتبارنامه ${settingsProviderLabel(providerId)}", fontWeight = FontWeight.Bold)
                         Text(if (apiKey.isBlank()) "تنظیم نشده" else "روی همین دستگاه ذخیره شده", color = if (apiKey.isBlank()) GlassTokens.faint else GlassTokens.live, style = MaterialTheme.typography.bodySmall)
                     }
                     Text("محرمانه", color = GlassTokens.accent, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
                 }
-                GlassCredentialField(value = apiKey, onValueChange = onApiKeyChange, label = if (providerId == "cloudflare") "API Token کلادفلر" else "کلید API ${providerLabel(providerId)}", supportingText = "این مقدار محرمانه است و فقط برای اتصال مستقیم ${providerLabel(providerId)} استفاده می‌شود.")
-                Text(providerDescription(providerId), color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
+                GlassCredentialField(value = apiKey, onValueChange = onApiKeyChange, label = if (providerId == "cloudflare") "API Token کلادفلر" else "کلید API ${settingsProviderLabel(providerId)}", supportingText = "این مقدار محرمانه است و فقط برای اتصال مستقیم ${settingsProviderLabel(providerId)} استفاده می‌شود.")
+                Text(settingsProviderDescription(providerId), color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
             }
         }
         Spacer(Modifier.height(8.dp))
@@ -149,3 +149,21 @@ private fun varProviderMenu(
 }
 
 private val MISTRAL_MODELS = listOf("mistral-small-2603")
+
+private fun settingsProviderLabel(id: String) = when (id) {
+    "gemini" -> "Gemini"
+    "deepseek" -> "DeepSeek"
+    "groq" -> "Groq"
+    "cloudflare" -> "Cloudflare"
+    "mistral" -> "Mistral"
+    else -> "OpenRouter"
+}
+
+private fun settingsProviderDescription(id: String) = when (id) {
+    "gemini" -> "اتصال مستقیم به Google Gemini API؛ مدل انتخاب‌شده با tool calling استفاده می‌شود."
+    "deepseek" -> "اتصال مستقیم به api.deepseek.com؛ Backend جداگانه لازم نیست."
+    "groq" -> "اتصال مستقیم به Groq API؛ مدل انتخاب‌شده برای متن و Qwen3.6-27B برای ورودی تصویر استفاده می‌شود."
+    "cloudflare" -> "اتصال مستقیم به Workers AI REST API؛ Account ID و API Token لازم است."
+    "mistral" -> "اتصال مستقیم به Mistral API؛ کلید Mistral برای متن، تصویر و Tool Calling استفاده می‌شود."
+    else -> "اتصال مستقیم به OpenRouter؛ روتر openrouter/free مدل مناسب را انتخاب می‌کند."
+}
