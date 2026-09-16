@@ -14,6 +14,7 @@ import androidx.work.workDataOf
 import com.samanramezani1377.woogit.WooGitApplication
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.core.domain.error.CoreResult
+import com.samanramezani1377.woogit.core.domain.model.Product
 import com.samanramezani1377.woogit.core.domain.sync.ProductSyncEvents
 import com.samanramezani1377.woogit.core.domain.sync.ProductSyncUpdate
 import com.samanramezani1377.woogit.data.network.HttpApiException
@@ -32,7 +33,7 @@ class ProductCatalogSyncWorker(appContext: Context, params: WorkerParameters) : 
             val last = prefs.getLong("last_product_sync_$storeId", 0L)
             val fullReconcile = last == 0L || now - last >= FULL_RECONCILE_MS
             val id = StoreId(storeId)
-            val syncedProducts = LinkedHashMap<Long, com.samanramezani1377.woogit.core.domain.model.Product>()
+            val syncedProducts = LinkedHashMap<String, Product>()
 
             if (fullReconcile) {
                 var page = 1
