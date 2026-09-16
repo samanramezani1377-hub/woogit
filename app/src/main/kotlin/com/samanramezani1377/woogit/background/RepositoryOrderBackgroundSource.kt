@@ -2,6 +2,8 @@ package com.samanramezani1377.woogit.background
 
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.core.domain.error.CoreResult
+import com.samanramezani1377.woogit.core.domain.sync.OrderSyncEvents
+import com.samanramezani1377.woogit.core.domain.sync.OrderSyncUpdate
 import com.samanramezani1377.woogit.core.domain.usecase.GetOrders
 
 class RepositoryOrderBackgroundSource(private val getOrders: GetOrders, private val observedStore: OrderNotificationStore) : OrderBackgroundSource {
@@ -13,6 +15,7 @@ class RepositoryOrderBackgroundSource(private val getOrders: GetOrders, private 
                 if (response !is CoreResult.Success) break
                 val orders = response.value
                 if (orders.isEmpty()) break
+                OrderSyncEvents.publish(OrderSyncUpdate(StoreId(storeId), orders))
                 var stable = true
                 orders.forEach { order ->
                     val version = order.modifiedAt?.toString() ?: "${order.status.name}:${order.id.value}"
