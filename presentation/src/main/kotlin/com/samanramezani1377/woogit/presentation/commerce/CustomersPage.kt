@@ -25,9 +25,11 @@ import com.samanramezani1377.woogit.presentation.GlassSearchField
 import com.samanramezani1377.woogit.presentation.GlassTokens
 import com.samanramezani1377.woogit.presentation.customers.CustomerRuntime
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 private const val CUSTOMER_PAGE_SIZE = 50
+private const val CUSTOMER_SILENT_REFRESH_MS = 60_000L
 
 @Composable
 internal fun CustomersPage(storeId: StoreId, state: CommerceUiState) {
@@ -74,6 +76,33 @@ internal fun CustomersPage(storeId: StoreId, state: CommerceUiState) {
     LaunchedEffect(storeId, query) {
         delay(350)
         loadFirstPage()
+    }
+
+    LaunchedEffect(storeId, query) {
+        while (isActive) {
+            delay(CUSTOMER_SILENT_REFRESH_MS)
+            val loader = CustomerRuntime.listLoader ?: continue
+            when (val result = loader(storeId, 1, CUSTOMER_PAGE_SIZE, query.trim().takeIf { it.isNotBlank() })) {
+                is CoreResult.Success -> {
+                    val incoming = result.value
+                    val existing = customers
+                    val incomingById = incoming.mapNotNull { customer -> customer.id?.value?.let { it to customer } }.toMap()
+                    val existingIds = existing.mapNotNull { it.id?.value }.toSet()
+                    val merged = existing.map { customer -> incomingById[customer.id?.value] ?: customer }.toMutableList()
+                    incoming.asReversed().forEach { customer ->
+                        val id = customer.id?.value
+                        if (id != null && id !in existingIds) merged.add(0, customer)
+                    }
+                    customers = merged.distinctBy { it.id?.value ?: "${it.name}:${it.email}" }
+                    hasMore = result.value.size == CUSTOMER_PAGE_SIZE || hasMore
+                    if (selectedId != null) {
+                        val updated = incoming.firstOrNull { it.id?.value == selectedId }
+                        if (updated != null) selected = updated
+                    }
+                }
+                is CoreResult.Failure -> Unit
+            }
+        }
     }
 
     LaunchedEffect(storeId, selectedId) {
