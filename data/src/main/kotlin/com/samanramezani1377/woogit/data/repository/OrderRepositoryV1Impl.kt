@@ -39,31 +39,21 @@ private fun Address.toJson(email: String? = null): JsonObject = JsonObject(build
 
 private fun Order.toUpdateJson(previous: Order?): JsonObject {
     val fields = linkedMapOf<String, kotlinx.serialization.json.JsonElement>()
-    if (previous == null || status != previous.status) {
-        fields["status"] = JsonPrimitive(status.toWooValue())
-    }
+    if (previous == null || status != previous.status) fields["status"] = JsonPrimitive(status.toWooValue())
     if (previous == null || customer?.id != previous.customer?.id) {
         customer?.id?.value?.toLongOrNull()?.let { fields["customer_id"] = JsonPrimitive(it) }
         if (customer?.id == null) fields["customer_id"] = JsonPrimitive(0L)
     }
-    if (previous == null || billing != previous.billing || customer?.email != previous.customer?.email) {
-        fields["billing"] = billing?.toJson(customer?.email) ?: JsonObject(emptyMap())
-    }
-    if (previous == null || shipping != previous.shipping) {
-        fields["shipping"] = shipping?.toJson() ?: JsonObject(emptyMap())
-    }
+    if (previous == null || billing != previous.billing || customer?.email != previous.customer?.email) fields["billing"] = billing?.toJson(customer?.email) ?: JsonObject(emptyMap())
+    if (previous == null || shipping != previous.shipping) fields["shipping"] = shipping?.toJson() ?: JsonObject(emptyMap())
     if (previous == null || payment != previous.payment) {
         payment?.methodId?.let { fields["payment_method"] = JsonPrimitive(it) }
         payment?.methodTitle?.let { fields["payment_method_title"] = JsonPrimitive(it) }
         payment?.transactionId?.let { fields["transaction_id"] = JsonPrimitive(it) }
         fields["set_paid"] = JsonPrimitive(payment?.paid == true)
     }
-    if (previous == null || items != previous.items) {
-        fields["line_items"] = JsonArray(items.map { item -> JsonObject(buildMap { put("id", JsonPrimitive(item.id.value.toLongOrNull() ?: 0L)); put("quantity", JsonPrimitive(item.quantity)) }) })
-    }
-    if (previous == null || shippingLines != previous.shippingLines) {
-        fields["shipping_lines"] = JsonArray(shippingLines.map { line -> JsonObject(buildMap { put("method_id", JsonPrimitive(line.methodId ?: "")); put("method_title", JsonPrimitive(line.methodTitle ?: "")); put("total", JsonPrimitive(line.total ?: "0")) }) })
-    }
+    if (previous == null || items != previous.items) fields["line_items"] = JsonArray(items.map { item -> JsonObject(buildMap { put("id", JsonPrimitive(item.id.value.toLongOrNull() ?: 0L)); put("quantity", JsonPrimitive(item.quantity)) }) })
+    if (previous == null || shippingLines != previous.shippingLines) fields["shipping_lines"] = JsonArray(shippingLines.map { line -> JsonObject(buildMap { put("method_id", JsonPrimitive(line.methodId ?: "")); put("method_title", JsonPrimitive(line.methodTitle ?: "")); put("total", JsonPrimitive(line.total ?: "0")) }) })
     return JsonObject(fields)
 }
 
@@ -74,7 +64,7 @@ class OrderRepositoryV1Impl(private val local:LocalOrderDataSource<Order>,privat
  override suspend fun count(storeId:StoreId,search:String?,status:String?):CoreResult<Int> = provider.client(storeId).fold({(store,api)->api.ordersTotal(store.baseUrl,search?.trim()?.takeIf{it.isNotEmpty()},status?.trim()?.takeIf{it.isNotEmpty()}).fold({CoreResult.Success(it)},{CoreResult.Failure(it.toDomain())})},{CoreResult.Failure(it)})
  private suspend fun refreshFirstPage(storeId:StoreId,perPage:Int){fetchPage(storeId,1,perPage,null,null)}
  suspend fun refresh(storeId:StoreId,page:Int,perPage:Int):CoreResult<List<Order>> = fetchPage(storeId,page,perPage,null,null)
- private suspend fun fetchPage(storeId:StoreId,page:Int,perPage:Int,search:String?,status:String?):CoreResult<List<Order>> = provider.client(storeId).fold({(store,api)->api.orders(store.baseUrl,page,perPage,search,status).fold({values->val mapped=values.mapNotNull{remote->runCatching{remote.toDomain()}.getOrNull()};mapped.forEach{local.upsert(storeId,it)};if(values.isNotEmpty()&&mapped.isEmpty())CoreResult.Failure(DomainError.Network("سفارش‌های دریافتی از فروشگاه قابل پردازش نیستند.")) else CoreResult.Success(mapped)},{error->val cached=if(page==1&&search.isNullOrBlank()&&status.isNullOrBlank())local.list(storeId) else null;cached?:CoreResult.Failure(error.toDomain())})},{error->val cached=if(page==1&&search.isNullOrBlank()&&status.isNullOrBlank())local.list(storeId) else null;cached?:CoreResult.Failure(error)})
+ private suspend fun fetchPage(storeId:StoreId,page:Int,perPage:Int,search:String?,status:String?):CoreResult<List<Order>> = provider.client(storeId).fold({(store,api)->api.orders(store.baseUrl,page,perPage,search,status).fold({values->val mapped=values.mapNotNull{remote->runCatching{remote.toDomain()}.getOrNull()};mapped.forEach{local.upsert(storeId,it)};val ordered=mapped.sortedWith(compareByDescending<Order>{it.createdAt?.toString()? : ""}.thenByDescending{it.id.value.toLongOrNull()?:Long.MIN_VALUE});if(values.isNotEmpty()&&mapped.isEmpty())CoreResult.Failure(DomainError.Network("سفارش‌های دریافتی از فروشگاه قابل پردازش نیستند.")) else CoreResult.Success(ordered)},{error->val cached=if(page==1&&search.isNullOrBlank()&&status.isNullOrBlank())local.list(storeId) else null;cached?:CoreResult.Failure(error.toDomain())})},{error->val cached=if(page==1&&search.isNullOrBlank()&&status.isNullOrBlank())local.list(storeId) else null;cached?:CoreResult.Failure(error)})
  override suspend fun salesSummary(storeId:StoreId):CoreResult<SalesSummary> = provider.client(storeId).fold({(store,api)->val settingsResult=api.validate(store.baseUrl);val reportResult=api.salesReport(store.baseUrl,"2000-01-01",LocalDate.now().toString());if(settingsResult.isFailure||reportResult.isFailure){val error=settingsResult.exceptionOrNull()?:reportResult.exceptionOrNull()?:Exception("WooCommerce sales report failed");return@fold CoreResult.Failure(error.toDomain())};val settings=settingsResult.getOrThrow().settings;val report=reportResult.getOrThrow();CoreResult.Success(SalesSummary(report.net_sales,settings.currency,settings.currency_symbol,settings.currency_position,settings.thousand_separator,settings.decimal_separator,settings.number_of_decimals))},{CoreResult.Failure(it)})
  override suspend fun update(storeId:StoreId,id:EntityId,order:Order):CoreResult<Order>{val previous=when(val result=local.get(storeId,id)){is CoreResult.Success->result.value;is CoreResult.Failure->null};val updateJson=order.toUpdateJson(previous);if(updateJson.isEmpty())return CoreResult.Success(order);val payload=updateJson.toString();val hash=payloadHash(payload);val operation=PendingOperation(EntityId(newOperationId("order-update")),storeId,"order",id,OperationType.UPDATE,payload,hash,0,null,null);val localResult=coordinator.execute(operation){local.upsert(storeId,order)};if(localResult is CoreResult.Failure)return localResult;return provider.client(storeId).fold({(store,api)->api.updateOrderFields(store.baseUrl,id.value.toLong(),updateJson,operation.id.value).fold({remote->val value=remote.toDomain();local.upsert(storeId,value);pending.markSucceeded(operation.id);CoreResult.Success(value)},{error->if(error is HttpApiException&&error.statusCode in 408..599)CoreResult.Success(order)else CoreResult.Failure(error.toDomain())})},{error->if(error.recoverable)CoreResult.Success(order)else CoreResult.Failure(error)})}
 }
