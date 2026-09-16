@@ -1,6 +1,7 @@
 package com.samanramezani1377.woogit.presentation.order
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -15,6 +16,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -39,90 +41,97 @@ internal fun OrderViewer(
         saving = false
     }
 
-    LazyColumn(
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 104.dp),
-    ) {
-        item {
-            GlassCard {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    GlassText("وضعیت سفارش", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-                    StatusSelector(selectedStatus) { selectedStatus = it }
-                    if (selectedStatus != order.status) {
-                        GlassPrimaryAction(
-                            if (saving) "در حال ذخیره…" else "ذخیره وضعیت",
-                            {
-                                saving = true
-                                onStatusSave(order.copy(status = selectedStatus))
-                            },
-                            Modifier.fillMaxWidth(),
-                        )
-                    }
-                }
-            }
-        }
-        item {
-            GlassCard {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    GlassText("خلاصه سفارش", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-                    GlassText("شماره سفارش: ${order.number}")
-                    GlassText("مبلغ کل: ${formatMoney(order.total)}")
-                    GlassText("ارز: ${order.currency}")
-                    GlassStatusBadge(order.status.displayName())
-                }
-            }
-        }
-        item {
-            GlassCard {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    GlassText("مشتری", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-                    GlassText(order.customer?.name?.ifBlank { "مهمان" } ?: "مهمان")
-                    order.customer?.email?.takeIf { it.isNotBlank() }?.let { GlassText(it) }
-                    order.customer?.id?.value?.let { GlassText("شناسه مشتری: $it") }
-                }
-            }
-        }
-        item { ReadOnlyAddressCard("صورتحساب", order.billing) }
-        item { ReadOnlyAddressCard("ارسال", order.shipping) }
-        item {
-            GlassCard {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    GlassText("پرداخت", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-                    GlassText(order.payment?.methodTitle?.ifBlank { order.payment?.methodId.orEmpty() }.orEmpty().ifBlank { "ثبت نشده" })
-                    order.payment?.transactionId?.takeIf { it.isNotBlank() }?.let { GlassText("تراکنش: $it") }
-                    GlassText(if (order.payment?.paid == true) "پرداخت شده" else "پرداخت نشده")
-                }
-            }
-        }
-        item {
-            GlassCard {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    GlassText("اقلام سفارش", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-                    order.items.forEach { item ->
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            GlassText("${item.name} × ${item.quantity}")
-                            GlassText(formatMoney(item.total))
+    Box(Modifier.fillMaxWidth()) {
+        LazyColumn(
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(start = 16.dp, top = 8.dp, end = 16.dp, bottom = 104.dp),
+        ) {
+            item {
+                GlassCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        GlassText("وضعیت سفارش", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                        StatusSelector(selectedStatus) { selectedStatus = it }
+                        if (selectedStatus != order.status) {
+                            GlassPrimaryAction(
+                                if (saving) "در حال ذخیره…" else "ذخیره وضعیت",
+                                {
+                                    saving = true
+                                    onStatusSave(order.copy(status = selectedStatus))
+                                },
+                                Modifier.fillMaxWidth(),
+                            )
                         }
                     }
-                    if (order.items.isEmpty()) GlassText("این سفارش آیتمی ندارد.")
                 }
             }
-        }
-        item {
-            GlassCard {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    GlassText("حمل‌ونقل", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
-                    order.shippingLines.forEach { line ->
-                        GlassText(line.methodTitle?.ifBlank { line.methodId.orEmpty() }.orEmpty().ifBlank { "روش ارسال" })
-                        GlassText(formatMoney(line.total))
+            item {
+                GlassCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        GlassText("خلاصه سفارش", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                        GlassText("شماره سفارش: ${order.number}")
+                        GlassText("مبلغ کل: ${formatMoney(order.total)}")
+                        GlassText("ارز: ${order.currency}")
+                        GlassStatusBadge(order.status.displayName())
                     }
-                    if (order.shippingLines.isEmpty()) GlassText("روش ارسالی ثبت نشده است.")
+                }
+            }
+            item {
+                GlassCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        GlassText("مشتری", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                        GlassText(order.customer?.name?.ifBlank { "مهمان" } ?: "مهمان")
+                        order.customer?.email?.takeIf { it.isNotBlank() }?.let { GlassText(it) }
+                        order.customer?.id?.value?.let { GlassText("شناسه مشتری: $it") }
+                    }
+                }
+            }
+            item { ReadOnlyAddressCard("صورتحساب", order.billing) }
+            item { ReadOnlyAddressCard("ارسال", order.shipping) }
+            item {
+                GlassCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        GlassText("پرداخت", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                        GlassText(order.payment?.methodTitle?.ifBlank { order.payment?.methodId.orEmpty() }.orEmpty().ifBlank { "ثبت نشده" })
+                        order.payment?.transactionId?.takeIf { it.isNotBlank() }?.let { GlassText("تراکنش: $it") }
+                        GlassText(if (order.payment?.paid == true) "پرداخت شده" else "پرداخت نشده")
+                    }
+                }
+            }
+            item {
+                GlassCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        GlassText("اقلام سفارش", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                        order.items.forEach { item ->
+                            Column(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                GlassText(item.name.ifBlank { "محصول" }, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold))
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                    GlassText("تعداد: ${item.quantity}")
+                                    GlassText(formatMoney(item.total))
+                                }
+                            }
+                        }
+                        if (order.items.isEmpty()) GlassText("این سفارش آیتمی ندارد.")
+                    }
+                }
+            }
+            item {
+                GlassCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        GlassText("حمل‌ونقل", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
+                        order.shippingLines.forEach { line ->
+                            GlassText(line.methodTitle?.ifBlank { line.methodId.orEmpty() }.orEmpty().ifBlank { "روش ارسال" })
+                            GlassText(formatMoney(line.total))
+                        }
+                        if (order.shippingLines.isEmpty()) GlassText("روش ارسالی ثبت نشده است.")
+                    }
                 }
             }
         }
-        item {
-            GlassSecondaryButton("ویرایش سفارش", onEdit, Modifier.fillMaxWidth())
-        }
+        GlassPrimaryAction(
+            "ویرایش سفارش",
+            onEdit,
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        )
     }
 }
 
