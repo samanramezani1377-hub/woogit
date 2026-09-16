@@ -3,6 +3,8 @@ package com.samanramezani1377.woogit.presentation.ai
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -35,9 +37,10 @@ private fun varProviderMenu(
     groqModel: String, onGroqModelChange: (String) -> Unit, cloudflareModel: String,
     onCloudflareModelChange: (String) -> Unit, cloudflareAccountId: String, onCloudflareAccountIdChange: (String) -> Unit,
 ) {
-    var providerMenuExpanded = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-    var groqMenuExpanded = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-    var cloudflareMenuExpanded = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    val providerMenuExpanded = remember { mutableStateOf(false) }
+    val groqMenuExpanded = remember { mutableStateOf(false) }
+    val cloudflareMenuExpanded = remember { mutableStateOf(false) }
+    val mistralMenuExpanded = remember { mutableStateOf(false) }
     val availableProviders = (AI_PROVIDERS + "mistral").distinct()
 
     GlassBottomSheet(show = show, onDismiss = onDismiss) {
@@ -105,8 +108,19 @@ private fun varProviderMenu(
         if (providerId == "mistral") {
             Spacer(Modifier.height(10.dp)); Text("Mistral", fontWeight = FontWeight.SemiBold)
             Text("مدل Mistral", color = GlassTokens.muted, style = MaterialTheme.typography.labelSmall)
-            AiField(vm.mistralModel, { vm.saveMistralModel(it) }, "Model ID (پیش‌فرض: mistral-small-2603)")
-            Text("Free mode می‌تواند با همین API استفاده شود و محدودیت مصرف حساب Mistral را اعمال می‌کند.", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
+            Box {
+                GlassOutlinedButton(vm.mistralModel, { mistralMenuExpanded.value = true }, Modifier.fillMaxWidth())
+                DropdownMenu(expanded = mistralMenuExpanded.value, onDismissRequest = { mistralMenuExpanded.value = false }) {
+                    MISTRAL_MODELS.forEach { model ->
+                        DropdownMenuItem(
+                            text = { Text(model, fontWeight = if (model == vm.mistralModel) FontWeight.SemiBold else FontWeight.Normal) },
+                            leadingIcon = { Text(if (model == vm.mistralModel) "✓" else "", color = GlassTokens.accent, fontWeight = FontWeight.Bold) },
+                            onClick = { vm.saveMistralModel(model); mistralMenuExpanded.value = false },
+                        )
+                    }
+                }
+            }
+            Text("مدل تأییدشده برای WooGit: Mistral Small 4 با پشتیبانی از متن، تصویر و Tool Calling. مدل‌های ناشناخته عمداً از اجرای ابزار و تصویر استفاده نمی‌کنند.", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
         }
         Spacer(Modifier.height(12.dp))
         GlassCard(Modifier.fillMaxWidth()) {
@@ -133,3 +147,5 @@ private fun varProviderMenu(
         })
     }
 }
+
+private val MISTRAL_MODELS = listOf("mistral-small-2603")
