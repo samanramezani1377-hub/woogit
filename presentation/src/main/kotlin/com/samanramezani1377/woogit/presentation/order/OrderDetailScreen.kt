@@ -48,11 +48,15 @@ internal fun OrderDetailScreen(
     onAddNote: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    var editing by remember { mutableStateOf(false) }
+    LaunchedEffect(state) {
+        if (state !is OrderDetailUiState.Content) editing = false
+    }
     GlassScaffold(modifier) { paddingValues ->
         Column(Modifier.fillMaxSize().padding(paddingValues), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             GlassTopBar(
                 title = if (state is OrderDetailUiState.Content) "سفارش #${state.order.number}" else "جزئیات سفارش",
-                subtitle = "مشاهده و ویرایش سفارش",
+                subtitle = if (state is OrderDetailUiState.Content && editing) "ویرایش سفارش" else "مشاهده سفارش",
                 modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp),
             )
             when (state) {
@@ -62,7 +66,13 @@ internal fun OrderDetailScreen(
                     GlassErrorState(state.message)
                     GlassPrimaryAction("تلاش مجدد", onRetry, Modifier.padding(horizontal = 18.dp))
                 }
-                is OrderDetailUiState.Content -> OrderEditor(state.order, onSave, onAddNote)
+                is OrderDetailUiState.Content -> {
+                    if (editing) {
+                        OrderEditor(state.order, onSave, onAddNote)
+                    } else {
+                        OrderViewer(state.order, onEdit = { editing = true }, onStatusSave = onSave)
+                    }
+                }
             }
         }
     }
