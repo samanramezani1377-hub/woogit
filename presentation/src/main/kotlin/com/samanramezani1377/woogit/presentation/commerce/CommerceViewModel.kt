@@ -13,6 +13,7 @@ import com.samanramezani1377.woogit.core.domain.entity.EntityId
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.core.domain.error.CoreResult
 import com.samanramezani1377.woogit.core.domain.model.*
+import com.samanramezani1377.woogit.core.domain.sync.ProductSyncEvents
 import com.samanramezani1377.woogit.data.network.BulkOrderStatusMapper
 import com.samanramezani1377.woogit.data.network.WooCouponCommerceDto
 import com.samanramezani1377.woogit.data.network.WooCouponCommerceWriteDto
@@ -64,11 +65,28 @@ internal class CommerceViewModel(
 
     init {
         viewModelScope.launch {
+            ProductSyncEvents.updates.collect { update ->
+                if (update.storeId != storeId) return@collect
+                val currentProducts = _state.value.products
+                val changed = update.products.associateBy { it.id.value }
+                val merged = currentProducts.map { changed[it.id.value] ?: it }.toMutableList()
+                update.products.forEach { product ->
+                    if (currentProducts.none { it.id.value == product.id.value }) merged.add(0, product)
+                }
+                val products = merged.distinctBy { it.id.value }
+                _state.value = _state.value.copy(
+                    products = products,
+                    inventory = CommerceFeatureEngine.filterInventory(products, inventoryQuery, lowStockOnly = inventoryLowStock, outOfStockOnly = inventoryOutOfStock),
+                    analytics = CommerceFeatureEngine.analytics(_state.value.orders, products),
+                    customerAggregation = CommerceFeatureEngine.customersFromOrders(_state.value.orders),
+                    couponAnalytics = CommerceFeatureEngine.couponsFromOrders(_state.value.orders),
+                )
+            }
+        }
+        viewModelScope.launch {
             while (isActive) {
                 delay(SILENT_REFRESH_MS)
-                if (_state.value.products.isNotEmpty() || _state.value.coupons.isNotEmpty()) {
-                    refreshSilently()
-                }
+                if (_state.value.products.isNotEmpty() || _state.value.coupons.isNotEmpty()) refreshSilently()
             }
         }
     }
