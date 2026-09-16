@@ -29,4 +29,9 @@ jobs:
             bash .github/agent-map-guard.sh "$BASE_SHA" "$GITHUB_SHA"
           else
             BASE=$(git rev-parse "$GITHUB_SHA^" 2>/dev/null || true)
-            if [[ -n "$BASE" ]]; then bash .github/agent-map-guard.sh "$BASE" "$GITHUB_SHA"; else echo 'Initial commit: no previous tree to compare.'; fi
+            if [[ -n "$BASE" ]]; then
+              bash .github/agent-map-guard.sh "$BASE" "$GITHUB_SHA"
+            else
+              echo 'Initial commit: no previous tree to compare.'
+            fi
+          fi
