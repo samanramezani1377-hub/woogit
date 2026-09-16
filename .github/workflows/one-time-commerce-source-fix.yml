@@ -1,0 +1,45 @@
+name: One-time Commerce source repair
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: ${{ !startsWith(github.event.head_commit.message, '[ci-fix]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Repair Commerce compile errors
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          customers = Path('presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/commerce/CustomersPage.kt')
+          text = customers.read_text()
+          text = text.replace('import kotlinx.coroutines.flow.snapshotFlow\n', '')
+          text = text.replace('import kotlinx.coroutines.withFrameNanos\n', 'import androidx.compose.runtime.withFrameNanos\n')
+          text = text.replace('listState.firstVisibleItemIndex > 1', 'listState.firstVisibleItemIndex > 0')
+          customers.write_text(text)
+
+          coupons = Path('presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/commerce/CouponsPage.kt')
+          text = coupons.read_text()
+          text = text.replace('import kotlinx.coroutines.withFrameNanos\n', 'import androidx.compose.runtime.withFrameNanos\n')
+          text = text.replace('listState.firstVisibleItemIndex > 1', 'listState.firstVisibleItemIndex > 0')
+          text = text.replace('PaddingValues(horizontal = 16.dp, bottom = 92.dp)', 'PaddingValues(start = 16.dp, top = 0.dp, end = 16.dp, bottom = 92.dp)')
+          coupons.write_text(text)
+          PY
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git rm .github/workflows/one-time-commerce-source-fix.yml
+          git add presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/commerce/CustomersPage.kt presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/commerce/CouponsPage.kt
+          git commit -m '[ci-fix] Repair Commerce compile errors'
+          git push
