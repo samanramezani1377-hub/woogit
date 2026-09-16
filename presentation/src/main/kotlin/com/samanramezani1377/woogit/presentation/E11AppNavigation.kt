@@ -157,7 +157,13 @@ internal fun E11AppNavigation(
                 val vm = viewModel<OrderDetailViewModel>(key = "order-detail-${storeId.value}-$id", factory = vmFactory { OrderDetailViewModel(dependencies) })
                 val state by vm.state.collectAsState()
                 LaunchedEffect(storeId, id) { vm.load(storeId, EntityId(id)) }
-                OrderDetailScreen(mapOrderDetailState(state), { vm.load(storeId, EntityId(id)) }, { navController.popBackStack() }, { status -> vm.updateStatus(storeId, status) })
+                OrderDetailScreen(
+                    state = mapOrderDetailState(state),
+                    onRetry = { vm.load(storeId, EntityId(id)) },
+                    onBack = { navController.popBackStack() },
+                    onSave = { order -> vm.update(storeId, order) },
+                    onAddNote = { text -> vm.note(storeId, EntityId(id), text) },
+                )
             }
         }
         composable(E11Routes.PRODUCTS) {
