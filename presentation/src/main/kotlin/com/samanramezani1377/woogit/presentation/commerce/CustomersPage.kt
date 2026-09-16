@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -27,6 +28,8 @@ import com.samanramezani1377.woogit.presentation.GlassSearchField
 import com.samanramezani1377.woogit.presentation.GlassTokens
 import com.samanramezani1377.woogit.presentation.customers.CustomerRuntime
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.snapshotFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
@@ -37,6 +40,9 @@ private const val CUSTOMER_SILENT_REFRESH_MS = 60_000L
 internal fun CustomersPage(storeId: StoreId, state: CommerceUiState) {
     var query by rememberSaveable { mutableStateOf("") }
     var customers by remember { mutableStateOf<List<Customer>>(emptyList()) }
+    var previousCustomerIds by remember { mutableStateOf<List<String>>(emptyList()) }
+    var anchorCustomerId by remember { mutableStateOf<String?>(null) }
+    var anchorCustomerOffset by remember { mutableIntStateOf(0) }
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
     var selected by remember { mutableStateOf<Customer?>(null) }
     var loading by rememberSaveable { mutableStateOf(true) }
@@ -66,6 +72,35 @@ internal fun CustomersPage(storeId: StoreId, state: CommerceUiState) {
     }
 
     LaunchedEffect(storeId, query) { delay(350); loadFirstPage() }
+
+    LaunchedEffect(listState) {
+        snapshotFlow {
+            val firstIndex = listState.firstVisibleItemIndex
+            if (firstIndex <= 0) null
+            else customers.getOrNull(firstIndex - 1)?.id?.value to listState.firstVisibleItemScrollOffset
+        }
+            .distinctUntilChanged()
+            .collect { anchor ->
+                anchorCustomerId = anchor?.first
+                anchorCustomerOffset = anchor?.second ?: 0
+            }
+    }
+
+    LaunchedEffect(customers.map { it.id?.value ?: "${it.name}:${it.email}" }, query) {
+        val newIds = customers.map { it.id?.value ?: "${it.name}:${it.email}" }
+        val oldIds = previousCustomerIds
+        val anchorId = anchorCustomerId
+        if (query.isBlank() && oldIds.isNotEmpty() && anchorId != null && listState.firstVisibleItemIndex > 1) {
+            val oldIndex = oldIds.indexOf(anchorId)
+            val newIndex = newIds.indexOf(anchorId)
+            val prependedCount = newIndex - oldIndex
+            if (oldIndex >= 0 && newIndex >= 0 && prependedCount > 0) {
+                withFrameNanos { }
+                listState.scrollToItem(newIndex + 1, anchorCustomerOffset)
+            }
+        }
+        previousCustomerIds = newIds
+    }
 
     LaunchedEffect(storeId, query) {
         while (isActive) {
