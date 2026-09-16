@@ -33,6 +33,7 @@ internal data class DashboardUiState(
     val orders: List<Order> = emptyList(),
     val products: List<Product> = emptyList(),
     val salesSummary: SalesSummary? = null,
+    val cachedRevenue: String? = null,
     val ordersTotal: Int? = null,
     val processingTotal: Int? = null,
     val productsTotal: Int? = null,
@@ -44,11 +45,23 @@ internal data class DashboardUiState(
     val ordersCount: String get() = DashboardStateMapper.ordersCount(ordersTotal ?: orders.size)
     val productsCount: String get() = DashboardStateMapper.productsCount(productsTotal ?: products.size)
     val processingCount: String get() = DashboardStateMapper.processingCount(processingTotal ?: orders.count { it.status.name == "PROCESSING" })
-    val revenue: String get() = DashboardStateMapper.revenue(salesSummary)
+    val revenue: String get() = salesSummary?.let(DashboardStateMapper::revenue) ?: cachedRevenue.orEmpty()
 }
 
-internal class DashboardViewModel(private val dependencies: V1PresentationDependencies, private val storeId: StoreId) : ViewModel() {
-    private val _uiState = MutableStateFlow(DashboardUiState())
+internal class DashboardViewModel(
+    private val dependencies: V1PresentationDependencies,
+    private val storeId: StoreId,
+    private val cache: DashboardCache,
+) : ViewModel() {
+    private val cachedMetrics = cache.read(storeId.value)
+    private val _uiState = MutableStateFlow(
+        DashboardUiState(
+            cachedRevenue = cachedMetrics.revenue,
+            ordersTotal = cachedMetrics.ordersTotal,
+            processingTotal = cachedMetrics.processingTotal,
+            productsTotal = cachedMetrics.productsTotal,
+        )
+    )
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
     private val refreshMutex = Mutex()
     private val refreshInFlight = AtomicBoolean(false)
@@ -84,8 +97,6 @@ internal class DashboardViewModel(private val dependencies: V1PresentationDepend
     override fun onCleared() { healthMonitorJob?.cancel(); super.onCleared() }
 
     private suspend fun checkConnection(allowDuringRefresh: Boolean = false): ConnectionState {
-        // The initial dashboard refresh owns the readiness check. Background health checks
-        // must not race login/navigation while the store session is being established.
         if (!allowDuringRefresh && refreshInFlight.get()) return _uiState.value.connectionState
         if (healthCheckInFlight) {
             if (!allowDuringRefresh) return _uiState.value.connectionState
@@ -122,9 +133,6 @@ internal class DashboardViewModel(private val dependencies: V1PresentationDepend
 
     private suspend fun refreshInternal() {
         try {
-            // Readiness is still checked first because BackendClient.forward requires the
-            // backend session to be ready. Once that is true, the first useful dashboard
-            // data is shown immediately; secondary metrics continue in the background.
             val connectionState = checkConnection(allowDuringRefresh = true)
             if (connectionState != ConnectionState.CONNECTED) {
                 _uiState.value = _uiState.value.copy(connectionState = connectionState, loading = false)
@@ -159,9 +167,6 @@ internal class DashboardViewModel(private val dependencies: V1PresentationDepend
                 }
             }
 
-            // Do not make the user wait for four additional network requests before seeing
-            // the dashboard. The recent orders/products are already enough to render the
-            // main screen; exact totals and revenue are filled in immediately afterwards.
             val immediateState = _uiState.value.copy(
                 orders = orders,
                 products = products,
@@ -180,10 +185,10 @@ internal class DashboardViewModel(private val dependencies: V1PresentationDepend
                 )
             }
 
-            val ordersTotal = (metrics[0] as CoreResult<Int>).getOrNull()
-            val processingTotal = (metrics[1] as CoreResult<Int>).getOrNull()
+            val ordersTotal = (metrics[0] as CoreResult<Int>).getOrNull() ?: _uiState.value.ordersTotal
+            val processingTotal = (metrics[1] as CoreResult<Int>).getOrNull() ?: _uiState.value.processingTotal
             val salesSummaryResult = metrics[2] as CoreResult<SalesSummary>
-            val productsTotal = (metrics[3] as CoreResult<Int>).getOrNull()
+            val productsTotal = (metrics[3] as CoreResult<Int>).getOrNull() ?: _uiState.value.productsTotal
             val rawSalesSummary = when (salesSummaryResult) {
                 is CoreResult.Success -> salesSummaryResult.value
                 is CoreResult.Failure -> {
@@ -199,8 +204,24 @@ internal class DashboardViewModel(private val dependencies: V1PresentationDepend
             }
 
             val current = _uiState.value
-            val newState = current.copy(ordersTotal = ordersTotal, processingTotal = processingTotal, productsTotal = productsTotal, salesSummary = salesSummary, loading = false)
+            val newState = current.copy(
+                ordersTotal = ordersTotal,
+                processingTotal = processingTotal,
+                productsTotal = productsTotal,
+                salesSummary = salesSummary,
+                cachedRevenue = salesSummary?.let(DashboardStateMapper::revenue) ?: current.cachedRevenue,
+                loading = false,
+            )
             _uiState.value = newState
+            cache.write(
+                storeId.value,
+                DashboardCachedMetrics(
+                    ordersTotal = newState.ordersTotal,
+                    processingTotal = newState.processingTotal,
+                    productsTotal = newState.productsTotal,
+                    revenue = newState.revenue.takeIf { it.isNotBlank() },
+                )
+            )
             DashboardSalesDebugSnapshot.update(newState.orders, salesSummary, newState.revenue)
         } catch (e: CancellationException) {
             throw e
