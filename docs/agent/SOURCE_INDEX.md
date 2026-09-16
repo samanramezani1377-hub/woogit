@@ -48,7 +48,8 @@ This is the source-of-truth locator for agent work. The contract maps in this di
 | Commerce coupon UI | `presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/commerce/CouponsPage.kt` |
 | Commerce invoice UI | `presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/commerce/InvoicePage.kt` |
 | Background order polling | `app/src/main/kotlin/com/samanramezani1377/woogit/background/OrderPollingWorker.kt` |
-| Product sync | `app/src/main/kotlin/com/samanramezani1377/woogit/background/ProductCatalogSyncWorker.kt` |
+| Product catalog sync worker | `app/src/main/kotlin/com/samanramezani1377/woogit/background/ProductCatalogSyncWorker.kt` — cache-triggered background refresh, full/incremental pagination and sync event publication |
+| Product sync event contract | `core/src/commonMain/kotlin/com/samanramezani1377/woogit/core/domain/sync/ProductSyncEvents.kt` — latest completed catalog update is replayable to newly attached collectors |
 | Notifications | `app/src/main/kotlin/com/samanramezani1377/woogit/background/OrderNotificationManager.kt` |
 | Technical error reporting | `app/src/main/kotlin/com/samanramezani1377/woogit/debug/AppTechnicalErrorReporter.kt` |
 
@@ -61,6 +62,10 @@ After batch confirmation, the Agent injects a complete internal per-item outcome
 ## Customer management contract
 
 Customer management is an individual-customer flow, not a bulk-operation UI. `CustomersPage` owns debounced search, pagination, selection, detail presentation, create/edit/delete dialogs and immediate local list reconciliation. `CustomerRuntime` bridges those UI mutations to `CustomerRepositoryV1Impl`. The repository uses WooCommerce customer REST endpoints and persists successful mutations to the local customer data source.
+
+## Product catalog sync contract
+
+`ProductCatalogSyncWorker` persists remote products into the local catalog and publishes one aggregated update after all pages in the current sync window have been processed. Full reconciliation paginates the complete catalog; incremental reconciliation paginates all products modified after the overlap cursor instead of stopping after the first 100 results. `ProductSyncEvents` retains the latest completed update so screen/ViewModel recreation cannot permanently miss a completed background sync.
 
 ## Line-addressable contract entries
 - `BackendClient.kt` → `revokeSession(storeId)` delegates to `revokeToken(sessions.get(storeId))` and clears the operational session after a successful revoke.
