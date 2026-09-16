@@ -18,6 +18,7 @@ internal data class AiModelCapabilities(
                 providerId == "cloudflare" && model.contains("glm-4.7-flash") -> AiModelCapabilities(128_000, 2_048, false, true)
                 providerId == "cloudflare" && model.contains("gemma-4-26b") -> AiModelCapabilities(128_000, 2_048, true, true)
                 providerId == "mistral" && model.contains("mistral-small-2603") -> AiModelCapabilities(256_000, 8_192, true, true)
+                providerId == "mistral" -> AiModelCapabilities(16_000, 2_048, false, false)
                 providerId == "gemini" -> AiModelCapabilities(1_000_000, 4_096, true, true)
                 providerId == "deepseek" && model.contains("deepseek-v4-flash-vision") -> AiModelCapabilities(1_048_576, 384_000, true, true)
                 providerId == "deepseek" && (model.contains("deepseek-v4-flash") || model.contains("deepseek-v4-pro")) -> AiModelCapabilities(1_048_576, 384_000, false, true)
