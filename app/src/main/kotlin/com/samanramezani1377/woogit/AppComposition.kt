@@ -10,6 +10,8 @@ import com.samanramezani1377.woogit.security.AndroidBackendSessionStore
 import com.samanramezani1377.woogit.security.AndroidSecureCredentialStore
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.core.domain.error.CoreResult
+import com.samanramezani1377.woogit.core.domain.sync.ProductSyncEvents
+import com.samanramezani1377.woogit.core.domain.sync.ProductSyncUpdate
 import com.samanramezani1377.woogit.core.domain.usecase.*
 import com.samanramezani1377.woogit.core.domain.model.Conflict
 import com.samanramezani1377.woogit.core.domain.model.ConflictResolution
@@ -122,7 +124,10 @@ class AppComposition(context: Context) {
 
     private fun onProductCacheHit(storeId: StoreId) {
         scope.launch {
-            productRepository.refresh(storeId, 1, 30, null)
+            when (val result = productRepository.refresh(storeId, 1, 30, null)) {
+                is CoreResult.Success -> ProductSyncEvents.publish(ProductSyncUpdate(storeId, result.value))
+                is CoreResult.Failure -> Unit
+            }
         }
     }
 
