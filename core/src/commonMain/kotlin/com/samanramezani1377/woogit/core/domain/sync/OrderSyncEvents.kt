@@ -12,7 +12,10 @@ data class OrderSyncUpdate(
 )
 
 object OrderSyncEvents {
-    private val _updates = MutableSharedFlow<OrderSyncUpdate>(extraBufferCapacity = 16)
+    private val _updates = MutableSharedFlow<OrderSyncUpdate>(
+        replay = 1,
+        extraBufferCapacity = 16,
+    )
     val updates: SharedFlow<OrderSyncUpdate> = _updates.asSharedFlow()
 
     fun publish(update: OrderSyncUpdate) {
