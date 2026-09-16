@@ -12,27 +12,17 @@ internal data class AiModelCapabilities(
             AiModelCapabilitiesRegistry.get(providerId, modelId)?.let { return it }
             val model = modelId.lowercase()
             return when {
-                providerId == "groq" && model.contains("gpt-oss-120b") ->
-                    AiModelCapabilities(131_072, 65_536, false, true)
-                providerId == "groq" && model.contains("gpt-oss-20b") ->
-                    AiModelCapabilities(131_072, 65_536, false, true)
-                providerId == "groq" && (model.contains("qwen3.6-27b") || model.contains("qwen/qwen3.6")) ->
-                    AiModelCapabilities(131_072, 4_096, true, true)
-                providerId == "cloudflare" && model.contains("glm-4.7-flash") ->
-                    AiModelCapabilities(128_000, 2_048, false, true)
-                providerId == "cloudflare" && model.contains("gemma-4-26b") ->
-                    AiModelCapabilities(128_000, 2_048, true, true)
-                providerId == "gemini" ->
-                    AiModelCapabilities(1_000_000, 4_096, true, true)
-                providerId == "deepseek" && model.contains("deepseek-v4-flash-vision") ->
-                    AiModelCapabilities(1_048_576, 384_000, true, true)
-                providerId == "deepseek" && (model.contains("deepseek-v4-flash") || model.contains("deepseek-v4-pro")) ->
-                    AiModelCapabilities(1_048_576, 384_000, false, true)
-                providerId == "openrouter" && model == "openrouter/free" ->
-                    // Router fallback. The actual downstream model is learned from the response and cached.
-                    AiModelCapabilities(32_000, 4_096, true, true)
-                else ->
-                    AiModelCapabilities(16_000, 2_048, false, true)
+                providerId == "groq" && model.contains("gpt-oss-120b") -> AiModelCapabilities(131_072, 65_536, false, true)
+                providerId == "groq" && model.contains("gpt-oss-20b") -> AiModelCapabilities(131_072, 65_536, false, true)
+                providerId == "groq" && (model.contains("qwen3.6-27b") || model.contains("qwen/qwen3.6")) -> AiModelCapabilities(131_072, 4_096, true, true)
+                providerId == "cloudflare" && model.contains("glm-4.7-flash") -> AiModelCapabilities(128_000, 2_048, false, true)
+                providerId == "cloudflare" && model.contains("gemma-4-26b") -> AiModelCapabilities(128_000, 2_048, true, true)
+                providerId == "mistral" && model.contains("mistral-small-2603") -> AiModelCapabilities(256_000, 8_192, true, true)
+                providerId == "gemini" -> AiModelCapabilities(1_000_000, 4_096, true, true)
+                providerId == "deepseek" && model.contains("deepseek-v4-flash-vision") -> AiModelCapabilities(1_048_576, 384_000, true, true)
+                providerId == "deepseek" && (model.contains("deepseek-v4-flash") || model.contains("deepseek-v4-pro")) -> AiModelCapabilities(1_048_576, 384_000, false, true)
+                providerId == "openrouter" && model == "openrouter/free" -> AiModelCapabilities(32_000, 4_096, true, true)
+                else -> AiModelCapabilities(16_000, 2_048, false, true)
             }
         }
     }
