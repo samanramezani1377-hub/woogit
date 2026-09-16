@@ -23,9 +23,15 @@ internal class MistralProvider(context: Context) : AiProvider {
         set(value) { prefs.edit().putString(KEY_API_KEY, value.trim()).apply() }
 
     override var modelId: String
-        get() = prefs.getString(KEY_MODEL, DEFAULT_MODEL) ?: DEFAULT_MODEL
+        get() {
+            val stored = prefs.getString(KEY_MODEL, DEFAULT_MODEL).orEmpty().trim()
+            return stored.takeIf { it in SUPPORTED_MODELS } ?: DEFAULT_MODEL
+        }
         set(value) {
-            prefs.edit().putString(KEY_MODEL, value.trim().ifBlank { DEFAULT_MODEL }).apply()
+            val model = value.trim()
+            if (model in SUPPORTED_MODELS) {
+                prefs.edit().putString(KEY_MODEL, model).apply()
+            }
         }
 
     override suspend fun complete(messages: JSONArray, tools: JSONArray): JSONObject =
@@ -214,5 +220,6 @@ internal class MistralProvider(context: Context) : AiProvider {
         const val MAX_COMPLETION_TOKENS = 8_192
         const val MAX_IMAGES = 5
         const val MAX_IMAGE_BYTES = 20 * 1024 * 1024
+        val SUPPORTED_MODELS = setOf(DEFAULT_MODEL)
     }
 }
