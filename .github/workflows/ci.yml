@@ -1,5 +1,8 @@
 name: WooGit V1 CI
 
+# Keep this workflow as the authoritative validation for every main source change.
+# This commit intentionally re-triggers the full validation after the Commerce compile repair.
+
 on:
   push:
     branches: [main, app-transfer]
@@ -231,7 +234,7 @@ jobs:
           distribution: temurin
           java-version: ${{ env.JAVA_VERSION }}
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v4
+        uses: actions/setup-android@v4
         with:
           packages: platform-tools
           accept-android-sdk-licenses: true
