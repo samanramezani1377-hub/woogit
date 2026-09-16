@@ -104,11 +104,13 @@ internal class CommerceViewModel(
     }
 
     private suspend fun refreshSilently() {
-        runCatching {
+        try {
             val products = readAllProducts()
             val orders = readAllOrders()
             applyProductAndOrderState(products, orders)
             loadCustomersAndCoupons()
+        } catch (_: Throwable) {
+            // Silent background refresh must never replace the visible state with a loading/error screen.
         }
     }
 
