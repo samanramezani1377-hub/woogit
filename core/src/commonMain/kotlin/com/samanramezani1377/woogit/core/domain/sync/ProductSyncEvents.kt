@@ -12,7 +12,9 @@ data class ProductSyncUpdate(
 )
 
 object ProductSyncEvents {
-    private val _updates = MutableSharedFlow<ProductSyncUpdate>(extraBufferCapacity = 16)
+    // A sync may finish while a screen is being recreated. Keep the latest
+    // completed update so a new collector can reconcile its state from it.
+    private val _updates = MutableSharedFlow<ProductSyncUpdate>(replay = 1, extraBufferCapacity = 16)
     val updates: SharedFlow<ProductSyncUpdate> = _updates.asSharedFlow()
 
     fun publish(update: ProductSyncUpdate) {
