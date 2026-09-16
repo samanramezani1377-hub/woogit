@@ -26,6 +26,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.samanramezani1377.woogit.core.domain.sync.OrderSyncEvents
 import com.samanramezani1377.woogit.presentation.GlassCard
 import com.samanramezani1377.woogit.presentation.GlassEmptyState
 import com.samanramezani1377.woogit.presentation.GlassErrorState
@@ -46,10 +47,37 @@ internal fun OrdersScreen(
     onLoadMore: () -> Unit = {},
     onSearch: (String) -> Unit = {},
     onBulkOrdersClick: () -> Unit = {},
+    storeId: String? = null,
     modifier: Modifier = Modifier,
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var revealError by rememberSaveable { mutableStateOf(false) }
+    var liveOrders by remember { mutableStateOf<List<OrderRowUiModel>>(emptyList()) }
+
+    LaunchedEffect(state) {
+        liveOrders = (state as? OrdersUiState.Content)?.orders.orEmpty()
+    }
+
+    LaunchedEffect(storeId) {
+        OrderSyncEvents.updates.collect { update ->
+            if (storeId != null && update.storeId.value != storeId) return@collect
+            val current = liveOrders
+            if (current.isEmpty() && state !is OrdersUiState.Content) return@collect
+            val currentById = current.associateBy { it.id }
+            val changed = update.orders.associateBy { it.id.value }
+            val merged = current.map { changed[it.id]?.toRowUiModel() ?: it }.toMutableList()
+
+            // Background reconciliation stays invisible: update visible rows in place.
+            // For the unfiltered list, prepend newly discovered orders because WooCommerce
+            // orders are ordered newest-first. Search results only receive existing-row updates.
+            update.orders.forEach { order ->
+                if (!currentById.containsKey(order.id.value) && query.isBlank()) {
+                    merged.add(0, order.toRowUiModel())
+                }
+            }
+            if (merged != current) liveOrders = merged.distinctBy { it.id }
+        }
+    }
 
     LaunchedEffect(query) {
         delay(300L)
@@ -78,7 +106,12 @@ internal fun OrdersScreen(
         when (state) {
             OrdersUiState.Loading -> OrdersSkeleton(Modifier.weight(1f))
             OrdersUiState.Empty -> EmptyState(Modifier.weight(1f))
-            is OrdersUiState.Content -> OrdersList(state, onOrderClick, onLoadMore, Modifier.weight(1f))
+            is OrdersUiState.Content -> OrdersList(
+                OrdersUiState.Content(liveOrders, state.hasMore),
+                onOrderClick,
+                onLoadMore,
+                Modifier.weight(1f),
+            )
             is OrdersUiState.Error -> if (revealError) ErrorState(state, onRetry, Modifier.weight(1f)) else OrdersSkeleton(Modifier.weight(1f))
             is OrdersUiState.Offline -> Column(Modifier.weight(1f)) {
                 GlassOfflineState()
@@ -142,6 +175,16 @@ private fun OrdersList(state: OrdersUiState.Content, onOrderClick: (String) -> U
         item(key = "orders-bottom-safe-area") { Spacer(Modifier.height(8.dp)) }
     }
 }
+
+private fun Order.toRowUiModel(): OrderRowUiModel = OrderRowUiModel(
+    id = id.value,
+    customerName = customer?.name.orEmpty(),
+    customerEmail = customer?.email.orEmpty(),
+    status = status.name.lowercase().replace('_', '-'),
+    total = total.orEmpty(),
+    payment = payment?.methodTitle.orEmpty(),
+    createdAt = createdAt?.toString() ?: modifiedAt?.toString().orEmpty(),
+)
 
 private fun String.glassLabel(): String = when (lowercase()) {
     "pending" -> "در انتظار"
