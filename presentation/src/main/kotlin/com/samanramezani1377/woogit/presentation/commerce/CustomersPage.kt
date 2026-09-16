@@ -29,7 +29,6 @@ import com.samanramezani1377.woogit.presentation.GlassTokens
 import com.samanramezani1377.woogit.presentation.customers.CustomerRuntime
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.snapshotFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
@@ -90,7 +89,7 @@ internal fun CustomersPage(storeId: StoreId, state: CommerceUiState) {
         val newIds = customers.map { it.id?.value ?: "${it.name}:${it.email}" }
         val oldIds = previousCustomerIds
         val anchorId = anchorCustomerId
-        if (query.isBlank() && oldIds.isNotEmpty() && anchorId != null && listState.firstVisibleItemIndex > 1) {
+        if (query.isBlank() && oldIds.isNotEmpty() && anchorId != null && listState.firstVisibleItemIndex > 0) {
             val oldIndex = oldIds.indexOf(anchorId)
             val newIndex = newIds.indexOf(anchorId)
             val prependedCount = newIndex - oldIndex

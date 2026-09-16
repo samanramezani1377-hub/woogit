@@ -49,7 +49,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.withFrameNanos
+import androidx.compose.runtime.withFrameNanos
 
 @Composable
 internal fun CouponsPage(
@@ -92,7 +92,7 @@ internal fun CouponsPage(
     LaunchedEffect(visible.map { it.id }, normalizedQuery) {
         val newIds = visible.map { it.id }
         val oldIds = previousCouponIds
-        if (normalizedQuery.isBlank() && oldIds.isNotEmpty() && anchorCouponId != null && listState.firstVisibleItemIndex > 1) {
+        if (normalizedQuery.isBlank() && oldIds.isNotEmpty() && anchorCouponId != null && listState.firstVisibleItemIndex > 0) {
             val oldIndex = oldIds.indexOf(anchorCouponId)
             val newIndex = newIds.indexOf(anchorCouponId)
             val prependedCount = newIndex - oldIndex
@@ -113,7 +113,7 @@ internal fun CouponsPage(
             if (visible.isEmpty()) {
                 GlassEmptyState(if (normalizedQuery.isBlank()) "کوپنی برای نمایش وجود ندارد." else "کوپنی مطابق جستجو پیدا نشد.")
             } else {
-                LazyColumn(state = listState, modifier = Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(horizontal = 16.dp, bottom = 92.dp)) {
+                LazyColumn(state = listState, modifier = Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(start = 16.dp, top = 0.dp, end = 16.dp, bottom = 92.dp)) {
                     item(key = "coupons-header") {
                         Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                             Text("کوپن‌ها", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
