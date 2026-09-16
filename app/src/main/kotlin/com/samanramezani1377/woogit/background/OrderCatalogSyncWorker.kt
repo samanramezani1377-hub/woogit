@@ -14,6 +14,8 @@ import androidx.work.workDataOf
 import com.samanramezani1377.woogit.WooGitApplication
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.core.domain.error.CoreResult
+import com.samanramezani1377.woogit.core.domain.sync.OrderSyncEvents
+import com.samanramezani1377.woogit.core.domain.sync.OrderSyncUpdate
 import com.samanramezani1377.woogit.data.network.HttpApiException
 import java.io.IOException
 import java.util.concurrent.TimeUnit
@@ -31,6 +33,9 @@ class OrderCatalogSyncWorker(appContext: Context, params: WorkerParameters) : Co
                 when (val result = app.composition.orderRepository.refresh(id, page, PAGE_SIZE)) {
                     is CoreResult.Failure -> return if (result.error.recoverable) Result.retry() else Result.failure()
                     is CoreResult.Success -> {
+                        if (result.value.isNotEmpty()) {
+                            OrderSyncEvents.publish(OrderSyncUpdate(id, result.value))
+                        }
                         if (result.value.isEmpty() || result.value.size < PAGE_SIZE) break
                         page++
                     }
