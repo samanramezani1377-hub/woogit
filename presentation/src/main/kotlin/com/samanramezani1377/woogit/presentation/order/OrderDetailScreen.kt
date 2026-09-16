@@ -84,7 +84,7 @@ private fun OrderEditor(order: Order, onBack: () -> Unit, onSave: (Order) -> Uni
     var note by remember(order.id.value) { mutableStateOf("") }
     var addedNotes by remember(order.id.value) { mutableStateOf(emptyList<String>()) }
     LaunchedEffect(order) { draft = order }
-    val hasChanges = draft != order
+    val hasChanges = draft != order || addedNotes.isNotEmpty()
 
     LazyColumn(
         Modifier.fillMaxSize(),
@@ -180,7 +180,10 @@ private fun OrderEditor(order: Order, onBack: () -> Unit, onSave: (Order) -> Uni
         }
         item {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                GlassButton("ذخیره تغییرات", { onSave(draft) }, Modifier.weight(1f), enabled = hasChanges)
+                GlassButton("ذخیره تغییرات", {
+                    onSave(draft)
+                    addedNotes = emptyList()
+                }, Modifier.weight(1f), enabled = hasChanges)
                 GlassSecondaryButton("بازگردانی", { draft = order }, Modifier.weight(1f))
             }
         }
