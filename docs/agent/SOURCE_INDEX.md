@@ -48,6 +48,8 @@ This is the source-of-truth locator for agent work. The contract maps in this di
 | Commerce coupon UI | `presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/commerce/CouponsPage.kt` |
 | Commerce invoice UI | `presentation/src/main/kotlin/com/samanramezani1377/woogit/presentation/commerce/InvoicePage.kt` |
 | Background order polling | `app/src/main/kotlin/com/samanramezani1377/woogit/background/OrderPollingWorker.kt` |
+| Order catalog sync worker | `app/src/main/kotlin/com/samanramezani1377/woogit/background/OrderCatalogSyncWorker.kt` — paginated catalog refresh, aggregated sync publication and queued immediate refreshes |
+| Order sync event contract | `core/src/commonMain/kotlin/com/samanramezani1377/woogit/core/domain/sync/OrderSyncEvents.kt` — latest completed catalog update is replayable to newly attached collectors |
 | Product catalog sync worker | `app/src/main/kotlin/com/samanramezani1377/woogit/background/ProductCatalogSyncWorker.kt` — cache-triggered background refresh, full/incremental pagination and sync event publication |
 | Product sync event contract | `core/src/commonMain/kotlin/com/samanramezani1377/woogit/core/domain/sync/ProductSyncEvents.kt` — latest completed catalog update is replayable to newly attached collectors |
 | Notifications | `app/src/main/kotlin/com/samanramezani1377/woogit/background/OrderNotificationManager.kt` |
@@ -66,6 +68,10 @@ Customer management is an individual-customer flow, not a bulk-operation UI. `Cu
 ## Product catalog sync contract
 
 `ProductCatalogSyncWorker` persists remote products into the local catalog and publishes one aggregated update after all pages in the current sync window have been processed. Full reconciliation paginates the complete catalog; incremental reconciliation paginates all products modified after the overlap cursor instead of stopping after the first 100 results. `ProductSyncEvents` retains the latest completed update so screen/ViewModel recreation cannot permanently miss a completed background sync.
+
+## Order catalog sync contract
+
+`OrderCatalogSyncWorker` persists the remote order catalog through all available pages and publishes one aggregated update after the complete sync has finished. Immediate refresh requests use `APPEND_OR_REPLACE` so a new refresh is not silently discarded when an earlier unique refresh is still queued or running. `OrderSyncEvents` retains the latest completed update so screen/ViewModel recreation cannot permanently miss a completed background sync.
 
 ## Line-addressable contract entries
 - `BackendClient.kt` → `revokeSession(storeId)` delegates to `revokeToken(sessions.get(storeId))` and clears the operational session after a successful revoke.
