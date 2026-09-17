@@ -36,7 +36,7 @@ private const val CUSTOMER_PAGE_SIZE = 50
 private const val CUSTOMER_SILENT_REFRESH_MS = 60_000L
 
 @Composable
-internal fun CustomersPage(storeId: StoreId, state: CommerceUiState) {
+internal fun CustomersPage(storeId: StoreId, state: CustomerCommerceUiState) {
     var query by rememberSaveable { mutableStateOf("") }
     var customers by remember { mutableStateOf<List<Customer>>(emptyList()) }
     var previousCustomerIds by remember { mutableStateOf<List<String>>(emptyList()) }
@@ -77,12 +77,10 @@ internal fun CustomersPage(storeId: StoreId, state: CommerceUiState) {
             val firstIndex = listState.firstVisibleItemIndex
             if (firstIndex <= 0) null
             else customers.getOrNull(firstIndex - 1)?.id?.value to listState.firstVisibleItemScrollOffset
+        }.distinctUntilChanged().collect { anchor ->
+            anchorCustomerId = anchor?.first
+            anchorCustomerOffset = anchor?.second ?: 0
         }
-            .distinctUntilChanged()
-            .collect { anchor ->
-                anchorCustomerId = anchor?.first
-                anchorCustomerOffset = anchor?.second ?: 0
-            }
     }
 
     LaunchedEffect(customers.map { it.id?.value ?: "${it.name}:${it.email}" }, query) {
@@ -150,9 +148,21 @@ internal fun CustomersPage(storeId: StoreId, state: CommerceUiState) {
         scope.launch {
             operationLoading = true
             operationMessage = null
-            val result = if (isNew) CustomerRuntime.createCustomer?.invoke(storeId, customer) else { val id = customer.id; if (id == null) CoreResult.Failure(DomainError.Validation("شناسه مشتری نامعتبر است.")) else CustomerRuntime.updateCustomer?.invoke(storeId, id, customer) }
+            val result = if (isNew) CustomerRuntime.createCustomer?.invoke(storeId, customer) else {
+                val id = customer.id
+                if (id == null) CoreResult.Failure(DomainError.Validation("شناسه مشتری نامعتبر است.")) else CustomerRuntime.updateCustomer?.invoke(storeId, id, customer)
+            }
             when (result) {
-                is CoreResult.Success -> { val saved = result.value; customers = if (isNew) listOf(saved) + customers else customers.map { if (it.id == saved.id) saved else it }; if (selected?.id == saved.id) selected = saved; selectedId = saved.id?.value; editorCustomer = null; showCreate = false; operationMessage = if (isNew) "مشتری با موفقیت ایجاد شد." else "اطلاعات مشتری با موفقیت ذخیره شد."; if (isNew) hasMore = customers.size < CUSTOMER_PAGE_SIZE }
+                is CoreResult.Success -> {
+                    val saved = result.value
+                    customers = if (isNew) listOf(saved) + customers else customers.map { if (it.id == saved.id) saved else it }
+                    if (selected?.id == saved.id) selected = saved
+                    selectedId = saved.id?.value
+                    editorCustomer = null
+                    showCreate = false
+                    operationMessage = if (isNew) "مشتری با موفقیت ایجاد شد." else "اطلاعات مشتری با موفقیت ذخیره شد."
+                    if (isNew) hasMore = customers.size < CUSTOMER_PAGE_SIZE
+                }
                 is CoreResult.Failure -> operationMessage = result.error.customerMessage()
                 null -> operationMessage = "سرویس مدیریت مشتریان آماده نیست."
             }
@@ -167,7 +177,12 @@ internal fun CustomersPage(storeId: StoreId, state: CommerceUiState) {
             val id = customer.id
             val result = if (id == null) CoreResult.Failure(DomainError.Validation("شناسه مشتری نامعتبر است.")) else CustomerRuntime.deleteCustomer?.invoke(storeId, id)
             when (result) {
-                is CoreResult.Success -> { customers = customers.filterNot { it.id == customer.id }; if (selectedId == customer.id?.value) { selectedId = null; selected = null }; deleteTarget = null; operationMessage = "مشتری با موفقیت حذف شد." }
+                is CoreResult.Success -> {
+                    customers = customers.filterNot { it.id == customer.id }
+                    if (selectedId == customer.id?.value) { selectedId = null; selected = null }
+                    deleteTarget = null
+                    operationMessage = "مشتری با موفقیت حذف شد."
+                }
                 is CoreResult.Failure -> operationMessage = result.error.customerMessage()
                 null -> operationMessage = "سرویس مدیریت مشتریان آماده نیست."
             }
