@@ -1,31 +1,40 @@
 # Commerce Navigation
 
-Commerce capabilities are no longer modeled as seven screens inside `CommerceCenterScreen`.
+Commerce is a small folder-like section, not a parent or hub for the other commerce-related tools.
 
 ## E11 destinations
 
-- `E11Routes.COMMERCE_BARCODE` → Barcode / SKU
-- `E11Routes.COMMERCE_BULK_ORDERS` → Bulk order status operations
-- `E11Routes.COMMERCE_INVENTORY` → Inventory filtering
-- `E11Routes.COMMERCE_ANALYTICS` → Advanced sales analytics
-- `E11Routes.COMMERCE_INVOICE` → Invoice workflow
-- `E11Routes.COMMERCE` → Commerce center for Customers and Coupons
+- `E11Routes.COMMERCE` → Commerce folder for Customers and Coupons only.
+- `E11Routes.DASHBOARD_BARCODE` → Barcode / SKU
+- `E11Routes.ORDERS_BULK` → Bulk order status operations
+- `E11Routes.PRODUCTS_INVENTORY` → Inventory filtering
+- `E11Routes.DASHBOARD_ANALYTICS` → Advanced sales analytics
+- `E11Routes.ORDER_INVOICE` → Invoice workflow
 
-Each capability route uses `CommerceFeatureRouteScreen`, so the feature is an actual E11 navigation destination rather than local `selected` state inside the Commerce center.
+The five standalone capabilities are reached directly from the section that owns them. They do not pass through the Commerce center.
 
-## Dashboard
+## Commerce center
 
-The Dashboard `بارکد و SKU` quick action navigates directly to `E11Routes.COMMERCE_BARCODE`; it does not navigate to the Commerce center first.
+`CommerceCenterScreen` contains only:
+
+- Customers
+- Coupons
+
+Customers and Coupons open inside the Commerce folder using their dedicated feature state/view models. The center does not load or own Barcode, Bulk Orders, Inventory, Analytics, or Invoice.
 
 ## Placement intent
 
-- Barcode / SKU: direct Dashboard entry + independent route.
-- Bulk Orders: independent route owned by E11 navigation.
-- Inventory: independent route owned by E11 navigation.
-- Analytics: independent route owned by E11 navigation.
-- Invoice: independent route owned by E11 navigation.
-- Customers: Commerce center.
-- Coupons: Commerce center.
+- Barcode / SKU: Dashboard entry + independent route.
+- Analytics: Dashboard entry + independent route.
+- Bulk Orders: Orders entry + independent route.
+- Inventory: Products entry + independent route.
+- Invoice: Order Detail entry + independent route.
+- Customers: Commerce folder.
+- Coupons: Commerce folder.
+
+## UI preservation
+
+The standalone feature screens keep their existing presentation and behavior. This change only removes the Commerce ownership/routing relationship and gives each capability a route under its actual section.
 
 ## Coupon management
 
