@@ -6,12 +6,12 @@ import androidx.lifecycle.viewModelScope
 import com.samanramezani1377.woogit.core.domain.commerce.BarcodeLookupResult
 import com.samanramezani1377.woogit.core.domain.commerce.BarcodeResolver
 import com.samanramezani1377.woogit.core.domain.commerce.CommerceFeatureEngine
-import com.samanramezani1377.woogit.core.domain.commerce.InvoiceDocument
 import com.samanramezani1377.woogit.core.domain.commerce.InvoiceDocumentFactory
 import com.samanramezani1377.woogit.core.domain.entity.EntityId
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.core.domain.error.CoreResult
 import com.samanramezani1377.woogit.core.domain.model.BulkOrderStatusResult
+import com.samanramezani1377.woogit.core.domain.model.InvoiceDocument
 import com.samanramezani1377.woogit.core.domain.model.Order
 import com.samanramezani1377.woogit.core.domain.model.OrderStatus
 import com.samanramezani1377.woogit.core.domain.model.Product
@@ -134,11 +134,11 @@ internal class InventoryFeatureViewModel(
         query = nextQuery
         lowStock = nextLowStock
         outOfStock = nextOutOfStock
-        _state.value = _state.value.copy(inventory = CommerceFeatureEngine.filterInventory(_state.value.products, query, lowStock, outOfStock))
+        _state.value = _state.value.copy(inventory = CommerceFeatureEngine.filterInventory(_state.value.products, query, 5.0, lowStock, outOfStock))
     }
 
     private fun applyProducts(products: List<Product>) {
-        _state.value = _state.value.copy(products = products, inventory = CommerceFeatureEngine.filterInventory(products, query, lowStock, outOfStock))
+        _state.value = _state.value.copy(products = products, inventory = CommerceFeatureEngine.filterInventory(products, query, 5.0, lowStock, outOfStock))
     }
 
     private suspend fun readProducts(): List<Product> {
@@ -278,17 +278,19 @@ internal class InvoiceFeatureViewModel(
     }
 }
 
-private fun <T> List<T>.distinctByString(selector: (T) -> String): List<T> = distinctBy(selector)
-
 internal class BarcodeFeatureViewModelFactory(private val d: V1PresentationDependencies, private val s: StoreId) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(c: Class<T>): T = BarcodeFeatureViewModel(d, s) as T
 }
 internal class InventoryFeatureViewModelFactory(private val d: V1PresentationDependencies, private val s: StoreId) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(c: Class<T>): T = InventoryFeatureViewModel(d, s) as T
 }
 internal class BulkOrdersFeatureViewModelFactory(private val d: V1PresentationDependencies, private val s: StoreId) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(c: Class<T>): T = BulkOrdersFeatureViewModel(d, s) as T
 }
 internal class InvoiceFeatureViewModelFactory(private val d: V1PresentationDependencies, private val s: StoreId) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(c: Class<T>): T = InvoiceFeatureViewModel(d, s) as T
 }
