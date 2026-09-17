@@ -21,69 +21,36 @@ import com.samanramezani1377.woogit.presentation.GlassTopBar
 
 @Composable
 internal fun FeatureHeader(title: String, subtitle: String, onBack: () -> Unit) {
-    GlassTopBar(
-        title = title,
-        subtitle = subtitle,
-        actions = { GlassOutlinedButton("بازگشت", onBack) },
-        modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-    )
+    GlassTopBar(title = title, subtitle = subtitle, actions = { GlassOutlinedButton("بازگشت", onBack) }, modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp))
 }
 
 @Composable
 internal fun FeatureBody(content: @Composable ColumnScope.() -> Unit) {
-    Column(
-        Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) { content() }
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) { content() }
 }
 
 @Composable
-internal fun Section(
-    title: String,
-    description: String? = null,
-    content: @Composable () -> Unit,
-) {
+internal fun Section(title: String, description: String? = null, content: @Composable () -> Unit) {
     GlassCard {
         Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-        description?.let {
-            Text(
-                it,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodySmall,
-            )
-        }
+        description?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant, style = MaterialTheme.typography.bodySmall) }
         content()
     }
 }
 
 @Composable
 internal fun SelectionSummary(count: Int, total: Int) {
-    GlassCard(Modifier.fillMaxWidth()) {
-        Text("$count انتخاب از $total", fontWeight = FontWeight.SemiBold)
-    }
+    GlassCard(Modifier.fillMaxWidth()) { Text("$count انتخاب از $total", fontWeight = FontWeight.SemiBold) }
 }
 
 internal fun CommerceFeature.titleFa(): String = when (this) {
-    CommerceFeature.BARCODE -> "بارکد و SKU"
-    CommerceFeature.BULK_ORDERS -> "عملیات گروهی سفارش‌ها"
-    CommerceFeature.INVENTORY -> "موجودی محصولات"
     CommerceFeature.CUSTOMERS -> "مدیریت مشتریان"
-    CommerceFeature.ANALYTICS -> "تحلیل فروش"
     CommerceFeature.COUPONS -> "مدیریت کوپن‌ها"
-    CommerceFeature.INVOICE -> "فاکتور سفارش"
 }
 
 internal fun CommerceFeature.subtitleFa(): String = when (this) {
-    CommerceFeature.BARCODE -> "پیدا کردن سریع محصول یا سفارش"
-    CommerceFeature.BULK_ORDERS -> "انتخاب، فیلتر و تغییر چند سفارش با هم"
-    CommerceFeature.INVENTORY -> "پیدا کردن کالاهای کم‌موجودی و ناموجود"
     CommerceFeature.CUSTOMERS -> "فهرست، پرونده و سابقه خرید مشتریان"
-    CommerceFeature.ANALYTICS -> "درک سریع عملکرد فروشگاه"
-    CommerceFeature.COUPONS -> "پیدا کردن و ویرایش گروهی کوپن‌ها"
-    CommerceFeature.INVOICE -> "ساخت و ذخیره فاکتور سفارش"
+    CommerceFeature.COUPONS -> "پیدا کردن و ویرایش کوپن‌ها"
 }
 
 internal fun OrderStatus.faLabel(): String = when (this) {
