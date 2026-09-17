@@ -197,7 +197,7 @@ internal fun CustomersPage(storeId: StoreId, state: CustomerCommerceUiState) {
         Column(Modifier.fillMaxSize()) {
             Spacer(Modifier.height(78.dp))
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) { Text("مشتریان", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold); Text("${customers.size} مشتری در این صفحه", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall) }
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) { Text(" ", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold); Text("${customers.size} مشتری در این صفحه", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall) }
                 if (loading) CircularProgressIndicator(modifier = Modifier.padding(4.dp))
             }
             error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(horizontal = 16.dp)) }
