@@ -12,20 +12,16 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.presentation.GlassCard
-import com.samanramezani1377.woogit.presentation.GlassErrorState
-import com.samanramezani1377.woogit.presentation.GlassLoading
 import com.samanramezani1377.woogit.presentation.GlassOutlinedButton
 import com.samanramezani1377.woogit.presentation.GlassScaffold
 import com.samanramezani1377.woogit.presentation.GlassText
@@ -46,28 +42,16 @@ internal fun CommerceCenterScreen(
     initialFeature: CommerceFeature? = null,
     modifier: Modifier = Modifier,
 ) {
-    val vm: CommerceViewModel = viewModel(key = "commerce-${storeId.value}", factory = CommerceViewModelFactory(dependencies, storeId))
-    val state by vm.state.collectAsStateWithLifecycle()
     var selected by remember { mutableStateOf(initialFeature?.takeIf { it == CommerceFeature.CUSTOMERS || it == CommerceFeature.COUPONS }) }
-    LaunchedEffect(storeId) { vm.load() }
 
     if (selected != null) {
-        GlassScaffold(modifier) {
-            CommerceFeaturePage(
-                storeId = storeId,
-                feature = selected!!,
-                state = state,
-                onBack = { selected = null },
-                onBarcode = vm::resolveBarcode,
-                onInventoryFilter = vm::filterInventory,
-                onBulkOrder = vm::bulkOrderStatus,
-                onInvoice = vm::prepareInvoice,
-                onProduct = onOpenProduct,
-                onEditCoupon = vm::updateCoupon,
-                onCreateCoupon = vm::createCoupon,
-                onDeleteCoupon = vm::deleteCoupon,
-            )
-        }
+        CommerceFeaturePage(
+            storeId = storeId,
+            dependencies = dependencies,
+            feature = selected!!,
+            onBack = { selected = null },
+            onProduct = onOpenProduct,
+        )
         return
     }
 
@@ -85,19 +69,15 @@ internal fun CommerceCenterScreen(
                 GlassText("ابزارهای مدیریت فروشگاه", style = MaterialTheme.typography.titleMedium)
                 GlassText("این مرکز فقط برای مشتریان و کوپن‌هاست. ابزارهای سفارش، موجودی، تحلیل، فاکتور و بارکد از صفحات مرتبط خود اپ در دسترس هستند.")
             }
-            when {
-                state.loading -> GlassLoading("در حال آماده‌سازی…")
-                state.error != null -> GlassErrorState(state.error!!, { vm.load() })
-                else -> LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 110.dp)) {
-                    items(featureModels, key = { it.feature.name }) { item ->
-                        GlassCard(Modifier.fillMaxWidth().clickable { openFeature(item.feature) }) {
-                            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                    GlassText(item.title, style = MaterialTheme.typography.titleMedium)
-                                    GlassText(item.description)
-                                }
-                                GlassOutlinedButton("ورود", { openFeature(item.feature) })
+            LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 110.dp)) {
+                items(featureModels, key = { it.feature.name }) { item ->
+                    GlassCard(Modifier.fillMaxWidth().clickable { openFeature(item.feature) }) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                GlassText(item.title, style = MaterialTheme.typography.titleMedium)
+                                GlassText(item.description)
                             }
+                            GlassOutlinedButton("ورود", { openFeature(item.feature) })
                         }
                     }
                 }
