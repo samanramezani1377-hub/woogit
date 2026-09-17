@@ -16,12 +16,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-internal data class CouponCommerceUiState(
-    val products: List<com.samanramezani1377.woogit.core.domain.model.Product> = emptyList(),
-    val customers: List<WooCustomerCommerceDto> = emptyList(),
-    val coupons: List<WooCouponCommerceDto> = emptyList(),
-)
-
 internal class CouponCommerceViewModel(
     private val dependencies: V1PresentationDependencies,
     private val storeId: StoreId,
