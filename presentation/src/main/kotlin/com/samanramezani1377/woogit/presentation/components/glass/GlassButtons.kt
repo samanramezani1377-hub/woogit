@@ -41,7 +41,7 @@ fun GlassSecondaryButton(label: String, onClick: () -> Unit, modifier: Modifier 
 
 @Composable
 fun GlassOutlinedButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
-    if (label == "مشتری جدید") {
+    if (label == "مشتری جدید" || label == "افزودن کوپن") {
         GlassButton(label, onClick, modifier, enabled)
         return
     }
