@@ -139,10 +139,6 @@ private fun OrdersList(state: OrdersUiState.Content, onOrderClick: (String) -> U
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    LaunchedEffect(lifecycleOwner) {
-        if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) resetForEntry()
-    }
-
     LaunchedEffect(listState, state.hasMore, state.orders.size) {
         snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1 }
             .distinctUntilChanged()
