@@ -65,8 +65,36 @@ class ProductRepositoryV1Impl(private val local: LocalProductDataSource<Product>
     private val commerceSettingsCache = mutableMapOf<String, WooSystemStatusSettingsDto>()
     private suspend fun commerceSettings(storeId: StoreId, api: TypedWooCommerceApi, baseUrl: String): WooSystemStatusSettingsDto? { commerceSettingsCache[storeId.value]?.let { return it }; return api.validate(baseUrl).getOrNull()?.settings?.also { commerceSettingsCache[storeId.value] = it } }
     private suspend fun enrich(storeId: StoreId, values: List<Product>): List<Product> = provider.client(storeId).fold({ (store, api) -> val settings = commerceSettings(storeId, api, store.baseUrl); if (settings == null) values else values.map { it.copy(currency=settings.currency.takeIf(String::isNotBlank),currencySymbol=settings.currency_symbol.takeIf(String::isNotBlank),currencyPosition=settings.currency_position.takeIf(String::isNotBlank),thousandSeparator=settings.thousand_separator,decimalSeparator=settings.decimal_separator,numberOfDecimals=settings.number_of_decimals,weightUnit=settings.weight_unit.takeIf(String::isNotBlank),dimensionUnit=settings.dimension_unit.takeIf(String::isNotBlank)) } }, { values })
+
     override suspend fun get(storeId: StoreId, id: EntityId): CoreResult<Product> = local.get(storeId, id).fold({ cached -> CoreResult.Success(enrich(storeId, listOf(cached)).firstOrNull() ?: cached) }, { provider.client(storeId).fold({ (store, api) -> api.product(store.baseUrl, id.value.toLong()).fold({ remote -> val settings=commerceSettings(storeId,api,store.baseUrl); val value=remote.toDomain(settings); local.upsert(storeId,value); CoreResult.Success(value) }, { local.get(storeId,id) }) }, { local.get(storeId,id) }) })
-    override suspend fun list(storeId: StoreId, page: Int, perPage: Int, search: String?, categoryId: Long?): CoreResult<List<Product>> = if (page==1&&search.isNullOrBlank()&&categoryId==null) local.list(storeId).fold({ cached -> if(cached.isNotEmpty()) { onCacheHit(storeId); CoreResult.Success(cached) } else fetchList(storeId,page,perPage,search,categoryId) }, { fetchList(storeId,page,perPage,search,categoryId) }) else fetchList(storeId,page,perPage,search,categoryId)
+
+    override suspend fun list(storeId: StoreId, page: Int, perPage: Int, search: String?, categoryId: Long?): CoreResult<List<Product>> {
+        if (page > 1 && search.isNullOrBlank() && categoryId == null) {
+            return local.list(storeId).fold(
+                { cached ->
+                    val from = (page - 1) * perPage
+                    val to = (from + perPage).coerceAtMost(cached.size)
+                    if (from < cached.size && to > from) {
+                        onCacheHit(storeId)
+                        CoreResult.Success(cached.subList(from, to))
+                    } else {
+                        fetchList(storeId, page, perPage, search, categoryId)
+                    }
+                },
+                { fetchList(storeId, page, perPage, search, categoryId) },
+            )
+        }
+
+        return if (page == 1 && search.isNullOrBlank() && categoryId == null) {
+            local.list(storeId).fold(
+                { cached -> if (cached.isNotEmpty()) { onCacheHit(storeId); CoreResult.Success(cached) } else fetchList(storeId,page,perPage,search,categoryId) },
+                { fetchList(storeId,page,perPage,search,categoryId) },
+            )
+        } else {
+            fetchList(storeId,page,perPage,search,categoryId)
+        }
+    }
+
     override suspend fun count(storeId: StoreId, search: String?): CoreResult<Int> = provider.client(storeId).fold({ (store,api) -> api.productsTotal(store.baseUrl,search?.trim()?.takeIf{it.isNotEmpty()}).fold({CoreResult.Success(it)},{CoreResult.Failure(it.productDomainError())}) },{CoreResult.Failure(it)})
     private suspend fun fetchList(storeId:StoreId,page:Int,perPage:Int,search:String?,categoryId:Long?):CoreResult<List<Product>> = provider.client(storeId).fold({(store,api)->api.products(store.baseUrl,page,perPage,search?.trim()?.takeIf{it.isNotEmpty()},null,categoryId).fold(onSuccess={remote->val settings=commerceSettings(storeId,api,store.baseUrl);val values=remote.map{it.toDomain(settings)};values.forEach{local.upsert(storeId,it)};CoreResult.Success(values)},onFailure={error->if(page==1&&search.isNullOrBlank()&&categoryId==null)local.list(storeId)else CoreResult.Failure(error.productDomainError())})},{error->if(page==1&&search.isNullOrBlank()&&categoryId==null)local.list(storeId)else CoreResult.Failure(error)})
     override suspend fun refresh(storeId:StoreId,page:Int,perPage:Int,modifiedAfter:String?):CoreResult<List<Product>> = provider.client(storeId).fold({(store,api)->api.products(store.baseUrl,page,perPage,null,modifiedAfter).fold(onSuccess={remote->val settings=commerceSettings(storeId,api,store.baseUrl);val values=remote.map{it.toDomain(settings)};values.forEach{local.upsert(storeId,it)};CoreResult.Success(values)},onFailure={error->if(page==1&&modifiedAfter==null)local.list(storeId)else CoreResult.Failure(error.productDomainError())})},{error->if(page==1&&modifiedAfter==null)local.list(storeId)else CoreResult.Failure(error)})
