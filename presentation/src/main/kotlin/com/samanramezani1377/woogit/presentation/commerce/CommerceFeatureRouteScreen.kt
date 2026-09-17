@@ -31,6 +31,27 @@ internal fun CommerceFeatureRouteScreen(
         return
     }
 
+    if (feature == LegacyCommerceFeature.BARCODE) {
+        val vm: BarcodeFeatureViewModel = viewModel(
+            key = "barcode-feature-${storeId.value}",
+            factory = BarcodeFeatureViewModelFactory(dependencies, storeId),
+        )
+        val state by vm.state.collectAsStateWithLifecycle()
+        BarcodeScannerScreen(
+            state = CommerceUiState(
+                loading = state.loading,
+                products = state.products,
+                orders = state.orders,
+                barcodeResult = state.barcodeResult,
+                error = state.error,
+            ),
+            onResolve = vm::resolve,
+            onProduct = onOpenProduct,
+            onBack = onBack,
+        )
+        return
+    }
+
     GlassScaffold {
         Box(
             Modifier
@@ -40,25 +61,6 @@ internal fun CommerceFeatureRouteScreen(
             Column(Modifier.fillMaxSize()) {
                 FeatureHeader(feature.titleFa(), feature.subtitleFa(), onBack)
                 when (feature) {
-                    LegacyCommerceFeature.BARCODE -> {
-                        val vm: BarcodeFeatureViewModel = viewModel(
-                            key = "barcode-feature-${storeId.value}",
-                            factory = BarcodeFeatureViewModelFactory(dependencies, storeId),
-                        )
-                        val state by vm.state.collectAsStateWithLifecycle()
-                        BarcodeScannerScreen(
-                            state = CommerceUiState(
-                                loading = state.loading,
-                                products = state.products,
-                                orders = state.orders,
-                                barcodeResult = state.barcodeResult,
-                                error = state.error,
-                            ),
-                            onResolve = vm::resolve,
-                            onProduct = onOpenProduct,
-                            onBack = onBack,
-                        )
-                    }
                     LegacyCommerceFeature.INVENTORY -> {
                         val vm: InventoryFeatureViewModel = viewModel(
                             key = "inventory-feature-${storeId.value}",
@@ -111,6 +113,7 @@ internal fun CommerceFeatureRouteScreen(
                             onInvoice = vm::prepare,
                         )
                     }
+                    LegacyCommerceFeature.BARCODE,
                     LegacyCommerceFeature.ANALYTICS -> Unit
                 }
             }
