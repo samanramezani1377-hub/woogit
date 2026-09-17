@@ -1,6 +1,7 @@
 package com.samanramezani1377.woogit.presentation.commerce
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
@@ -29,6 +30,17 @@ internal fun CommerceFeatureRouteScreen(
         return
     }
 
+    if (feature == CommerceFeature.CUSTOMERS || feature == CommerceFeature.COUPONS) {
+        CommerceFeaturePage(
+            storeId = storeId,
+            dependencies = dependencies,
+            feature = feature,
+            onBack = onBack,
+            onProduct = onOpenProduct,
+        )
+        return
+    }
+
     val vm: CommerceViewModel = viewModel(
         key = "commerce-feature-${storeId.value}-${feature.name}",
         factory = CommerceViewModelFactory(dependencies, storeId),
@@ -36,29 +48,52 @@ internal fun CommerceFeatureRouteScreen(
     val state by vm.state.collectAsStateWithLifecycle()
 
     LaunchedEffect(storeId, feature) {
-        vm.load(loadRemoteCommerceData = feature != CommerceFeature.CUSTOMERS)
+        vm.load()
     }
 
-    if (feature == CommerceFeature.BARCODE) {
-        BarcodeScannerScreen(state = state, onResolve = vm::resolveBarcode, onProduct = onOpenProduct, onBack = onBack)
-    } else {
-        GlassScaffold {
-            Box(Modifier.fillMaxSize().padding(horizontal = GlassTokens.spacingSm)) {
-                CommerceFeaturePage(
-                    storeId = storeId,
-                    feature = feature,
-                    state = state,
-                    onBack = onBack,
-                    onBarcode = vm::resolveBarcode,
-                    onInventoryFilter = vm::filterInventory,
-                    onBulkOrder = vm::bulkOrderStatus,
-                    onInvoice = vm::prepareInvoice,
-                    onProduct = onOpenProduct,
-                    onEditCoupon = vm::updateCoupon,
-                    onCreateCoupon = vm::createCoupon,
-                    onDeleteCoupon = vm::deleteCoupon,
-                )
+    when (feature) {
+        CommerceFeature.BARCODE -> {
+            BarcodeScannerScreen(
+                state = state,
+                onResolve = vm::resolveBarcode,
+                onProduct = onOpenProduct,
+                onBack = onBack,
+            )
+        }
+        CommerceFeature.INVENTORY,
+        CommerceFeature.BULK_ORDERS,
+        CommerceFeature.INVOICE -> {
+            GlassScaffold {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(horizontal = GlassTokens.spacingSm),
+                ) {
+                    Column(Modifier.fillMaxSize()) {
+                        FeatureHeader(feature.titleFa(), feature.subtitleFa(), onBack)
+                        when (feature) {
+                            CommerceFeature.INVENTORY -> InventoryPage(
+                                storeId = storeId,
+                                state = state,
+                                onFilter = vm::filterInventory,
+                                onProduct = onOpenProduct,
+                            )
+                            CommerceFeature.BULK_ORDERS -> BulkOrdersPage(
+                                state = state,
+                                onBulkOrder = vm::bulkOrderStatus,
+                            )
+                            CommerceFeature.INVOICE -> InvoicePage(
+                                state = state,
+                                onInvoice = vm::prepareInvoice,
+                            )
+                            else -> Unit
+                        }
+                    }
+                }
             }
         }
+        CommerceFeature.ANALYTICS,
+        CommerceFeature.CUSTOMERS,
+        CommerceFeature.COUPONS -> Unit
     }
 }
