@@ -1,38 +1,54 @@
 package com.samanramezani1377.woogit.presentation.commerce
 
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.core.domain.model.OrderStatus
 import com.samanramezani1377.woogit.data.network.WooCouponCommerceWriteDto
+import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
 
 @Composable
 internal fun CommerceFeaturePage(
     storeId: StoreId,
+    dependencies: V1PresentationDependencies,
     feature: CommerceFeature,
-    state: CommerceUiState,
     onBack: () -> Unit,
-    onBarcode: (String) -> Unit,
-    onInventoryFilter: (String, Boolean, Boolean) -> Unit,
-    onBulkOrder: (Set<String>, OrderStatus) -> Unit,
-    onInvoice: (String) -> Unit,
     onProduct: (String) -> Unit,
-    onEditCoupon: (Long, WooCouponCommerceWriteDto) -> Unit,
-    onCreateCoupon: (WooCouponCommerceWriteDto) -> Unit,
-    onDeleteCoupon: (Long) -> Unit,
 ) {
     Column(Modifier.fillMaxSize()) {
         FeatureHeader(feature.titleFa(), feature.subtitleFa(), onBack)
         when (feature) {
-            CommerceFeature.BARCODE -> BarcodePage(state, onBarcode, onProduct)
-            CommerceFeature.BULK_ORDERS -> BulkOrdersPage(state, onBulkOrder)
-            CommerceFeature.INVENTORY -> InventoryPage(storeId, state, onInventoryFilter, onProduct)
-            CommerceFeature.CUSTOMERS -> CustomersPage(storeId = storeId, state = state)
-            CommerceFeature.ANALYTICS -> Unit
-            CommerceFeature.COUPONS -> CouponsPage(state, onEditCoupon, onCreateCoupon, onDeleteCoupon)
-            CommerceFeature.INVOICE -> InvoicePage(state, onInvoice)
+            CommerceFeature.CUSTOMERS -> {
+                val vm: CustomerCommerceViewModel = viewModel(
+                    key = "commerce-customers-${storeId.value}",
+                    factory = CustomerCommerceViewModelFactory(dependencies, storeId),
+                )
+                val state by vm.state.collectAsStateWithLifecycle()
+                CustomersPage(storeId = storeId, state = CommerceUiState(orders = state.orders))
+            }
+            CommerceFeature.COUPONS -> {
+                val vm: CouponCommerceViewModel = viewModel(
+                    key = "commerce-coupons-${storeId.value}",
+                    factory = CouponCommerceViewModelFactory(dependencies, storeId),
+                )
+                val state by vm.state.collectAsStateWithLifecycle()
+                CouponsPage(
+                    state = CommerceUiState(
+                        products = state.products,
+                        customers = state.customers,
+                        coupons = state.coupons,
+                    ),
+                    onEditCoupon = vm::updateCoupon,
+                    onCreateCoupon = vm::createCoupon,
+                    onDeleteCoupon = vm::deleteCoupon,
+                )
+            }
+            else -> Unit
         }
     }
 }
