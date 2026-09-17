@@ -25,7 +25,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,7 +36,6 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import com.samanramezani1377.woogit.core.domain.model.Product
 import com.samanramezani1377.woogit.core.domain.model.ProductStatus
-import com.samanramezani1377.woogit.core.domain.sync.ProductSyncEvents
 import com.samanramezani1377.woogit.presentation.FeatureUiState
 import com.samanramezani1377.woogit.presentation.GlassCard
 import com.samanramezani1377.woogit.presentation.GlassEmptyState
@@ -71,36 +69,6 @@ internal fun ProductsScreen(
 
     LaunchedEffect(state) {
         liveProducts = (state as? FeatureUiState.Success)?.value.orEmpty()
-    }
-
-    LaunchedEffect(Unit) {
-        ProductSyncEvents.updates.collect { update ->
-            val current = liveProducts
-            val currentById = current.associateBy { it.id }
-            val changedById = update.products.associateBy { it.id }
-
-            if (current.isEmpty()) {
-                if (query.isBlank() && update.products.isNotEmpty()) liveProducts = update.products
-                return@collect
-            }
-
-            val newProducts = if (query.isBlank()) update.products.filterNot { currentById.containsKey(it.id) } else emptyList()
-            val merged = current.map { changedById[it.id] ?: it }
-
-            if (newProducts.isEmpty()) {
-                if (merged != current) liveProducts = merged
-                return@collect
-            }
-
-            val firstVisibleIndex = listState.firstVisibleItemIndex
-            val firstVisibleOffset = listState.firstVisibleItemScrollOffset
-            liveProducts = newProducts + merged
-
-            if (firstVisibleIndex > 0) {
-                withFrameNanos { }
-                listState.scrollToItem(firstVisibleIndex + newProducts.size, firstVisibleOffset)
-            }
-        }
     }
 
     GlassScaffold(modifier) { paddingValues ->
