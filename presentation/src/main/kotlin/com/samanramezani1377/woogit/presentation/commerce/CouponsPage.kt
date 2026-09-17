@@ -109,7 +109,7 @@ internal fun CouponsPage(
 
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
-            Spacer(Modifier.height(78.dp))
+            Spacer(Modifier.height(104.dp))
             if (visible.isEmpty()) {
                 GlassEmptyState(if (normalizedQuery.isBlank()) "کوپنی برای نمایش وجود ندارد." else "کوپنی مطابق جستجو پیدا نشد.")
             } else {
