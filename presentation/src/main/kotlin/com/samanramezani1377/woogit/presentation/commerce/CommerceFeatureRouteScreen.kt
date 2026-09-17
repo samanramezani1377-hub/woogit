@@ -16,7 +16,7 @@ import com.samanramezani1377.woogit.presentation.GlassTokens
 import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
 import com.samanramezani1377.woogit.presentation.analytics.AnalyticsRouteScreen
 
-ainternal enum class LegacyCommerceFeature { BARCODE, BULK_ORDERS, INVENTORY, ANALYTICS, INVOICE }
+internal enum class LegacyCommerceFeature { BARCODE, BULK_ORDERS, INVENTORY, ANALYTICS, INVOICE }
 
 @Composable
 internal fun CommerceFeatureRouteScreen(
