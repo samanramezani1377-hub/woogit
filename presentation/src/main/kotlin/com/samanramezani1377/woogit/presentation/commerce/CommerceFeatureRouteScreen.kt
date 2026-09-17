@@ -16,33 +16,24 @@ import com.samanramezani1377.woogit.presentation.GlassTokens
 import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
 import com.samanramezani1377.woogit.presentation.analytics.AnalyticsRouteScreen
 
+ainternal enum class LegacyCommerceFeature { BARCODE, BULK_ORDERS, INVENTORY, ANALYTICS, INVOICE }
+
 @Composable
 internal fun CommerceFeatureRouteScreen(
     storeId: StoreId,
     dependencies: V1PresentationDependencies,
-    feature: CommerceFeature,
+    feature: LegacyCommerceFeature,
     onBack: () -> Unit,
     onOpenProduct: (String) -> Unit,
     onOpenOrder: (String) -> Unit,
 ) {
-    if (feature == CommerceFeature.ANALYTICS) {
+    if (feature == LegacyCommerceFeature.ANALYTICS) {
         AnalyticsRouteScreen(storeId = storeId, onBack = onBack)
         return
     }
 
-    if (feature == CommerceFeature.CUSTOMERS || feature == CommerceFeature.COUPONS) {
-        CommerceFeaturePage(
-            storeId = storeId,
-            dependencies = dependencies,
-            feature = feature,
-            onBack = onBack,
-            onProduct = onOpenProduct,
-        )
-        return
-    }
-
     val vm: CommerceViewModel = viewModel(
-        key = "commerce-feature-${storeId.value}-${feature.name}",
+        key = "standalone-feature-${storeId.value}-${feature.name}",
         factory = CommerceViewModelFactory(dependencies, storeId),
     )
     val state by vm.state.collectAsStateWithLifecycle()
@@ -52,7 +43,7 @@ internal fun CommerceFeatureRouteScreen(
     }
 
     when (feature) {
-        CommerceFeature.BARCODE -> {
+        LegacyCommerceFeature.BARCODE -> {
             BarcodeScannerScreen(
                 state = state,
                 onResolve = vm::resolveBarcode,
@@ -60,9 +51,9 @@ internal fun CommerceFeatureRouteScreen(
                 onBack = onBack,
             )
         }
-        CommerceFeature.INVENTORY,
-        CommerceFeature.BULK_ORDERS,
-        CommerceFeature.INVOICE -> {
+        LegacyCommerceFeature.INVENTORY,
+        LegacyCommerceFeature.BULK_ORDERS,
+        LegacyCommerceFeature.INVOICE -> {
             GlassScaffold {
                 Box(
                     Modifier
@@ -72,17 +63,17 @@ internal fun CommerceFeatureRouteScreen(
                     Column(Modifier.fillMaxSize()) {
                         FeatureHeader(feature.titleFa(), feature.subtitleFa(), onBack)
                         when (feature) {
-                            CommerceFeature.INVENTORY -> InventoryPage(
+                            LegacyCommerceFeature.INVENTORY -> InventoryPage(
                                 storeId = storeId,
                                 state = state,
                                 onFilter = vm::filterInventory,
                                 onProduct = onOpenProduct,
                             )
-                            CommerceFeature.BULK_ORDERS -> BulkOrdersPage(
+                            LegacyCommerceFeature.BULK_ORDERS -> BulkOrdersPage(
                                 state = state,
                                 onBulkOrder = vm::bulkOrderStatus,
                             )
-                            CommerceFeature.INVOICE -> InvoicePage(
+                            LegacyCommerceFeature.INVOICE -> InvoicePage(
                                 state = state,
                                 onInvoice = vm::prepareInvoice,
                             )
@@ -92,8 +83,21 @@ internal fun CommerceFeatureRouteScreen(
                 }
             }
         }
-        CommerceFeature.ANALYTICS,
-        CommerceFeature.CUSTOMERS,
-        CommerceFeature.COUPONS -> Unit
     }
+}
+
+private fun LegacyCommerceFeature.titleFa(): String = when (this) {
+    LegacyCommerceFeature.BARCODE -> "بارکد"
+    LegacyCommerceFeature.BULK_ORDERS -> "عملیات گروهی سفارش‌ها"
+    LegacyCommerceFeature.INVENTORY -> "مدیریت موجودی"
+    LegacyCommerceFeature.ANALYTICS -> "تحلیل فروش"
+    LegacyCommerceFeature.INVOICE -> "فاکتور"
+}
+
+private fun LegacyCommerceFeature.subtitleFa(): String = when (this) {
+    LegacyCommerceFeature.BARCODE -> "اسکن و پیدا کردن محصول با بارکد"
+    LegacyCommerceFeature.BULK_ORDERS -> "تغییر وضعیت چند سفارش به‌صورت گروهی"
+    LegacyCommerceFeature.INVENTORY -> "بررسی و مدیریت موجودی محصولات"
+    LegacyCommerceFeature.ANALYTICS -> "بررسی و تحلیل عملکرد فروشگاه"
+    LegacyCommerceFeature.INVOICE -> "ساخت و آماده‌سازی فاکتور سفارش"
 }
