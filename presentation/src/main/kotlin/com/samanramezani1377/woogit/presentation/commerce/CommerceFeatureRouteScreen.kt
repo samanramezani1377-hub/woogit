@@ -104,12 +104,7 @@ internal fun CommerceFeatureRouteScreen(
                         )
                         val state by vm.state.collectAsStateWithLifecycle()
                         InvoicePage(
-                            state = CommerceUiState(
-                                loading = state.loading,
-                                orders = state.orders,
-                                invoice = state.invoice,
-                                error = state.error,
-                            ),
+                            state = state,
                             onInvoice = vm::prepare,
                         )
                     }
