@@ -31,7 +31,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 
 @Composable
-internal fun InvoicePage(state: CommerceUiState, onInvoice: (String) -> Unit) {
+internal fun InvoicePage(state: InvoiceFeatureUiState, onInvoice: (String) -> Unit) {
     var query by rememberSaveable { mutableStateOf("") }
     val visible = state.orders.filter { it.number.contains(query.trim(), true) }
     val context = LocalContext.current
