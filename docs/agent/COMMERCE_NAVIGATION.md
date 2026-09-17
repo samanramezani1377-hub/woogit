@@ -65,7 +65,7 @@ Examples:
 
 The standalone feature screens keep their existing presentation and behavior. The architecture change separates state ownership without introducing a new visual system or replacing the existing Liquid Glass page shells.
 
-Customers and Coupons UI should remain visually and behaviorally unchanged while their state is owned by their own feature ViewModels. A temporary `CommerceUiState` compatibility adapter is acceptable only where an existing page contract still requires it; it is an adapter, not authoritative feature state.
+Customers and Coupons UI remain visually and behaviorally independent from `CommerceUiState`. Their pages consume their own feature-owned UI state directly. `CommerceUiState` is not part of the Customers/Coupons page contracts.
 
 ## Prohibited architecture
 
@@ -75,7 +75,8 @@ Do not reintroduce:
 - Commerce as a data center;
 - a shared Commerce ViewModel for unrelated features;
 - Commerce-owned refresh loops for unrelated pages;
-- routing unrelated features through Commerce solely to obtain state or data.
+- routing unrelated features through Commerce solely to obtain state or data;
+- `CommerceUiState` as the input contract for Customers or Coupons pages.
 
 ## Coupon management
 
