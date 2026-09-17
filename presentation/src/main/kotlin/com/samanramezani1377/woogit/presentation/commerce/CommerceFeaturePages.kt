@@ -8,8 +8,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
-import com.samanramezani1377.woogit.core.domain.model.OrderStatus
-import com.samanramezani1377.woogit.data.network.WooCouponCommerceWriteDto
 import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
 
 @Composable
@@ -29,7 +27,7 @@ internal fun CommerceFeaturePage(
                     factory = CustomerCommerceViewModelFactory(dependencies, storeId),
                 )
                 val state by vm.state.collectAsStateWithLifecycle()
-                CustomersPage(storeId = storeId, state = CommerceUiState(orders = state.orders))
+                CustomersPage(storeId = storeId, state = state)
             }
             CommerceFeature.COUPONS -> {
                 val vm: CouponCommerceViewModel = viewModel(
@@ -38,11 +36,7 @@ internal fun CommerceFeaturePage(
                 )
                 val state by vm.state.collectAsStateWithLifecycle()
                 CouponsPage(
-                    state = CommerceUiState(
-                        products = state.products,
-                        customers = state.customers,
-                        coupons = state.coupons,
-                    ),
+                    state = state,
                     onEditCoupon = vm::updateCoupon,
                     onCreateCoupon = vm::createCoupon,
                     onDeleteCoupon = vm::deleteCoupon,
