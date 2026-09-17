@@ -44,9 +44,11 @@ internal class CustomerCommerceViewModel(
     }
 
     fun refresh() = viewModelScope.launch {
-        runCatching { readAllOrders() }
-            .onSuccess { _state.value = CustomerCommerceUiState(orders = it) }
-            .onFailure { _state.value = _state.value.copy(error = it.message) }
+        try {
+            _state.value = _state.value.copy(orders = readAllOrders(), error = null)
+        } catch (t: Throwable) {
+            _state.value = _state.value.copy(error = t.message)
+        }
     }
 
     private suspend fun readAllOrders(): List<Order> {
