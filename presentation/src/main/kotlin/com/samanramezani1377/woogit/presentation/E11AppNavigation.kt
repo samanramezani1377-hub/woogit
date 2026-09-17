@@ -100,8 +100,8 @@ internal fun E11AppNavigation(
                         { navController.navigate(E11Routes.SYNC) }, { navController.navigate(E11Routes.CONFLICTS) }, DashboardDestination.DASHBOARD,
                         { destination -> when (destination) { DashboardDestination.DASHBOARD -> Unit; DashboardDestination.ORDERS -> navController.navigate(E11Routes.ORDERS); DashboardDestination.PRODUCTS -> navController.navigate(E11Routes.PRODUCTS); DashboardDestination.SETTINGS -> navController.navigate(E11Routes.SETTINGS) } },
                         { navController.navigate(E11Routes.AI) }, { vm.refresh() }, state.loading,
-                        { navController.navigate(E11Routes.COMMERCE) }, { navController.navigate(E11Routes.COMMERCE_BARCODE) },
-                        { navController.navigate(E11Routes.COMMERCE_ANALYTICS) },
+                        { navController.navigate(E11Routes.COMMERCE) }, { navController.navigate(E11Routes.DASHBOARD_BARCODE) },
+                        { navController.navigate(E11Routes.DASHBOARD_ANALYTICS) },
                     )
                 }
             }
@@ -110,26 +110,17 @@ internal fun E11AppNavigation(
             activeStore?.let { store ->
                 CommerceCenterScreen(
                     storeId = StoreId(store), dependencies = dependencies, onBack = { navController.popBackStack() },
-                    onOpenFeature = { feature ->
-                        when (feature) {
-                            CommerceFeature.CUSTOMERS, CommerceFeature.COUPONS -> Unit
-                            CommerceFeature.BARCODE -> navController.navigate(E11Routes.COMMERCE_BARCODE)
-                            CommerceFeature.BULK_ORDERS -> navController.navigate(E11Routes.COMMERCE_BULK_ORDERS)
-                            CommerceFeature.INVENTORY -> navController.navigate(E11Routes.COMMERCE_INVENTORY)
-                            CommerceFeature.ANALYTICS -> navController.navigate(E11Routes.COMMERCE_ANALYTICS)
-                            CommerceFeature.INVOICE -> navController.navigate(E11Routes.COMMERCE_INVOICE)
-                        }
-                    },
+                    onOpenFeature = { /* Commerce is only the Customers/Coupons folder; those open in-place. */ },
                     onOpenProduct = { id -> navController.navigate(E11Routes.product(id)) },
                     onOpenOrder = { id -> navController.navigate(E11Routes.order(id)) },
                 )
             }
         }
-        composable(E11Routes.COMMERCE_BARCODE) { activeStore?.let { CommerceFeatureRouteScreen(StoreId(it), dependencies, CommerceFeature.BARCODE, { navController.popBackStack() }, { id -> navController.navigate(E11Routes.product(id)) }, { id -> navController.navigate(E11Routes.order(id)) }) } }
-        composable(E11Routes.COMMERCE_BULK_ORDERS) { activeStore?.let { CommerceFeatureRouteScreen(StoreId(it), dependencies, CommerceFeature.BULK_ORDERS, { navController.popBackStack() }, { id -> navController.navigate(E11Routes.product(id)) }, { id -> navController.navigate(E11Routes.order(id)) }) } }
-        composable(E11Routes.COMMERCE_INVENTORY) { activeStore?.let { CommerceFeatureRouteScreen(StoreId(it), dependencies, CommerceFeature.INVENTORY, { navController.popBackStack() }, { id -> navController.navigate(E11Routes.product(id)) }, { id -> navController.navigate(E11Routes.order(id)) }) } }
-        composable(E11Routes.COMMERCE_ANALYTICS) { activeStore?.let { CommerceFeatureRouteScreen(StoreId(it), dependencies, CommerceFeature.ANALYTICS, { navController.popBackStack() }, { id -> navController.navigate(E11Routes.product(id)) }, { id -> navController.navigate(E11Routes.order(id)) }) } }
-        composable(E11Routes.COMMERCE_INVOICE) { activeStore?.let { CommerceFeatureRouteScreen(StoreId(it), dependencies, CommerceFeature.INVOICE, { navController.popBackStack() }, { id -> navController.navigate(E11Routes.product(id)) }, { id -> navController.navigate(E11Routes.order(id)) }) } }
+        composable(E11Routes.DASHBOARD_BARCODE) { activeStore?.let { CommerceFeatureRouteScreen(StoreId(it), dependencies, LegacyCommerceFeature.BARCODE, { navController.popBackStack() }, { id -> navController.navigate(E11Routes.product(id)) }, { id -> navController.navigate(E11Routes.order(id)) }) } }
+        composable(E11Routes.ORDERS_BULK) { activeStore?.let { CommerceFeatureRouteScreen(StoreId(it), dependencies, LegacyCommerceFeature.BULK_ORDERS, { navController.popBackStack() }, { id -> navController.navigate(E11Routes.product(id)) }, { id -> navController.navigate(E11Routes.order(id)) }) } }
+        composable(E11Routes.PRODUCTS_INVENTORY) { activeStore?.let { CommerceFeatureRouteScreen(StoreId(it), dependencies, LegacyCommerceFeature.INVENTORY, { navController.popBackStack() }, { id -> navController.navigate(E11Routes.product(id)) }, { id -> navController.navigate(E11Routes.order(id)) }) } }
+        composable(E11Routes.DASHBOARD_ANALYTICS) { activeStore?.let { CommerceFeatureRouteScreen(StoreId(it), dependencies, LegacyCommerceFeature.ANALYTICS, { navController.popBackStack() }, { id -> navController.navigate(E11Routes.product(id)) }, { id -> navController.navigate(E11Routes.order(id)) }) } }
+        composable(E11Routes.ORDER_INVOICE) { activeStore?.let { CommerceFeatureRouteScreen(StoreId(it), dependencies, LegacyCommerceFeature.INVOICE, { navController.popBackStack() }, { id -> navController.navigate(E11Routes.product(id)) }, { id -> navController.navigate(E11Routes.order(id)) }) } }
         composable(E11Routes.DEBUG_LOGS) { DebugLogsScreen { navController.popBackStack() } }
         composable(E11Routes.AI) { AiScreen() }
         composable(E11Routes.ORDERS) {
@@ -144,7 +135,7 @@ internal fun E11AppNavigation(
                         mapOrdersState(state, vm.hasMore()),
                         { id -> navController.navigate(E11Routes.order(id)) },
                         { vm.load(storeId) }, { vm.nextPage(storeId) }, { vm.load(storeId, it, true) },
-                        { navController.navigate(E11Routes.COMMERCE_BULK_ORDERS) },
+                        { navController.navigate(E11Routes.ORDERS_BULK) },
                     )
                 }
             }
@@ -180,7 +171,7 @@ internal fun E11AppNavigation(
                     onLoadMore = { vm.nextPage(storeId) },
                     onSearch = { vm.load(storeId, it, true) },
                     onAddProduct = { navController.navigate(E11Routes.PRODUCT_NEW) },
-                    onInventoryClick = { navController.navigate(E11Routes.COMMERCE_INVENTORY) },
+                    onInventoryClick = { navController.navigate(E11Routes.PRODUCTS_INVENTORY) },
                 )
             }
         }
