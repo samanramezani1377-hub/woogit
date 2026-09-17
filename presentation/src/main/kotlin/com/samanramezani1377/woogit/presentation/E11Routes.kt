@@ -8,11 +8,13 @@ internal object E11Routes {
     const val SUBSCRIPTION_EXPIRED = "subscription-expired"
     const val AI = "ai"
     const val COMMERCE = "commerce"
-    const val COMMERCE_BARCODE = "commerce/barcode"
-    const val COMMERCE_BULK_ORDERS = "commerce/bulk-orders"
-    const val COMMERCE_INVENTORY = "commerce/inventory"
-    const val COMMERCE_ANALYTICS = "commerce/analytics"
-    const val COMMERCE_INVOICE = "commerce/invoice"
+    // Kept as compatibility names for existing navigation callbacks; the route paths now
+    // reflect the section that actually owns each feature rather than Commerce.
+    const val COMMERCE_BARCODE = "dashboard/barcode"
+    const val COMMERCE_BULK_ORDERS = "orders/bulk-orders"
+    const val COMMERCE_INVENTORY = "products/inventory"
+    const val COMMERCE_ANALYTICS = "dashboard/analytics"
+    const val COMMERCE_INVOICE = "order/invoice"
     const val ORDERS = "orders"
     const val ORDER_ID = "orderId"
     const val ORDER_DETAIL = "orders/{$ORDER_ID}"
