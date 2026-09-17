@@ -22,7 +22,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -33,7 +32,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.samanramezani1377.woogit.core.domain.model.Order
-import com.samanramezani1377.woogit.core.domain.sync.OrderSyncEvents
 import com.samanramezani1377.woogit.presentation.GlassCard
 import com.samanramezani1377.woogit.presentation.GlassEmptyState
 import com.samanramezani1377.woogit.presentation.GlassErrorState
@@ -61,27 +59,6 @@ internal fun OrdersScreen(
 ) {
     var query by rememberSaveable { mutableStateOf("") }
     var revealError by rememberSaveable { mutableStateOf(false) }
-    var liveOrders by remember { mutableStateOf<List<OrderRowUiModel>>(emptyList()) }
-
-    LaunchedEffect(state) {
-        liveOrders = (state as? OrdersUiState.Content)?.orders.orEmpty()
-    }
-
-    LaunchedEffect(storeId) {
-        OrderSyncEvents.updates.collect { update ->
-            if (storeId != null && update.storeId.value != storeId) return@collect
-            val current = liveOrders
-            if (current.isEmpty() && state !is OrdersUiState.Content) return@collect
-            val currentById = current.associateBy { it.id }
-            val changed = update.orders.associateBy { it.id.value }
-            val merged = current.map { changed[it.id]?.toRowUiModel() ?: it }.toMutableList()
-            update.orders.forEach { order ->
-                if (!currentById.containsKey(order.id.value) && query.isBlank()) merged.add(0, order.toRowUiModel())
-            }
-            if (merged != current) liveOrders = merged.distinctBy { it.id }
-        }
-    }
-
     LaunchedEffect(query) {
         delay(300L)
         onSearch(query.trim())
@@ -109,7 +86,7 @@ internal fun OrdersScreen(
         when (state) {
             OrdersUiState.Loading -> OrdersSkeleton(Modifier.weight(1f))
             OrdersUiState.Empty -> EmptyState(Modifier.weight(1f))
-            is OrdersUiState.Content -> OrdersList(OrdersUiState.Content(liveOrders, state.hasMore), onOrderClick, onLoadMore, Modifier.weight(1f))
+            is OrdersUiState.Content -> OrdersList(state, onOrderClick, onLoadMore, Modifier.weight(1f))
             is OrdersUiState.Error -> if (revealError) ErrorState(state, onRetry, Modifier.weight(1f)) else OrdersSkeleton(Modifier.weight(1f))
             is OrdersUiState.Offline -> Column(Modifier.weight(1f)) {
                 GlassOfflineState()
