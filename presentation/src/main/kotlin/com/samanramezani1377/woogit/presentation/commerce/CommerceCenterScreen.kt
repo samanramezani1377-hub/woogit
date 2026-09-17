@@ -16,7 +16,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -28,7 +27,7 @@ import com.samanramezani1377.woogit.presentation.GlassText
 import com.samanramezani1377.woogit.presentation.GlassTopBar
 import com.samanramezani1377.woogit.presentation.V1PresentationDependencies
 
-internal enum class CommerceFeature { BARCODE, BULK_ORDERS, INVENTORY, CUSTOMERS, ANALYTICS, COUPONS, INVOICE }
+internal enum class CommerceFeature { CUSTOMERS, COUPONS }
 private data class CommerceFeatureUiModel(val feature: CommerceFeature, val title: String, val description: String)
 
 @Composable
@@ -42,7 +41,7 @@ internal fun CommerceCenterScreen(
     initialFeature: CommerceFeature? = null,
     modifier: Modifier = Modifier,
 ) {
-    var selected by remember { mutableStateOf(initialFeature?.takeIf { it == CommerceFeature.CUSTOMERS || it == CommerceFeature.COUPONS }) }
+    var selected by remember { mutableStateOf(initialFeature) }
 
     if (selected != null) {
         CommerceFeaturePage(
@@ -56,10 +55,8 @@ internal fun CommerceCenterScreen(
     }
 
     fun openFeature(feature: CommerceFeature) {
-        when (feature) {
-            CommerceFeature.CUSTOMERS, CommerceFeature.COUPONS -> selected = feature
-            else -> onOpenFeature(feature)
-        }
+        selected = feature
+        onOpenFeature(feature)
     }
 
     GlassScaffold(modifier) { padding ->
