@@ -53,7 +53,7 @@ import androidx.compose.runtime.withFrameNanos
 
 @Composable
 internal fun CouponsPage(
-    state: CommerceUiState,
+    state: CouponCommerceUiState,
     onEditCoupon: (Long, WooCouponCommerceWriteDto) -> Unit,
     onCreateCoupon: (WooCouponCommerceWriteDto) -> Unit,
     onDeleteCoupon: (Long) -> Unit,
