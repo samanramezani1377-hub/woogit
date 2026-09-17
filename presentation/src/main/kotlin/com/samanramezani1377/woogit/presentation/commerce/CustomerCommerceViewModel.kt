@@ -15,11 +15,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-internal data class CustomerCommerceUiState(
-    val orders: List<Order> = emptyList(),
-    val error: String? = null,
-)
-
 internal class CustomerCommerceViewModel(
     private val dependencies: V1PresentationDependencies,
     private val storeId: StoreId,
@@ -44,11 +39,8 @@ internal class CustomerCommerceViewModel(
     }
 
     fun refresh() = viewModelScope.launch {
-        try {
-            _state.value = _state.value.copy(orders = readAllOrders(), error = null)
-        } catch (t: Throwable) {
-            _state.value = _state.value.copy(error = t.message)
-        }
+        runCatching { readAllOrders() }
+            .onSuccess { _state.value = _state.value.copy(orders = it) }
     }
 
     private suspend fun readAllOrders(): List<Order> {
