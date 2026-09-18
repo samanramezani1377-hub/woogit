@@ -6,7 +6,13 @@ import com.samanramezani1377.woogit.core.domain.error.CoreResult
 import com.samanramezani1377.woogit.core.domain.model.*
 
 interface LocalOrderDataSource<T> { fun get(storeId:StoreId,id:EntityId):CoreResult<T>; fun list(storeId:StoreId):CoreResult<List<T>>; fun upsert(storeId:StoreId,value:T):CoreResult<Unit>; fun delete(storeId:StoreId,id:EntityId):CoreResult<Unit> }
-interface LocalProductDataSource<T> { fun get(storeId:StoreId,id:EntityId):CoreResult<T>; fun list(storeId:StoreId):CoreResult<List<T>>; fun upsert(storeId:StoreId,value:T):CoreResult<Unit>; fun delete(storeId:StoreId,id:EntityId):CoreResult<Unit> }
+interface LocalProductDataSource<T> {
+    fun get(storeId:StoreId,id:EntityId):CoreResult<T>
+    fun list(storeId:StoreId):CoreResult<List<T>>
+    fun upsert(storeId:StoreId,value:T):CoreResult<Unit>
+    fun upsertAt(storeId:StoreId,value:T,prepend:Boolean):CoreResult<Unit> = upsert(storeId,value)
+    fun delete(storeId:StoreId,id:EntityId):CoreResult<Unit>
+}
 interface LocalCustomerDataSource<T> { fun get(storeId:StoreId,id:EntityId):CoreResult<T>; fun list(storeId:StoreId):CoreResult<List<T>>; fun upsert(storeId:StoreId,value:T):CoreResult<Unit>; fun delete(storeId:StoreId,id:EntityId):CoreResult<Unit> }
 interface LocalStoreDataSource<T> { fun get(storeId:StoreId):CoreResult<T>; fun upsert(value:T):CoreResult<Unit>; fun delete(storeId:StoreId):CoreResult<Unit> }
 interface LocalVariationDataSource { fun list(storeId:StoreId,productId:EntityId):CoreResult<List<Variation>>; fun get(storeId:StoreId,productId:EntityId,id:EntityId):CoreResult<Variation>; fun upsert(storeId:StoreId,value:Variation):CoreResult<Unit>; fun delete(storeId:StoreId,productId:EntityId,id:EntityId):CoreResult<Unit> }
