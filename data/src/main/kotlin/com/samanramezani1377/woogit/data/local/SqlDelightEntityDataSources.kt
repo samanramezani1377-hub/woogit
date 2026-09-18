@@ -39,7 +39,17 @@ class SqlOrderDataSource(private val db:WooGitDatabase):LocalOrderDataSource<Ord
 class SqlProductDataSource(private val db:WooGitDatabase):LocalProductDataSource<Product>{
  override fun get(storeId:StoreId,id:EntityId):CoreResult<Product> = db.productQueries.selectById(id.value,storeId.value).executeAsOneOrNull()?.let{row->runCatching{json.decodeFromString<P>(row.payload_json).d()}.fold({CoreResult.Success(it)},{CoreResult.Failure(DomainError.Unknown("ذخیره محلی محصول قابل پردازش نیست."))})}?:CoreResult.Failure(DomainError.NotFound("product",id.value))
  override fun list(storeId:StoreId):CoreResult<List<Product>> = runCatching{db.productQueries.selectByStore(storeId.value).executeAsList().mapNotNull{row->runCatching{json.decodeFromString<P>(row.payload_json).d()}.getOrNull()}}.fold({CoreResult.Success(it)},{CoreResult.Failure(DomainError.Unknown("ذخیره محلی محصولات قابل پردازش نیست."))})
- override fun upsert(storeId:StoreId,value:Product):CoreResult<Unit>{val now=System.currentTimeMillis();db.productQueries.upsert(value.id.value,storeId.value,value.name,value.statusStorageValue(),value.pricing.regular?.toLongOrNull(),null,value.stock?.quantity?.toLong(),value.modifiedAt ?: "",value.modifiedAt ?: "",json.encodeToString(P(value.id.value.toLongOrNull()?:0L,value.name,value.sku,value.description,value.shortDescription,value.statusStorageValue(),value.typeStorageValue(),value.pricing.regular,value.pricing.sale,value.pricing.onSale,value.stock?.quantity,value.stock?.status?.name?.lowercase()?:"instock",value.stock?.manageStock?:false,value.images.map{I(it.id?.value?.toLongOrNull(),it.src,it.name,it.alt)},value.categories.map{N(it.id.value.toLongOrNull()?:0L,it.name)},value.attributes.map{X(it.id?.value?.toLongOrNull(),it.name,it.visible,it.variation,it.options)},value.modifiedAt)),now,now);return CoreResult.Success(Unit)}
+ override fun upsert(storeId:StoreId,value:Product):CoreResult<Unit> = upsertAt(storeId,value,false)
+ override fun upsertAt(storeId:StoreId,value:Product,prepend:Boolean):CoreResult<Unit>{
+  val now=System.currentTimeMillis()
+  val existing=db.productQueries.selectById(value.id.value,storeId.value).executeAsOneOrNull()
+  val position=existing?.created_at ?: run {
+   val rows=db.productQueries.selectByStore(storeId.value).executeAsList()
+   if(rows.isEmpty()) now else if(prepend) rows.maxOf { it.created_at }.plus(1L) else rows.minOf { it.created_at }.minus(1L)
+  }
+  db.productQueries.upsert(value.id.value,storeId.value,value.name,value.statusStorageValue(),value.pricing.regular?.toLongOrNull(),null,value.stock?.quantity?.toLong(),value.modifiedAt ?: "",value.modifiedAt ?: "",json.encodeToString(P(value.id.value.toLongOrNull()?:0L,value.name,value.sku,value.description,value.shortDescription,value.statusStorageValue(),value.typeStorageValue(),value.pricing.regular,value.pricing.sale,value.onSale,value.stock?.quantity,value.stock?.status?.name?.lowercase()?:"instock",value.stock?.manageStock?:false,value.images.map{I(it.id?.value?.toLongOrNull(),it.src,it.name,it.alt)},value.categories.map{N(it.id.value.toLongOrNull()?:0L,it.name)},value.attributes.map{X(it.id?.value?.toLongOrNull(),it.name,it.visible,it.variation,it.options)},value.modifiedAt)),position,now)
+  return CoreResult.Success(Unit)
+ }
  override fun delete(storeId:StoreId,id:EntityId):CoreResult<Unit>{db.productQueries.deleteById(id.value,storeId.value);return CoreResult.Success(Unit)}
 }
 class SqlCustomerDataSource(private val db:WooGitDatabase):LocalCustomerDataSource<Customer>{
