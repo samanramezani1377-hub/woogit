@@ -28,6 +28,7 @@ internal class CouponCommerceViewModel(
 
     private val _state = MutableStateFlow(CouponCommerceUiState())
     val state: StateFlow<CouponCommerceUiState> = _state.asStateFlow()
+    private var initialLoadCompleted = false
 
     init {
         refresh()
@@ -40,8 +41,15 @@ internal class CouponCommerceViewModel(
     }
 
     fun refresh() = viewModelScope.launch {
-        loadReferenceData()
-        loadCoupons()
+        try {
+            loadReferenceData()
+            loadCoupons()
+        } finally {
+            if (!initialLoadCompleted) {
+                initialLoadCompleted = true
+                _state.value = _state.value.copy(isLoading = false)
+            }
+        }
     }
 
     fun updateCoupon(id: Long, coupon: WooCouponCommerceWriteDto) = viewModelScope.launch {
