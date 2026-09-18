@@ -14,4 +14,5 @@ internal data class CouponCommerceUiState(
     val coupons: List<WooCouponCommerceDto> = emptyList(),
     val products: List<Product> = emptyList(),
     val customers: List<WooCustomerCommerceDto> = emptyList(),
+    val isLoading: Boolean = true,
 )
