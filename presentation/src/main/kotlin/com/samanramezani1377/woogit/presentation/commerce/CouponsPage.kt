@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -110,16 +111,21 @@ internal fun CouponsPage(
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             Spacer(Modifier.height(104.dp))
-            if (visible.isEmpty()) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 2.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text("کوپن‌ها", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("${visible.size} کوپن", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
+                }
+                if (state.isLoading) CircularProgressIndicator(modifier = Modifier.padding(4.dp))
+            }
+            if (!state.isLoading && visible.isEmpty()) {
                 GlassEmptyState(if (normalizedQuery.isBlank()) "کوپنی برای نمایش وجود ندارد." else "کوپنی مطابق جستجو پیدا نشد.")
             } else {
                 LazyColumn(state = listState, modifier = Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(start = 16.dp, top = 0.dp, end = 16.dp, bottom = 92.dp)) {
-                    item(key = "coupons-header") {
-                        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                            Text("کوپن‌ها", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                            Text("${visible.size} کوپن", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
                     items(visible, key = { it.id }, contentType = { "coupon" }) { coupon ->
                         val isExpanded = expandedCouponId == coupon.id
                         val isEditing = editingCouponId == coupon.id
