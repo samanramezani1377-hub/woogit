@@ -125,7 +125,7 @@ private fun PaymentWebView(url: String, onClose: () -> Unit) {
                 webViewClient = object : WebViewClient() {
                     override fun shouldOverrideUrlLoading(view: WebView, request: android.webkit.WebResourceRequest): Boolean {
                         val target = request.url
-                        if (isWooGitAppPaymentClose(target) || isWooGitCart(target)) {
+                        if (isWooGitAppPaymentClose(target) || isWooGitCart(target) || isWooGitCheckout(target) || isWooGitCheckout(target)) {
                             onClose()
                             return true
                         }
@@ -158,6 +158,11 @@ private fun PaymentWebView(url: String, onClose: () -> Unit) {
 private fun isWooGitCart(uri: Uri): Boolean {
     return uri.host.equals("woogit.ir", ignoreCase = true) &&
         uri.path.orEmpty().trimEnd('/') == "/cart"
+}
+
+private fun isWooGitCheckout(uri: Uri): Boolean {
+    return uri.host.equals("woogit.ir", ignoreCase = true) &&
+        uri.path.orEmpty().trimEnd('/') == "/checkout"
 }
 
 private fun isWooGitAppPaymentClose(uri: Uri): Boolean {
