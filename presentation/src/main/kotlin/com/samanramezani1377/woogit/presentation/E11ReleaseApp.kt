@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
@@ -19,8 +20,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -206,7 +205,7 @@ private fun PaymentWebView(url: String, onClose: () -> Unit) {
 private fun PaymentWebViewHeader(onClose: () -> Unit) {
     Surface(
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxWidth()
             .height(56.dp),
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 2.dp,
@@ -224,10 +223,7 @@ private fun PaymentWebViewHeader(onClose: () -> Unit) {
                 onClick = onClose,
                 modifier = Modifier.align(Alignment.CenterEnd),
             ) {
-                Icon(
-                    imageVector = Icons.Filled.Close,
-                    contentDescription = "بستن پرداخت",
-                )
+                GlassText("×")
             }
         }
     }
