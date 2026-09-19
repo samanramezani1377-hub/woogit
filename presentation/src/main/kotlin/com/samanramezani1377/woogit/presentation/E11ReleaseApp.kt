@@ -2,18 +2,30 @@ package com.samanramezani1377.woogit.presentation
 
 import android.net.Uri
 import android.webkit.WebView
+import android.view.View
+import android.webkit.RenderProcessGoneDetail
+import android.webkit.WebResourceRequest
 import android.webkit.WebViewClient
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -108,51 +120,129 @@ private fun PaymentWebView(url: String, onClose: () -> Unit) {
 
     BackHandler {
         val view = webView
-        if (view?.canGoBack() == true) view.goBack() else onClose()
+        if (view?.canGoBack() == true) {
+            view.goBack()
+        } else {
+            onClose()
+        }
     }
 
-    AndroidView(
-        modifier = Modifier.fillMaxSize(),
-        factory = {
-            WebView(context).apply {
-                settings.javaScriptEnabled = true
-                settings.domStorageEnabled = true
-                settings.javaScriptCanOpenWindowsAutomatically = true
-                settings.setSupportMultipleWindows(false)
-                settings.loadsImagesAutomatically = true
-                settings.allowFileAccess = false
-                settings.allowContentAccess = false
-                webViewClient = object : WebViewClient() {
-                    override fun shouldOverrideUrlLoading(view: WebView, request: android.webkit.WebResourceRequest): Boolean {
-                        val target = request.url
-                        if (isWooGitAppPaymentClose(target) || isWooGitCart(target) || isWooGitCheckout(target) || isWooGitCheckout(target)) {
+    Column(Modifier.fillMaxSize()) {
+        PaymentWebViewHeader(onClose = onClose)
+
+        AndroidView(
+            modifier = Modifier
+                .fillMaxSize()
+                .weight(1f),
+            factory = {
+                WebView(context).apply {
+                    // Keep the renderer on the normal hardware-accelerated path.
+                    // Do not enable slow whole-document drawing: Android documents it
+                    // as a significant performance cost.
+                    settings.javaScriptEnabled = true
+                    settings.domStorageEnabled = true
+                    settings.javaScriptCanOpenWindowsAutomatically = true
+                    settings.setSupportMultipleWindows(false)
+                    settings.loadsImagesAutomatically = true
+                    settings.allowFileAccess = false
+                    settings.allowContentAccess = false
+
+                    // Reduce the extra edge/overscroll work that makes the payment
+                    // page feel sticky on some Android/WebView combinations.
+                    overScrollMode = View.OVER_SCROLL_NEVER
+
+                    // Keep scrollbars unobtrusive; the page itself remains fully
+                    // vertically scrollable.
+                    scrollBarStyle = View.SCROLLBARS_INSIDE_OVERLAY
+
+                    webViewClient = object : WebViewClient() {
+                        override fun shouldOverrideUrlLoading(
+                            view: WebView,
+                            request: WebResourceRequest,
+                        ): Boolean {
+                            return handlePaymentNavigation(request.url, onClose)
+                        }
+
+                        @Deprecated("Deprecated in API 24; retained for older Android WebView compatibility.")
+                        override fun shouldOverrideUrlLoading(
+                            view: WebView,
+                            url: String,
+                        ): Boolean {
+                            val target = runCatching { Uri.parse(url) }.getOrNull()
+                            return target != null && handlePaymentNavigation(target, onClose)
+                        }
+
+                        override fun onRenderProcessGone(
+                            view: WebView,
+                            detail: RenderProcessGoneDetail,
+                        ): Boolean {
+                            // The renderer can be killed independently of the app process.
+                            // Close the payment surface instead of leaving a dead WebView
+                            // visible or allowing a renderer crash to take down the UI.
                             onClose()
                             return true
                         }
-                        return false
                     }
 
-                    @Deprecated("Deprecated in API 24; retained for older Android WebView compatibility.")
-                    override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean {
-                        val target = runCatching { Uri.parse(url) }.getOrNull()
-                        if (target != null && (isWooGitAppPaymentClose(target) || isWooGitCart(target))) {
-                            onClose()
-                            return true
-                        }
-                        return false
-                    }
+                    webView = this
+                    loadUrl(url)
                 }
-                webView = this
-                loadUrl(url)
+            },
+            update = { webView = it },
+            onRelease = { view ->
+                (view.parent as? android.view.ViewGroup)?.removeView(view)
+                view.stopLoading()
+                view.loadUrl("about:blank")
+                view.clearHistory()
+                view.removeAllViews()
+                view.destroy()
+                webView = null
+            },
+        )
+    }
+}
+
+@Composable
+private fun PaymentWebViewHeader(onClose: () -> Unit) {
+    Surface(
+        modifier = Modifier
+            .fillMaxSize()
+            .height(56.dp),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 2.dp,
+        shadowElevation = 1.dp,
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 4.dp),
+        ) {
+            GlassText(
+                text = "پرداخت",
+            )
+            IconButton(
+                onClick = onClose,
+                modifier = Modifier.align(Alignment.CenterEnd),
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Close,
+                    contentDescription = "بستن پرداخت",
+                )
             }
-        },
-        update = { webView = it },
-        onRelease = { view ->
-            view.stopLoading()
-            view.destroy()
-            webView = null
-        },
-    )
+        }
+    }
+}
+
+private fun handlePaymentNavigation(uri: Uri, onClose: () -> Unit): Boolean {
+    if (
+        isWooGitAppPaymentClose(uri) ||
+        isWooGitCart(uri) ||
+        isWooGitCheckout(uri)
+    ) {
+        onClose()
+        return true
+    }
+    return false
 }
 
 private fun isWooGitCart(uri: Uri): Boolean {
