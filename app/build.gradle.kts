@@ -79,5 +79,5 @@ dependencies {
     implementation(libs.androidx.camera.view)
     implementation(libs.mlkit.barcode)
 
-    bazaarImplementation(libs.poolakey)
+    "bazaarImplementation"(libs.poolakey)
 }
