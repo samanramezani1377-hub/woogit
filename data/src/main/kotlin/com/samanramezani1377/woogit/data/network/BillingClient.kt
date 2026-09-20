@@ -4,6 +4,7 @@ import com.samanramezani1377.woogit.core.billing.BillingActivation
 import com.samanramezani1377.woogit.core.billing.BillingCheckout
 import com.samanramezani1377.woogit.core.billing.BillingGateway
 import com.samanramezani1377.woogit.core.billing.BillingPlan
+import com.samanramezani1377.woogit.core.billing.BillingPurchase
 import com.samanramezani1377.woogit.core.billing.BillingStatus
 import com.samanramezani1377.woogit.core.billing.BillingVariation
 import com.samanramezani1377.woogit.core.security.BackendSessionStore
@@ -86,6 +87,31 @@ class BillingClient(
         val checkout = BillingCheckout(root["order_id"]?.jsonPrimitive?.intOrNull ?: 0, root["payment_url"]?.jsonPrimitive?.contentOrNull ?: error("Missing payment_url"), root["status"]?.jsonPrimitive?.contentOrNull ?: "pending")
         checkoutKeys.remove(operationKey, key)
         return checkout
+    }
+
+    override suspend fun verifyBazaarPurchase(storeId: StoreId, purchase: BillingPurchase): Result<BillingActivation> = runCatching {
+        var token = sessions.getBilling(storeId.value)
+        if (token == null && reauthenticate(storeId)) token = sessions.getBilling(storeId.value)
+        if (token == null) throw BackendProtocolException("Billing session is unavailable")
+        val response = httpClient.post(url("/wp-json/woogit/v1/billing/bazaar/verify")) {
+            header("X-WooGit-App-Version", appVersion)
+            header("X-WooGit-Session", token)
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject {
+                put("product_id", purchase.productId)
+                put("purchase_token", purchase.purchaseToken)
+                put("order_id", purchase.orderId)
+                put("purchase_time", purchase.purchaseTime)
+                put("package_name", purchase.packageName)
+            })
+        }
+        val body = response.bodyAsText()
+        if (response.status.value == 401) {
+            sessions.removeBilling(storeId.value)
+            if (reauthenticate(storeId)) return@runCatching verifyBazaarPurchase(storeId, purchase).getOrThrow()
+        }
+        if (response.status.value !in 200..299) throw BackendHttpException(response.status.value, body, extractMessage(body))
+        parseActivation(storeId, body)
     }
 
     override suspend fun activateOperationalSession(storeId: StoreId): Result<BillingActivation> = runCatching { requestActivate(storeId, true) }
