@@ -69,6 +69,9 @@ fun BillingSection(storeId: StoreId) {
                     if (current.trialUsed) GlassText("آزمایشی ۱۵ روزه قبلاً برای این حساب استفاده شده است.")
                 }
                 plans.forEach { plan ->
+                    val selectedVariation = plan.variations.firstOrNull()
+                    val bazaarPurchase = BillingPurchaseRuntime.purchase
+                    val bazaarProductId = selectedVariation?.bazaarProductId ?: plan.bazaarProductId
                     val isTrial = plan.price.toDoubleOrNull() == 0.0 || plan.name.contains("آزمایشی") || plan.name.contains("trial", true)
                     GlassCard {
                         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
