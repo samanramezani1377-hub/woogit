@@ -5,11 +5,11 @@ name: WooGit V1 CI
 
 on:
   push:
-    branches: [main, app-transfer]
+    branches: [main, app-transfer, bazar]
     paths-ignore:
       - 'docs/agent/**'
   pull_request:
-    branches: [main]
+    branches: [main, bazar]
     paths-ignore:
       - 'docs/agent/**'
   workflow_dispatch:
@@ -63,7 +63,7 @@ jobs:
           gradle-version: ${{ env.GRADLE_VERSION }}
           cache-cleanup: on-success
       - name: Build debug
-        run: gradle assembleDebug --console=plain --warning-mode=all --stacktrace
+        run: gradle assembleStandardDebug assembleBazaarDebug --console=plain --warning-mode=all --stacktrace
       - name: Upload debug APK
         uses: actions/upload-artifact@v6
         with:
@@ -130,7 +130,7 @@ jobs:
             -Pwoogit.release.keystorePassword="${ANDROID_KEYSTORE_PASSWORD}" \
             -Pwoogit.release.keyAlias="${ANDROID_KEY_ALIAS}" \
             -Pwoogit.release.keyPassword="${ANDROID_KEY_PASSWORD}" \
-            assembleRelease bundleRelease \
+            assembleStandardRelease bundleStandardRelease assembleBazaarRelease bundleBazaarRelease \
             --console=plain --warning-mode=all --stacktrace
       - name: Verify release APK and AAB
         shell: bash
@@ -264,8 +264,8 @@ jobs:
           LINT_RESULT: ${{ needs.lint.result }}
         run: |
           set -euo pipefail
-          echo "Debug build : ${DEBUG_RESULT}"
-          echo "Release AAB : ${RELEASE_RESULT}"
+          echo "Debug builds : ${DEBUG_RESULT}"
+          echo "Release APK/AAB variants : ${RELEASE_RESULT}"
           echo "Unit tests  : ${TEST_RESULT}"
           echo "Lint        : ${LINT_RESULT}"
           if [[ "${DEBUG_RESULT}" != "success" || "${RELEASE_RESULT}" != "success" || "${TEST_RESULT}" != "success" || "${LINT_RESULT}" != "success" ]]; then
