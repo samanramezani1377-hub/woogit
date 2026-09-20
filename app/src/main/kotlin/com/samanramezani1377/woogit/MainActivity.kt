@@ -12,6 +12,7 @@ import androidx.core.view.WindowCompat
 import com.samanramezani1377.woogit.presentation.E11ReleaseApp
 import com.samanramezani1377.woogit.presentation.WooGitTheme
 import com.samanramezani1377.woogit.presentation.commerce.CommerceRuntime
+import com.samanramezani1377.woogit.billing.BillingProviderInstaller
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -30,6 +31,7 @@ class MainActivity : ComponentActivity() {
         notificationOrderId.value = intentOrderId(intent)
         val composition = (application as WooGitApplication).composition
         CommerceRuntime.provider = composition.commerceClientProvider
+        BillingProviderInstaller.install(this, composition.billingGateway)
         announcementCenter = composition.announcementCenter
         forceUpdateUrl.value = announcementCenter.forceUpdateUrl.value
         observeAnnouncementCenter()
@@ -75,6 +77,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        BillingProviderInstaller.clear()
         announcementScope.cancel()
         super.onDestroy()
     }
