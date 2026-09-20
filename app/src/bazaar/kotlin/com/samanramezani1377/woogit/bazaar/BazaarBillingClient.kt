@@ -27,7 +27,8 @@ class BazaarBillingClient(context: Context, private val backend: BillingGateway)
     private suspend fun ensureConnected() {
         if (connection != null) return
         suspendCancellableCoroutine<Unit> { continuation ->
-            val currentConnection = payment.connect {
+            lateinit var currentConnection: ir.cafebazaar.poolakey.Connection
+            currentConnection = payment.connect {
                 connectionSucceed {
                     connection = currentConnection
                     if (continuation.isActive) continuation.resume(Unit)
