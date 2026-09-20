@@ -18,7 +18,20 @@ android {
         targetSdk=36
         versionCode=1
         versionName="1.0.0"
-        buildConfigField("String", "WOOGIT_BACKEND_BASE_URL", "\"https://woogit.ir\"")
+        buildConfigField("String", "WOOGIT_BACKEND_BASE_URL", ""https://woogit.ir"")
+    }
+
+    flavorDimensions += "distribution"
+
+    productFlavors {
+        create("standard") {
+            dimension = "distribution"
+            buildConfigField("Boolean", "BAZAAR_BUILD", "false")
+        }
+        create("bazaar") {
+            dimension = "distribution"
+            buildConfigField("Boolean", "BAZAAR_BUILD", "true")
+        }
     }
 
     signingConfigs {
@@ -61,4 +74,6 @@ dependencies {
     implementation(libs.androidx.camera.lifecycle)
     implementation(libs.androidx.camera.view)
     implementation(libs.mlkit.barcode)
+
+    bazaarImplementation(libs.poolakey)
 }
