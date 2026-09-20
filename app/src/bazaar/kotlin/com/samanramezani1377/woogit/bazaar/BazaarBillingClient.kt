@@ -70,6 +70,18 @@ class BazaarBillingClient(context: Context, private val backend: BillingGateway)
         ).getOrThrow()
     }
 
+    suspend fun reconcile(storeId: StoreId): Result<Unit> = runCatching {
+        ensureConnected()
+        val purchases = suspendCancellableCoroutine<List<ir.cafebazaar.poolakey.entity.PurchaseInfo>> { continuation ->
+            payment.getSubscribedProducts {
+                querySucceed { if (continuation.isActive) continuation.resume(it) }
+                queryFailed { error -> if (continuation.isActive) continuation.resumeWith(Result.failure(error)) }
+            }
+        }
+        purchases.forEach { purchase ->
+            backend.verifyBazaarPurchase(storeId, BillingPurchase(purchase.productId, purchase.purchaseToken, purchase.orderId, purchase.purchaseTime, purchase.packageName)).getOrThrow()
+        }
+    }
     fun disconnect() {
         payment.disconnect()
         connected = false
