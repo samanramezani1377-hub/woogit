@@ -7,8 +7,8 @@ import com.samanramezani1377.woogit.core.billing.BillingGateway
 import com.samanramezani1377.woogit.core.billing.BillingPurchase
 import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import ir.cafebazaar.poolakey.Payment
-import ir.cafebazaar.poolakey.PaymentConfiguration
-import ir.cafebazaar.poolakey.SecurityCheck
+import ir.cafebazaar.poolakey.config.PaymentConfiguration
+import ir.cafebazaar.poolakey.config.SecurityCheck
 import ir.cafebazaar.poolakey.request.PurchaseRequest
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
@@ -22,23 +22,27 @@ class BazaarBillingClient(context: Context, private val backend: BillingGateway)
             shouldSupportSubscription = true,
         ),
     )
-    @Volatile private var connected = false
+    @Volatile private var connection: ir.cafebazaar.poolakey.Connection? = null
 
     private suspend fun ensureConnected() {
-        if (connected) return
+        if (connection != null) return
         suspendCancellableCoroutine<Unit> { continuation ->
-            payment.connect {
+            val currentConnection = payment.connect {
                 connectionSucceed {
-                    connected = true
+                    connection = currentConnection
                     if (continuation.isActive) continuation.resume(Unit)
                 }
                 connectionFailed { error ->
-                    connected = false
+                    connection = null
                     if (continuation.isActive) continuation.resumeWith(Result.failure(error))
                 }
-                disconnected { connected = false }
+                disconnected { connection = null }
             }
-            continuation.invokeOnCancellation { connected = false }
+            connection = currentConnection
+            continuation.invokeOnCancellation {
+                currentConnection.disconnect()
+                connection = null
+            }
         }
     }
 
@@ -82,8 +86,9 @@ class BazaarBillingClient(context: Context, private val backend: BillingGateway)
             backend.verifyBazaarPurchase(storeId, BillingPurchase(purchase.productId, purchase.purchaseToken, purchase.orderId, purchase.purchaseTime, purchase.packageName)).getOrThrow()
         }
     }
+
     fun disconnect() {
-        payment.disconnect()
-        connected = false
+        connection?.disconnect()
+        connection = null
     }
 }
