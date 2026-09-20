@@ -27,10 +27,13 @@ android {
         create("standard") {
             dimension = "distribution"
             buildConfigField("Boolean", "BAZAAR_BUILD", "false")
+            buildConfigField("String", "BAZAAR_RSA_PUBLIC_KEY", """")
         }
         create("bazaar") {
             dimension = "distribution"
             buildConfigField("Boolean", "BAZAAR_BUILD", "true")
+            val rsa = providers.gradleProperty("woogit.bazaar.rsaPublicKey").orNull ?: ""
+            buildConfigField("String", "BAZAAR_RSA_PUBLIC_KEY", "\"" + rsa.replace("\\", "\\\\").replace(""", "\\"") + "\"")
         }
     }
 
