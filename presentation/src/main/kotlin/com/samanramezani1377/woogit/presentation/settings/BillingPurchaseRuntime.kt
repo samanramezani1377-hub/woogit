@@ -6,4 +6,7 @@ import com.samanramezani1377.woogit.core.domain.entity.StoreId
 object BillingPurchaseRuntime {
     @Volatile
     var purchase: (suspend (StoreId, String) -> Result<BillingActivation>)? = null
+
+    @Volatile
+    var reconcile: (suspend (StoreId) -> Result<Unit>)? = null
 }
