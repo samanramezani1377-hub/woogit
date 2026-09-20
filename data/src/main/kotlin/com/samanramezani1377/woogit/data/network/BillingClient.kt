@@ -89,7 +89,10 @@ class BillingClient(
         return checkout
     }
 
-    override suspend fun verifyBazaarPurchase(storeId: StoreId, purchase: BillingPurchase): Result<BillingActivation> = runCatching {
+    override suspend fun verifyBazaarPurchase(storeId: StoreId, purchase: BillingPurchase): Result<BillingActivation> =
+        runCatching { requestBazaarVerify(storeId, purchase, true) }
+
+    private suspend fun requestBazaarVerify(storeId: StoreId, purchase: BillingPurchase, retry: Boolean): BillingActivation {
         var token = sessions.getBilling(storeId.value)
         if (token == null && reauthenticate(storeId)) token = sessions.getBilling(storeId.value)
         if (token == null) throw BackendProtocolException("Billing session is unavailable")
@@ -106,12 +109,12 @@ class BillingClient(
             })
         }
         val body = response.bodyAsText()
-        if (response.status.value == 401) {
+        if (response.status.value == 401 && retry) {
             sessions.removeBilling(storeId.value)
-            if (reauthenticate(storeId)) return@runCatching verifyBazaarPurchase(storeId, purchase).getOrThrow()
+            if (reauthenticate(storeId)) return requestBazaarVerify(storeId, purchase, false)
         }
         if (response.status.value !in 200..299) throw BackendHttpException(response.status.value, body, extractMessage(body))
-        parseActivation(storeId, body)
+        return parseActivation(storeId, body)
     }
 
     override suspend fun activateOperationalSession(storeId: StoreId): Result<BillingActivation> = runCatching { requestActivate(storeId, true) }
