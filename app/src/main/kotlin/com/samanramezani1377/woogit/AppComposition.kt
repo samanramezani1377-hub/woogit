@@ -66,6 +66,7 @@ class AppComposition(context: Context) {
 
     val storeRepository = StoreRepositoryImpl(storeLocal, secure, backend)
     private val billingClient = BillingClient(network.httpClient, BuildConfig.WOOGIT_BACKEND_BASE_URL, sessions, BuildConfig.VERSION_NAME) { storeId -> reauthenticateBilling(storeId) }
+    val billingGateway: com.samanramezani1377.woogit.core.billing.BillingGateway get() = billingClient
     val accountSetupGateway: AccountSetupGateway = object : AccountSetupGateway {
         override suspend fun requiresWebPassword(storeId: String) = accountSetupClient.requiresWebPassword(storeId)
         override suspend fun setupWebPassword(storeId: String, password: String, confirmation: String): CoreResult<Unit> = accountSetupClient.setupWebPassword(storeId, password, confirmation)
