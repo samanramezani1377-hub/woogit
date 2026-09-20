@@ -42,7 +42,10 @@ fun BillingSection(storeId: StoreId) {
         }.onFailure { message = billingMessage(it) }
     }
 
-    LaunchedEffect(storeId) { refreshBilling() }
+    LaunchedEffect(storeId) {
+        BillingPurchaseRuntime.reconcile?.invoke(storeId)?.onFailure { message = billingMessage(it) }
+        refreshBilling()
+    }
 
     // Payment is an app-level surface. Reconcile only after an active payment
     // surface has actually been closed; Preparing must not look like a closed payment.
