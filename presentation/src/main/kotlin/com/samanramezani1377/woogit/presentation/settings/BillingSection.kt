@@ -79,16 +79,27 @@ fun BillingSection(storeId: StoreId) {
                                 onClick = {
                                     if (!trialDisabled && busyPlanId == null) {
                                         busyPlanId = plan.id
-                                        BillingPaymentRuntime.begin()
                                         scope.launch {
-                                            gateway.checkout(storeId, plan.id, plan.variations.firstOrNull()?.id ?: 0)
-                                                .onSuccess { checkout ->
-                                                    message = "درگاه پرداخت داخل WooGit باز شد."
-                                                    BillingPaymentRuntime.open(checkout.paymentUrl)
+                                            if (bazaarPurchase != null) {
+                                                if (bazaarProductId.isNullOrBlank()) {
+                                                    message = "شناسه محصول کافه‌بازار برای این طرح تنظیم نشده است."
+                                                } else {
+                                                    bazaarPurchase(storeId, bazaarProductId)
+                                                        .onSuccess {
+                                                            message = "خرید کافه‌بازار تأیید شد و دسترسی فروشگاه فعال شد."
+                                                            reconcileAfterPayment()
+                                                        }
+                                                        .onFailure { message = billingMessage(it) }
                                                 }
-                                                .onFailure {
-                                                    BillingPaymentRuntime.fail(billingMessage(it))
-                                                }
+                                            } else {
+                                                BillingPaymentRuntime.begin()
+                                                gateway.checkout(storeId, plan.id, selectedVariation?.id ?: 0)
+                                                    .onSuccess { checkout ->
+                                                        message = "درگاه پرداخت داخل WooGit باز شد."
+                                                        BillingPaymentRuntime.open(checkout.paymentUrl)
+                                                    }
+                                                    .onFailure { BillingPaymentRuntime.fail(billingMessage(it)) }
+                                            }
                                             busyPlanId = null
                                         }
                                     }
