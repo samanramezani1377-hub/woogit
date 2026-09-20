@@ -12,9 +12,11 @@ object BillingProviderInstaller {
         BazaarBillingRuntime.registry = activity.activityResultRegistry
         client = BazaarBillingClient(activity.applicationContext, gateway)
         BillingPurchaseRuntime.purchase = { storeId, productId -> client!!.purchase(storeId, productId) }
+        BillingPurchaseRuntime.reconcile = { storeId -> client!!.reconcile(storeId) }
     }
     fun clear() {
         BillingPurchaseRuntime.purchase = null
+        BillingPurchaseRuntime.reconcile = null
         client?.disconnect()
         client = null
         BazaarBillingRuntime.registry = null
