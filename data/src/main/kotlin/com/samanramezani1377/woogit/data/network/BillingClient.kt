@@ -123,7 +123,8 @@ class BillingClient(
             regularPrice = obj.string("regular_price").orEmpty(), currency = obj.string("currency").orEmpty(), billingPeriod = obj.string("billing_period").orEmpty(),
             billingInterval = obj["billing_interval"]?.jsonPrimitive?.intOrNull ?: 1, description = obj.string("description").orEmpty(), type = obj.string("type").orEmpty(),
             requiresVariation = obj["requires_variation"]?.jsonPrimitive?.booleanOrNull ?: false,
-            variations = obj["variations"]?.jsonArray?.map { variation -> val v = variation.jsonObject; BillingVariation(v["id"]?.jsonPrimitive?.intOrNull ?: 0, v.string("name").orEmpty(), v.string("price").orEmpty(), v.string("regular_price").orEmpty()) } ?: emptyList(),
+            bazaarProductId = obj.string("bazaar_product_id"),
+            variations = obj["variations"]?.jsonArray?.map { variation -> val v = variation.jsonObject; BillingVariation(v["id"]?.jsonPrimitive?.intOrNull ?: 0, v.string("name").orEmpty(), v.string("price").orEmpty(), v.string("regular_price").orEmpty(), v.string("bazaar_product_id")) } ?: emptyList(),
         )
     }
     private fun JsonObject.string(name: String): String? = this[name]?.jsonPrimitive?.contentOrNull
