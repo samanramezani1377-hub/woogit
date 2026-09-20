@@ -6,6 +6,7 @@ interface BillingGateway {
     suspend fun plans(storeId: StoreId): Result<List<BillingPlan>>
     suspend fun status(storeId: StoreId): Result<BillingStatus>
     suspend fun checkout(storeId: StoreId, planId: Int, variationId: Int = 0): Result<BillingCheckout>
+    suspend fun verifyBazaarPurchase(storeId: StoreId, purchase: BillingPurchase): Result<BillingActivation> = Result.failure(UnsupportedOperationException("Bazaar billing is unavailable for this provider"))
     suspend fun activateOperationalSession(storeId: StoreId): Result<BillingActivation>
 }
 
@@ -22,6 +23,7 @@ data class BillingPlan(
     val type: String,
     val requiresVariation: Boolean,
     val variations: List<BillingVariation> = emptyList(),
+    val bazaarProductId: String? = null,
 )
 
 data class BillingVariation(
@@ -29,6 +31,7 @@ data class BillingVariation(
     val name: String,
     val price: String,
     val regularPrice: String,
+    val bazaarProductId: String? = null,
 )
 
 data class BillingStatus(
@@ -43,6 +46,14 @@ data class BillingCheckout(
     val orderId: Int,
     val paymentUrl: String,
     val status: String,
+)
+
+data class BillingPurchase(
+    val productId: String,
+    val purchaseToken: String,
+    val orderId: String,
+    val purchaseTime: Long,
+    val packageName: String,
 )
 
 data class BillingActivation(
