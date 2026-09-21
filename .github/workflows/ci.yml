@@ -121,16 +121,19 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          BAZAAR_RSA_PUBLIC_KEY: ${{ secrets.BAZAAR_RSA_PUBLIC_KEY }}
         run: |
           set -euo pipefail
           test -n "${ANDROID_KEYSTORE_PASSWORD}"
           test -n "${ANDROID_KEY_ALIAS}"
           test -n "${ANDROID_KEY_PASSWORD}"
+          test -n "${BAZAAR_RSA_PUBLIC_KEY}"
           gradle \
             -Pwoogit.release.keystore="${RUNNER_TEMP}/woogit-release.jks" \
             -Pwoogit.release.keystorePassword="${ANDROID_KEYSTORE_PASSWORD}" \
             -Pwoogit.release.keyAlias="${ANDROID_KEY_ALIAS}" \
             -Pwoogit.release.keyPassword="${ANDROID_KEY_PASSWORD}" \
+            -Pwoogit.bazaar.rsaPublicKey="${BAZAAR_RSA_PUBLIC_KEY}" \
             assembleStandardRelease bundleStandardRelease assembleBazaarRelease bundleBazaarRelease \
             --console=plain --warning-mode=all --stacktrace
       - name: Verify release APK and AAB
