@@ -179,15 +179,18 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           set -euo pipefail
-          bazaar_aab="./app/build/outputs/bundle/bazaarRelease/app-bazaar-release.aab"
-          if [[ ! -s "${bazaar_aab}" ]]; then
-            echo "Bazaar release AAB was not found: ${bazaar_aab}"
-            echo "Available Bazaar release bundles:"
-            find . -type f -path '*/build/outputs/bundle/bazaarRelease/*.aab' -print | sort || true
+          keystore_pass_file="${RUNNER_TEMP}/bundlesigner-keystore-pass"
+          key_pass_file="${RUNNER_TEMP}/bundlesigner-key-pass"
+          signer_jar="${RUNNER_TEMP}/bundlesigner-${BUNDLE_SIGNER_VERSION}.jar"
+          trap 'rm -f "${keystore_pass_file}" "${key_pass_file}" "${signer_jar}"' EXIT
+          mapfile -t bazaar_aabs < <(find . -type f -path '*/build/outputs/bundle/bazaarRelease/*.aab' -size +0c | sort)
+          if (( ${#bazaar_aabs[@]} != 1 )); then
+            echo "Expected exactly one non-empty Bazaar release AAB, found ${#bazaar_aabs[@]}"
+            printf '%s\n' "${bazaar_aabs[@]}"
             exit 1
           fi
+          bazaar_aab="${bazaar_aabs[0]}"
 
-          signer_jar="${RUNNER_TEMP}/bundlesigner-${BUNDLE_SIGNER_VERSION}.jar"
           curl --fail --silent --show-error --location --retry 3 \
             "https://github.com/cafebazaar/bundle-signer/releases/download/v${BUNDLE_SIGNER_VERSION}/bundlesigner-${BUNDLE_SIGNER_VERSION}.jar" \
             --output "${signer_jar}"
@@ -195,8 +198,6 @@ jobs:
 
           bin_dir="${RUNNER_TEMP}/cafebazaar-bin"
           mkdir -p "${bin_dir}"
-          keystore_pass_file="${RUNNER_TEMP}/bundlesigner-keystore-pass"
-          key_pass_file="${RUNNER_TEMP}/bundlesigner-key-pass"
           printf '%s\n' "${ANDROID_KEYSTORE_PASSWORD}" > "${keystore_pass_file}"
           printf '%s\n' "${ANDROID_KEY_PASSWORD}" > "${key_pass_file}"
           chmod 600 "${keystore_pass_file}" "${key_pass_file}"
@@ -226,10 +227,7 @@ jobs:
           mkdir -p "app/build/outputs/cafebazaar"
           cp "${bazaar_bin}" "app/build/outputs/cafebazaar/"
 
-          rm -f "${keystore_pass_file}" "${key_pass_file}"
-          rm -f "${signer_jar}"
-
-            - name: Upload signed release APK
+      - name: Upload signed release APK
         uses: actions/upload-artifact@v6
         with:
           name: woogit-release-apk-${{ github.sha }}
