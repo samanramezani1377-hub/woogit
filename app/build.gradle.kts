@@ -32,7 +32,7 @@ android {
         create("bazaar") {
             dimension = "distribution"
             buildConfigField("Boolean", "BAZAAR_BUILD", "true")
-            val rsa = providers.gradleProperty("woogit.bazaar.rsaPublicKey").orNull ?: ""
+            val rsa = providers.gradleProperty("woogit.bazaar.rsaPublicKey").orNull ?: "MIHNMA0GCSqGSIb3DQEBAQUAA4G7ADCBtwKBrwCdzmRJcPgeDl2NA4yYu5kWD65RpJogk1fNN2MdJdwwprT8D3VjdEhB6gTYEAlPn/+FeO1d+ivUNmGEaHVY/aCfccGEyIE7YV6vPL7icuoQVRWEDh/+aem7D4qj9Ubm/NtFQrJf68iu6MvWSV8hvKvP5R7zMLsI+Ofb1gMbQQpZ9EgQ3GqnEou3k23HfUbrcvpqc0tNHWvYoWCgNAtSdgy9hUvdkkpEIhpMflFvpv0CAwEAAQ=="
             val escapedRsa = rsa.replace("\\", "\\\\").replace("\"", "\\\"")
             buildConfigField("String", "BAZAAR_RSA_PUBLIC_KEY", "\"$escapedRsa\"")
         }
