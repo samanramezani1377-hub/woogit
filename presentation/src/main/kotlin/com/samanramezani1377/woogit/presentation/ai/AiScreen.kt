@@ -352,6 +352,7 @@ internal fun AiScreen(onOpenChatGpt: () -> Unit = {}) {
         onCloudflareModelChange = { cloudflareModel = it },
         cloudflareAccountId = cloudflareAccountId,
         onCloudflareAccountIdChange = { cloudflareAccountId = it },
+        onOpenChatGpt = onOpenChatGpt,
     )
 
     AgentMemoryDebugSheet(
