@@ -5,7 +5,7 @@ name: WooGit V1 CI
 
 on:
   push:
-    branches: [main, app-transfer, bazar]
+    branches: [main, app-transfer, bazar, underwater]
     paths-ignore:
       - 'docs/agent/**'
   pull_request:
