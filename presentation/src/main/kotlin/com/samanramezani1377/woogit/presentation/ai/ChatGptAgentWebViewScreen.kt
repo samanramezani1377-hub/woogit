@@ -1,6 +1,7 @@
 package com.samanramezani1377.woogit.presentation.ai
 
 import android.annotation.SuppressLint
+import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebView
@@ -80,6 +81,8 @@ internal fun ChatGptAgentWebViewScreen(onClose: () -> Unit) {
                         settings.loadsImagesAutomatically = true
                         settings.javaScriptCanOpenWindowsAutomatically = true
                         settings.setSupportMultipleWindows(false)
+                        CookieManager.getInstance().setAcceptCookie(true)
+                        CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
                         settings.allowFileAccess = false
                         settings.allowContentAccess = false
                         webChromeClient = WebChromeClient()
@@ -162,6 +165,32 @@ private class WooGitChatBridge(
         val value = text?.trim().orEmpty()
         if (value.isNotBlank()) onPrompt(value)
     }
+}
+
+private fun injectAgentResult(view: WebView, text: String) {
+    val escaped = org.json.JSONObject.quote(text)
+    view.evaluateJavascript(
+        """(function() {
+          var existing = document.getElementById('woogit-agent-result');
+          if (existing) existing.remove();
+          var host = document.querySelector('main') || document.body;
+          if (!host) return;
+          var box = document.createElement('div');
+          box.id = 'woogit-agent-result';
+          box.setAttribute('role', 'status');
+          box.style.cssText = 'margin:16px auto;padding:14px 16px;max-width:760px;border-radius:16px;border:1px solid rgba(128,90,213,.35);background:rgba(128,90,213,.10);color:inherit;font:inherit;white-space:pre-wrap;line-height:1.65;direction:auto;';
+          var title = document.createElement('div');
+          title.textContent = 'WooGit Agent';
+          title.style.cssText = 'font-weight:700;margin-bottom:8px;';
+          var body = document.createElement('div');
+          body.textContent = $escaped;
+          box.appendChild(title);
+          box.appendChild(body);
+          host.appendChild(box);
+          box.scrollIntoView({behavior:'smooth',block:'center'});
+        })();""".replace("\$escaped", escaped),
+        null,
+    )
 }
 
 private fun installPromptBridge(view: WebView) {
