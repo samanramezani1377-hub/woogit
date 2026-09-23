@@ -56,6 +56,9 @@ internal fun ChatGptAgentWebViewScreen(onClose: () -> Unit) {
     val context = LocalContext.current
     val viewModelStoreOwner = LocalViewModelStoreOwner.current
     var vm by remember { mutableStateOf<AiViewModel?>(null) }
+    var showWebViewLog by remember { mutableStateOf(false) }
+    var webViewLogs by remember { mutableStateOf(listOf("WooGit WebView آماده شد.")) }
+    fun addWebViewLog(message: String) { webViewLogs = (webViewLogs + message).takeLast(MAX_WEBVIEW_LOGS) }
     var viewModelError by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(viewModelStoreOwner) {
@@ -87,7 +90,7 @@ internal fun ChatGptAgentWebViewScreen(onClose: () -> Unit) {
             ) {
                 Text("ChatGPT · Agent WooGit")
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { /* diagnostics are shown in the WebView body */ }) {
+                    IconButton(onClick = { showWebViewLog = true }) {
                         Text("⌁")
                     }
                     IconButton(onClick = onClose) { Text("×") }
@@ -110,10 +113,20 @@ internal fun ChatGptAgentWebViewScreen(onClose: () -> Unit) {
                     )
                 }
                 else -> {
-                    ChatGptAgentWebViewContent(vm = vm!!, context = context)
+                    ChatGptAgentWebViewContent(vm = vm!!, context = context, addWebViewLog = ::addWebViewLog)
                 }
             }
         }
+    }
+
+    if (showWebViewLog) {
+        AlertDialog(
+            onDismissRequest = { showWebViewLog = false },
+            title = { Text("گزارش WebView") },
+            text = { androidx.compose.foundation.lazy.LazyColumn { items(webViewLogs.size) { i -> Text(webViewLogs[i], modifier = Modifier.padding(bottom = 6.dp)) } } },
+            confirmButton = { TextButton(onClick = { webViewLogs = listOf("گزارش پاک شد.") }) { Text("پاک کردن") } },
+            dismissButton = { TextButton(onClick = { showWebViewLog = false }) { Text("بستن") } },
+        )
     }
 }
 
@@ -122,15 +135,14 @@ internal fun ChatGptAgentWebViewScreen(onClose: () -> Unit) {
 private fun ChatGptAgentWebViewContent(
     vm: AiViewModel,
     context: android.content.Context,
+    addWebViewLog: (String) -> Unit,
 ) {
     val state by vm.state.collectAsState()
     val isGenerating by vm.isGenerating.collectAsState()
     var webView by remember { mutableStateOf<WebView?>(null) }
-    var showWebViewLog by remember { mutableStateOf(false) }
-    var webViewLogs by remember { mutableStateOf(listOf("WooGit WebView آماده شد.")) }
-
-    fun addWebViewLog(message: String) {
-        webViewLogs = (webViewLogs + message).takeLast(MAX_WEBVIEW_LOGS)
+    BackHandler {
+        val view = webView
+        if (view?.canGoBack() == true) view.goBack() else onClose()
     }
 
     Box(Modifier.fillMaxSize()) {
