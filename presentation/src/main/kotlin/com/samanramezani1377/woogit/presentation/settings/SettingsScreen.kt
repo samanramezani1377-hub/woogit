@@ -205,7 +205,6 @@ private fun ChatGptWebSettingsSection(onOpenChatGpt: () -> Unit) {
             GlassText("ChatGPT وب")
             GlassText(
                 if (loggedIn) "حساب ChatGPT در WebView وارد شده است." else "برای استفاده از اتصال ChatGPT، ابتدا وارد حساب خود شوید.",
-                color = GlassTokens.muted,
             )
             GlassPrimaryAction(
                 if (loggedIn) "باز کردن ChatGPT" else "ورود به ChatGPT",
