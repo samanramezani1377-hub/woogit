@@ -26,6 +26,7 @@ internal fun AiSettingsSheet(
     onCloudflareModelChange: (String) -> Unit,
     cloudflareAccountId: String,
     onCloudflareAccountIdChange: (String) -> Unit,
+    onOpenChatGpt: () -> Unit = {},
 ) {
     varProviderMenu(show, onDismiss, vm, providerId, apiKey, onApiKeyChange, geminiModel, onGeminiModelChange, groqModel, onGroqModelChange, cloudflareModel, onCloudflareModelChange, cloudflareAccountId, onCloudflareAccountIdChange)
 }
@@ -58,7 +59,21 @@ private fun varProviderMenu(
         Box(Modifier.fillMaxWidth()) {
             GlassOutlinedButton("${settingsProviderLabel(providerId)}  ·  ${if (providerId == "mistral") vm.mistralModel else providerModelLabel(providerId, geminiModel, groqModel, cloudflareModel)}", { providerMenuExpanded.value = true }, Modifier.fillMaxWidth())
             DropdownMenu(expanded = providerMenuExpanded.value, onDismissRequest = { providerMenuExpanded.value = false }) {
-                availableProviders.forEach { provider ->
+                DropdownMenuItem(
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text("ChatGPT Web", fontWeight = FontWeight.SemiBold)
+                        Text("استفاده از مسیر مستقل ChatGPT وب", color = GlassTokens.muted, style = MaterialTheme.typography.bodySmall)
+                    }
+                },
+                leadingIcon = { Text("↗", color = GlassTokens.accent, fontWeight = FontWeight.Bold) },
+                onClick = {
+                    providerMenuExpanded.value = false
+                    onDismiss()
+                    onOpenChatGpt()
+                },
+            )
+            availableProviders.forEach { provider ->
                     DropdownMenuItem(
                         text = {
                             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
