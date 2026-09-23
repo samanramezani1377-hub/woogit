@@ -1,6 +1,7 @@
 package com.samanramezani1377.woogit.presentation.settings
 
 import android.content.Intent
+import android.webkit.CookieManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -27,7 +28,7 @@ import com.samanramezani1377.woogit.presentation.*
 import kotlinx.coroutines.launch
 
 @Composable
-fun SettingsScreen(storeName: String, storeId: StoreId, onBack: () -> Unit, onDisconnect: () -> Unit, dependencies: V1PresentationDependencies) {
+fun SettingsScreen(storeName: String, storeId: StoreId, onBack: () -> Unit, onOpenChatGpt: () -> Unit, onDisconnect: () -> Unit, dependencies: V1PresentationDependencies) {
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
@@ -111,6 +112,7 @@ fun SettingsScreen(storeName: String, storeId: StoreId, onBack: () -> Unit, onDi
                 GlassTopBar("تنظیمات", "مدیریت اتصال و حساب فروشگاه") { TextButton(onClick = onBack) { GlassText("بازگشت") } }
                 GlassCard { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { GlassText("فروشگاه متصل"); GlassText(storeName); GlassPrimaryAction("قطع اتصال", onDisconnect) } }
                 BillingSection(storeId)
+                ChatGptWebSettingsSection(onOpenChatGpt = onOpenChatGpt)
                 GlassCard {
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         GlassText("پس‌زمینه برنامه")
@@ -188,3 +190,42 @@ private fun Color.toHexString(): String = "#%02X%02X%02X".format(
     (green * 255).toInt(),
     (blue * 255).toInt(),
 )
+
+@Composable
+private fun ChatGptWebSettingsSection(onOpenChatGpt: () -> Unit) {
+    val context = LocalContext.current
+    var loggedIn by remember { mutableStateOf(CookieManager.getInstance().hasCookies()) }
+
+    fun refresh() {
+        loggedIn = CookieManager.getInstance().hasCookies()
+    }
+
+    GlassCard {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            GlassText("ChatGPT وب")
+            GlassText(
+                if (loggedIn) "حساب ChatGPT در WebView وارد شده است." else "برای استفاده از اتصال ChatGPT، ابتدا وارد حساب خود شوید.",
+                color = GlassTokens.muted,
+            )
+            GlassPrimaryAction(
+                if (loggedIn) "باز کردن ChatGPT" else "ورود به ChatGPT",
+                onClick = {
+                    refresh()
+                    onOpenChatGpt()
+                },
+            )
+            if (loggedIn) {
+                TextButton(
+                    onClick = {
+                        CookieManager.getInstance().removeAllCookies {
+                            CookieManager.getInstance().flush()
+                            loggedIn = false
+                        }
+                    },
+                ) {
+                    GlassText("خروج از حساب ChatGPT")
+                }
+            }
+        }
+    }
+}
