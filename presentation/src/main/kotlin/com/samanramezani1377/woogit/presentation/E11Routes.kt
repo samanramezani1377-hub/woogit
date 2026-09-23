@@ -7,6 +7,7 @@ internal object E11Routes {
     const val DASHBOARD = "dashboard"
     const val SUBSCRIPTION_EXPIRED = "subscription-expired"
     const val AI = "ai"
+    const val AI_CHATGPT = "ai/chatgpt"
     const val COMMERCE = "commerce"
     const val DASHBOARD_BARCODE = "dashboard/barcode"
     const val ORDERS_BULK = "orders/bulk-orders"
