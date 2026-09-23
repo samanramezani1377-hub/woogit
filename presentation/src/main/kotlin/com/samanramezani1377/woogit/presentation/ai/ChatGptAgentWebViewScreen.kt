@@ -35,7 +35,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import com.samanramezani1377.woogit.presentation.GlassCard
 import com.samanramezani1377.woogit.presentation.GlassTokens
 
@@ -53,21 +54,29 @@ import com.samanramezani1377.woogit.presentation.GlassTokens
 @Composable
 internal fun ChatGptAgentWebViewScreen(onClose: () -> Unit) {
     val context = LocalContext.current
-    val vm = viewModel<AiViewModel>(factory = AiViewModel.Factory(context.applicationContext))
-    val state by vm.state.collectAsState()
-    val isGenerating by vm.isGenerating.collectAsState()
-    var webView by remember { mutableStateOf<WebView?>(null) }
-    var showWebViewLog by remember { mutableStateOf(false) }
-    var webViewLogs by remember { mutableStateOf(listOf("WooGit WebView آماده شد.")) }
+    val viewModelStoreOwner = LocalViewModelStoreOwner.current
+    var vm by remember { mutableStateOf<AiViewModel?>(null) }
+    var viewModelError by remember { mutableStateOf<String?>(null) }
 
-    fun addWebViewLog(message: String) {
-        webViewLogs = (webViewLogs + message).takeLast(MAX_WEBVIEW_LOGS)
+    LaunchedEffect(viewModelStoreOwner) {
+        if (viewModelStoreOwner == null) {
+            viewModelError = "محیط اجرای Agent در دسترس نیست."
+            return@LaunchedEffect
+        }
+        runCatching {
+            ViewModelProvider(
+                viewModelStoreOwner,
+                AiViewModel.Factory(context.applicationContext),
+            )[AiViewModel::class.java]
+        }.onSuccess {
+            vm = it
+        }.onFailure {
+            viewModelError = it.message?.takeIf(String::isNotBlank)
+                ?: "راه‌اندازی Agent ووگیت ناموفق بود."
+        }
     }
 
-    BackHandler {
-        val view = webView
-        if (view?.canGoBack() == true) view.goBack() else onClose()
-    }
+    BackHandler(onBack = onClose)
 
     Column(Modifier.fillMaxSize()) {
         Surface(modifier = Modifier.fillMaxWidth().height(56.dp)) {
@@ -78,150 +87,161 @@ internal fun ChatGptAgentWebViewScreen(onClose: () -> Unit) {
             ) {
                 Text("ChatGPT · Agent WooGit")
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = { showWebViewLog = true }) { Text("⌁") }
+                    IconButton(onClick = { /* diagnostics are shown in the WebView body */ }) {
+                        Text("⌁")
+                    }
                     IconButton(onClick = onClose) { Text("×") }
                 }
             }
         }
 
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            AndroidView(
-                modifier = Modifier.fillMaxSize(),
-                factory = {
-                    WebView(context).apply {
-                        settings.javaScriptEnabled = true
-                        settings.domStorageEnabled = true
-                        // ChatGPT's web app is designed for a full browser surface.
-                        // Remove the Android WebView marker from the UA for this isolated
-                        // experiment so browser capability detection does not reject the page.
-                        settings.userAgentString = settings.userAgentString
-                            .replace("; wv", "")
-                            .replace(" Version/4.0", "")
-                        addWebViewLog("UA ${settings.userAgentString}")
-                        settings.loadsImagesAutomatically = true
-                        settings.javaScriptCanOpenWindowsAutomatically = true
-                        settings.setSupportMultipleWindows(false)
-                        CookieManager.getInstance().setAcceptCookie(true)
-                        CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
-                        settings.allowFileAccess = false
-                        settings.allowContentAccess = false
-                        webChromeClient = object : WebChromeClient() {
-                            override fun onConsoleMessage(consoleMessage: android.webkit.ConsoleMessage): Boolean {
-                                addWebViewLog(
-                                    "JS ${consoleMessage.messageLevel()}: ${consoleMessage.message()} " +
-                                        "(${consoleMessage.sourceId()}:${consoleMessage.lineNumber()})"
-                                )
-                                return true
-                            }
+            when {
+                viewModelError != null -> {
+                    Text(
+                        text = "راه‌اندازی Agent انجام نشد:\n${viewModelError}",
+                        modifier = Modifier.align(Alignment.Center).padding(24.dp),
+                    )
+                }
+                vm == null -> {
+                    Text(
+                        text = "در حال آماده‌سازی Agent…",
+                        modifier = Modifier.align(Alignment.Center).padding(24.dp),
+                    )
+                }
+                else -> {
+                    ChatGptAgentWebViewContent(vm = vm!!, context = context)
+                }
+            }
+        }
+    }
+}
+
+@SuppressLint("SetJavaScriptEnabled")
+@Composable
+private fun ChatGptAgentWebViewContent(
+    vm: AiViewModel,
+    context: android.content.Context,
+) {
+    val state by vm.state.collectAsState()
+    val isGenerating by vm.isGenerating.collectAsState()
+    var webView by remember { mutableStateOf<WebView?>(null) }
+    var showWebViewLog by remember { mutableStateOf(false) }
+    var webViewLogs by remember { mutableStateOf(listOf("WooGit WebView آماده شد.")) }
+
+    fun addWebViewLog(message: String) {
+        webViewLogs = (webViewLogs + message).takeLast(MAX_WEBVIEW_LOGS)
+    }
+
+    Box(Modifier.fillMaxSize()) {
+        AndroidView(
+            modifier = Modifier.fillMaxSize(),
+            factory = {
+                WebView(context).apply {
+                    settings.javaScriptEnabled = true
+                    settings.domStorageEnabled = true
+                    settings.userAgentString = settings.userAgentString
+                        .replace("; wv", "")
+                        .replace(" Version/4.0", "")
+                    addWebViewLog("UA ${settings.userAgentString}")
+                    settings.loadsImagesAutomatically = true
+                    settings.javaScriptCanOpenWindowsAutomatically = true
+                    settings.setSupportMultipleWindows(false)
+                    CookieManager.getInstance().setAcceptCookie(true)
+                    CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+                    settings.allowFileAccess = false
+                    settings.allowContentAccess = false
+                    webChromeClient = object : WebChromeClient() {
+                        override fun onConsoleMessage(consoleMessage: android.webkit.ConsoleMessage): Boolean {
+                            addWebViewLog(
+                                "JS ${consoleMessage.messageLevel()}: ${consoleMessage.message()} " +
+                                    "(${consoleMessage.sourceId()}:${consoleMessage.lineNumber()})"
+                            )
+                            return true
                         }
-
-                        addJavascriptInterface(
-                            WooGitChatBridge { prompt ->
-                                vm.send(prompt)
-                            },
-                            BRIDGE_NAME,
-                        )
-
-                        webViewClient = object : WebViewClient() {
-                            override fun shouldOverrideUrlLoading(
-                                view: WebView,
-                                request: WebResourceRequest,
-                            ): Boolean {
-                                addWebViewLog("NAV ${request.url}")
-                                return false
-                            }
-
-                            @Deprecated("Deprecated in API 24")
-                            override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean {
-                                addWebViewLog("NAV $url")
-                                return false
-                            }
-
-                            override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
-                                super.onPageStarted(view, url, favicon)
-                                addWebViewLog("START $url")
-                            }
-
-                            override fun onPageFinished(view: WebView, url: String) {
-                                super.onPageFinished(view, url)
-                                addWebViewLog("FINISH $url")
-                                if (url.startsWith("https://chatgpt.com")) {
-                                    installPromptBridge(view)
-                                    logDomDiagnostics(view, "FINISH", ::addWebViewLog)
-                                    view.postDelayed({ logDomDiagnostics(view, "T+2s", ::addWebViewLog) }, 2000)
-                                    view.postDelayed({ logDomDiagnostics(view, "T+5s", ::addWebViewLog) }, 5000)
-                                }
-                            }
-
-                            override fun onReceivedError(
-                                view: WebView,
-                                request: WebResourceRequest,
-                                error: WebResourceError,
-                            ) {
-                                super.onReceivedError(view, request, error)
-                                addWebViewLog("ERROR ${error.errorCode}: ${error.description} @ ${request.url}")
-                            }
-
-                            @Deprecated("Deprecated in API 23")
-                            override fun onReceivedError(
-                                view: WebView,
-                                errorCode: Int,
-                                description: String?,
-                                failingUrl: String?,
-                            ) {
-                                super.onReceivedError(view, errorCode, description, failingUrl)
-                                addWebViewLog("ERROR $errorCode: ${description.orEmpty()} @ ${failingUrl.orEmpty()}")
-                            }
-
-                            override fun onReceivedHttpError(
-                                view: WebView,
-                                request: WebResourceRequest,
-                                errorResponse: android.webkit.WebResourceResponse,
-                            ) {
-                                super.onReceivedHttpError(view, request, errorResponse)
-                                addWebViewLog("HTTP ${errorResponse.statusCode}: ${request.url}")
-                            }
-                        }
-
-                        addWebViewLog("LOAD $CHATGPT_URL")
-                        loadUrl(CHATGPT_URL)
-                        webView = this
                     }
-                },
-                update = { webView = it },
-                onRelease = { view ->
-                    (view.parent as? android.view.ViewGroup)?.removeView(view)
-                    view.stopLoading()
-                    view.loadUrl("about:blank")
-                    view.removeJavascriptInterface(BRIDGE_NAME)
-                    view.removeAllViews()
-                    view.destroy()
-                    webView = null
-                },
-            )
+                    addJavascriptInterface(
+                        WooGitChatBridge { prompt -> vm.send(prompt) },
+                        BRIDGE_NAME,
+                    )
+                    webViewClient = object : WebViewClient() {
+                        override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                            addWebViewLog("NAV ${request.url}")
+                            return false
+                        }
 
-            if (isGenerating) {
+                        @Deprecated("Deprecated in API 24")
+                        override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean {
+                            addWebViewLog("NAV $url")
+                            return false
+                        }
+
+                        override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
+                            super.onPageStarted(view, url, favicon)
+                            addWebViewLog("START $url")
+                        }
+
+                        override fun onPageFinished(view: WebView, url: String) {
+                            super.onPageFinished(view, url)
+                            addWebViewLog("FINISH $url")
+                            if (url.startsWith("https://chatgpt.com")) {
+                                installPromptBridge(view)
+                                logDomDiagnostics(view, "FINISH", ::addWebViewLog)
+                                view.postDelayed({ logDomDiagnostics(view, "T+2s", ::addWebViewLog) }, 2000)
+                                view.postDelayed({ logDomDiagnostics(view, "T+5s", ::addWebViewLog) }, 5000)
+                            }
+                        }
+
+                        override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
+                            super.onReceivedError(view, request, error)
+                            addWebViewLog("ERROR ${error.errorCode}: ${error.description} @ ${request.url}")
+                        }
+
+                        @Deprecated("Deprecated in API 23")
+                        override fun onReceivedError(view: WebView, errorCode: Int, description: String?, failingUrl: String?) {
+                            super.onReceivedError(view, errorCode, description, failingUrl)
+                            addWebViewLog("ERROR $errorCode: ${description.orEmpty()} @ ${failingUrl.orEmpty()}")
+                        }
+
+                        override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, errorResponse: android.webkit.WebResourceResponse) {
+                            super.onReceivedHttpError(view, request, errorResponse)
+                            addWebViewLog("HTTP ${errorResponse.statusCode}: ${request.url}")
+                        }
+                    }
+                    addWebViewLog("LOAD $CHATGPT_URL")
+                    loadUrl(CHATGPT_URL)
+                    webView = this
+                }
+            },
+            update = { webView = it },
+            onRelease = { view ->
+                (view.parent as? android.view.ViewGroup)?.removeView(view)
+                view.stopLoading()
+                view.loadUrl("about:blank")
+                view.removeJavascriptInterface(BRIDGE_NAME)
+                view.removeAllViews()
+                view.destroy()
+                webView = null
+            },
+        )
+
+        if (isGenerating) {
+            GlassCard(
+                modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp),
+            ) {
+                Text("Agent WooGit در حال اجرای درخواست است…", color = GlassTokens.accent)
+            }
+        } else {
+            val lastAssistant = when (val current = state) {
+                is AiUiState.Ready -> current.messages.lastOrNull { it.role == "assistant" }?.content
+                is AiUiState.Error -> current.messages.lastOrNull { it.role == "assistant" }?.content
+                else -> null
+            }
+            if (!lastAssistant.isNullOrBlank()) {
                 GlassCard(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(12.dp),
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(12.dp),
                 ) {
-                    Text("Agent WooGit در حال اجرای درخواست است…", color = GlassTokens.accent)
-                }
-            } else {
-                val lastAssistant = when (val current = state) {
-                    is AiUiState.Ready -> current.messages.lastOrNull { it.role == "assistant" }?.content
-                    is AiUiState.Error -> current.messages.lastOrNull { it.role == "assistant" }?.content
-                    else -> null
-                }
-                if (!lastAssistant.isNullOrBlank()) {
-                    GlassCard(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(12.dp),
-                    ) {
-                        Text(lastAssistant.takeLast(800))
-                    }
+                    Text(lastAssistant.takeLast(800))
                 }
             }
         }
@@ -234,30 +254,21 @@ internal fun ChatGptAgentWebViewScreen(onClose: () -> Unit) {
             text = {
                 androidx.compose.foundation.lazy.LazyColumn {
                     items(webViewLogs.size) { index ->
-                        Text(
-                            webViewLogs[index],
-                            modifier = Modifier.padding(bottom = 6.dp),
-                        )
+                        Text(webViewLogs[index], modifier = Modifier.padding(bottom = 6.dp))
                     }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { webViewLogs = listOf("گزارش پاک شد.") }) {
-                    Text("پاک کردن")
-                }
+                TextButton(onClick = { webViewLogs = listOf("گزارش پاک شد.") }) { Text("پاک کردن") }
             },
             dismissButton = {
-                TextButton(onClick = { showWebViewLog = false }) {
-                    Text("بستن")
-                }
+                TextButton(onClick = { showWebViewLog = false }) { Text("بستن") }
             },
         )
     }
 
     DisposableEffect(Unit) {
-        onDispose {
-            webView?.removeJavascriptInterface(BRIDGE_NAME)
-        }
+        onDispose { webView?.removeJavascriptInterface(BRIDGE_NAME) }
     }
 
     LaunchedEffect(webView, isGenerating, state) {
