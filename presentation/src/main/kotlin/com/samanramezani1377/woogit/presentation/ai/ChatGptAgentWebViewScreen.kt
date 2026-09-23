@@ -113,7 +113,7 @@ internal fun ChatGptAgentWebViewScreen(onClose: () -> Unit) {
                     )
                 }
                 else -> {
-                    ChatGptAgentWebViewContent(vm = vm!!, context = context, addWebViewLog = ::addWebViewLog)
+                    ChatGptAgentWebViewContent(vm = vm!!, context = context, onClose = onClose, addWebViewLog = ::addWebViewLog)
                 }
             }
         }
@@ -135,6 +135,7 @@ internal fun ChatGptAgentWebViewScreen(onClose: () -> Unit) {
 private fun ChatGptAgentWebViewContent(
     vm: AiViewModel,
     context: android.content.Context,
+    onClose: () -> Unit,
     addWebViewLog: (String) -> Unit,
 ) {
     val state by vm.state.collectAsState()
@@ -258,27 +259,6 @@ private fun ChatGptAgentWebViewContent(
             }
         }
     }
-
-    if (showWebViewLog) {
-        AlertDialog(
-            onDismissRequest = { showWebViewLog = false },
-            title = { Text("گزارش WebView") },
-            text = {
-                androidx.compose.foundation.lazy.LazyColumn {
-                    items(webViewLogs.size) { index ->
-                        Text(webViewLogs[index], modifier = Modifier.padding(bottom = 6.dp))
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { webViewLogs = listOf("گزارش پاک شد.") }) { Text("پاک کردن") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showWebViewLog = false }) { Text("بستن") }
-            },
-        )
-    }
-
     DisposableEffect(Unit) {
         onDispose { webView?.removeJavascriptInterface(BRIDGE_NAME) }
     }
