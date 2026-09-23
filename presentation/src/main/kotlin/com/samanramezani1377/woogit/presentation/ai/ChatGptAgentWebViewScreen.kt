@@ -152,8 +152,18 @@ internal fun ChatGptAgentWebViewScreen(onClose: () -> Unit) {
         }
     }
 
-    LaunchedEffect(webView) {
-        webView?.let(::installPromptBridge)
+    LaunchedEffect(webView, isGenerating, state) {
+        webView?.let { view ->
+            installPromptBridge(view)
+            if (!isGenerating) {
+                val result = when (val current = state) {
+                    is AiUiState.Ready -> current.messages.lastOrNull { it.role == "assistant" }?.content
+                    is AiUiState.Error -> current.messages.lastOrNull { it.role == "assistant" }?.content
+                    else -> null
+                }
+                if (!result.isNullOrBlank()) injectAgentResult(view, result)
+            }
+        }
     }
 }
 
