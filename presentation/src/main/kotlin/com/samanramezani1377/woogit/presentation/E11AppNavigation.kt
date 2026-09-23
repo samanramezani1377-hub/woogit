@@ -13,6 +13,7 @@ import com.samanramezani1377.woogit.core.domain.entity.StoreId
 import com.samanramezani1377.woogit.core.domain.model.*
 import com.samanramezani1377.woogit.presentation.account.*
 import com.samanramezani1377.woogit.presentation.ai.AiScreen
+import com.samanramezani1377.woogit.presentation.ai.ChatGptAgentWebViewScreen
 import com.samanramezani1377.woogit.presentation.commerce.*
 import com.samanramezani1377.woogit.presentation.connection.ConnectionScreen
 import com.samanramezani1377.woogit.presentation.dashboard.*
@@ -122,7 +123,8 @@ internal fun E11AppNavigation(
         composable(E11Routes.DASHBOARD_ANALYTICS) { activeStore?.let { CommerceFeatureRouteScreen(StoreId(it), dependencies, LegacyCommerceFeature.ANALYTICS, { navController.popBackStack() }, { id -> navController.navigate(E11Routes.product(id)) }, { id -> navController.navigate(E11Routes.order(id)) }) } }
         composable(E11Routes.ORDER_INVOICE) { activeStore?.let { CommerceFeatureRouteScreen(StoreId(it), dependencies, LegacyCommerceFeature.INVOICE, { navController.popBackStack() }, { id -> navController.navigate(E11Routes.product(id)) }, { id -> navController.navigate(E11Routes.order(id)) }) } }
         composable(E11Routes.DEBUG_LOGS) { DebugLogsScreen { navController.popBackStack() } }
-        composable(E11Routes.AI) { AiScreen() }
+        composable(E11Routes.AI) { AiScreen(onOpenChatGpt = { navController.navigate(E11Routes.AI_CHATGPT) }) }
+        composable(E11Routes.AI_CHATGPT) { ChatGptAgentWebViewScreen(onClose = { navController.popBackStack() }) }
         composable(E11Routes.ORDERS) {
             val store = activeStore
             if (store != null) {
