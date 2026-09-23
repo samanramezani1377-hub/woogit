@@ -24,7 +24,7 @@ import com.samanramezani1377.woogit.presentation.*
 import kotlinx.coroutines.launch
 
 @Composable
-internal fun AiScreen() {
+internal fun AiScreen(onOpenChatGpt: () -> Unit = {}) {
     val context = LocalContext.current.applicationContext
     val vm = viewModel<AiViewModel>(factory = AiViewModel.Factory(context))
     val state by vm.state.collectAsState()
@@ -92,6 +92,20 @@ internal fun AiScreen() {
                         Text(
                             "Agent داخلی WooGit · ${providerLabel(providerId)}",
                             color = GlassTokens.muted,
+                        )
+                    }
+
+                    IconButton(
+                        onClick = onOpenChatGpt,
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(GlassTokens.accent.copy(alpha = .14f)),
+                    ) {
+                        Text(
+                            "↗",
+                            color = GlassTokens.accent,
+                            fontWeight = FontWeight.Bold,
                         )
                     }
 
