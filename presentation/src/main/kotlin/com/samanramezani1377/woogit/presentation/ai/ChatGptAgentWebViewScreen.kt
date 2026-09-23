@@ -1,6 +1,8 @@
 package com.samanramezani1377.woogit.presentation.ai
 
 import android.annotation.SuppressLint
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.webkit.CookieManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
@@ -124,8 +126,32 @@ internal fun ChatGptAgentWebViewScreen(onClose: () -> Unit) {
             onDismissRequest = { showWebViewLog = false },
             title = { Text("گزارش WebView") },
             text = { androidx.compose.foundation.lazy.LazyColumn { items(webViewLogs.size) { i -> Text(webViewLogs[i], modifier = Modifier.padding(bottom = 6.dp)) } } },
-            confirmButton = { TextButton(onClick = { webViewLogs = listOf("گزارش پاک شد.") }) { Text("پاک کردن") } },
-            dismissButton = { TextButton(onClick = { showWebViewLog = false }) { Text("بستن") } },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val clipboard = context.getSystemService(ClipboardManager::class.java)
+                        clipboard?.setPrimaryClip(
+                            ClipData.newPlainText(
+                                "WooGit WebView logs",
+                                webViewLogs.joinToString("\\n"),
+                            )
+                        )
+                        webViewLogs = (webViewLogs + "گزارش کپی شد.").takeLast(MAX_WEBVIEW_LOGS)
+                    }
+                ) {
+                    Text("کپی گزارش")
+                }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = { webViewLogs = listOf("گزارش پاک شد.") }) {
+                        Text("پاک کردن")
+                    }
+                    TextButton(onClick = { showWebViewLog = false }) {
+                        Text("بستن")
+                    }
+                }
+            },
         )
     }
 }
