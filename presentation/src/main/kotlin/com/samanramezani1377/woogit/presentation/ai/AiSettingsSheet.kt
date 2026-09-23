@@ -28,7 +28,7 @@ internal fun AiSettingsSheet(
     onCloudflareAccountIdChange: (String) -> Unit,
     onOpenChatGpt: () -> Unit = {},
 ) {
-    varProviderMenu(show, onDismiss, vm, providerId, apiKey, onApiKeyChange, geminiModel, onGeminiModelChange, groqModel, onGroqModelChange, cloudflareModel, onCloudflareModelChange, cloudflareAccountId, onCloudflareAccountIdChange)
+    varProviderMenu(show, onDismiss, vm, providerId, apiKey, onApiKeyChange, geminiModel, onGeminiModelChange, groqModel, onGroqModelChange, cloudflareModel, onCloudflareModelChange, cloudflareAccountId, onCloudflareAccountIdChange, onOpenChatGpt)
 }
 
 @Composable
@@ -37,6 +37,7 @@ private fun varProviderMenu(
     onApiKeyChange: (String) -> Unit, geminiModel: String, onGeminiModelChange: (String) -> Unit,
     groqModel: String, onGroqModelChange: (String) -> Unit, cloudflareModel: String,
     onCloudflareModelChange: (String) -> Unit, cloudflareAccountId: String, onCloudflareAccountIdChange: (String) -> Unit,
+    onOpenChatGpt: () -> Unit,
 ) {
     val providerMenuExpanded = remember { mutableStateOf(false) }
     val groqMenuExpanded = remember { mutableStateOf(false) }
