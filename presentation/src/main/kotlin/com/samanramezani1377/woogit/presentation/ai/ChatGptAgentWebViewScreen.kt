@@ -236,7 +236,20 @@ private fun ChatGptAgentWebViewContent(
                                 // Force a browser-style reflow without changing the page DOM.
                                 view.postDelayed({
                                     view.evaluateJavascript(
-                                        "(function(){document.documentElement.style.minHeight='100vh';document.body.style.minHeight='100vh';window.dispatchEvent(new Event('resize'));window.dispatchEvent(new Event('orientationchange'));})();",
+                                        """(function(){
+                                          var style=document.getElementById('woogit-webview-layout-fix');
+                                          if(!style){
+                                            style=document.createElement('style');
+                                            style.id='woogit-webview-layout-fix';
+                                            style.textContent='html,body{width:100%!important;height:100%!important;min-height:100%!important;margin:0!important;padding:0!important}#web-mobile-root{width:100%!important;height:100%!important;min-height:100%!important;display:block!important}#lightweight-shell,#lightweight-home-wordmark,#lightweight-composer,#lightweight-composer-actions{width:100%!important;min-height:100%!important}';
+                                            document.head.appendChild(style);
+                                          }
+                                          document.documentElement.style.cssText+=';height:100%!important;min-height:100%!important;';
+                                          document.body.style.cssText+=';height:100%!important;min-height:100%!important;';
+                                          var root=document.getElementById('web-mobile-root');
+                                          if(root){root.style.cssText+=';height:100%!important;min-height:100%!important;width:100%!important;';}
+                                          window.dispatchEvent(new Event('resize'));
+                                        })();""",
                                         null,
                                     )
                                 }, 1000)
