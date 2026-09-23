@@ -289,32 +289,49 @@ private class WooGitChatBridge(
 }
 
 private fun logDomDiagnostics(view: WebView, label: String, addLog: (String) -> Unit = {}) {
+    addLog(
+        "VIEW $label " +
+            "size=${view.width}x${view.height} " +
+            "visibility=${view.visibility} alpha=${view.alpha} " +
+            "scale=${view.scaleX}x${view.scaleY} " +
+            "shown=${view.isShown} hardware=${view.layerType}"
+    )
     view.evaluateJavascript(
         """
         (function() {
-          var body = document.body;
-          var html = document.documentElement;
-          var roots = Array.prototype.slice.call(document.querySelectorAll('[id]'))
-            .map(function(e) { return e.id; })
-            .filter(Boolean)
-            .slice(0, 20);
+          function rectOf(el) {
+            if (!el) return null;
+            var r = el.getBoundingClientRect();
+            return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) };
+          }
+          function stylesOf(el) {
+            if (!el) return null;
+            var s = window.getComputedStyle(el);
+            return { display:s.display, visibility:s.visibility, opacity:s.opacity, position:s.position, zIndex:s.zIndex, width:s.width, height:s.height, background:s.backgroundColor, color:s.color };
+          }
+          function shadowInfo(el) {
+            if (!el || !el.shadowRoot) return null;
+            return { mode:"open", children:el.shadowRoot.children.length, childTags:Array.prototype.slice.call(el.shadowRoot.children).map(function(child){ return child.tagName + (child.id ? "#" + child.id : ""); }).slice(0,12) };
+          }
+          function inspect(id) { var el=document.getElementById(id); return {exists:!!el,rect:rectOf(el),styles:stylesOf(el),shadow:shadowInfo(el)}; }
+          var body=document.body, html=document.documentElement;
+          var shell=document.querySelector("lightweight-shell");
+          var composer=document.querySelector("lightweight-composer");
+          var center=document.elementFromPoint(Math.max(0,Math.floor(window.innerWidth/2)),Math.max(0,Math.floor(window.innerHeight/2)));
           return JSON.stringify({
-            readyState: document.readyState,
-            title: document.title,
-            href: location.href,
-            body: !!body,
-            bodyChildren: body ? body.children.length : -1,
-            bodyTextLength: body ? (body.innerText || '').length : -1,
-            htmlChildren: html ? html.children.length : -1,
-            roots: roots
+            readyState:document.readyState,title:document.title,href:location.href,visibilityState:document.visibilityState,
+            viewport:{innerWidth:window.innerWidth,innerHeight:window.innerHeight,clientWidth:html?html.clientWidth:-1,clientHeight:html?html.clientHeight:-1,devicePixelRatio:window.devicePixelRatio},
+            body:{exists:!!body,children:body?body.children.length:-1,textLength:body?(body.innerText||"").length:-1,rect:rectOf(body),styles:stylesOf(body)},
+            shell:{rect:rectOf(shell),styles:stylesOf(shell),shadow:shadowInfo(shell)},
+            composer:{rect:rectOf(composer),styles:stylesOf(composer),shadow:shadowInfo(composer)},
+            centerElement:center?{tag:center.tagName,id:center.id||"",className:typeof center.className==="string"?center.className.slice(0,120):""}:null
           });
         })();
         """.trimIndent()
     ) { result ->
-        addLog("DOM $label $result")
+        addLog("LAYOUT $label $result")
     }
 }
-
 private fun injectAgentResult(view: WebView, text: String) {
     val escaped = org.json.JSONObject.quote(text)
     view.evaluateJavascript(
