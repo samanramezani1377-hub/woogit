@@ -190,6 +190,10 @@ private fun ChatGptAgentWebViewContent(
                     CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
                     settings.allowFileAccess = false
                     settings.allowContentAccess = false
+                    // ChatGPT's current mobile web shell can rely on viewport sizing.
+                    // Explicit viewport support prevents a zero-height document in Android WebView.
+                    settings.useWideViewPort = false
+                    settings.loadWithOverviewMode = false
                     webChromeClient = object : WebChromeClient() {
                         override fun onConsoleMessage(consoleMessage: android.webkit.ConsoleMessage): Boolean {
                             addWebViewLog(
@@ -228,6 +232,14 @@ private fun ChatGptAgentWebViewContent(
                                 logDomDiagnostics(view, "FINISH") { message -> addWebViewLog(message) }
                                 view.postDelayed({ logDomDiagnostics(view, "T+2s") { message -> addWebViewLog(message) } }, 2000)
                                 view.postDelayed({ logDomDiagnostics(view, "T+5s") { message -> addWebViewLog(message) } }, 5000)
+                                // Some ChatGPT mobile shells initially attach their UI after layout.
+                                // Force a browser-style reflow without changing the page DOM.
+                                view.postDelayed({
+                                    view.evaluateJavascript(
+                                        "(function(){document.documentElement.style.minHeight='100vh';document.body.style.minHeight='100vh';window.dispatchEvent(new Event('resize'));window.dispatchEvent(new Event('orientationchange'));})();",
+                                        null,
+                                    )
+                                }, 1000)
                             }
                         }
 
