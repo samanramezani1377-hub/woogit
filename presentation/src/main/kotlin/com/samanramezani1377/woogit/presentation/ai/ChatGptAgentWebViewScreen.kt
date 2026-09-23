@@ -180,8 +180,13 @@ private fun ChatGptAgentWebViewContent(
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
                     settings.userAgentString = settings.userAgentString
+                        // ChatGPT currently routes Android WebView traffic to m.chatgpt.com.
+                        // Present this isolated ChatGPT surface as desktop Chrome so it uses
+                        // the normal chatgpt.com web shell instead of the mobile Worker path.
+                        .replace(Regex("\\(Linux; Android[^)]*\\)"), "(X11; Linux x86_64)")
                         .replace("; wv", "")
                         .replace(" Version/4.0", "")
+                        .replace(" Mobile", "")
                     addWebViewLog("UA ${settings.userAgentString}")
                     settings.loadsImagesAutomatically = true
                     settings.javaScriptCanOpenWindowsAutomatically = true
