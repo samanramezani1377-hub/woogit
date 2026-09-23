@@ -341,13 +341,16 @@ private fun logDomDiagnostics(view: WebView, label: String, addLog: (String) -> 
           }
           function inspect(id) { var el=document.getElementById(id); return {exists:!!el,rect:rectOf(el),styles:stylesOf(el),shadow:shadowInfo(el)}; }
           var body=document.body, html=document.documentElement;
+          var bodyChildren=body?Array.prototype.slice.call(body.children).map(function(el){ return el.tagName + (el.id ? "#" + el.id : ""); }).slice(0,40):[];
+          var customElements=body?Array.prototype.slice.call(body.querySelectorAll("*")).filter(function(el){ return el.tagName.indexOf("-") !== -1; }).map(function(el){ return el.tagName; }).filter(function(value,index,array){ return array.indexOf(value)===index; }).slice(0,40):[];
           var shell=document.querySelector("lightweight-shell");
           var composer=document.querySelector("lightweight-composer");
           var center=document.elementFromPoint(Math.max(0,Math.floor(window.innerWidth/2)),Math.max(0,Math.floor(window.innerHeight/2)));
           return JSON.stringify({
             readyState:document.readyState,title:document.title,href:location.href,visibilityState:document.visibilityState,
             viewport:{innerWidth:window.innerWidth,innerHeight:window.innerHeight,clientWidth:html?html.clientWidth:-1,clientHeight:html?html.clientHeight:-1,devicePixelRatio:window.devicePixelRatio},
-            body:{exists:!!body,children:body?body.children.length:-1,textLength:body?(body.innerText||"").length:-1,rect:rectOf(body),styles:stylesOf(body)},
+            html:{rect:rectOf(html),styles:stylesOf(html)},
+            body:{exists:!!body,children:body?body.children.length:-1,childTags:bodyChildren,customElements:customElements,textLength:body?(body.innerText||"").length:-1,rect:rectOf(body),styles:stylesOf(body)},
             shell:{rect:rectOf(shell),styles:stylesOf(shell),shadow:shadowInfo(shell)},
             composer:{rect:rectOf(composer),styles:stylesOf(composer),shadow:shadowInfo(composer)},
             centerElement:center?{tag:center.tagName,id:center.id||"",className:typeof center.className==="string"?center.className.slice(0,120):""}:null
