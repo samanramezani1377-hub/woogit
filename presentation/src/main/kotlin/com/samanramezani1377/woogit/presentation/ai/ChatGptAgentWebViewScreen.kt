@@ -187,7 +187,7 @@ private fun installPromptBridge(view: WebView) {
             if (!composer(el)) return;
             var text = textOf(el);
             if (!text) return;
-            window.$BRIDGE.onPrompt(text);
+            window.__BRIDGE__.onPrompt(text);
             try {
               if (typeof el.value === 'string') {
                 el.value = '';
@@ -223,7 +223,7 @@ private fun installPromptBridge(view: WebView) {
             submit(el);
           }, true);
         })();
-        """.replace("$BRIDGE", BRIDGE_NAME),
+        """.replace("__BRIDGE__", BRIDGE_NAME),
         null,
     )
 }
