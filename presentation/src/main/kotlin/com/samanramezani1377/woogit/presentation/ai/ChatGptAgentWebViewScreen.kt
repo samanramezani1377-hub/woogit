@@ -91,6 +91,13 @@ internal fun ChatGptAgentWebViewScreen(onClose: () -> Unit) {
                     WebView(context).apply {
                         settings.javaScriptEnabled = true
                         settings.domStorageEnabled = true
+                        // ChatGPT's web app is designed for a full browser surface.
+                        // Remove the Android WebView marker from the UA for this isolated
+                        // experiment so browser capability detection does not reject the page.
+                        settings.userAgentString = settings.userAgentString
+                            .replace("; wv", "")
+                            .replace(" Version/4.0", "")
+                        addWebViewLog("UA ${settings.userAgentString}")
                         settings.loadsImagesAutomatically = true
                         settings.javaScriptCanOpenWindowsAutomatically = true
                         settings.setSupportMultipleWindows(false)
@@ -140,6 +147,9 @@ internal fun ChatGptAgentWebViewScreen(onClose: () -> Unit) {
                                 addWebViewLog("FINISH $url")
                                 if (url.startsWith("https://chatgpt.com")) {
                                     installPromptBridge(view)
+                                    logDomDiagnostics(view, "FINISH")
+                                    view.postDelayed({ logDomDiagnostics(view, "T+2s") }, 2000)
+                                    view.postDelayed({ logDomDiagnostics(view, "T+5s") }, 5000)
                                 }
                             }
 
@@ -272,6 +282,33 @@ private class WooGitChatBridge(
     fun onPrompt(text: String?) {
         val value = text?.trim().orEmpty()
         if (value.isNotBlank()) onPrompt(value)
+    }
+}
+
+private fun logDomDiagnostics(view: WebView, label: String) {
+    view.evaluateJavascript(
+        """
+        (function() {
+          var body = document.body;
+          var html = document.documentElement;
+          var roots = Array.prototype.slice.call(document.querySelectorAll('[id]'))
+            .map(function(e) { return e.id; })
+            .filter(Boolean)
+            .slice(0, 20);
+          return JSON.stringify({
+            readyState: document.readyState,
+            title: document.title,
+            href: location.href,
+            body: !!body,
+            bodyChildren: body ? body.children.length : -1,
+            bodyTextLength: body ? (body.innerText || '').length : -1,
+            htmlChildren: html ? html.children.length : -1,
+            roots: roots
+          });
+        })();
+        """.trimIndent()
+    ) { result ->
+        addWebViewLog("DOM $label $result")
     }
 }
 
