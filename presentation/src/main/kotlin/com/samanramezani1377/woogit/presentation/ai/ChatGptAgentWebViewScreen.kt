@@ -147,9 +147,9 @@ internal fun ChatGptAgentWebViewScreen(onClose: () -> Unit) {
                                 addWebViewLog("FINISH $url")
                                 if (url.startsWith("https://chatgpt.com")) {
                                     installPromptBridge(view)
-                                    logDomDiagnostics(view, "FINISH")
-                                    view.postDelayed({ logDomDiagnostics(view, "T+2s") }, 2000)
-                                    view.postDelayed({ logDomDiagnostics(view, "T+5s") }, 5000)
+                                    logDomDiagnostics(view, "FINISH", ::addWebViewLog)
+                                    view.postDelayed({ logDomDiagnostics(view, "T+2s", ::addWebViewLog) }, 2000)
+                                    view.postDelayed({ logDomDiagnostics(view, "T+5s", ::addWebViewLog) }, 5000)
                                 }
                             }
 
@@ -285,7 +285,7 @@ private class WooGitChatBridge(
     }
 }
 
-private fun logDomDiagnostics(view: WebView, label: String) {
+private fun logDomDiagnostics(view: WebView, label: String, addLog: (String) -> Unit) {
     view.evaluateJavascript(
         """
         (function() {
@@ -308,7 +308,7 @@ private fun logDomDiagnostics(view: WebView, label: String) {
         })();
         """.trimIndent()
     ) { result ->
-        addWebViewLog("DOM $label $result")
+        addLog("DOM $label $result")
     }
 }
 
